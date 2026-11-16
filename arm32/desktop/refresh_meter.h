@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <vector>
 
 namespace player {
 
@@ -33,13 +34,9 @@ public:
         } else {
             phase_ = t;
         }
-        // The interval the wakes keep, measured from the wakes themselves, apart from the grid: a grid laid at an
-        // interval the wakes do not keep (a 160 Hz mode whose wakes come at 60 Hz) starts over every few wakes and would
-        // never measure. Over a second at least, and 30 wakes: the gaps' lower quarter is one refresh (a missed wake makes
-        // a gap of two or three, which may be half the gaps of a busy second; a late one a gap a little long and the next
-        // a little short); each gap counts the refreshes it
-        // holds at that, and the whole span over all of them is the interval, the lateness of its two ends spread over a
-        // second's refreshes.
+        // The interval the wakes keep, measured from the wakes themselves over two seconds, apart from the grid: a grid
+        // laid at an interval the wakes do not keep (a 160 Hz mode whose wakes come at 60 Hz) starts over every few wakes
+        // and would never measure. The span of the wakes over the refreshes it held, counted gap by gap (below).
         if (!first_) {
             first_ = last_ = t;
             count_ = 0;
@@ -48,15 +45,36 @@ public:
         if (t <= last_) return 0;
         if (count_ < kGaps) gaps_[count_++] = t - last_;
         last_ = t;
-        // A second, or as many gaps as there is room for (a display past 1000 Hz).
-        if ((last_ - first_ < kSecond || count_ < 30) && count_ < kGaps) return 0;
+        // Two seconds (a second's lateness at its ends weighs half as much), or as many gaps as there is room for.
+        if ((last_ - first_ < 2 * kSecond || count_ < 30) && count_ < kGaps) return 0;
         std::int64_t found = 0;
         const std::int64_t one = lower_quarter();
         if (one > 0) {
+            // The refreshes the span held. Near the interval in use (the gaps' median within a tenth of it): each gap in
+            // whole intervals in use, a gap of nearly none counted as none, since a wake late by up to a whole refresh makes
+            // its gap long and the next one short and the two count two between them (and a rate a few in a hundred off
+            // still counts one a gap). Else the wakes keep another rate (a dynamic refresh rate's 60 Hz, its boost back
+            // up): each gap in whole lower quarters, one at least (a missed wake's gap two or three).
             std::int64_t refreshes = 0;
-            for (int i = 0; i < count_; ++i) refreshes += std::max<std::int64_t>(1, (gaps_[i] + one / 2) / one);
-            const std::int64_t real = (last_ - first_) / refreshes;
-            if (std::llabs(real - interval) * 1000 > interval * 3) found = real;
+            const std::int64_t span = last_ - first_;
+            const std::int64_t middle = share_of_gaps(2);
+            const bool at_rate = std::llabs(middle - interval) * 10 < interval;
+            for (int i = 0; i < count_; ++i) {
+                refreshes += at_rate ? (gaps_[i] + interval / 2) / interval : std::max<std::int64_t>(1, (gaps_[i] + one / 2) / one);
+            }
+            const std::int64_t real = refreshes > 0 ? span / refreshes : 0;
+            // Another rate (a tenth off and more) at once; a small difference (a rate the system gave in whole hertz) only
+            // when two measures in a row say the same, within a thousandth: one measure's lateness at its ends never moves
+            // the interval (it did on a busy computer, a refresh miscounted in a second's 240: 241.07 Hz).
+            if (real && std::llabs(real - interval) * 10 >= interval) {
+                found = real;
+                pending_ = 0;
+            } else if (real && std::llabs(real - interval) * 1000 > interval * 3) {
+                if (pending_ && std::llabs(real - pending_) * 1000 <= pending_) found = (real + pending_) / 2;
+                pending_ = found ? 0 : real;
+            } else {
+                pending_ = 0;
+            }
         }
         first_ = last_;
         count_ = 0;
@@ -66,23 +84,26 @@ public:
     std::int64_t phase() const { return phase_; }
     // Starts over: another display.
     void restart() {
-        phase_ = first_ = last_ = 0;
+        phase_ = first_ = last_ = pending_ = 0;
         off_grid_ = count_ = 0;
     }
 
 private:
     static constexpr std::int64_t kSecond = 1000000000;
-    // The gaps of a second's wakes: room for a 1000 Hz display's (when full, the second ends there).
-    static constexpr int kGaps = 1024;
-    // The gap a quarter of the way up from the shortest, by a partial sort of a copy (once a second).
-    std::int64_t lower_quarter() const {
-        std::int64_t copy[kGaps];
-        std::copy(gaps_, gaps_ + count_, copy);
-        std::nth_element(copy, copy + count_ / 4, copy + count_);
-        return copy[count_ / 4];
+    // The gaps of two seconds' wakes: room for a 1000 Hz display's (when full, the measure ends there).
+    static constexpr int kGaps = 2048;
+    // The gap 1/`part` of the way up from the shortest (4: a quarter, 2: the median), by a partial sort of a copy (once
+    // a measure).
+    std::int64_t share_of_gaps(int part) const {
+        std::vector<std::int64_t> copy(gaps_, gaps_ + count_);
+        std::nth_element(copy.begin(), copy.begin() + count_ / part, copy.end());
+        return copy[static_cast<std::size_t>(count_ / part)];
     }
+    std::int64_t lower_quarter() const { return share_of_gaps(4); }
     std::int64_t phase_ = 0;
     int off_grid_ = 0;
+    // A small difference one measure found, waiting for the next to say the same (0: none).
+    std::int64_t pending_ = 0;
     // The wakes measured: the first and last, and the gaps between them.
     std::int64_t first_ = 0, last_ = 0;
     std::int64_t gaps_[kGaps] = {};

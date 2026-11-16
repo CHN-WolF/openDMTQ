@@ -893,6 +893,10 @@ void refresh_meter_checks() {
     check(missed.changed_at < 0, "a 240 Hz display with every 7th wake missed keeps its interval");
     const Followed missed160 = follow_refreshes(160, 1e9 / 160, 30, 3, 900000);
     check(missed160.changed_at < 0, "a 160 Hz display with every 3rd wake missed and wakes up to 0.9 ms late keeps its interval");
+    // A busy computer: wakes up to 2.5 ms late at 240 Hz (more than half a refresh), some missed, as a song's load gives
+    // them; the interval is never taken for another (it was, by a refresh miscounted in a second's 240: 241.07 Hz).
+    const Followed busy = follow_refreshes(240.084, 1e9 / 240.084, 60, 9, 2500000);
+    check(busy.changed_at < 0, "a 240 Hz display with wakes up to 2.5 ms late and some missed keeps its interval");
     // A display whose rate the system gave in whole hertz (59 for 59.94): its measured interval.
     const Followed whole = follow_refreshes(59, 1e9 / 59.94, 30);
     check(whole.changed_at >= 0 && std::llabs(whole.interval - 16683350) < 20000, "a 59 Hz display waking at 59.94 Hz follows 59.94 Hz");
