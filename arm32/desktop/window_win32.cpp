@@ -172,6 +172,9 @@ constexpr double kNarrowest = 4.0 / 3.0, kWidest = 21.0 / 9.0;
 std::atomic<HMONITOR> g_monitor{nullptr};
 // The refresh rate that display's mode gives (watch_display), for the log when its refreshes keep another.
 std::atomic<double> g_monitor_hz{0};
+// Whether that rate is the system's exact one (the display configuration's fraction), not GDI's whole hertz or a check's
+// --refresh: the refresh meter takes a small difference from a rate in whole hertz alone (refresh_meter.h).
+std::atomic<bool> g_monitor_exact{false};
 std::atomic<bool> g_displays_changed{false};
 
 // android.view.Surface: the window it stands for.
@@ -262,9 +265,11 @@ void place_game() {
 
 // The refresh rate of a display: exact from the display configuration (240084/1000 Hz), else GDI's whole hertz; 0 when
 // neither says. `signal` gets the rate of the signal the display is sent, from the same configuration's target mode (0:
-// not given): the log says it where it differs, as a display on Windows 11's dynamic refresh rate may.
-double monitor_rate(HMONITOR m, MONITORINFOEXW& mi, double* signal = nullptr) {
+// not given): the log says it where it differs, as a display on Windows 11's dynamic refresh rate may. `exact` says
+// whether the rate is the configuration's.
+double monitor_rate(HMONITOR m, MONITORINFOEXW& mi, double* signal = nullptr, bool* exact = nullptr) {
     if (signal) *signal = 0;
+    if (exact) *exact = false;
     mi.cbSize = sizeof mi;
     if (!GetMonitorInfoW(m, &mi)) return 0;
     UINT32 np = 0, nm = 0;
@@ -288,7 +293,10 @@ double monitor_rate(HMONITOR m, MONITORINFOEXW& mi, double* signal = nullptr) {
                     const DISPLAYCONFIG_RATIONAL& v = modes[mode].targetMode.targetVideoSignalInfo.vSyncFreq;
                     if (v.Numerator && v.Denominator) *signal = static_cast<double>(v.Numerator) / static_cast<double>(v.Denominator);
                 }
-                if (r.Numerator && r.Denominator) return static_cast<double>(r.Numerator) / static_cast<double>(r.Denominator);
+                if (r.Numerator && r.Denominator) {
+                    if (exact) *exact = true;
+                    return static_cast<double>(r.Numerator) / static_cast<double>(r.Denominator);
+                }
             }
         }
     }
@@ -307,8 +315,11 @@ void watch_display(bool changed) {
     if (m == g_monitor.load() && !changed) return;
     MONITORINFOEXW mi{};
     double signal = 0;
-    const double hz = monitor_rate(m, mi, &signal);
+    bool exact = false;
+    const double hz = monitor_rate(m, mi, &signal, &exact);
     g_monitor_hz.store(hz);
+    // A check's --refresh is a rate in whole hertz too.
+    g_monitor_exact.store(exact && !app().refresh_set);
     // A rate below 20 Hz, or none, is no display's to pace by: frames then go as they would without one.
     const double rate = app().refresh_set ? static_cast<double>(app().refresh) : hz;
     arm32::g_display_interval.store(rate >= 20 ? std::llround(1e9 / rate) : 0);
@@ -428,7 +439,7 @@ void refresh_loop() {
                 jvm::log("player: the display's refreshes %s", output ? "are followed" : "cannot be followed: frames go by its rate");
             }
             current = want;
-            meter.restart();
+            meter.restart(!g_monitor_exact.load());
             last = 0;
             failures = 0;
             arm32::g_display_vblank.store(0);

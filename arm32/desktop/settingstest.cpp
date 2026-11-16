@@ -865,8 +865,10 @@ struct Followed {
     long long interval;
     double changed_at;
 };
-Followed follow_refreshes(double hz, double wake_ns, double seconds, int miss_every = 0, long long late_most = 300000) {
+Followed follow_refreshes(double hz, double wake_ns, double seconds, int miss_every = 0, long long late_most = 300000, bool whole_hertz = false) {
     player::RefreshMeter meter;
+    // The rate in use as the system gave it: exactly, or in whole hertz (GDI's).
+    meter.restart(whole_hertz);
     long long interval = std::llround(1e9 / hz);
     Followed out{interval, -1};
     // A fixed sequence of lateness (no clock, no random device): the same run each time.
@@ -900,7 +902,7 @@ void refresh_meter_checks() {
     const Followed busy = follow_refreshes(240.084, 1e9 / 240.084, 60, 9, 2500000);
     check(busy.changed_at < 0, "a 240 Hz display with wakes up to 2.5 ms late and some missed keeps its interval");
     // A display whose rate the system gave in whole hertz (59 for 59.94): its measured interval.
-    const Followed whole = follow_refreshes(59, 1e9 / 59.94, 30);
+    const Followed whole = follow_refreshes(59, 1e9 / 59.94, 30, 0, 300000, true);
     check(whole.changed_at >= 0 && std::llabs(whole.interval - 16683350) < 20000, "a 59 Hz display waking at 59.94 Hz follows 59.94 Hz");
     // Dynamic refresh rate: the mode says 160, 180 or 240 Hz, the wakes come at 60 until the program is boosted. Its
     // wakes' 60 Hz within a few seconds, not the mode's rate with every frame waiting for a refresh three times as long.
@@ -910,6 +912,40 @@ void refresh_meter_checks() {
         std::snprintf(what, sizeof what, "a %.0f Hz display waking at 60 Hz follows 60 Hz within 3 s (at %.1f s, %.3f ms)", hz, drr.changed_at,
                       static_cast<double>(drr.interval) / 1e6);
         check(drr.changed_at >= 0 && drr.changed_at <= 3 && std::llabs(drr.interval - 16666667) < 50000, what);
+    }
+    // A busy computer whose wakes creep later and drop back now and then (0.3 and 0.6 of a refresh late, then on time,
+    // every 80 refreshes): each drop's gap counts one refresh short, a measure says 237.1 Hz, and two say it alike. A rate
+    // the system gives exactly keeps its interval (on this PC 0.11's first meter took 237.101 Hz in a quiet song run).
+    {
+        player::RefreshMeter meter;
+        meter.restart(false);
+        const double period = 1e9 / 240.084;
+        long long interval = std::llround(period);
+        bool changed = false;
+        for (long long k = 0; k < 240 * 30; ++k) {
+            const double late = k % 80 == 77 ? 0.3 : k % 80 == 78 ? 0.6 : 0.0;
+            if (meter.wake(std::llround(1e6 + (static_cast<double>(k) + late) * period), interval)) changed = true;
+        }
+        check(!changed, "a 240.084 Hz display whose wakes creep late and drop back every 80 refreshes keeps its interval");
+    }
+    // Wakes all over the place: the thread late by up to more than a refresh, then waiting for the next one, as a computer
+    // too busy for it gives them. No rate is taken from them (gaps counted in lower quarters said 298 Hz).
+    {
+        player::RefreshMeter meter;
+        meter.restart(false);
+        const double period = 1e9 / 240.084;
+        long long interval = std::llround(period);
+        bool changed = false;
+        unsigned seed = 4242;
+        for (double next = 1e6; next < 30e9;) {
+            seed = seed * 1103515245u + 12345u;
+            // Late by 0 to 1.2 refreshes.
+            const double t = next + period * 1.2 * static_cast<double>((seed >> 8) % 10001) / 10000.0;
+            if (meter.wake(std::llround(t), interval)) changed = true;
+            // The next refresh after this wake.
+            next = (std::floor((t - 1e6) / period) + 1) * period + 1e6;
+        }
+        check(!changed, "a 240 Hz display whose wakes come late by up to a refresh and more takes no other rate");
     }
     // And boosted after that: the wakes at the panel's own rate again, followed as fast.
     {
