@@ -84,6 +84,9 @@ void control_main() {
     bool was_on = false;
     // The number of the last notice shown (live_net.h notice_of): each new one shows once, a repeat never.
     int last_notice = 0;
+    // Asks in a row without an answer while on air, and whether the server was said to be gone (reach_notice).
+    int misses = 0;
+    bool lost = false;
     const std::string lang = player::host_locale().first == "ko" ? "ko" : "en";
     for (;;) {
         sleep_ns(kSecond);
@@ -116,6 +119,9 @@ void control_main() {
         }
         // The answer, checked (live_net.cpp parse_state). None: as things were.
         const live::State state = g_link.ask_state(ids, lang.c_str());
+        // The server gone quiet while this PC broadcasts, and back: the player's own notice, once each way (live_net.cpp).
+        const live::Notice reach = live::reach_notice(state, was_on, misses, lost, lang == "ko");
+        if (reach.show) player::show_notice(reach.text, reach.live);
         if (!state.answered) continue;
         // The server's first answer, at the game's first screens: the render thread makes the conversion's program now,
         // once (warm_up), ahead of any broadcast. A first answer later than kWarmWithin (a server or network down at the

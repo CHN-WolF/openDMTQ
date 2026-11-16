@@ -478,6 +478,32 @@ Notice notice_of(const State& s, int& last_id, bool gave_up) {
     return n;
 }
 
+Notice reach_notice(const State& s, bool was_on, int& misses, bool& lost, bool korean) {
+    Notice n;
+    if (!s.answered) {
+        // No answer: counted while on air, said once when the count reaches kLostAfter.
+        if (!was_on || lost) return n;
+        if (++misses < kLostAfter) return n;
+        lost = true;
+        n.show = true;
+        n.text = korean ? "\xeb\xb0\xa9\xec\x86\xa1\xec\x9d\xb4 \xeb\xa9\x88\xec\xb7\x84\xec\x96\xb4\xec\x9a\x94\n"
+                          "\xec\x84\x9c\xeb\xb2\x84\xea\xb0\x80 \xec\x9d\x91\xeb\x8b\xb5\xed\x95\x98\xec\xa7\x80 \xec\x95\x8a\xec\x95\x84\xec\x9a\x94"
+                        : "Your broadcast has stopped\nThe server is not answering";
+        return n;
+    }
+    misses = 0;
+    if (!lost) return n;
+    lost = false;
+    // Back: said only when the broadcast goes on (off air, the server's own notice says what it is).
+    if (!s.on) return n;
+    n.show = true;
+    n.live = true;
+    n.text = korean ? "\xeb\xb0\xa9\xec\x86\xa1\xec\x9d\x84 \xeb\x8b\xa4\xec\x8b\x9c \xec\x9d\xb4\xec\x96\xb4 \xea\xb0\x80\xec\x9a\x94\n"
+                      "\xec\x84\x9c\xeb\xb2\x84\xea\xb0\x80 \xeb\x8b\xa4\xec\x8b\x9c \xec\x9d\x91\xeb\x8b\xb5\xed\x95\xb4\xec\x9a\x94"
+                    : "Your broadcast is back on\nThe server answers again";
+    return n;
+}
+
 void add_id(std::string& ids, std::string_view id) {
     // Only what the login's ids are made of: this goes straight in a URL.
     if (!plain(id)) return;

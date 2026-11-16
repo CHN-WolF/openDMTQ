@@ -417,6 +417,35 @@ void state_answers() {
         Notice j = notice_of(answer(false, "", 0, ""), last, false);
         check(!j.show, "notice: an answer without a notice shows none");
     }
+    // The server gone quiet while on air: the player's own notice after three asks without an answer, once; back when it
+    // answers on air again; nothing while off air.
+    {
+        int misses = 0;
+        bool lost = false;
+        const State none = parse_state(answer_of(0, ""));
+        const State on = parse_state(answer_of(200, R"({"on":true,"token":"abc","toast":""})"));
+        const State off = parse_state(answer_of(200, R"({"on":false,"toast":""})"));
+        check(!reach_notice(on, false, misses, lost, false).show, "reach: an answer on air says nothing");
+        check(!reach_notice(none, true, misses, lost, false).show && !reach_notice(none, true, misses, lost, false).show, "reach: two asks unanswered say nothing yet");
+        const Notice gone = reach_notice(none, true, misses, lost, false);
+        check(gone.show && !gone.live && gone.text == "Your broadcast has stopped\nThe server is not answering", "reach: the third says the broadcast stopped");
+        check(!reach_notice(none, true, misses, lost, false).show, "reach: once, not again while it stays quiet");
+        const Notice back = reach_notice(on, true, misses, lost, false);
+        check(back.show && back.live && back.text == "Your broadcast is back on\nThe server answers again", "reach: its next answer on air says it is back");
+        check(!reach_notice(on, true, misses, lost, false).show, "reach: and not again");
+        for (int i = 0; i < 3; ++i) reach_notice(none, true, misses, lost, true);
+        check(lost && !reach_notice(off, true, misses, lost, false).show && !lost, "reach: back off air says nothing (the server's own notice says what it is)");
+        int m2 = 0;
+        bool l2 = false;
+        bool any = false;
+        for (int i = 0; i < 6; ++i) any |= reach_notice(none, false, m2, l2, false).show;
+        check(!any && !l2, "reach: asks unanswered while off air say nothing");
+        int m3 = 0;
+        bool l3 = false;
+        reach_notice(none, true, m3, l3, true);
+        reach_notice(none, true, m3, l3, true);
+        check(reach_notice(none, true, m3, l3, true).text.rfind("\xeb\xb0\xa9\xec\x86\xa1", 0) == 0, "reach: in Korean when the player speaks it");
+    }
     // An older server's (no number, no kind): each notice it hands out shows, the tag while on air.
     {
         int last = 0;

@@ -110,6 +110,14 @@ struct Notice {
 // The on notice is left out where this computer cannot send (`gave_up`): it would not be true.
 Notice notice_of(const State& s, int& last_id, bool gave_up);
 
+// The player's own notice when the server stops answering while it broadcasts, and when it answers again (the server
+// cannot say either itself): `misses` and `lost` are the poller's, kept between its asks (0 and false at first). Three
+// asks in a row without an answer while the last answer was on air (15 s at the PC's pace): "stopped", once; the next
+// answer after that, if it is on air: "back", with the LIVE tag. Asks while off air count nothing. `korean` for the words.
+Notice reach_notice(const State& s, bool was_on, int& misses, bool& lost, bool korean);
+// Asks in a row without an answer that make the broadcast's server lost.
+inline constexpr int kLostAfter = 3;
+
 // Adds a device id to the comma-separated list the requests name the player by, once, and only when it is made of what
 // the login's ids are made of (letters, digits, '-' and '_', at most 128): the list goes into a URL as it is.
 void add_id(std::string& ids, std::string_view id);
