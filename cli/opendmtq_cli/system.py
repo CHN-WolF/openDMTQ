@@ -366,8 +366,12 @@ def images_present():
 _tools_built = False
 
 
-def tool(module, *args, extra_env=None, as_invoker=False, service="tools", capture=False):
+def tool(module, *args, extra_env=None, as_invoker=False, service="tools", capture=False, container_env=None):
     """Run one tools-container module (opendmtq_tools.<module>).
+
+    container_env: variables for the module itself, inside the container (extra_env is compose's own, which reaches the
+    container only where compose.yaml names it). Their names go on the command line, their values through compose's
+    environment, so that a password among them is never in a process list.
 
     as_invoker runs it with the caller's own uid, even root: the import must read the user's
     folder, which (on WSL's /mnt/c, for one) only that user can read. It still has no
@@ -393,7 +397,11 @@ def tool(module, *args, extra_env=None, as_invoker=False, service="tools", captu
         env.update(OPENDMTQ_UID=str(os.getuid()), OPENDMTQ_GID=str(os.getgid()))
         # The import writes data/content and data/apk/base; let the invoking user own them meanwhile.
         own_data_dirs(os.getuid(), os.getgid(), subs=("content", os.path.join("apk", "base")))
-    r = compose("--profile", "tools", "run", "--rm", service,
+    passed = []
+    for key, value in (container_env or {}).items():
+        env[key] = value
+        passed += ["-e", key]
+    r = compose("--profile", "tools", "run", "--rm", *passed, service,
                 f"opendmtq_tools.{module}", *args, extra_env=env, check=False, capture=capture)
     if as_invoker:
         # Whatever it wrote goes back to the container user.

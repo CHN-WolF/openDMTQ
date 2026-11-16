@@ -89,11 +89,15 @@ expect "the Server page names the commands that stop, restart, repair and uninst
 cli delete-data > "$WORK/list.log" 2>&1 || true
 expect "delete-data lists the parts with their size" grep -q '^database' "$WORK/list.log"
 expect "and the game files" grep -q '^game' "$WORK/list.log"
+# The owner's sign-in above is in the log of changes: what the deletion of the logs must empty.
+expect "the log of changes has the owner's sign-in" test -s "$SRV/data/state/changes.log"
 cli delete-data logs recordings --yes > "$WORK/delete.log" 2>&1 || true
 sed 's/^/    /' "$WORK/delete.log"
 expect "delete-data logs recordings --yes makes a backup first" grep -q 'backup data/backups/opendmtq-.*-before-delete' "$WORK/delete.log"
 expect "and deletes them" grep -q 'deleted: logs, recordings' "$WORK/delete.log"
 expect "the backup is kept" sh -c "ls '$SRV/data/backups' | grep -q before-delete"
+expect "the log of changes is empty now" test ! -s "$SRV/data/state/changes.log"
+expect "the database was not touched" grep -q 'database' "$WORK/list.log"
 expect "the server still answers" answers "http://127.0.0.1:$PORT/opendmtq/health.php"
 
 # 3. The repair: a data folder and the owner's sign-in for the site gone, then everything again (SRV-49).
@@ -102,6 +106,8 @@ cli repair > "$WORK/repair.log" 2>&1 || true
 sed 's/^/    /' "$WORK/repair.log"
 expect "repair builds the images again" grep -q 'images built from this folder' "$WORK/repair.log"
 expect "and starts the server again with them" grep -q 'the server runs again' "$WORK/repair.log"
+expect "every step of the data's checks found it right or put it right" sh -c "grep -E '^(folders|database|owner|songs|files): ' '$WORK/repair.log' | grep -vq ': bad' && ! grep -qE '^(folders|database|owner|songs): bad' '$WORK/repair.log'"
+expect "the database was looked at" grep -q '^database: ok' "$WORK/repair.log"
 expect "the data folder is there again" test -d "$SRV/data/state/live-rec"
 expect "and the owner's sign-in for the site" test -s "$SRV/data/state/owner.pass"
 expect "the server answers" answers "http://127.0.0.1:$PORT/opendmtq/admin/login"

@@ -165,8 +165,9 @@ class Sandbox:
             else:
                 raise AssertionError(f"the restore's line has a step this sandbox does not know: {step.strip()}")
 
-    def _tool(self, module, *args, extra_env=None, as_invoker=False, service="tools", capture=False):
-        self.tool_calls.append((module, args, dict(extra_env or {})))
+    def _tool(self, module, *args, extra_env=None, as_invoker=False, service="tools", capture=False, container_env=None):
+        # What compose gets and what the module itself gets, together: the tests look at where each part is.
+        self.tool_calls.append((module, args, {**(extra_env or {}), **(container_env or {})}))
         # The compose service each module ran in (the import has one of its own).
         self.tool_services.append((module, service))
         fn = self.tools.get(module)

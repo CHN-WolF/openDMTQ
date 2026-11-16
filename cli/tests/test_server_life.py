@@ -60,6 +60,25 @@ class DeleteDataTest(unittest.TestCase):
             self.assertIn("deleted: logs, apps", sb.output())
 
 
+class ToolsContainerTest(unittest.TestCase):
+    """What the module in the tools container is given reaches it inside the container: its names on compose's command line,
+    their values through compose's environment (SRV-48)."""
+
+    def test_container_env_goes_into_the_container(self):
+        from opendmtq_cli import system
+        calls = []
+        with mock.patch.object(system, "compose", lambda *args, **kw: calls.append((args, kw)) or done()), \
+                mock.patch.object(system, "_tools_built", True):
+            system.tool("server_data", "sizes", container_env={"OPENDMTQ_DB": "/data/state/dmtq.db3", "ADMIN_PASSWORD": "pw"})
+        args, kw = calls[0]
+        self.assertEqual(args[:4], ("--profile", "tools", "run", "--rm"))
+        self.assertEqual(args[4:8], ("-e", "OPENDMTQ_DB", "-e", "ADMIN_PASSWORD"))
+        self.assertEqual(args[8:], ("tools", "opendmtq_tools.server_data", "sizes"))
+        # The values only in compose's environment: a password never in a process list.
+        self.assertEqual(kw["extra_env"]["ADMIN_PASSWORD"], "pw")
+        self.assertNotIn("pw", args)
+
+
 class RepairTest(unittest.TestCase):
     """./opendmtq repair (SRV-49)."""
 

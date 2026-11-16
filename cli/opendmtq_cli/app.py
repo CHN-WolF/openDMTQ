@@ -656,7 +656,7 @@ def cmd_repair(args):
     # The steps that look at the data, in the tools container as the admin pages run them.
     values = env.load(ENV_FILE)
     extra = dict(TOOLS_PATHS, ADMIN_USER=values.get("ADMIN_USER", ""), ADMIN_PASSWORD=values.get("ADMIN_PASSWORD", ""))
-    status = system.tool("repair", extra_env=extra).returncode
+    status = system.tool("repair", container_env=extra).returncode
     # Every part again, with the images and certificates as they are now; the builder makes the app when it has to.
     since = time.time()
     system.compose("up", "-d", "--force-recreate", "server", "admin", "edge")
@@ -676,7 +676,7 @@ def cmd_delete_data(args):
     if unknown:
         die(f"no such part: {', '.join(unknown)} (the parts: {', '.join(DATA_PARTS)})")
     if not args.parts:
-        r = system.tool("server_data", "sizes", extra_env=TOOLS_PATHS, capture=True)
+        r = system.tool("server_data", "sizes", container_env=TOOLS_PATHS, capture=True)
         try:
             sizes = jsonlib.loads(r.stdout.strip().splitlines()[-1])
         except (ValueError, IndexError):
@@ -694,7 +694,7 @@ def cmd_delete_data(args):
             ok(f"backup {os.path.relpath(made, ROOT)}")
             keep = ["--keep", os.path.basename(made)]
     # In the tools container, as the server's own files are seen there; while the server runs, as on the admin pages.
-    status = system.tool("server_data", "delete", *args.parts, *keep, extra_env=TOOLS_PATHS).returncode
+    status = system.tool("server_data", "delete", *args.parts, *keep, container_env=TOOLS_PATHS).returncode
     if status != 0:
         die("not everything could be deleted (see above)")
     if "songs" in args.parts or "game" in args.parts:
