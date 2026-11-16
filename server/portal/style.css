@@ -568,11 +568,10 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
 .field-error::before { content: "!"; flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; font: 800 11px/1 var(--text-face); color: #2b0409; background: var(--bad); }
 /* What is wrong with a field of a row of fields side by side (admin.js): a line of its own right under that field's row,
    across the form, so that the fields of the row stay in line. In a grid it comes right after the row (dense); in a row
-   that wraps, under the whole row. */
+   that wraps, right after the field's own line (admin.js puts it there). */
 .field-error-row { grid-column: 1 / -1; flex-basis: 100%; }
 form.says-in-grid { grid-auto-flow: row dense; }
 form.says-in-row { flex-wrap: wrap; }
-form.says-in-row > .field-error-row { order: 1; }
 /* A password field's Show: inside the field at its right end, a word in the menus' face (Show, Hide), the field's text
    kept clear of it. Pressed, the password reads as typed until pressed again; the field keeps the focus and the cursor. */
 .slot.pw input { padding-right: 78px; }
