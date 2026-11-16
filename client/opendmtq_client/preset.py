@@ -34,10 +34,12 @@ def _valid(details):
     if not isinstance(details, dict) or details.get("version") != FORMAT:
         return None
     url = details.get("url")
+    # An address with spaces round it (a file edited by hand) is still that address.
+    url = url.strip() if isinstance(url, str) else url
     if not isinstance(url, str) or not url.startswith(("http://", "https://")) or len(url) > 300:
         return None
     name = details.get("name")
-    found = {"url": url.rstrip("/"), "name": name if isinstance(name, str) and name.strip() else url}
+    found = {"url": url.rstrip("/"), "name": name.strip() if isinstance(name, str) and name.strip() else url}
     ca = details.get("ca").strip() if isinstance(details.get("ca"), str) else ""
     # Only for HTTPS (plain HTTP has no certificate to check), and only a certificate, whole.
     whole = ca.startswith("-----BEGIN CERTIFICATE-----") and ca.endswith("-----END CERTIFICATE-----")
@@ -99,7 +101,7 @@ def take():
     on (server.trust), under its address as the launcher writes every address."""
     path = os.path.join(st.config_dir(), FILE_NAME)
     try:
-        # utf-8-sig: as saved again by Notepad, with a byte-order mark.
+        # utf-8-sig: a file saved again by Notepad starts with a byte order mark, which JSON alone refuses.
         with open(path, encoding="utf-8-sig") as f:
             details = json.load(f)
     except FileNotFoundError:

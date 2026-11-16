@@ -8,7 +8,8 @@ Velopack's setup lays the program out like this, in %LOCALAPPDATA%\\OpenDMTQ.Cli
   packages\\       the package the installed version came from
 
 A launcher run from a checkout or from a copied folder has none of this: root() answers None there, and repairing and
-uninstalling say that they work in the installed launcher.
+uninstalling say that they work in the installed launcher. Windows' entry for the program (Settings, Apps; Control
+Panel's Programs) is Velopack's, made OpenDMTQ's own by own_entry().
 """
 
 import logging
@@ -48,19 +49,32 @@ def updater(folder):
     return path if os.path.isfile(path) else None
 
 
-def quiet_uninstall(folder=None):
-    """Windows' Settings, Apps uninstalls with Velopack's uninstaller as the launcher runs it, silent: none of Velopack's
-    plain system windows (its progress, its "Uninstall Complete"), and the launcher's own card after it, which says what
-    went and what stayed (removal.card_after_uninstall). Velopack writes the entry's UninstallString without --silent,
-    at the install and again at each update (its QuietUninstallString has it): it is made the same as the quiet one
-    here, by the installer once its setup is done, by the update's hook, and at each start of the launcher. `folder` is
-    the install folder (this launcher's own when None). True when the entry was changed."""
+# The launcher's argument that opens the installer's own uninstall from Windows' Settings, Apps (main.py).
+UNINSTALL_WINDOW = "--uninstall-window"
+
+
+def entry_commands(folder):
+    """What Windows' entry for the program in `folder` runs, as (UninstallString, QuietUninstallString): the launcher's
+    own uninstall, which asks whether the data stays and says how much (installer.py, in a copy of the launcher outside
+    the program's folder), and Velopack's uninstaller with nothing on screen for a tool that uninstalls quietly (the data
+    stays then)."""
+    window = '"%s" %s' % (os.path.join(folder, "current", "OpenDMTQ.exe"), UNINSTALL_WINDOW)
+    quiet = '"%s" --uninstall --silent' % os.path.join(folder, UPDATER)
+    return window, quiet
+
+
+def own_entry(folder=None):
+    """Windows' Settings, Apps (and Control Panel's Programs) uninstall OpenDMTQ with the launcher's own uninstall
+    (entry_commands): Velopack writes the entry with its own uninstaller at the install and again at each update, whose
+    window asks nothing and keeps the data. The entry is made OpenDMTQ's here, by the installer once its setup is done,
+    by the update's hook, and at each start of the launcher. `folder` is the install folder (this launcher's own when
+    None). True when the entry was changed."""
     if sys.platform != "win32":
         # Windows' registry only.
         return False
     folder = folder or root()
     if not folder or not updater(folder):
-        # Not installed by OpenDMTQ-Setup.exe: there is no entry of Velopack's to make quiet.
+        # Not installed by OpenDMTQ-Setup.exe: there is no entry of Velopack's to change.
         return False
     import winreg
     try:
@@ -68,16 +82,17 @@ def quiet_uninstall(folder=None):
     except OSError:
         # No entry (an install in a folder of its own, or one being removed): nothing to change.
         return False
+    changed = False
     with key:
-        try:
-            now = str(winreg.QueryValueEx(key, "UninstallString")[0])
-        except OSError:
-            now = ""
-        if "--silent" in now.split():
-            # Quiet already: written by an earlier start, or by this launcher's update.
-            return False
-        # The same command as Velopack's own quiet one: its updater, quoted, with --uninstall --silent.
-        quiet = '"%s" --uninstall --silent' % os.path.join(folder, UPDATER)
-        winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, quiet)
-    log.info("Windows' Apps uninstall OpenDMTQ silently now, the launcher's card after it: %s", quiet)
-    return True
+        for name, wanted in zip(("UninstallString", "QuietUninstallString"), entry_commands(folder)):
+            try:
+                now = str(winreg.QueryValueEx(key, name)[0])
+            except OSError:
+                now = ""
+            if now != wanted:
+                # Written only when it says something else: an earlier start, or the update's hook, made it already.
+                winreg.SetValueEx(key, name, 0, winreg.REG_SZ, wanted)
+                changed = True
+    if changed:
+        log.info("Windows' Apps uninstall OpenDMTQ with its own uninstall now: %s", entry_commands(folder)[0])
+    return changed

@@ -217,6 +217,28 @@ class State(Folder):
         self.assertEqual(preset.take(), {"url": "http://example.test:8790", "name": "Club"})
         self.assertIsNone(preset.take())
 
+    def test_the_installers_server_as_notepad_leaves_it(self):
+        # The file the installer left, saved again by hand before the launcher's start: a byte order mark, Windows' line
+        # ends, spaces round the address and the name. The same server all the same.
+        import json
+        os.makedirs(st.config_dir(), exist_ok=True)
+        with open(os.path.join(st.config_dir(), preset.FILE_NAME), "w", encoding="utf-8-sig", newline="\r\n") as f:
+            f.write(json.dumps({"version": preset.FORMAT, "url": " http://example.test:8790/ ", "name": " Club "},
+                               indent=2))
+        self.assertEqual(preset.take(), {"url": "http://example.test:8790", "name": "Club"})
+
+    def test_the_settings_as_notepad_leaves_them(self):
+        # The launcher's settings saved again by hand: a byte order mark, Windows' line ends, the language in capitals
+        # with spaces round it. Read as they were, never set aside as broken.
+        s = st.LauncherState()
+        s.language = "ko"
+        s.save()
+        with open(st.LauncherState.path(), encoding="utf-8") as f:
+            text = f.read()
+        with open(st.LauncherState.path(), "w", encoding="utf-8-sig", newline="\r\n") as f:
+            f.write(text.replace('"language": "ko"', '"language": "Ko "'))
+        self.assertEqual(st.LauncherState.load().picked_language, "ko")
+
 
 class WindowThread(Folder):
     """The window saves the state on its own thread while its worker threads ask servers (app.py)."""

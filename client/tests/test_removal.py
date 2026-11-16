@@ -264,101 +264,105 @@ class Uninstall(Folder):
         super().tearDown()
 
     def test_velopacks_uninstaller_starts_on_its_own(self):
+        # Its log of the uninstall goes into the install folder, which goes whole after it: none in Velopack's folder.
         with mock.patch.object(subprocess, "Popen") as popen:
             removal.uninstall()
         command, = popen.call_args[0]
-        self.assertEqual(command, [os.path.join(self.install, "Update.exe"), "--uninstall", "--silent"])
+        self.assertEqual(command, [os.path.join(self.install, "Update.exe"), "--uninstall", "--silent",
+                                   "--log", os.path.join(self.install, "uninstall.log")])
         # Not from inside the folder that is going.
         cwd = popen.call_args[1]["cwd"]
         self.assertFalse(os.path.abspath(cwd).startswith(self.install))
 
-    def test_after_delete_all_velopacks_log_of_the_uninstall_goes_with_the_program(self):
-        # Update.exe would write its log of the uninstall in Velopack's folder, where Delete all has just deleted it.
-        with mock.patch.object(subprocess, "Popen") as popen:
-            removal.uninstall(delete_all=True)
-        command, = popen.call_args[0]
-        self.assertEqual(command, [os.path.join(self.install, "Update.exe"), "--uninstall", "--silent",
-                                   "--log", os.path.join(self.install, "uninstall.log")])
+    def test_keeping_the_data_takes_opendmtqs_logs_elsewhere_all_the_same(self):
+        # The data the player keeps stays; OpenDMTQ's logs outside its folders (Velopack's of it, the installer's) go.
+        velopack = os.path.join(st.local_dir(), "velopack")
+        write(velopack, {"velopack_OpenDMTQ.Client.log": b"v" * 200, "velopack_Another.App.log": b"theirs"})
+        write(self.setup_logs, {"OpenDMTQ-setup.log": b"i", "OpenDMTQ-setup-20261112-235959.log": b"s", "other.log": b"x"})
+        write(os.path.join(removal.data_root(), "com.example.game"), GAME)
+        with mock.patch.object(subprocess, "Popen"):
+            removal.uninstall()
+        self.assertEqual(listing(velopack), {"velopack_Another.App.log"})
+        self.assertEqual(set(os.listdir(self.setup_logs)), {"other.log"})
+        self.assertEqual(listing(os.path.join(removal.data_root(), "com.example.game")), set(GAME))
 
-    def test_the_launchers_own_uninstall_tells_its_hook(self):
-        # Help's Uninstall and --uninstall have said what happens: the hook their uninstaller runs shows no card.
+    def test_opendmtqs_own_uninstall_tells_its_hook(self):
+        # The installer's uninstall, Help's and --uninstall start Velopack's uninstaller with FROM_LAUNCHER, as its hook
+        # learns who started it; the installer waits for it (no window of its own), the launcher's leaves it running.
         with mock.patch.object(subprocess, "Popen") as popen:
             removal.uninstall()
         self.assertEqual(popen.call_args[1]["env"][removal.FROM_LAUNCHER], "1")
-        with mock.patch.dict(os.environ, {removal.FROM_LAUNCHER: "1"}), mock.patch.object(subprocess, "Popen") as popen:
-            self.assertIsNone(removal.card_after_uninstall(os.path.join(self.install, "current", "OpenDMTQ.exe")))
-        popen.assert_not_called()
+        import sys
+        with mock.patch.object(sys, "platform", "win32"), mock.patch.object(subprocess, "Popen") as popen:
+            removal.start_uninstaller(self.install)
+        self.assertEqual(popen.call_args[1]["creationflags"], removal.NO_WINDOW)
+        with mock.patch.object(sys, "platform", "win32"), mock.patch.object(subprocess, "Popen") as popen:
+            removal.start_uninstaller(self.install, detached=True)
+        self.assertEqual(popen.call_args[1]["creationflags"], removal.DETACHED)
 
-    def test_an_uninstall_from_windows_apps_ends_with_the_launchers_card(self):
-        # Windows' Settings, Apps runs the uninstaller on its own: the hook copies the launcher's window copy and what it
-        # runs with out of the program's folder, and starts the copy to wait for the uninstaller (the hook's parent).
+    def test_windows_apps_opens_the_uninstall_from_a_copy(self):
+        # Windows' Settings, Apps runs the launcher with --uninstall-window: it copies its window copy and what it runs
+        # with out of the program's folder, and starts the copy with --uninstall-from and the install folder.
         program = os.path.join(self.install, "current", "OpenDMTQ.exe")
         write(os.path.join(self.install, "current"), {"OpenDMTQ.exe": b"MZ launcher", "_internal/python312.dll": b"py",
                                                       "_internal/opendmtq_client/assets/a.ttf": b"font",
                                                       "player/opendmtq-player.exe": b"MZ player"})
-        os.environ.pop(removal.FROM_LAUNCHER, None)
         with mock.patch.dict(os.environ, {"_PYI_APPLICATION_HOME_DIR": os.path.dirname(program)}), \
                 mock.patch.object(subprocess, "Popen") as popen:
-            copy = removal.card_after_uninstall(program)
+            copy = removal.start_uninstall_window(self.install, program)
         self.addCleanup(shutil.rmtree, copy, True)
         # In the temporary folder, outside the program's that goes, by the name only such copies have.
         self.assertEqual(os.path.dirname(copy), tempfile.gettempdir())
-        self.assertTrue(os.path.basename(copy).startswith("OpenDMTQ-uninstalled-"))
+        self.assertTrue(os.path.basename(copy).startswith("OpenDMTQ-uninstall-"))
         self.assertFalse(copy.startswith(self.install))
         # The launcher and its _internal, not the player.
         self.assertEqual(listing(copy), {"OpenDMTQ.exe", "_internal/python312.dll", "_internal/opendmtq_client/assets/a.ttf"})
         command, = popen.call_args[0]
-        self.assertEqual(command, [os.path.join(copy, "OpenDMTQ.exe"), "--uninstalled", str(removal._parent_pid())])
-        self.assertEqual(removal._parent_pid(), os.getppid())
+        self.assertEqual(command, [os.path.join(copy, "OpenDMTQ.exe"), "--uninstall-from", self.install])
         self.assertEqual(popen.call_args[1]["cwd"], copy)
         env = popen.call_args[1]["env"]
         self.assertEqual(env["PYINSTALLER_RESET_ENVIRONMENT"], "1")
         self.assertNotIn("_PYI_APPLICATION_HOME_DIR", env)
+        # Run from source, there is nothing to copy.
+        self.assertIsNone(removal.start_uninstall_window(self.install))
 
-    def test_the_cards_copy_goes_after_it(self):
-        # Windows' command processor deletes the copy a few seconds after the card's program ends (ping's wait, which
-        # needs no keyboard, as choice does): one command line, as cmd.exe reads it (a list would be quoted whole, its
-        # inner quotes as \", which cmd.exe takes for the name's).
+    def test_the_uninstalls_copy_goes_after_it(self):
+        # Windows' command processor deletes the copy a few seconds after its program ends (ping's wait, which needs no
+        # keyboard, as choice does): one command line, as cmd.exe reads it (a list would be quoted whole, its inner
+        # quotes as \", which cmd.exe takes for the name's).
         import sys
-        copy = os.path.join(tempfile.gettempdir(), removal.CARD_COPY % 4242)
+        copy = os.path.join(tempfile.gettempdir(), removal.UNINSTALL_COPY % 4242)
         with mock.patch.object(sys, "platform", "win32"), mock.patch.object(subprocess, "Popen") as popen:
-            removal._remove_later(copy)
+            removal.remove_later(copy)
         command, = popen.call_args[0]
         self.assertEqual(command, 'cmd.exe /C ping -n 6 127.0.0.1 > nul & rmdir /s /q "%s"' % copy)
         # Never a folder of another name, nor one outside the temporary folder: the program's own folder stays.
         for other in (os.path.join(tempfile.gettempdir(), "OpenDMTQ"), os.path.join(self.install, "current")):
             with mock.patch.object(sys, "platform", "win32"), mock.patch.object(subprocess, "Popen") as popen:
-                removal._remove_later(other)
+                removal.remove_later(other)
             popen.assert_not_called()
 
-    def test_the_card_says_what_went_and_what_stayed(self):
-        from opendmtq_client import i18n
-        w = i18n.Words("en")
-        gone = os.path.join(self.home, "gone")
-        # The settings, sign-ins and game data stayed, with their size and folder.
+    def test_delete_all_says_its_bytes_as_they_go(self):
+        # The installer's progress: each file's bytes as it goes, all of them by the end, as everything_size counted.
         write(os.path.join(removal.data_root(), "com.example.game"), GAME)
-        kind, title, message, detail = removal.uninstalled_card(w, gone)
-        self.assertEqual((kind, title, message), ("info", "Uninstall", "OpenDMTQ is uninstalled."))
-        self.assertEqual(detail.split("\n")[0], "Gone: the program, its shortcuts and its entry in Windows' Apps.")
-        self.assertIn("Kept for a later install: the settings, sign-ins and game data (%s) in %s."
-                      % (removal.megabytes(removal.everything_size()), removal.data_root()), detail)
-        # Nothing stayed (deleted before): said so.
-        shutil.rmtree(removal.data_root())
-        self.assertIn("Nothing of OpenDMTQ's stays on this PC.", removal.uninstalled_card(w, gone)[3])
-        # The program still there after the uninstaller ended: said as it is, in Korean too.
-        os.makedirs(os.path.join(self.install, "current"), exist_ok=True)
-        kind, _title, message, detail = removal.uninstalled_card(i18n.Words("ko"), self.install)
-        self.assertEqual((kind, message), ("warn", "OpenDMTQ를 다 지우지 못했습니다."))
-        self.assertIn(self.install, detail)
+        write(os.path.join(removal.data_root(), "client"), {"settings.json": b"{}" * 50})
+        total = removal.everything_size()
+        heard = []
+        self.assertEqual(removal.delete_everything(gone=heard.append), [])
+        self.assertEqual(sum(heard), total)
+        self.assertFalse(os.path.exists(removal.data_root()))
 
-    def test_windows_apps_entry_is_made_quiet(self):
-        # Velopack writes Settings, Apps' entry with a plain --uninstall (its own window at the end): made the same as its
-        # quiet one, once; an entry quiet already, none at all, or a launcher not installed is left as it is. A stand-in
-        # for Windows' registry answers.
+    def test_windows_apps_entry_opens_opendmtqs_own_uninstall(self):
+        # Velopack writes Settings, Apps' entry with its own uninstaller at the install and at each update: made the
+        # launcher's own uninstall (which asks whether the data stays), its quiet one Velopack's silent uninstaller;
+        # written once, again after Velopack wrote it again; none at all, or a launcher not installed, left as it is. A
+        # stand-in for Windows' registry answers.
         import sys
         from opendmtq_client import installed
-        entries = {installed.UNINSTALL_KEY: {"UninstallString": '"%s" --uninstall' % os.path.join(self.install,
-                                                                                                    "Update.exe")}}
+        updater = os.path.join(self.install, "Update.exe")
+        velopacks = {"UninstallString": '"%s" --uninstall --silent' % updater,
+                     "QuietUninstallString": '"%s" --uninstall --silent' % updater}
+        entries = {installed.UNINSTALL_KEY: dict(velopacks)}
 
         class Key:
             def __init__(self, path):
@@ -386,21 +390,24 @@ class Uninstall(Folder):
         winreg = types.SimpleNamespace(HKEY_CURRENT_USER=1, KEY_QUERY_VALUE=1, KEY_SET_VALUE=2, REG_SZ=1,
                                        OpenKey=open_key, QueryValueEx=query, SetValueEx=set_value)
         with mock.patch.dict(sys.modules, {"winreg": winreg}), mock.patch.object(sys, "platform", "win32"):
-            self.assertTrue(installed.quiet_uninstall())
-            quiet = '"%s" --uninstall --silent' % os.path.join(self.install, "Update.exe")
-            self.assertEqual(entries[installed.UNINSTALL_KEY]["UninstallString"], quiet)
-            # Quiet already: nothing written again.
-            self.assertFalse(installed.quiet_uninstall())
-            # An install folder named by the installer, as it is after its setup.
-            entries[installed.UNINSTALL_KEY]["UninstallString"] = '"X:\\Update.exe" --uninstall'
-            self.assertTrue(installed.quiet_uninstall(self.install))
+            self.assertTrue(installed.own_entry())
+            entry = entries[installed.UNINSTALL_KEY]
+            self.assertEqual(entry["UninstallString"], '"%s" --uninstall-window' % os.path.join(self.install, "current",
+                                                                                                 "OpenDMTQ.exe"))
+            self.assertEqual(entry["QuietUninstallString"], '"%s" --uninstall --silent' % updater)
+            # Its own already: nothing written again.
+            self.assertFalse(installed.own_entry())
+            # Velopack wrote its own again (an update): made OpenDMTQ's own again.
+            entry.update(velopacks)
+            self.assertTrue(installed.own_entry(self.install))
+            self.assertIn("--uninstall-window", entry["UninstallString"])
             # No entry, and no install: nothing.
             entries.clear()
-            self.assertFalse(installed.quiet_uninstall())
+            self.assertFalse(installed.own_entry())
             os.environ.pop("OPENDMTQ_INSTALL_ROOT")
-            self.assertFalse(installed.quiet_uninstall())
+            self.assertFalse(installed.own_entry())
         # Off Windows, nothing is asked.
-        self.assertFalse(installed.quiet_uninstall(self.install))
+        self.assertFalse(installed.own_entry(self.install))
 
     def test_a_copied_folder_has_no_uninstaller(self):
         os.environ.pop("OPENDMTQ_INSTALL_ROOT")

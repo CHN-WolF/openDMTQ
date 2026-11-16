@@ -524,7 +524,10 @@ class Maintenance(Folder):
         with mock.patch.object(subprocess, "Popen") as popen:
             code, said = self.run_main(["--uninstall"], stdin="y\n")
         self.assertEqual(code, 0)
-        self.assertEqual(popen.call_args[0][0][1:], ["--uninstall", "--silent"])
+        # Velopack's log of this uninstall goes into the install folder, which goes whole after it: nothing of
+        # OpenDMTQ's stays but the data the player keeps.
+        self.assertEqual(popen.call_args[0][0][1:], ["--uninstall", "--silent", "--log",
+                                                     os.path.join(self.install, "uninstall.log")])
         self.assertEqual(listing(self.game), set(GAME))
         self.assertEqual(st.LauncherState.load().server()["url"], self.site.url)
 
@@ -553,7 +556,8 @@ class Maintenance(Folder):
 
     def test_velopacks_hooks_do_what_opendmtq_asks_of_them(self):
         # A stand-in for Velopack's module runs the hook its arguments name, as the real one does, then ends the process:
-        # after an update Windows' entry is made quiet again; before an uninstall the card's copy is made.
+        # after an update Windows' entry is made OpenDMTQ's own again; its uninstall asks nothing more of OpenDMTQ (the
+        # installer's own uninstall asked and says what went), so no hook is given for it.
         done, given = [], {}
 
         class App:
@@ -571,27 +575,58 @@ class Maintenance(Folder):
                 hook = self.hooks.get(given["argv"][0])
                 if hook:
                     hook(given["argv"][1])
+                # A hook's process ends here whether or not OpenDMTQ gave one, as Velopack ends it.
+                if given["argv"][0].startswith("--veloapp-"):
                     raise SystemExit(0)
 
         velopack = types.SimpleNamespace(App=App)
         with mock.patch.dict(sys.modules, {"velopack": velopack}), \
-                mock.patch("opendmtq_client.installed.quiet_uninstall", lambda folder=None: done.append("quiet")), \
-                mock.patch.object(removal, "card_after_uninstall", lambda program=None: done.append("card")):
-            for hook, said in (("--veloapp-updated", "quiet"), ("--veloapp-uninstall", "card")):
+                mock.patch("opendmtq_client.installed.own_entry", lambda folder=None: done.append("own")):
+            for hook, said in (("--veloapp-updated", ["own"]), ("--veloapp-uninstall", [])):
                 given["argv"] = [hook, "0.9.6"]
                 done.clear()
                 with self.assertRaises(SystemExit):
                     self.run_main(given["argv"])
-                self.assertEqual(done, [said])
+                self.assertEqual(done, said)
 
-    def test_the_card_after_an_uninstall_runs_on_its_own(self):
-        # The copy the uninstall hook starts: its card, nothing of Velopack's, no window of the launcher's.
-        with mock.patch.object(removal, "show_uninstalled", return_value=0) as card, \
-                mock.patch.object(main, "_velopack_hooks") as hooks, mock.patch.object(main.dpi, "aware"):
-            code, said = self.run_main(["--uninstalled", "4242"])
+    def test_windows_apps_opens_the_installers_own_uninstall(self):
+        # Windows' Settings, Apps runs the installed launcher with --uninstall-window: it starts its copy outside the
+        # program's folder and ends; the copy (--uninstall-from FOLDER) is the installer's own uninstall, then goes a
+        # few seconds after it. Neither runs Velopack's start-up handling, makes Windows' entry again, nor asks for the
+        # launcher's settings.
+        from opendmtq_client import installed, installer
+        with mock.patch.object(removal, "start_uninstall_window") as copy, \
+                mock.patch.object(main, "_velopack_hooks") as hooks, mock.patch.object(main, "_own_entry") as entry, \
+                mock.patch.object(main.dpi, "aware"):
+            code, said = self.run_main([installed.UNINSTALL_WINDOW])
         self.assertEqual(code, 0)
-        card.assert_called_once_with(4242)
+        copy.assert_called_once_with(self.install)
         hooks.assert_not_called()
+        entry.assert_not_called()
+        with mock.patch.object(installer, "uninstall_main", return_value=0) as uninstall, \
+                mock.patch.object(removal, "remove_later") as later, \
+                mock.patch.object(main, "_velopack_hooks") as hooks, mock.patch.object(main.dpi, "aware"):
+            code, said = self.run_main([main.UNINSTALL_FROM, self.install])
+        self.assertEqual(code, 0)
+        uninstall.assert_called_once_with(self.install)
+        later.assert_called_once_with(os.path.dirname(os.path.abspath(sys.executable)))
+        hooks.assert_not_called()
+        # A launcher Windows did not install has nothing to uninstall: said in the log, nothing copied.
+        os.environ.pop("OPENDMTQ_INSTALL_ROOT")
+        with mock.patch.object(removal, "start_uninstall_window") as copy, mock.patch.object(main.dpi, "aware"):
+            code, said = self.run_main([installed.UNINSTALL_WINDOW])
+        self.assertEqual(code, 2)
+        copy.assert_not_called()
+
+    def test_the_uninstalls_own_runs_make_no_log_folder(self):
+        # The copy from Windows' Apps may run after the data was deleted: its log is written only where its folder is.
+        from opendmtq_client import installer
+        import shutil
+        shutil.rmtree(removal.data_root(), ignore_errors=True)
+        with mock.patch.object(installer, "uninstall_main", return_value=0), \
+                mock.patch.object(removal, "remove_later"), mock.patch.object(main.dpi, "aware"):
+            self.run_main([main.UNINSTALL_FROM, self.install])
+        self.assertFalse(os.path.exists(os.path.dirname(st.launcher_log())))
 
     def test_uninstall_waits_for_the_window_and_the_game(self):
         with mock.patch.object(main, "window_open", return_value=True), \

@@ -14,26 +14,68 @@ class Installer(unittest.TestCase):
         order = ["0.7.0", "0.8.0-rc.1", "0.8.0-rc.2", "0.8.0", "0.8.1", "1.0.0"]
         self.assertEqual(sorted(reversed(order), key=installer.version_key), order)
 
-    def test_what_it_asks(self):
-        self.assertEqual(installer.plan(None, "0.8.0", False)[5], "install")
-        self.assertEqual(installer.plan("0.7.0", "0.8.0", True)[5], "update")
-        self.assertEqual(installer.plan("0.9.0", "0.8.0", False)[5], "back")
-        self.assertIsNone(installer.plan("0.8.0", "0.8.0", False))
+    def test_what_an_installed_pc_is_offered(self):
+        # This installer's version against the one installed: Update first when this one is newer (no Repair then: it
+        # would update), Open first otherwise, then Repair for the same version, going back for an older one, and
+        # Uninstall last every time.
+        self.assertEqual(installer.maintenance("0.10.0", "0.11.0"), ["update", "open", "uninstall"])
+        self.assertEqual(installer.maintenance("0.11.0", "0.11.0"), ["open", "repair", "uninstall"])
+        self.assertEqual(installer.maintenance("0.12.0", "0.11.0"), ["open", "back", "uninstall"])
+        self.assertEqual(installer.maintenance("0.11.0-rc.1", "0.11.0"), ["update", "open", "uninstall"])
 
-    def test_it_names_the_server_it_brings(self):
-        asked = installer.plan(None, "0.8.0", False, {"url": "http://club.test", "name": "Club"})
-        # What it sets up, said: OpenDMTQ, to play on that server.
-        self.assertIn("This installer sets OpenDMTQ to play on Club.", asked[3])
+    def test_velopacks_setup_read_as_it_writes(self):
+        # Its log, as 0.10.0's setup wrote it under Wine: the steps it goes through, the program's size and the
+        # package's, read as they come, a line not ended yet waiting for its end.
+        folder = tempfile.mkdtemp()
+        log = os.path.join(folder, "setup.log")
+        lines = ["[setup:448] [11:47:52] [INFO] Starting Velopack Setup (1.2.161)\n",
+                 "[setup:448] [11:47:52] [INFO] Bundle offset = 7546368, length = 41322990\n",
+                 "[setup:448] [11:47:52] [INFO] There is 312.75 GB free space available at destination, this package "
+                 "requires 187.49 MB.\n",
+                 "[setup:448] [11:47:52] [INFO] Extracting 1032 app files to '...current'...\n",
+                 "[setup:448] [11:47:54] [INFO] Creating shortcuts...\n",
+                 "[setup:448] [11:47:54] [INFO] Running --veloapp-install hook...\n"]
+        reader = installer.SetupLog(log)
+        # Not written yet: the setup is starting.
+        self.assertEqual(reader.read(), 0)
+        with open(log, "w", encoding="utf-8") as f:
+            f.write("".join(lines[:3]) + lines[3][:20])
+        self.assertEqual(reader.read(), 0)
+        self.assertEqual((reader.required, reader.bundle), (187.49 * (1 << 20), 41322990))
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(lines[3][20:])
+        self.assertEqual(reader.read(), 1)
+        # The copy's share follows the program's files: half of them there, about half of the copy's span.
+        os.makedirs(os.path.join(folder, "current"))
+        target = reader.required - reader.bundle
+        with open(os.path.join(folder, "current", "half.bin"), "wb") as f:
+            f.write(b"\0" * int(target / 2))
+        share = reader.share(folder)
+        self.assertAlmostEqual(share, 0.06 + (0.92 - 0.06) * 0.5, places=2)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(lines[4] + lines[5])
+        self.assertEqual(reader.read(), 3)
+        self.assertEqual(reader.share(folder), 0.96)
 
-    def test_it_asks_in_korean(self):
-        w = i18n.Words("ko")
-        asked = installer.plan(None, "0.8.0", False, {"url": "http://club.test", "name": "Club"}, w)
-        self.assertEqual(asked[2], "OpenDMTQ 0.8.0 버전을 설치할까요?")
-        self.assertIn("이 설치 파일은 OpenDMTQ가 Club에서 플레이하도록 설정합니다.", asked[3])
-        asked = installer.plan("0.7.0", "0.8.0", True, None, w)
-        self.assertEqual((asked[1], asked[4]), ("업데이트", "업데이트"))
-        self.assertIn("열려 있는 런처는 먼저 닫힙니다.", asked[3])
-        self.assertEqual(installer.plan("0.9.0", "0.8.0", False, None, w)[4], "0.8.0 버전 설치")
+    def test_the_installed_version_as_notepad_leaves_it(self):
+        # Velopack's sq.version saved again by hand: a byte order mark, Windows' line ends, spaces, quotes.
+        folder = tempfile.mkdtemp()
+        os.makedirs(os.path.join(folder, "current"))
+        for text in ('\ufeff<?xml version="1.0"?>\r\n<package>\r\n  <version> 0.11.0 </version>\r\n</package>\r\n',
+                     '<version>"0.11.0"</version>', "<version>0.11.0</version>"):
+            with open(os.path.join(folder, "current", "sq.version"), "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+            self.assertEqual(installer.installed_version(folder), "0.11.0", repr(text))
+        self.assertIsNone(installer.installed_version(os.path.join(folder, "none")))
+
+    def test_every_step_and_stage_has_its_words(self):
+        # The keys the window builds from a step's or a stage's name, in both languages.
+        for key in installer.STEP_KEYS:
+            self.assertTrue(all(i18n.TEXT["setup.step." + key]), key)
+        for key in installer.STAGE_KEYS:
+            self.assertTrue(all(i18n.TEXT["setup.stage." + key]), key)
+        for action in installer.WORK:
+            self.assertTrue(all(i18n.TEXT["setup.work.%s.line" % action]), action)
 
     def test_the_server_from_its_own_file(self):
         folder = tempfile.mkdtemp()
@@ -86,6 +128,19 @@ class Language(Folder):
         s.save()
         self.assertEqual(installer.language(), "en")
 
+    def test_the_launchers_choice_as_notepad_leaves_it(self):
+        # The launcher's settings saved again by hand: a byte order mark, Windows' line ends, the language in capitals
+        # with spaces round it. Still the player's choice, never Windows' language instead.
+        s = st.LauncherState()
+        s.language = "en"
+        s.save()
+        with open(st.LauncherState.path(), encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn('"language": "en"', text)
+        with open(st.LauncherState.path(), "w", encoding="utf-8-sig", newline="\r\n") as f:
+            f.write(text.replace('"language": "en"', '"language": " EN "'))
+        self.assertEqual(installer.language(), "en")
+
     def test_unreadable_settings_fall_back_to_windows(self):
         os.makedirs(st.config_dir(), exist_ok=True)
         with open(st.LauncherState.path(), "w") as f:
@@ -111,7 +166,8 @@ class BuiltWithout(unittest.TestCase):
         # Each left-out module made unimportable (None in sys.modules), then the installer's own code imported.
         code = ("import sys\n"
                 "for name in %r: sys.modules[name] = None\n"
-                "from opendmtq_client import installer, preset, dialogs\n" % (left_out,))
+                "from opendmtq_client import installer, preset, dialogs, removal, installed, setup_window\n"
+                "removal.everything_size(), removal.game_data_size(), removal.leftovers()\n" % (left_out,))
         run = subprocess.run([sys.executable, "-c", code], cwd=os.path.join(here, ".."), capture_output=True, text=True)
         self.assertEqual(run.returncode, 0, run.stderr[-2000:])
 
