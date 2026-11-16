@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.request
 from xml.sax.saxutils import escape
 
 from opendmtq_cli import checks, env, look
@@ -364,9 +365,36 @@ def cmd_repair(args):
     status = tool("repair", "--build", values=values, found=found)
     if running_pid():
         # Its programs read what was put back at their start.
-        ask_running_program("restart.request", str(int(time.time())))
-        ok("the server starts again with it")
+        restart_running(values)
     return status
+
+
+def admin_instance(values):
+    """Which run of the admin pages answers (their setup's ping), or None while none does."""
+    from .settings import admin_port
+    try:
+        url = f"http://127.0.0.1:{admin_port(values)}/opendmtq/admin/setup/ping"
+        with urllib.request.urlopen(url, timeout=2) as r:
+            return json.loads(r.read()).get("instance")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def restart_running(values):
+    """Asks the running server's program to start every part again, and says so once it has: a new run of the admin pages
+    answers and the server is healthy, so that what comes next (a page, a script's next request) finds it whole, never
+    the old run on its way out."""
+    before = admin_instance(values)
+    ask_running_program("restart.request", str(int(time.time())))
+    # As long as a start may take (START_WAIT), and the request's own look every two seconds.
+    deadline = time.time() + START_WAIT + 10
+    while time.time() < deadline:
+        now = admin_instance(values)
+        if now is not None and now != before and health(values) is not None:
+            ok("the server started again with it")
+            return
+        time.sleep(1)
+    ok(f"the server is starting again with it; {CLI} status says when it answers")
 
 
 def data_sizes(values, found):

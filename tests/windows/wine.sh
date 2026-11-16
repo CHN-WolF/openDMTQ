@@ -444,7 +444,7 @@ tail -n 4 /tmp/delete.log
 before=$(web "$A/setup/ping")
 timeout 600 wine OpenDMTQ.exe repair 2>&1 | cat > /tmp/repair.log || true
 tail -n 8 /tmp/repair.log
-expect "OpenDMTQ.exe repair checks everything and the window starts the server again with it" grep -q "the server starts again with it" /tmp/repair.log
+expect "OpenDMTQ.exe repair checks everything and the window starts the server again with it" grep -q "the server started again with it" /tmp/repair.log
 restarted=no
 for _ in $(seq 1 120); do
   now=$(curl -s -m 3 "$A/setup/ping" || true)

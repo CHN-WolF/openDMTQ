@@ -410,6 +410,8 @@ expect "and the owner's sign-in for the site" inside "test -s OpenDMTQ/data/stat
 inside "rm OpenDMTQ/server/portal/robots.txt"
 expect "opendmtq repair puts a program file back too" inside "OPENDMTQ_TARBALL=file:///tmp/release.tar.gz opendmtq repair > /tmp/repair.log 2>&1 && test -s OpenDMTQ/server/portal/robots.txt"
 inside "tail -n 4 /tmp/repair.log" || true
+# It says the server started again only once it has: the next request finds the new run whole, not the old one leaving.
+expect "and says the server started again once it has" inside "grep -q 'the server started again with it' /tmp/repair.log"
 for _ in $(seq 60); do is 200 "http://127.0.0.1:$PORT/opendmtq/health.php" && break; sleep 1; done
 # The data: an old backup and the logs, a backup made first and kept.
 inside "mkdir -p OpenDMTQ/data/backups && echo old > OpenDMTQ/data/backups/opendmtq-20200101-000000-manual.tar.gz"
