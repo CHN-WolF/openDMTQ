@@ -23,6 +23,8 @@ def cmd_start(args):
     if WINDOWS:
         die("on Windows the server runs in its window: start OpenDMTQ.exe")
     values = require_settings()
+    # The wordmark first (once per run: the setup that comes here showed it already).
+    look.banner(version())
     programs()
     if running_pid():
         ok(f"already running: http://{values['PUBLIC_HOST']}/")
@@ -41,6 +43,14 @@ def cmd_start(args):
         die(f"no answer from the server after {START_WAIT} s; it may still be starting. Run {CLI} setup again in a "
             f"minute, or see {os.path.join(LOGS, 'host.log')} and {os.path.join(LOGS, 'server.log')}")
     ok(f"running: http://{values['PUBLIC_HOST']}/")
+    # Started on its own (start, restart): the addresses and the owner's sign-in, as the setup's end shows them. (The
+    # setup that comes here shows them itself, once.)
+    if getattr(args, "cmd", None) in ("start", "restart"):
+        say("")
+        for line in look.address_block(f"http://{values['PUBLIC_HOST']}/",
+                                       f"http://localhost:{admin_port(values)}/opendmtq/admin/",
+                                       values.get("ADMIN_USER") or "admin", where="ADMIN_PASSWORD in .env"):
+            say(line)
     return 0
 
 
