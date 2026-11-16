@@ -46,9 +46,9 @@ AUDIO_MODE = ("shared", "exclusive")
 AUDIO_BUFFER = ("low", "normal", "safe")
 # The three-band equaliser on the game's whole output: flat, a preset, or the player's own bands (custom).
 EQ = ("flat", "bass", "vocal", "treble", "custom")
-# Each preset's bands in dB (low, mid, high): the launcher writes them as eq_low, eq_mid and eq_high with the preset,
-# so the player hears the same whichever of the two it reads.
-EQ_PRESETS = {"flat": (0, 0, 0), "bass": (6, 1, 0), "vocal": (-2, 4, 1), "treble": (0, 1, 6)}
+# Each preset's bands in dB (low, mid, high), the player's own (arm32/desktop/sound_mix.h, preset_bands): the launcher
+# writes them as eq_low, eq_mid and eq_high with the preset, so the player hears the same whichever of the two it reads.
+EQ_PRESETS = {"flat": (0, 0, 0), "bass": (6, 0, 0), "vocal": (-2, 4, 1), "treble": (0, 0, 6)}
 # The bands' names in the settings file, from the lowest, and the range each takes (dB).
 EQ_BANDS = ("eq_low", "eq_mid", "eq_high")
 EQ_RANGE = (-12, 12)

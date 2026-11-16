@@ -197,9 +197,19 @@ class Values(unittest.TestCase):
             with self.assertRaises(choices.ChoiceError, msg=(name, value)):
                 choices.normalize({name: value})
         self.assertEqual(choices.normalize({"eq": "custom", "eq_low": "+3", "eq_high": "-12"})["eq_low"], 3)
-        # A preset sets its bands; the file writes them after it, in the contract's order after volume.
+        # A preset sets its bands, the player's own numbers (arm32/desktop/sound_mix.h): the file writes them after it,
+        # in the contract's order after volume.
         bass = choices.normalize({"eq": "bass", "eq_low": "-5"})
         self.assertEqual([bass[b] for b in choices.EQ_BANDS], list(choices.EQ_PRESETS["bass"]))
+        sound_mix = os.path.join(os.path.dirname(__file__), "..", "..", "arm32", "desktop", "sound_mix.h")
+        if os.path.isfile(sound_mix):
+            # The player's presets, where its branch has them: the same numbers.
+            with open(sound_mix, encoding="utf-8") as f:
+                source = f.read()
+            for kind, bands in choices.EQ_PRESETS.items():
+                found = re.search(r"EqPreset::k%s: return \{(-?\d+), (-?\d+), (-?\d+)\}" % kind.title(), source)
+                self.assertTrue(found, kind)
+                self.assertEqual(tuple(int(n) for n in found.groups()), bands, kind)
         lines = [line for line in choices.settings_text({"eq": "vocal", "music_volume": 40}).splitlines()
                  if not line.startswith("#")]
         start = lines.index("volume=100")

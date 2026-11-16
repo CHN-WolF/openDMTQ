@@ -694,13 +694,13 @@ class Maintenance(Folder):
         code, said = self.run_main(["--set", "eq_low=-3"])
         self.assertEqual(code, 0, said)
         values = st.LauncherState.load().values
-        self.assertEqual((values["eq"], values["eq_low"], values["eq_mid"]), ("custom", -3, 1))
+        self.assertEqual((values["eq"], values["eq_low"], values["eq_mid"]), ("custom", -3, 0))
         with open(player.settings_path(), encoding="utf-8") as f:
             written = f.read().splitlines()
-        for line in ("music_volume=40", "effects_volume=70", "eq=custom", "eq_low=-3", "eq_mid=1", "eq_high=0"):
+        for line in ("music_volume=40", "effects_volume=70", "eq=custom", "eq_low=-3", "eq_mid=0", "eq_high=0"):
             self.assertIn(line, written)
         code, said = self.run_main(["--status"])
-        for name in ("music_volume=40", "effects_volume=70", "eq=custom", "eq_low=-3", "eq_mid=1", "eq_high=0"):
+        for name in ("music_volume=40", "effects_volume=70", "eq=custom", "eq_low=-3", "eq_mid=0", "eq_high=0"):
             self.assertIn(name, said)
         # Out of range, and the frame limit as any rate in the player's range (a 160 Hz display's own).
         code, said = self.run_main(["--set", "eq_high=13"])

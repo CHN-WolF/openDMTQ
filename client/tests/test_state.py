@@ -152,7 +152,7 @@ class State(Folder):
         from opendmtq_client import values as choices
         text = "\ufeffvolume = 40\r\nmusic_volume=\"55\"\r\neq=' bass '\r\ndisplay=window\r\n"
         found = choices.took_back(choices.normalize({}), text.lstrip("\ufeff"))
-        self.assertEqual(found, {"volume": 40, "music_volume": 55, "eq": "bass", "eq_low": 6, "eq_mid": 1})
+        self.assertEqual(found, {"volume": 40, "music_volume": 55, "eq": "bass", "eq_low": 6})
 
     def test_a_bad_setting_keeps_its_default(self):
         os.makedirs(st.config_dir())
