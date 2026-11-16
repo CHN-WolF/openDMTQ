@@ -152,8 +152,8 @@ Where the server gets the installer, the first that has one:
 
 A copy in `data/apk` gives way to the latest release's once it is a week old, and stays when that fetch fails. After a
 fetch that failed, the builder waits a day before it tries again: a server without internet does not wait for an answer
-at every start. Without internet, put the release's `OpenDMTQ-Setup.exe` and `OpenDMTQ-Setup.exe.version` in `data/apk`
-([without internet](closed-network.md)). Without an installer the site shows no Windows button, and everything else
+at every start. Without internet, put the release's `OpenDMTQ-PC-Client-<version>-windows-x64-Setup.exe` in `data/apk`
+([without internet](closed-network.md)): the builder keeps it as `OpenDMTQ-Setup.exe`, with the version from its name. Without an installer the site shows no Windows button, and everything else
 works as before.
 
 A server reached over HTTPS hands out installers that use it, with the port named (HTTPS answers on the game's port).

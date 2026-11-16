@@ -437,9 +437,16 @@ class ClosedNetworkGuideTest(unittest.TestCase):
         values = self.read("deploy", "helm", "opendmtq", "values.yaml")
         for repository, tag in re.findall(r'repository: (\S+)\n\s+(?:#.*\n\s+)?tag: "([^"]+)"', values):
             self.assertIn(f"{repository}:{tag}", guide)
-        # The runtime's file, under the name runtime.py looks for.
-        self.assertIn('ZIP_NAME = "opendmtq-arm32-runtime.zip"', self.read("tools", "opendmtq_tools", "runtime.py"))
-        self.assertIn("opendmtq-arm32-runtime.zip", guide)
+        # The runtime's and the installer's files, under the names a release gives them, which runtime.py,
+        # windows_client.py and host/install.sh look for.
+        self.assertIn('RELEASE_NAME = "OpenDMTQ-Phone-Runtime-{version}-android-arm64-armv7.zip"',
+                      self.read("tools", "opendmtq_tools", "runtime.py"))
+        self.assertIn("`OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip`", guide)
+        self.assertIn("'OpenDMTQ-Phone-Runtime-*-android-arm64-armv7.zip'", install)
+        self.assertIn('RELEASE_NAME = "OpenDMTQ-PC-Client-{version}-windows-x64-Setup.exe"',
+                      self.read("tools", "opendmtq_tools", "windows_client.py"))
+        self.assertIn("`OpenDMTQ-PC-Client-1.2.3-windows-x64-Setup.exe`", guide)
+        self.assertIn("'OpenDMTQ-PC-Client-*-windows-x64-Setup.exe'", install)
 
 
 class LicenseTest(unittest.TestCase):

@@ -27,12 +27,14 @@ anything. [The game's files](game-files.md) has every form it accepts.
 
 ## Windows
 
-Windows 10 or 11. Paste into **Windows PowerShell**:
+Windows 10 or 11, x64. Paste into **Windows PowerShell** (the first line finds the latest release's number, which the
+file's name carries):
 
 ```powershell
 cd ~
-curl.exe -LO https://github.com/kanggu12/openDMTQ/releases/latest/download/OpenDMTQ-windows.zip
-tar.exe -xf OpenDMTQ-windows.zip
+$v = (curl.exe -fsS -o NUL -w '%{redirect_url}' https://github.com/kanggu12/openDMTQ/releases/latest) -replace '.*/v'
+curl.exe -fLO "https://github.com/kanggu12/openDMTQ/releases/download/v$v/OpenDMTQ-Server-$v-windows-x64.zip"
+tar.exe -xf "OpenDMTQ-Server-$v-windows-x64.zip"
 start .\OpenDMTQ\OpenDMTQ.exe
 ```
 
@@ -44,18 +46,19 @@ use and an account for each player, and builds the app.
   **Private** in Settings, or phones cannot connect.
 - **The server runs while its window is open.** To stop it, close the window, or press **Stop the server** under
   **Maintenance** on the admin pages. To start it again, `start ~\OpenDMTQ\OpenDMTQ.exe`, or double-click it.
-- **To update**, close its window and run the same four lines again. The new files replace the program's; your `data`
+- **To update**, close its window and run the same five lines again. The new files replace the program's; your `data`
   folder and `.env` stay.
 
 <details>
 <summary>Without PowerShell</summary>
 
-Download `OpenDMTQ-windows.zip` from [Releases](https://github.com/kanggu12/openDMTQ/releases/latest) and unpack it
-outside OneDrive and Program Files, for example to `C:\OpenDMTQ`. Start `OpenDMTQ.exe`. If Windows says it protected
-your PC, click **More info**, then **Run anyway**: OpenDMTQ.exe is not signed by a publisher Windows knows.
+Download `OpenDMTQ-Server-<version>-windows-x64.zip` from [Releases](https://github.com/kanggu12/openDMTQ/releases/latest)
+and unpack it outside OneDrive and Program Files, for example to `C:\OpenDMTQ`. Start `OpenDMTQ.exe`. If Windows says it
+protected your PC, click **More info**, then **Run anyway**: OpenDMTQ.exe is not signed by a publisher Windows knows.
 
-Each release has `OpenDMTQ-windows.zip.sha256` beside the zip. In PowerShell, compare `Get-FileHash
-OpenDMTQ-windows.zip` with it; on Linux, run `sha256sum -c OpenDMTQ-windows.zip.sha256`.
+Each release has `OpenDMTQ-<version>-SHA256SUMS.txt`, the SHA-256 of every file in it. In PowerShell, compare
+`Get-FileHash OpenDMTQ-Server-<version>-windows-x64.zip` with its line; on Linux, run
+`sha256sum -c --ignore-missing OpenDMTQ-<version>-SHA256SUMS.txt` in the folder you downloaded to.
 </details>
 
 ## Linux or macOS

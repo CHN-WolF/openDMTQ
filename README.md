@@ -74,12 +74,13 @@ With your own copy of the game's Android app, its client data and its song data 
 </tr>
 </table>
 
-**Windows 10 or 11**, in PowerShell (the server runs while its window is open):
+**Windows 10 or 11 (x64)**, in PowerShell (the server runs while its window is open):
 
 ```powershell
 cd ~
-curl.exe -LO https://github.com/kanggu12/openDMTQ/releases/latest/download/OpenDMTQ-windows.zip
-tar.exe -xf OpenDMTQ-windows.zip
+$v = (curl.exe -fsS -o NUL -w '%{redirect_url}' https://github.com/kanggu12/openDMTQ/releases/latest) -replace '.*/v'
+curl.exe -fLO "https://github.com/kanggu12/openDMTQ/releases/download/v$v/OpenDMTQ-Server-$v-windows-x64.zip"
+tar.exe -xf "OpenDMTQ-Server-$v-windows-x64.zip"
 start .\OpenDMTQ\OpenDMTQ.exe
 ```
 

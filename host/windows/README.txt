@@ -43,6 +43,8 @@ Later
 - The admin password is in the file .env in this folder; open it with Notepad.
 - Your data (players, scores, recordings, the app's signing key) is in the data folder. The admin pages' backups hold all
   of it but the recordings.
+- To update: close the window, download the newest OpenDMTQ-Server-<version>-windows-x64.zip from the releases
+  (https://github.com/kanggu12/openDMTQ/releases/latest) and unpack it over this folder. The data folder and .env stay.
 
 Guides, and where to report a problem: https://github.com/kanggu12/openDMTQ
 

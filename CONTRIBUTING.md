@@ -190,11 +190,16 @@ What a release publishes:
 | What | Where |
 | :--- | :--- |
 | The server and tools images | `ghcr.io/kanggu12/opendmtq-server` and `opendmtq-tools`, tagged `1.2.3` and `latest` |
-| The Helm chart | `oci://ghcr.io/kanggu12/charts/opendmtq`, and `opendmtq-1.2.3.tgz` on the release |
-| The Windows bundle | `OpenDMTQ-windows.zip` and `OpenDMTQ-windows.zip.sha256` |
-| The PC client | `OpenDMTQ-Setup.exe` with `OpenDMTQ-Setup.exe.version`, and Velopack's packages that installed clients update from (`OpenDMTQ.Client-1.2.3-full.nupkg`, `RELEASES`, `releases.win.json`, `assets.win.json`) |
-| The runtime for newer phones | `opendmtq-arm32-runtime.zip` |
-| The player for Windows alone | `opendmtq-player-windows.zip` |
+| The PC client's installer, for players | `OpenDMTQ-PC-Client-1.2.3-windows-x64-Setup.exe` |
+| The server for Windows | `OpenDMTQ-Server-1.2.3-windows-x64.zip` |
+| The Helm chart | `OpenDMTQ-Server-1.2.3-helm-chart.tgz`, and `oci://ghcr.io/kanggu12/charts/opendmtq` |
+| The runtime for newer phones, for the server's app builder | `OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip` |
+| The PC client's update feed and package, which installed clients update from | `releases.win.json` and `OpenDMTQ.Client-1.2.3-full.nupkg` (Velopack's names, which installed clients look for) |
+| The checksums of all of them | `OpenDMTQ-1.2.3-SHA256SUMS.txt` |
+
+`.github/release_assets.py` gives the files these names and checks them before anything is pushed: exactly these, the
+version in each name, the programs for Windows built for x64, the update feed naming the package beside it. The
+release's notes open with which file is for whom (`.github/release_notes.py`).
 
 A release names itself by its number (`0.2.0`): the Windows bundle, the one-command install and the Helm chart. A copy
 from a clone names itself the same at a release's tag, and past it by that release and its commit (`0.9.3-d5e201c`),
