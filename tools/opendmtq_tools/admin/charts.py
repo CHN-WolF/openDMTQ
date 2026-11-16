@@ -1,7 +1,9 @@
 """Small charts for the admin pages, drawn on the server as plain HTML and SVG: no library, no script needed to see them.
 
-Every mark carries data-tip, which the page's small script shows on hover and on keyboard focus (base.html). Text stays in
-the page's text colours; the marks carry the colour. All values go through html.escape: names come from players.
+Every mark carries data-tip, which the page's script shows under a pointer, on a finger's press and on the keyboard's focus
+(admin.js), and the same words as its name for a screen reader. The marks of one chart are one stop of the Tab key (data-tips
+on the chart): the arrow keys go from mark to mark. Text stays in the page's text colours; the marks carry the colour. All
+values go through html.escape: names come from players.
 """
 
 from html import escape
@@ -25,8 +27,10 @@ PLOT_HEAD = 6
 
 
 def tip(text):
-    """The attribute that gives a mark its tooltip."""
-    return f'data-tip="{escape(str(text), quote=True)}" tabindex="0"'
+    """The attributes that give a mark its words: shown beside it (admin.js), and its name for a screen reader. Reached by the
+    keyboard: admin.js keeps one mark of each chart in the Tab key's order, and the arrow keys go to the others."""
+    words = escape(str(text), quote=True)
+    return f'data-tip="{words}" role="img" aria-label="{words}" tabindex="0"'
 
 
 def number(n):
@@ -73,7 +77,7 @@ def _frame(marks, top, axis_labels, label, fmt=number, note=""):
         # their bar, over the one before. Past the plot's edge they reach at most about 11px, inside the card's padding.
         place = f'left:{share:.1f}%;transform:translateX(-50%)'
         x_labels.append(f'<span style="{place}">{escape(text)}</span>')
-    svg = (f'<svg class="chart-svg" viewBox="0 0 {PLOT_WIDTH} 100" role="img" aria-label="{escape(label, quote=True)}" preserveAspectRatio="none">'
+    svg = (f'<svg class="chart-svg" viewBox="0 0 {PLOT_WIDTH} 100" role="group" aria-label="{escape(label, quote=True)}" data-tips preserveAspectRatio="none">'
            f'{"".join(grid)}{"".join(marks)}</svg>')
     words = f'<p class="chart-note"><span>{escape(note)}</span></p>' if note else ""
     return (f'<div class="chart"><div class="chart-y" aria-hidden="true">{"".join(y_labels)}</div><div class="chart-plot">{svg}{words}</div>'
@@ -133,7 +137,7 @@ def heatmap(rows, row_names, cell_tip, label, ends=("", "")):
     """A grid of counts (one row per day of the week, one column per hour): one colour, stronger with more. ends are the
     words at the two ends of the key under it."""
     top = max((v for row in rows for v in row), default=0)
-    parts = [f'<div class="heat" role="img" aria-label="{escape(label, quote=True)}"><span class="heat-corner"></span>']
+    parts = [f'<div class="heat" role="group" aria-label="{escape(label, quote=True)}" data-tips><span class="heat-corner"></span>']
     for hour in range(24):
         parts.append(f'<span class="heat-hour">{hour if hour % 3 == 0 else ""}</span>')
     for name, row in zip(row_names, rows):
@@ -141,7 +145,7 @@ def heatmap(rows, row_names, cell_tip, label, ends=("", "")):
         for hour, value in enumerate(row):
             # Five steps: past that the eye cannot tell them apart.
             step = 0 if not value or not top else 1 + min(4, int(4 * value / top))
-            parts.append(f'<i class="c{step}" data-tip="{escape(cell_tip(name, hour, value), quote=True)}"></i>')
+            parts.append(f'<i class="c{step}" {tip(cell_tip(name, hour, value))}></i>')
     parts.append("</div>")
     steps = "".join(f'<span class="k{step}"></span>' for step in range(6))
     parts.append(f'<div class="heat-key" aria-hidden="true">{escape(ends[0])}<span class="heat-steps">{steps}</span>{escape(ends[1])}</div>')
@@ -172,7 +176,7 @@ def segments(parts, label, colours=PARTS):
         words = f"{name}: {shown} ({share:.0%})"
         inside = f"{share:.0%}" if share >= 0.09 else ""
         bar.append(f'<span style="flex:{value} 1 0;background:{colour};color:{ink_on(colour)}" {tip(words)}>{inside}</span>')
-    return Markup(f'<div class="segbar" role="img" aria-label="{escape(label, quote=True)}">{"".join(bar)}</div><ul class="seglegend">{"".join(legend)}</ul>')
+    return Markup(f'<div class="segbar" role="group" aria-label="{escape(label, quote=True)}" data-tips>{"".join(bar)}</div><ul class="seglegend">{"".join(legend)}</ul>')
 
 
 def ranked(rows, label):
@@ -236,7 +240,7 @@ def area(points, label, top=100, fmt=percent, note=""):
     for i, (name, words, value) in enumerate(points):
         # Bigger than the line: the whole slot answers the pointer, where something was known.
         if words and value is not None:
-            marks.append(f'<rect class="hit" x="{slot * i:.1f}" y="{PLOT_HEAD}" width="{slot:.1f}" height="{100 - PLOT_HEAD}" data-tip="{escape(str(words), quote=True)}"/>')
+            marks.append(f'<rect class="hit" x="{slot * i:.1f}" y="{PLOT_HEAD}" width="{slot:.1f}" height="{100 - PLOT_HEAD}" {tip(words)}/>')
         if name:
             axis.append((slot * i + slot / 2, name))
     return Markup(_frame(marks, top, axis, label, fmt, note))
@@ -253,8 +257,8 @@ def meter(share, label, high=0.9):
 def strip(cells, label, ends, legend):
     """A row of equal slots over time, oldest first, each in the colour of its state: cells are (state, tooltip), state one
     of ok, warn, bad or none. ends are the words under its two ends; legend is (state, words) for the key under it."""
-    parts = [f'<div class="strip" role="img" aria-label="{escape(label, quote=True)}" style="--cells:{len(cells)}">']
-    parts += [f'<i class="s-{state}" data-tip="{escape(str(words), quote=True)}"></i>' for state, words in cells]
+    parts = [f'<div class="strip" role="group" aria-label="{escape(label, quote=True)}" data-tips style="--cells:{len(cells)}">']
+    parts += [f'<i class="s-{state}" {tip(words)}></i>' for state, words in cells]
     parts.append("</div>")
     parts.append(f'<div class="strip-ends" aria-hidden="true"><span>{escape(ends[0])}</span><span>{escape(ends[1])}</span></div>')
     parts.append('<ul class="seglegend">' + "".join(f'<li><i class="s-{state}"></i>{escape(words)}</li>' for state, words in legend) + "</ul>")
@@ -268,7 +272,7 @@ def days(values, top, tips, label):
     for value, words in zip(values, tips):
         # Five steps, as the hours of the week have.
         step = 0 if not value or not top else 1 + min(4, int(4 * value / top))
-        cells.append(f'<i class="c{step}" data-tip="{escape(str(words), quote=True)}"></i>')
+        cells.append(f'<i class="c{step}" {tip(words)}></i>')
     # A cell's colour says how many, not which part of a row it is: the layout check's lining up of rows passes it by.
-    return Markup(f'<span class="daycells" role="img" aria-label="{escape(label, quote=True)}" data-layout-ok="cells by value">{"".join(cells)}</span>')
+    return Markup(f'<span class="daycells" role="group" aria-label="{escape(label, quote=True)}" data-tips data-layout-ok="cells by value">{"".join(cells)}</span>')
 

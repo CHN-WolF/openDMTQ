@@ -163,7 +163,7 @@ page_header('OpenDMTQ', 'home', '', $stage);
             <?php // The grade before the score, the keyboard's mark beside the score of a keyboard play (one item with it, so
                   // that the grade and the score stay at the two ends); under it, how far over their best before (nothing for a
                   // first clear). ?>
-            <span class="feed-end"><span class="feed-score"><span class="grade g<?= h($r['grade']) ?> feed-grade"><?= h($r['grade']) ?></span><span><?= keys_mark($r) ?><?= number_format($r['score']) ?></span></span><?php if ($r['before'] !== null && (int)$r['score'] > (int)$r['before']): ?><span class="feed-gain" title="<?= h(tp('rec.up', ['before' => number_format($r['before'])])) ?>">+<?= number_format($r['score'] - $r['before']) ?></span><?php endif; ?><span class="feed-when"><?= h(ago((int)$r['played_at'])) ?></span></span>
+            <span class="feed-end"><span class="feed-score"><span class="grade g<?= h($r['grade']) ?> feed-grade"><?= h($r['grade']) ?></span><span><?= keys_mark($r) ?><?= number_format($r['score']) ?></span></span><?php if ($r['before'] !== null && (int)$r['score'] > (int)$r['before']): ?><span class="feed-gain" data-tip="<?= h(tp('rec.up', ['before' => number_format($r['before'])])) ?>" tabindex="0">+<?= number_format($r['score'] - $r['before']) ?></span><?php endif; ?><span class="feed-when"><?= h(ago((int)$r['played_at'])) ?></span></span>
           </li>
         <?php endforeach; ?>
         </ul>

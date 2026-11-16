@@ -238,10 +238,9 @@
       } else if (!n && mark) {
         mark.remove();
       }
-      if (n) {
-        mark.textContent = n;
-        mark.title = says;
-      }
+      if (n) mark.textContent = n;
+      // How many, in words, as the link's name for a screen reader.
+      if (n) head.setAttribute('aria-label', `LIVE, ${says}`); else head.removeAttribute('aria-label');
     }
   }
 

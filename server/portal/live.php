@@ -109,13 +109,14 @@ page_header($replay !== '' ? t('live.replay') : t('live.title'), 'live');
         <?php if ($past): $last = $past[0]; ?>
           <?php // Who and when, and how long, as its card says it (0:12): t() escapes the name, once. ?>
           <p class="last-air"><?= t('live.last', ['name' => $last['name'], 'ago' => $last['ago'], 'length' => $last['length']]) ?> <a href="?r=<?= h($last['key']) ?>"><?= t('live.watch_again') ?></a></p>
-          <div class="air-days" role="img" aria-label="<?= h(tp('live.days')) ?>">
+          <?php // The days are one stop of the Tab key (data-tips): the arrow keys go from day to day (tips.js). ?>
+          <div class="air-days" role="group" aria-label="<?= h(tp('live.days')) ?>" data-tips>
             <?php foreach ($air_days as $day => $d):
                 $step = !$d['sec'] || !$air_most ? ($d['n'] ? 1 : 0) : 1 + min(4, intdiv(4 * $d['sec'], $air_most));
                 // Plain text for the attribute, escaped once where it is printed; the day's time on air as a card says it.
                 $words = $d['n'] ? tp('live.day_tip', ['day' => substr($day, 5), 'n' => $d['n'], 'length' => clock_length($d['sec']), 'who' => implode(', ', array_keys($d['who']))])
                                  : tp('live.day_none', ['day' => substr($day, 5)]); ?>
-              <i class="c<?= $step ?>" data-tip="<?= h($words) ?>"></i>
+              <i class="c<?= $step ?>" data-tip="<?= h($words) ?>" aria-label="<?= h($words) ?>" role="img" tabindex="0"></i>
             <?php endforeach; ?>
           </div>
           <div class="air-days-ends" aria-hidden="true"><span><?= t('live.days_ago') ?></span><span><?= t('live.today') ?></span></div>
@@ -140,7 +141,7 @@ page_header($replay !== '' ? t('live.replay') : t('live.title'), 'live');
               // under it, and step back with the controls so as not to sit on the game. ?>
         <div class="live-top" id="live-top" hidden>
           <span class="live-pill" id="top-pill"><i></i><span id="pill-word">LIVE</span></span>
-          <span class="live-clock" id="live-clock" title="<?= h(tp('live.since')) ?>"></span>
+          <span class="live-clock" id="live-clock" data-tip="<?= h(tp('live.since')) ?>" tabindex="0"></span>
           <button type="button" class="go-live" id="go-live" hidden><?= t('live.go_live') ?></button>
           <span class="live-title"><b id="top-who"></b><span id="top-what"></span></span>
         </div>
@@ -171,7 +172,7 @@ page_header($replay !== '' ? t('live.replay') : t('live.title'), 'live');
             <input type="range" id="ctl-vol" min="0" max="1" step="0.05" value="1" aria-label="<?= h(tp('live.ctl_volume')) ?>">
             <span class="ctl-time" id="ctl-time" hidden></span>
             <span class="ctl-gap"></span>
-            <button type="button" id="ctl-rate" class="vod-only ctl-word" aria-label="<?= h(tp('live.ctl_speed')) ?>" title="<?= h(tp('live.ctl_speed')) ?>" hidden>1×</button>
+            <button type="button" id="ctl-rate" class="vod-only ctl-word" aria-label="<?= h(tp('live.ctl_speed')) ?>" data-tip="<?= h(tp('live.ctl_speed')) ?>" hidden>1×</button>
             <button type="button" id="ctl-stats"></button>
             <button type="button" id="ctl-pip" hidden></button>
             <button type="button" id="ctl-wide"></button>
@@ -209,7 +210,7 @@ page_header($replay !== '' ? t('live.replay') : t('live.title'), 'live');
         <?php // Here from the start, so that the box is not empty until the script has come. The script makes the same. ?>
         <ul class="past-list" id="past-list">
           <?php foreach (array_slice($past, 0, 24) as $x): $on = $x['key'] === $replay; ?>
-            <li><a class="past<?= $on ? ' on' : '' ?>" href="?r=<?= h($x['key']) ?>" data-key="<?= h($x['key']) ?>"><span class="past-pic"><?php if ($x['pic']): ?><img src="<?= h($x['pic']) ?>" alt="" loading="lazy" decoding="async"<?= JACKET_ONERROR ?>><?php endif; ?><span class="past-len"><?= h($x['length']) ?></span></span><span class="past-text"><b class="who"><?= h($x['name']) ?></b><span class="doing" title="<?= h($x['find']) ?>"><?= h($x['doing']) ?></span><span class="past-when" title="<?= h($x['when']) ?>"><?= h($x['ago']) ?></span></span></a></li>
+            <li><a class="past<?= $on ? ' on' : '' ?>" href="?r=<?= h($x['key']) ?>" data-key="<?= h($x['key']) ?>"><span class="past-pic"><?php if ($x['pic']): ?><img src="<?= h($x['pic']) ?>" alt="" loading="lazy" decoding="async"<?= JACKET_ONERROR ?>><?php endif; ?><span class="past-len"><?= h($x['length']) ?></span></span><span class="past-text"><b class="who"><?= h($x['name']) ?></b><span class="doing"><?= h($x['doing']) ?></span><span class="past-when"><?= h($x['ago']) ?></span></span></a></li>
           <?php endforeach; ?>
         </ul>
         <?php // A screenful at a time: a month of broadcasts is a long list. ?>
@@ -221,7 +222,6 @@ page_header($replay !== '' ? t('live.replay') : t('live.title'), 'live');
         // must play video too. Copied as it was published (see hls/LICENSE, docs/architecture.md). ?>
   <script src="/opendmtq/hls/hls-1.5.17.min.js"></script>
   <script src="<?= asset_url('thumbs.js') ?>"></script>
-  <script src="<?= asset_url('tips.js') ?>" defer></script>
   <?php // What the server knows at page load (with the sign of its list of recordings, which the page's looks compare),
         // and the page's words as plain text (tp()), for the page's script (live.js), which sets them as text: data, never
         // run. JSON_HEX_TAG keeps a name with </script> in it from ending the block. ?>

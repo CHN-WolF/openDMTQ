@@ -71,7 +71,7 @@ if (!$song): ?>
               $records = t('records', ['n' => $n]);
               // What a screen reader says: the whole name, as the other pages write it.
               $label = chart_label($p['line'], $p['difficulty'], $p['signature']); ?>
-            <a class="sig<?= (int)$p['signature'] ?><?= $pid === $pick ? ' on' : '' ?>" href="?id=<?= $id ?>&amp;chart=<?= $pid ?>" aria-label="<?= h($label) ?><?= $n ? ', ' . $records : '' ?>"<?= $n ? ' title="' . $records . '"' : '' ?>><?= difficulty_name((int)$p['signature']) ?> <?= (int)$p['difficulty'] ?><?= $n ? '<span class="n">' . $records . '</span>' : '' ?></a>
+            <a class="sig<?= (int)$p['signature'] ?><?= $pid === $pick ? ' on' : '' ?>" href="?id=<?= $id ?>&amp;chart=<?= $pid ?>" aria-label="<?= h($label) ?><?= $n ? ', ' . $records : '' ?>"><?= difficulty_name((int)$p['signature']) ?> <?= (int)$p['difficulty'] ?><?= $n ? '<span class="n">' . $records . '</span>' : '' ?></a>
           <?php endforeach; ?>
         </div>
       <?php endforeach; ?>

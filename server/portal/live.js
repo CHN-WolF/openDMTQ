@@ -44,11 +44,12 @@ const icons = {
   pip: icon('M3 5h18v14H3zm2 2v10h14V7zm6 4h7v5h-7z'), wide: icon('M3 7h18v10H3zm2 2v6h14V9z'),
   stats: icon('M11 10h2v7h-2zM11 7h2v2h-2zM12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14z'),
 };
-// A button's picture and its name for a screen reader and a pointer's tooltip.
+// A button's picture and its name: for a screen reader, and beside it under a pointer and on the keyboard's focus (tips.js;
+// a press does what the button does).
 function face(button, name, label) {
   button.innerHTML = icons[name];
   button.setAttribute('aria-label', label);
-  button.title = label;
+  button.dataset.tip = label;
 }
 function drawControls() {
   face(ctlPlay, video.ended ? 'again' : video.paused ? 'play' : 'pause', video.paused ? words.ctl_play : words.ctl_pause);
@@ -784,12 +785,11 @@ function pastCard(x) {
   }
   const text = document.createElement('span');
   text.className = 'past-text';
-  // How long ago, as the other pages say it, with the date itself under the pointer.
-  for (const [tag, cls, words_, full] of [['b', 'who', x.name, ''], ['span', 'doing', x.doing, x.find], ['span', 'past-when', x.ago, x.when]]) {
+  // How long ago, as the other pages say it. Every song and the date are on the recording the card leads to.
+  for (const [tag, cls, words_] of [['b', 'who', x.name], ['span', 'doing', x.doing], ['span', 'past-when', x.ago]]) {
     const part_ = document.createElement(tag);
     part_.className = cls;
     part_.textContent = words_;
-    if (full) part_.title = full;
     text.append(part_);
   }
   a.append(pic, text);

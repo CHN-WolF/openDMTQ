@@ -101,8 +101,8 @@ function server_version_block(): string
     if ($version === '') {
         return '';
     }
-    // The commit is of no use to a player: for whoever asks, under the pointer.
-    return '<div class="server-ver"' . ($commit !== '' ? ' title="' . h($commit) . '"' : '') . '><span>SERVER</span><b>v' . h($version) . '</b></div>';
+    // The commit is of no use to a player: for whoever asks, beside it under a pointer, on a press or the focus (tips.js).
+    return '<div class="server-ver"' . ($commit !== '' ? ' data-tip="' . h($commit) . '" tabindex="0"' : '') . '><span>SERVER</span><b>v' . h($version) . '</b></div>';
 }
 
 /* The server's name in the app's title, as patch_apk.server_name() decides for this address: SERVER_NAME,
@@ -483,8 +483,8 @@ function past_card(array $x): string
 {
     $pic = $x['pic'] ? '<img src="' . h($x['pic']) . '" alt="" loading="lazy" decoding="async"' . JACKET_ONERROR . '>' : '';
     return '<li><a class="past" href="live.php?r=' . h($x['key']) . '"><span class="past-pic">' . $pic . '<span class="past-len">' . h($x['length']) . '</span></span>'
-        . '<span class="past-text"><b class="who">' . h($x['name']) . '</b><span class="doing" title="' . h($x['find']) . '">' . h($x['doing']) . '</span>'
-        . '<span class="past-when" title="' . h($x['when']) . '">' . h($x['ago']) . '</span></span></a></li>';
+        . '<span class="past-text"><b class="who">' . h($x['name']) . '</b><span class="doing">' . h($x['doing']) . '</span>'
+        . '<span class="past-when">' . h($x['ago']) . '</span></span></a></li>';
 }
 
 /* Jacket image URL for a song: the small web copy when there is one, else the game's PNG. */
@@ -578,7 +578,9 @@ function page_header(string $title, string $active = '', string $refresh = '', s
     header('Content-Language: ' . lang());
     // Who is on air: a small count on LIVE, on every page and every width.
     $on_air = $db ? count(live_on_air($db)) : 0;
-    $live_label = 'LIVE' . ($on_air ? ' <span class="onair" title="' . h(tp('live.count', ['n' => $on_air])) . '">' . $on_air . '</span>' : '');
+    $live_label = 'LIVE' . ($on_air ? ' <span class="onair">' . $on_air . '</span>' : '');
+    // How many, in words, as the link's name for a screen reader (thumbs.js keeps it up to date with the count).
+    $live_name = $on_air ? 'LIVE, ' . tp('live.count', ['n' => $on_air]) : '';
     // The sections stay in the display face's English, as in the game's menus.
     // What the site is for comes first, watching and getting the app; then the rest. With broadcasts off for the server
     // there is nothing to watch, and no LIVE in the menu.
@@ -589,7 +591,8 @@ function page_header(string $title, string $active = '', string $refresh = '', s
     ];
     $links = '';
     foreach ($sections as $key => [$label, $href]) {
-        $links .= '<a href="' . $href . '"' . ($key === $active ? ' class="on" aria-current="true"' : '') . '>' . $label . '</a>';
+        $links .= '<a href="' . $href . '"' . ($key === 'live' && $live_name !== '' ? ' aria-label="' . h($live_name) . '"' : '')
+            . ($key === $active ? ' class="on" aria-current="true"' : '') . '>' . $label . '</a>';
     }
     // Maintenance (the in-game notice is on) comes before anything else: players cannot get in.
     $notice = $inside ? maintenance_notice() : null;
@@ -621,7 +624,7 @@ function page_header(string $title, string $active = '', string $refresh = '', s
     $word = ['ok' => '', 'maint' => 'MAINTENANCE', 'down' => 'OFFLINE'][$state];
     echo '<header class="bar"><div class="wrap bar-in"><a class="logo" href="/opendmtq/"><span class="o">OPEN</span><span class="m">DMT<b>Q</b></span></a>';
     echo $inside ? '<nav class="nav" aria-label="' . h(tp('nav.aria')) . '">' . $links . '</nav>' : '';
-    echo '<div class="bar-end">' . ($word !== '' ? '<span class="state ' . $state . '" role="img" aria-label="' . h($status) . '" title="' . h($status) . '"><i></i>' . $word . '</span>' : '') . lang_switch() . '</div></div></header>';
+    echo '<div class="bar-end">' . ($word !== '' ? '<span class="state ' . $state . '" role="img" aria-label="' . h($status) . '" data-tip="' . h($status) . '" tabindex="0"><i></i>' . $word . '</span>' : '') . lang_switch() . '</div></div></header>';
     echo $inside ? '<nav class="tabbar" aria-label="' . h(tp('nav.aria')) . '">' . $links . '</nav>' : '';
     if ($state !== 'ok') {
         $own = $notice !== null && $notice !== '' && $notice !== DEFAULT_NOTICE;
@@ -684,9 +687,9 @@ function lang_switch(): string
 {
     $back = rawurlencode(safe_next((string)($_SERVER['REQUEST_URI'] ?? '/opendmtq/')));
     $out = '<nav class="lang-switch" aria-label="' . h(tp('lang.label')) . '">';
-    // Two keys; each language's own name for those who cannot read the other one's key.
+    // Two keys; each language's own name for a screen reader (KOR and ENG say it to everyone else).
     foreach (['ko' => ['KOR', '한국어'], 'en' => ['ENG', 'English']] as $code => [$key, $word]) {
-        $out .= '<a lang="' . $code . '" title="' . $word . '" aria-label="' . $word . '" href="/opendmtq/lang.php?to=' . $code . '&amp;next=' . $back . '"'
+        $out .= '<a lang="' . $code . '" aria-label="' . $word . '" href="/opendmtq/lang.php?to=' . $code . '&amp;next=' . $back . '"'
             . ($code === lang() ? ' class="on" aria-current="true"' : '') . '>' . $key . '</a>';
     }
     $out .= '</nav>';
@@ -706,10 +709,12 @@ function lang_switch(): string
         $badge = '<span class="who-badge" aria-hidden="true">' . h($first !== '' ? $first : '?') . '</span>';
         $sub = $fig ? '<span class="who-sub">' . ($fig['rank'] ? h(tp('player.rank_short', ['n' => $fig['rank']])) . ' · ' : '') . h((string)$who) . '</span>' : '';
         $text = '<span class="who-text"><span class="who-name">' . h($name) . '</span>' . $sub . '</span>';
-        // Its words again in its title, for the badge alone (below 1100 px) under the pointer.
+        // Its words again beside it, for the badge alone (below 1100 px): under a pointer and on the keyboard's focus, and on
+        // a finger's press where the badge leads nowhere (tips.js). The badge that leads to the player's page goes there
+        // when pressed, and that page says the same.
         $title = h($name . ($fig ? ' · ' . ($fig['rank'] ? t('player.rank_short', ['n' => $fig['rank']]) . ' · ' : '') . $who : ''));
-        $label = $fig ? '<a class="auth-who" href="/opendmtq/player.php?id=' . $me . '" aria-label="' . h($name) . '" title="' . $title . '">' . $badge . $text . '</a>'
-                      : '<span class="auth-who" title="' . $title . '">' . $badge . $text . '</span>';
+        $label = $fig ? '<a class="auth-who" href="/opendmtq/player.php?id=' . $me . '" aria-label="' . h($name) . '" data-tip="' . $title . '">' . $badge . $text . '</a>'
+                      : '<span class="auth-who" data-tip="' . $title . '" tabindex="0">' . $badge . $text . '</span>';
         $out .= $who !== null
             ? '<form class="auth-form" method="post" action="/opendmtq/login.php?logout=1">' . $label . '<button class="auth">' . t('nav.signout') . '</button></form>'
             : '<a class="auth sign-in" href="/opendmtq/login.php?next=' . $back . '">' . t('nav.signin') . '</a>';
@@ -875,7 +880,8 @@ function live_mark(?SQLite3 $db, int $guid): string
     if (!$db || !isset(live_on_air($db)[$guid])) {
         return '';
     }
-    return ' <a class="live-mark" href="/opendmtq/live.php?p=' . $guid . '" title="' . h(tp('live.watch')) . '">LIVE</a>';
+    // What it does in its name for a screen reader; LIVE says it to everyone else.
+    return ' <a class="live-mark" href="/opendmtq/live.php?p=' . $guid . '" aria-label="' . h(tp('live.watch')) . '">LIVE</a>';
 }
 
 /* Footer: what this site is, in two short lines, then the server's patch and the ways on: the license, and the admin
@@ -892,6 +898,8 @@ function page_footer(): void
         . '</nav></div></footer>'
         // The bar is glass once the page has moved, and has no surface of its own at the very top.
         . "<script>(()=>{const b=document.querySelector('.bar'),f=()=>b.classList.toggle('under',scrollY>2);addEventListener('scroll',f,{passive:true});f()})()</script>"
+        // What a mark means, on every page that has marks (tips.js): under a pointer, on a finger's press, on the focus.
+        . '<script src="' . asset_url('tips.js') . '" defer></script>'
         . '</body></html>';
 }
 
@@ -975,10 +983,11 @@ function hidden_on_ios(): string
     return on_ios() ? ' hidden' : '';
 }
 
-/* The game's AC and PP marks, with what they stand for as a tooltip. */
+/* The game's AC and PP marks, with what they stand for beside them under a pointer, on a finger's press and on the
+   keyboard's focus (tips.js). */
 function mark(string $kind): string
 {
-    return '<span class="mark ' . $kind . '" title="' . h(tp('mark.' . $kind)) . '">' . strtoupper($kind) . '</span>';
+    return '<span class="mark ' . $kind . '" data-tip="' . h(tp('mark.' . $kind)) . '" tabindex="0">' . strtoupper($kind) . '</span>';
 }
 
 /* Grade with AC/PP marks, as small labels. */
@@ -995,15 +1004,15 @@ function grade_cell(array $r): string
 
 /* The keyboard's mark, before a score that a keyboard play made ('' for one by touch): $r is a row of Play (a best, marked
    with the play that set it) or of PlayLog (a play), whose keys column the game server's save keeps (game/src/game.php).
-   A small keyboard, as the site draws its marks (style.css .keys-mark); its words as its title for a pointer and as its
-   name for a screen reader. */
+   A small keyboard, as the site draws its marks (style.css .keys-mark); its words show beside it under a pointer, on a
+   finger's press and on the keyboard's focus (tips.js), and are its name for a screen reader. */
 function keys_mark(array $r): string
 {
     if (empty($r['keys'])) {
         return '';
     }
     $words = h(tp('mark.keys'));
-    return '<span class="keys-mark" role="img" aria-label="' . $words . '" title="' . $words . '"></span>';
+    return '<span class="keys-mark" role="img" aria-label="' . $words . '" data-tip="' . $words . '" tabindex="0"></span>';
 }
 
 /* The same mark before a total that counts $n bests a keyboard play set ('' for none): the rankings' scores, which add up
@@ -1014,7 +1023,7 @@ function keys_count_mark(int $n): string
         return '';
     }
     $words = h(tp('mark.keys_in', ['n' => $n]));
-    return '<span class="keys-mark" role="img" aria-label="' . $words . '" title="' . $words . '"></span>';
+    return '<span class="keys-mark" role="img" aria-label="' . $words . '" data-tip="' . $words . '" tabindex="0"></span>';
 }
 
 /* ---------------------------------------------------------------------- download sign-in */

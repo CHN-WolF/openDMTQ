@@ -105,7 +105,7 @@
   <p class="meta log-help">{{ t('logs.changes_help') }}</p>
   {% if not changes %}<p class="empty">{{ t('logs.changes_none') }}</p>{% else %}
   <ol class="changes">
-    {% for c in changes %}<li><span class="ch-when" title="{{ c.ago }}">{{ c.at|rec_date }}</span><span class="ch-what">{{ c.words }}</span><span class="ch-target">{{ c.target }}</span><span class="ch-who">{{ c.who }}</span></li>{% endfor %}
+    {% for c in changes %}<li><span class="ch-when" data-tip="{{ c.ago }}" tabindex="0">{{ c.at|rec_date }}</span><span class="ch-what">{{ c.words }}</span><span class="ch-target">{{ c.target }}</span><span class="ch-who">{{ c.who }}</span></li>{% endfor %}
   </ol>
   {% endif %}
 </section>

@@ -35,7 +35,7 @@ page_header(t('songs.title'), 'songs');
   <p class="empty" id="no-match" role="status" hidden><?= t('songs.nomatch') ?></p>
   <div class="songs" id="songs">
     <?php foreach ($songs as $s): $n = (int)($plays[(int)$s['song_id']] ?? 0); ?>
-      <a class="song" href="song.php?id=<?= (int)$s['song_id'] ?>" title="<?= h(song_title($s) . ' · ' . $s['artist_name']) ?>" data-k="<?= h(strtolower(song_title($s) . ' ' . $s['artist_name'] . ' ' . $s['genre'])) ?>">
+      <a class="song" href="song.php?id=<?= (int)$s['song_id'] ?>" data-k="<?= h(strtolower(song_title($s) . ' ' . $s['artist_name'] . ' ' . $s['genre'])) ?>">
         <span class="song-pic"><img loading="lazy" decoding="async" src="<?= h(jacket($s)) ?>" alt=""<?= JACKET_ONERROR ?>></span>
         <span class="t"><?= h(song_title($s)) ?></span>
         <span class="a"><?= h($s['artist_name']) ?></span>

@@ -300,7 +300,9 @@ def keys_mark():
     """The keyboard's mark before a score a keyboard play made, as the site draws it (lib.php keys_mark(), .keys-mark in the
     portal's style.css), its words in the page's language as its title and as its name for a screen reader."""
     words = t("mark.keys")
-    return Markup('<span class="keys-mark" role="img" aria-label="{}" title="{}"></span>').format(words, words)
+    # Its words beside it under a pointer, on a finger's press and on the keyboard's focus (admin.js), and its name for a
+    # screen reader.
+    return Markup('<span class="keys-mark" role="img" aria-label="{}" data-tip="{}" tabindex="0"></span>').format(words, words)
 
 
 def app_name_html(label=None):

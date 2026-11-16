@@ -607,7 +607,10 @@ async function hoverOnly(contexts) {
       const found = await page.evaluate(() => ({
         titled: [...document.querySelectorAll('body [title]')].filter(e => !e.closest('svg') && e.tagName !== 'IFRAME')
           .map(e => `${e.tagName.toLowerCase()}${typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : ''}: ${e.getAttribute('title').slice(0, 30)}`),
-        unreached: [...document.querySelectorAll('[data-tip]')].filter(e => e.tabIndex < 0)
+        // Out of the keyboard's reach: not a stop of the Tab key itself, nor a mark of a group of marks (data-tips) that has
+        // one, from which the arrow keys go to the others.
+        unreached: [...document.querySelectorAll('[data-tip]')].filter(e => e.tabIndex < 0
+          && !(e.closest('[data-tips]') && [...e.closest('[data-tips]').querySelectorAll('[data-tip]')].some(m => m.tabIndex === 0)))
           .map(e => `${e.tagName.toLowerCase()}${typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : ''}`),
         tips: document.querySelectorAll('[data-tip]').length,
       }));
@@ -616,6 +619,35 @@ async function hoverOnly(contexts) {
         found.titled.length === 0 && found.unreached.length === 0,
         `${found.titled.length} titles: ${titled.slice(0, 4).join(' ; ')} | ${found.unreached.length} marks out of the keyboard's reach: ${[...new Set(found.unreached)].slice(0, 3).join(' ; ')}`);
       if (!found.tips) continue;
+      // A group of marks (a chart's, a grid of days) is one stop of the Tab key: from its stop the arrow keys go to the other
+      // marks, each showing its words. On a laptop's screen, once a page.
+      if (!touch && await page.$('[data-tips] [data-tip]')) {
+        const moved = await page.evaluate(async () => {
+          const group = [...document.querySelectorAll('[data-tips]')].find(g => [...g.querySelectorAll('[data-tip]')].some(m => m.getClientRects().length && m.tabIndex === 0));
+          if (!group) return 'no group with a stop';
+          const stops = [...group.querySelectorAll('[data-tip]')].filter(m => m.tabIndex === 0);
+          if (stops.length !== 1) return `${stops.length} stops in one group`;
+          stops[0].scrollIntoView({ block: 'center' });
+          stops[0].focus();
+          return 'ok';
+        });
+        const keys = [];
+        for (const key of ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp']) {
+          const before = await page.evaluate(() => document.activeElement && document.activeElement.dataset.tip);
+          await page.keyboard.press(key);
+          await pause(80);
+          const after = await page.evaluate(() => {
+            const a = document.activeElement, box = [...document.querySelectorAll('.chart-tip')].find(b => !b.hidden);
+            return a && a.dataset.tip !== undefined ? [a.dataset.tip, box ? box.textContent : ''] : null;
+          });
+          // Moved to another mark with its words up, or stayed at an edge (a row of one, the last column).
+          keys.push(after && (after[0] === before || after[1] === after[0]) ? (after[0] !== before ? 'moved' : 'edge') : 'lost');
+        }
+        check(`the marks of a group are one stop of the Tab key, the arrow keys going from mark to mark with their words (${name}, ${at})`,
+          moved === 'ok' && keys.includes('moved') && !keys.includes('lost'), `${moved} ${keys.join(' ')}`);
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      }
       // The first mark and the last one on the page that a person can reach: drawn, a few pixels at least.
       const marks = await page.$$eval('[data-tip]', all => all.map((e, i) => {
         const r = e.getBoundingClientRect();

@@ -28,8 +28,9 @@ if ($month) {
 // A number column's classes: the column the list is sorted by is marked (and kept on phones); the
 // optional ones leave narrow screens.
 $col = fn(string $key, bool $optional = false) => 'r' . ($key === $sort ? ' sorted' : ($optional ? ' opt' : ''));
-// The game's abbreviations in the header, with what they stand for (also in the line under the table).
-$abbr = fn(string $term, string $key) => '<abbr title="' . h(tp($key)) . '">' . $term . '</abbr>';
+// The game's abbreviations in the header, with what they stand for (also in the line under the table) beside them under a
+// pointer, on a finger's press and on the keyboard's focus (tips.js).
+$abbr = fn(string $term, string $key) => '<abbr data-tip="' . h(tp($key)) . '" tabindex="0">' . $term . '</abbr>';
 
 // The value of the chosen order, as the podium shows it under the name.
 $value = function (array $p) use ($sort, $month): string {
