@@ -27,6 +27,37 @@
   const seen = a => !sight || onScreen.has(a);
   // The stream answered that this visitor may not watch (signed out in another tab): no more asking.
   let denied = false;
+
+  // The site's state as a look at the server found it (X-Site-State, lib.php site_state()) against the one the page was
+  // drawn with: when they differ, the bar's word and the sentence under the bar come again from the page itself, put in
+  // place without opening it anew (a broadcast being watched goes on). So maintenance begun, a new message, its end and the
+  // database gone or back show on a page left open, every time.
+  let siteAsking = false;
+  const siteState = r => {
+    const now = r.headers.get('X-Site-State');
+    if (!now || now === document.body.dataset.site || siteAsking) return;
+    siteAsking = true;
+    fetch(location.href, { cache: 'no-store' }).then(p => (p.ok ? p.text() : Promise.reject())).then(text => {
+      const page = new DOMParser().parseFromString(text, 'text/html');
+      // Signed out meanwhile: the sign-in page has neither, and nothing is taken from it.
+      if (!page.body || !page.body.dataset.site) return;
+      // The word at the bar's end, before the language keys, as the page puts it.
+      const end = document.querySelector('.bar-end');
+      const was = end && end.querySelector(':scope > .state'), word = page.querySelector('.bar-end > .state');
+      if (end) {
+        if (word && was) was.replaceWith(word);
+        else if (word) end.prepend(word);
+        else if (was) was.remove();
+      }
+      // The sentence under the bar, where the page puts it: before the page's heading.
+      const said = document.querySelector('body > .site-alert'), says = page.querySelector('body > .site-alert');
+      const heading = document.querySelector('body > h1.page-title');
+      if (said && says) said.replaceWith(says);
+      else if (says && heading) heading.before(says);
+      else if (said) said.remove();
+      document.body.dataset.site = page.body.dataset.site;
+    }).catch(() => { /* The next look. */ }).finally(() => { siteAsking = false; });
+  };
   let hlsLoaded = null;
 
   function element(tag, cls, text) {
@@ -286,6 +317,7 @@
     setInterval(() => {
       if (document.hidden) return;
       fetch('/opendmtq/?live=1').then(r => {
+        if (r.ok) siteState(r);
         // Broadcasts turned off for the server meanwhile: the page again, without anything of them (as the live page does).
         if (r.ok && r.headers.get('X-Live') === 'off') {
           location.reload();
@@ -296,5 +328,5 @@
     }, 15000);
   }
 
-  window.liveThumbs = { home, render, takePictures, headerCount, airTime, since };
+  window.liveThumbs = { home, render, takePictures, headerCount, airTime, since, siteState };
 })();

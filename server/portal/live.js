@@ -904,6 +904,8 @@ function look() {
   // is the network's: what is on screen stays, and the next look decides.
   fetch(withPast ? '?list=1&past=1' : '?list=1').then(r => {
     if (r.status === 401 || r.status === 403) { location.reload(); return Promise.reject(); }
+    // How the site stands now: the bar's word and the sentence under it put in place when that changed (thumbs.js).
+    if (r.ok) window.liveThumbs.siteState(r);
     return r.ok ? r.json() : Promise.reject();
   }).then(l => {
     // Broadcasts turned off for the server meanwhile: the page as it is now says so.

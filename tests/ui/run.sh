@@ -208,6 +208,10 @@ if wanted air; then
   FEED_PID=
 fi
 
+# The site's pages left open while the owner begins, changes and ends maintenance (broadcasts still on, so that the home
+# page and the live page look at the server by themselves).
+stage notices
+
 stage maint
 stage flows
 # Nothing said only under a mouse pointer, switches that change the page where it is, the forms' words under their fields.
@@ -218,6 +222,32 @@ stage patterns
 if wanted quiet; then
   python3 "$UI/feed.py" quiet
   stage quiet
+fi
+
+# The game server going away and coming back, twice, while the owner's pages stay open in the browser (audit.js away): the
+# browser says where it is through files in the report folder, and this side stops the server when it is ready and starts
+# it again once the pages have said it is gone. In the background, the browser's stage in front, as every stage.
+if wanted away; then
+  rm -f "$REPORT"/away-*
+  (
+    seen() { for _ in $(seq 1 240); do [ -f "$REPORT/$1" ] && return 0; sleep 1; done; return 1; }
+    for round in 1 2; do
+      seen "away-ready-$round" || break
+      docker stop "$SITE" >/dev/null
+      touch "$REPORT/away-down-$round"
+      seen "away-seen-down-$round" || true
+      docker start "$SITE" >/dev/null
+      for _ in $(seq 1 60); do curl -sf -m 3 -o /dev/null "http://127.0.0.1:$SITE_PORT/opendmtq/health.php" && break; sleep 1; done
+      touch "$REPORT/away-up-$round"
+      seen "away-seen-up-$round" || true
+    done
+  ) &
+  AWAY_PID=$!
+  stage away
+  wait "$AWAY_PID" 2>/dev/null || true
+  # Running again for what comes after, whatever happened in the browser.
+  docker start "$SITE" >/dev/null 2>&1 || true
+  for _ in $(seq 1 60); do curl -sf -m 3 -o /dev/null "http://127.0.0.1:$SITE_PORT/opendmtq/health.php" && break; sleep 1; done
 fi
 
 # The game server gone: the owner's pages are what is left. Last, as the other stages need it.

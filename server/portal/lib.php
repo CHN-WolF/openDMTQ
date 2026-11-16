@@ -364,6 +364,16 @@ function maintenance_notice(): ?string
     return $notice;
 }
 
+/* The site's state as the bar and the sentence under it show it (page_header()): ok, down (no database), or maint-<a sign of
+   the notice's words> while the maintenance notice is on, so that a new message is a new state. The pages that look again
+   by themselves (home, live) get it with every look (X-Site-State) and put the bar's word and the sentence in place when
+   it is not the one they were drawn with (thumbs.js siteState()): they come and go with it, every time. */
+function site_state(?SQLite3 $db): string
+{
+    $notice = maintenance_notice();
+    return $notice !== null ? 'maint-' . substr(md5($notice), 0, 8) : ($db ? 'ok' : 'down');
+}
+
 /* Number of songs the server offers (added ones included, hidden ones not). */
 function song_count(): int
 {
@@ -618,7 +628,9 @@ function page_header(string $title, string $active = '', string $refresh = '', s
     // A page just arriving: what it measures fills in once and the player's own row glows once (style.css,
     // "motion"). The class goes after 1.6 s, so that nothing the page redraws later moves again.
     echo '<script>document.documentElement.classList.add("arriving");setTimeout(()=>document.documentElement.classList.remove("arriving"),1600)</script></head>';
-    echo '<body data-section="' . h($active) . '"' . ($inside ? '' : ' class="signed-out"') . '><div class="facets" aria-hidden="true"></div>';
+    // With the state it was drawn with (site_state()), for the pages that look again by themselves.
+    echo '<body data-section="' . h($active) . '"' . ($inside ? ' data-site="' . h(site_state($db)) . '"' : ' class="signed-out"')
+        . '><div class="facets" aria-hidden="true"></div>';
     // Only what is wrong is said: one word with a light, in English like the menus (the page's language for screen readers),
     // and a plain sentence under the bar. A server that is fine has nothing to announce.
     $word = ['ok' => '', 'maint' => 'MAINTENANCE', 'down' => 'OFFLINE'][$state];

@@ -11,6 +11,9 @@ $db = db();
 if (isset($_GET['live'])) {
     header('Content-Type: application/json');
     header('Cache-Control: no-store');
+    // How the site stands now: maintenance begun, changed or ended, or the database gone, puts the page's bar and sentence
+    // in place (thumbs.js).
+    header('X-Site-State: ' . site_state($db));
     // Broadcasts turned off since the page came: it says so, and the page reloads without them (thumbs.js).
     if (!live_enabled()) {
         header('X-Live: off');

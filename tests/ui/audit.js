@@ -9,8 +9,10 @@
 //   node audit.js flows    what people do: signing in, searching, the replay player, the owner's forms; every floating
 //                          layer (menus, tooltips, questions) opened and measured whole and on top
 //   node audit.js quiet    broadcasts off for the server with everything in place: nothing of them on the site
-//   node audit.js patterns nothing said only under a mouse pointer, switches that change the page in place, the owner's
-//                          forms saying what is wrong under the field
+//   node audit.js notices  the site's pages left open while the owner begins, changes and ends maintenance, twice: the bar's
+//                          word and the sentence under it come and go by themselves each time
+//   node audit.js away     the owner's pages left open while the game server stops and starts again, twice (run.sh does
+//                          that when this says it is ready, through files in OUT): the word and the sentence come and go
 // Exit status 1 when anything failed. Reads SITE, ADMIN (addresses), PASSWORD and OUT from the environment.
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -359,27 +361,26 @@ const noFindings = async (page, name) => {
   check(`${name}: nothing wrong with the layout`, items.length === 0, items.slice(0, 6).map(f => `${f.kind} ${f.at} ${f.detail}`.slice(0, 140)).join(' ; '));
 };
 
-// What a press does, done: the page loaded again, or a change made in place (admin.js counts those, window.odqChanges).
-// Thirty seconds at most.
-async function settle(page, act) {
-  const before = await page.evaluate(() => window.odqChanges || 0).catch(() => 0);
-  const loaded = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 });
-  const changed = page.waitForFunction(n => (window.odqChanges || 0) > n, { timeout: 30000, polling: 100 }, before);
-  // The one that does not happen ends in an error later, which nobody waits for.
-  loaded.catch(() => {});
-  changed.catch(() => {});
-  const never = p => p.catch(() => new Promise(() => {}));
-  let timer;
-  const late = new Promise((_, fail) => { timer = setTimeout(() => fail(new Error('the press neither loaded a page nor changed this one')), 30000); });
-  await act();
-  try {
-    await Promise.race([never(loaded), never(changed), late]);
-  } finally {
-    clearTimeout(timer);
+// Pages left open while things change (the notices and away stages): their own looks run ten times as often, their
+// timers sped up before the page's scripts run, so that a change shows in seconds; the server's answers are as they are.
+// A mark on the window that only a page opened anew would lose: what changed came by itself.
+function quickTimers() {
+  const every = window.setInterval;
+  window.setInterval = (fn, ms, ...rest) => every(fn, Math.max(250, (ms || 0) / 10), ...rest);
+  window.keptOpen = true;
+}
+const keptOpen = page => page.evaluate(() => window.keptOpen === true).catch(() => false);
+// Until the page says so (test, run in the page with arg), for ms at most: whether it came.
+async function until(page, test, arg, ms = 90000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (await page.evaluate(test, arg).catch(() => false)) return true;
+    await pause(500);
   }
+  return false;
 }
 
-// A form on the page, sent by pressing its button: the page coming back afterwards, or changed in place.
+// A form on the page, sent by pressing its button, the page coming back afterwards.
 async function press(page, selector) {
   await settle(page, () => page.click(selector));
 }
@@ -2064,10 +2065,83 @@ async function adminFlows(contexts) {
     await portalFlows(contexts);
     await replayFlows(contexts);
     await adminFlows(contexts);
-  } else if (stage === 'patterns') {
-    await hoverOnly(contexts);
-    await inPlace(contexts);
-    await formsLook(contexts);
+  } else if (stage === 'notices') {
+    // PAGE-55..57: the home page and the live page left open (both look at the server by themselves) while the owner
+    // begins maintenance, gives it a new message, ends it, and begins and ends it again: each time the bar's word and the
+    // sentence under the bar come, change or go, without the page being opened anew. Before: they stayed as drawn.
+    const owner = await contexts.signed.newPage();
+    const open = [];
+    for (const url of [`${P}/`, `${P}/live.php`]) {
+      const page = await contexts.signed.newPage();
+      await page.evaluateOnNewDocument(quickTimers);
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      open.push(page);
+    }
+    const maintenance = async (action, message) => {
+      await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+      if (message !== undefined) await owner.$eval('textarea', (e, m) => { e.value = m; }, message);
+      // Beginning it asks first; a new message and the end do not.
+      if (await owner.$(`button[name=action][value=${action}][data-ask]`)) await pressAndConfirm(owner, `button[name=action][value=${action}]`);
+      else await press(owner, `button[name=action][value=${action}]`);
+    };
+    // The word and the sentence as maintenance shows them, with these words in the sentence; or neither.
+    const saying = words => {
+      const said = document.querySelector('body > .site-alert.maint'), word = document.querySelector('.bar-end > .state.maint');
+      return words === null ? !said && !word : !!said && !!word && said.textContent.includes(words);
+    };
+    const all = async (words, name) => {
+      const came = [];
+      for (const page of open) came.push(await until(page, saying, words) && await keptOpen(page));
+      check(name, came.every(Boolean), came.join(' '));
+    };
+    for (const round of [1, 2]) {
+      await maintenance('on', round === 1 ? 'Back at nine.' : '');
+      await all(round === 1 ? 'Back at nine.' : '', `round ${round}: maintenance begun, the home page and the live page left open say so by themselves`);
+      if (round === 1) {
+        await maintenance('on', 'Back at ten.');
+        await all('Back at ten.', 'a new message: the pages left open say the new words');
+      }
+      await maintenance('off');
+      await all(null, `round ${round}: maintenance ended, the word and the sentence go by themselves`);
+    }
+    for (const page of open) await page.close();
+    await owner.close();
+  } else if (stage === 'away') {
+    // ADM-117, ADM-118: the Players page and the status page left open while the game server stops and starts again, twice
+    // (run.sh stops and starts it when this says it is ready): each time the bar's OFFLINE and the sentence above the page
+    // come and go by themselves. Before: they stayed as each page was first drawn.
+    const flag = name => fs.writeFileSync(path.join(OUT, name), '');
+    const sign = async name => {
+      const end = Date.now() + 240000;
+      while (Date.now() < end) {
+        if (fs.existsSync(path.join(OUT, name))) return true;
+        await pause(500);
+      }
+      return false;
+    };
+    const open = [];
+    for (const url of [`${A}/players`, `${A}/`]) {
+      const page = await contexts.signed.newPage();
+      await page.evaluateOnNewDocument(quickTimers);
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      open.push(page);
+    }
+    const down = () => !!document.querySelector('.bar-end > .state.down') && !!document.querySelector('#server-alert > .site-alert.down');
+    const up = () => !document.querySelector('.bar-end > .state') && !document.querySelector('#server-alert > .site-alert');
+    for (const round of [1, 2]) {
+      flag(`away-ready-${round}`);
+      const stopped = await sign(`away-down-${round}`);
+      const gone = [];
+      for (const page of open) gone.push(stopped && await until(page, down) && await keptOpen(page));
+      check(`round ${round}: the game server stopped, the pages left open say so by themselves`, gone.every(Boolean), gone.join(' '));
+      flag(`away-seen-down-${round}`);
+      const started = await sign(`away-up-${round}`);
+      const back = [];
+      for (const page of open) back.push(started && await until(page, up) && await keptOpen(page));
+      check(`round ${round}: the game server back, the word and the sentence go by themselves`, back.every(Boolean), back.join(' '));
+      flag(`away-seen-up-${round}`);
+    }
+    for (const page of open) await page.close();
   } else if (stage === 'quiet') {
     await broadcastsOff(contexts, true);
     await sweep(contexts, QUIET, ALL_WIDTHS);

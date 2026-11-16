@@ -46,6 +46,8 @@ $cards = live_cards($db);
 if (isset($_GET['list'])) {
     header('Content-Type: application/json');
     header('Cache-Control: no-store');
+    // How the site stands now, as on the home page's look (thumbs.js siteState()).
+    header('X-Site-State: ' . site_state($db));
     // Who is on, every few seconds, for each viewer, with the sign of the recordings' list (live_past_rev(), from their
     // folders alone); the list itself, a file each to read and 60 KB compressed at 300, only when the page asks, which it
     // does when that sign changed. Then the sign of the list sent, so that the page holds the two together.
