@@ -282,7 +282,8 @@ PY
 step "The list of the program's files"
 # Every file of the program with its SHA-256, as this build made it: the admin pages' Server page and `repair` compare
 # an install with it, to name what is missing or changed. Written last, so that it lists the bundle as it ships.
-python3 "$ROOT/tools/opendmtq_tools/manifest.py" write "$STAGE" "$STAGE/app/MANIFEST.sha256"
+# By the bundle's own copy of the program: this part runs in the build image, where the repository is not.
+python3 "$STAGE/app/tools/opendmtq_tools/manifest.py" write "$STAGE" "$STAGE/app/MANIFEST.sha256"
 echo "$(wc -l < "$STAGE/app/MANIFEST.sha256") files listed"
 
 step "The zip"

@@ -437,6 +437,18 @@ class HostPortsTest(unittest.TestCase):
                 self.assertEqual(f.read(), "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n")
             self.assertTrue(any("at its next start: http://192.168.0.10:8791/" in line for line in said), said)
 
+    def test_each_command_reaches_its_own(self):
+        # The host program's command line: start is start and port is port (a sub-command's name must not stand in for
+        # the whole line's parser).
+        from opendmtq_host import cli
+        called = []
+        with mock.patch.object(cli.os, "geteuid", return_value=1000, create=True), \
+                mock.patch.object(cli, "cmd_start", lambda args: called.append(("start", None))), \
+                mock.patch.object(cli, "cmd_port", lambda args: called.append(("port", args.port))):
+            for line in (["start"], ["port", "8792"], ["port"]):
+                cli.main(line)
+        self.assertEqual(called, [("start", None), ("port", 8792), ("port", None)])
+
     def test_the_addresses_named_are_on_the_one_port(self):
         lan = {"PUBLIC_HOST": "192.168.0.10:8791", "LISTEN_PORT": "8791", "ADMIN_PORT": "18791"}
         self.assertEqual(self.settings.site_url(lan), "http://192.168.0.10:8791/")
