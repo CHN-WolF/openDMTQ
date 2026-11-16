@@ -214,6 +214,42 @@ def main():
     # ---- a PC with OpenDMTQ: the same version, an older one (Update), a newer one (go back).
     program(__version__)
     run("choose", installer.Installer)
+
+    # The keyboard alone (P1: nothing reachable only by the pointer): Tab goes the choices, then the strip's buttons;
+    # the arrow keys move the choice; Enter on the choices does the main button's; Esc on the uninstall's page goes
+    # back, on the first page closes the window.
+    def keys(made):
+        from opendmtq_client import setup_window
+        root = made.root
+        settle(root, 0.5)
+        focus = root.focus_get()
+        if not isinstance(focus, setup_window.Options):
+            problems.append("setup-%s: the choices do not have the keyboard at first (%r)" % (tag, focus))
+            return
+        order = [focus]
+        widget = focus
+        for _ in range(4):
+            widget = widget.tk_focusNext()
+            if widget is None or widget in order:
+                break
+            order.append(widget)
+        words = [getattr(w, "words", None) for w in order[1:]]
+        if words[:2] != [made.words("setup.close"), made.words("setup.open")]:
+            problems.append("setup-%s: Tab goes %r after the choices" % (tag, words))
+        for key in ("<Down>", "<Down>"):
+            focus.event_generate(key)
+        if focus.value != "uninstall":
+            problems.append("setup-%s: the arrow keys did not reach Uninstall (%s)" % (tag, focus.value))
+        focus.event_generate("<Return>")
+        settle(root, 0.5)
+        if made.flow[0][1] != "data":
+            problems.append("setup-%s: Enter on Uninstall did not open the uninstall's page" % tag)
+        root.event_generate("<Escape>")
+        settle(root, 0.5)
+        if made.flow[0][0] != "choose":
+            problems.append("setup-%s: Esc on the uninstall's page did not go back (%r)" % (tag, made.flow))
+
+    run("choose-keys", installer.Installer, [keys])
     # The notices follow the PC each time: a launcher opened while the page shows says so, closed again it goes; the
     # game too.
     notice = {"launcher": False, "game": False}

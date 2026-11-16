@@ -13,19 +13,23 @@ then plays against the server as it does on a phone.
 
 1. On the server's site, sign in and open **Download**. Under **On a computer (Windows)**, choose **Download the
    installer (.exe)**. The file it gives, `OpenDMTQ-Setup-<address>.exe`, is set up for that server.
-2. Run it and choose **Install**. It installs for your Windows user, with shortcuts on the desktop and in the Start
-   menu and no administrator rights, and starts the launcher. If Windows says it protected your PC from an unknown
+2. Run it: its page says what goes where (the program in your user folder, shortcuts on the desktop and in the Start
+   menu, no administrator rights, the server it plays on). Choose **Install**: the bar follows the files as they land,
+   and the last page says what was done, with **Open OpenDMTQ**. If Windows says it protected your PC from an unknown
    app: **More info**, then **Run anyway**. The installer is not signed by a publisher Windows knows. Windows 11's
    Smart App Control, when it is on, blocks unsigned programs, this one among them, and has no **Run anyway**.
 3. The launcher's first start walks through the server (already filled in), the sign-in with your site ID, the app's
    download, the picture and the sound, then the ready check and how to play, and **PLAY**. Each step asks its
    question at the top; while **Next** waits, a line under the step says for what.
 
-The installer from the project's [releases](https://github.com/kanggu12/openDMTQ/releases/latest)
-(`OpenDMTQ-PC-Client-<version>-windows-x64-Setup.exe`) is the same program without a server: its first start asks for
-the server's address. One launcher keeps several servers, each with its own sign-in and app, and plays on the one
-chosen on the **Online** page. Either installer with `--silent` installs or updates with no dialog and starts the
-launcher (`--no-start` leaves it closed); while a game runs it installs nothing and ends with 3.
+The installer from the project's [releases](https://github.com/kanggu12/openDMTQ/releases/latest) (`OpenDMTQ-Setup.exe`)
+is the same program without a server: its first start asks for the server's address. One launcher keeps several
+servers, each with its own sign-in and app, and plays on the one chosen on the **Online** page.
+Run on a PC that has OpenDMTQ, the installer offers what to do with it: **Open OpenDMTQ**, **Repair** (every file of the
+program put back as it came), **Update** when the installer is newer (or going back to its older version), and
+**Uninstall**. While the game is open, repairing, updating and uninstalling wait for it to close and then go on.
+`OpenDMTQ-Setup.exe --silent` installs or updates with no window and starts the launcher (`--no-start` leaves it
+closed); while a game runs it installs nothing and ends with 3.
 
 ### On Linux, with Wine
 
@@ -339,7 +343,7 @@ title says so alone), and says where it can be watched.
   Scores are kept on the server. The launcher keeps the server's sign-in cookie, never the password.
 - **Repairing, clearing and removing,** on the launcher's **Help** page, each with the same flag of `OpenDMTQ-cmd.exe`:
   - **Repair** compares the program's files with the package it was installed from and puts back what is missing or
-    changed (`--repair`). Running the installer again repairs too.
+    changed (`--repair`). Running `OpenDMTQ-Setup.exe` again and choosing **Repair** installs every file again.
   - **Clear game data** deletes what the game keeps, all but the device id: the game downloads its data again at the
     next start, and the PC stays the same player (`--clear-game-data`).
   - **Start over** forgets the servers, the sign-ins, the apps and the settings, and opens the first-start guide; the
@@ -348,8 +352,10 @@ title says so alone), and says where it can be watched.
     the settings, sign-ins and game data stay for a later install or go too (`--uninstall --delete-data`). With them
     go the device id and the logs of the installs (the installer's in `%TEMP%`, Velopack's in `%LOCALAPPDATA%\velopack`),
     and a later install is a new player, unless the account transfer below brings this one back.
-    Windows' Settings, Apps uninstalls too and keeps the data; it ends with the launcher's card, which says what went
-    and what stayed.
+    `OpenDMTQ-Setup.exe` uninstalls too, and so does **Uninstall** in Windows' Settings, Apps (and Control Panel's
+    Programs): both open the installer's own uninstall, which asks whether the data stays, says each size, shows the
+    work as it goes and ends on what went and what stayed; with **Delete everything** nothing of OpenDMTQ's is left on
+    the PC. A tool that uninstalls quietly (the entry's quiet command) shows nothing and keeps the data.
 - **The account:** a PC is a player of its own, apart from the same person's phone. The server gives each new device a
   new account, and the device id the PC goes by is kept in the game's folder: deleting that folder makes this PC a new
   player. The game's own account transfer carries a player to another device: on the device that has the player,
