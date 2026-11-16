@@ -48,7 +48,7 @@ How each part runs, with Docker Compose and without containers:
 | Command line | `./opendmtq` | `./opendmtq`, passed on to `host/opendmtq_host`; `OpenDMTQ.exe` on Windows |
 
 <p align="center">
-  <img src="images/fig-parts-docker.svg" alt="The parts with Docker Compose. Phones (plain HTTP) and browsers (HTTPS) reach the edge, nginx on the one public port, which ends HTTPS and passes each connection to one of Apache's two doors; site.conf sends it to the game server, the players' site or, for /opendmtq/admin, the admin pages, which the owner also opens at localhost:8791. The game server, the site and the admin pages work on data/; the builder puts the app, and the PC client's installer beside it, in data/apk/out at every start" width="100%">
+  <img src="images/fig-parts-docker.svg" alt="The parts with Docker Compose. Phones (plain HTTP) and browsers (HTTPS) reach the edge, nginx on the one public port, which ends HTTPS and passes each connection to one of Apache's two doors; site.conf sends it to the game server, the players' site or, for /opendmtq/admin, the admin pages, on the same port: the owner opens them there too. The game server, the site and the admin pages work on data/; the builder puts the app, and the PC client's installer beside it, in data/apk/out at every start" width="100%">
 </p>
 
 ## One address for four hosts
@@ -445,16 +445,18 @@ hand.
 - Containers run as the invoking user's uid (33, www-data, when that is root), with no capabilities,
   `no-new-privileges` and a read-only root filesystem. The content is mounted read-only. Apache and PHP do not announce
   their versions.
-- The stack publishes one port: `LISTEN_PORT`, 80 by default, on every interface (`BIND_ADDRESS` narrows it), held by
+- The stack publishes one port: `LISTEN_PORT`, 8791 on a new install (80 on one set up before 0.11.0 without it), on every interface (`BIND_ADDRESS` narrows it), held by
   the edge. It carries plain HTTP and HTTPS; HTTPS ends in the edge, whose certificate is signed by an authority the
   server makes for itself, limited to the server's own names ([internet.md](internet.md#https)). Only the edge holds
   the certificate's key, and no running container holds the authority's.
 - The import opens the owner's archives with 7-Zip in a container of its own, which sees the folder it imports from,
   `data/content` and `data/apk/base`; the keys, the backups, the database and what phones download are hidden from it,
   and it has no network (compose service `importer`).
-- The admin pages are published on `127.0.0.1:8791` only (`ADMIN_BIND`, `ADMIN_PORT`). The server also passes
-  `/opendmtq/admin` to them unless `ADMIN_ON_PUBLIC_PORT=no`; once HTTPS is set up a plain-HTTP visit is sent to
-  HTTPS.
+- The admin pages have no port of their own: the server passes `/opendmtq/admin` to them on its one port. With
+  `ADMIN_ON_PUBLIC_PORT=no` (an exposed server) only the server PC's own visits are passed on: those that reach the
+  server from the stack network's gateway, which Docker Engine uses for a visit to localhost (`ADMIN_LOCAL=gateway`,
+  which the command line sets; under Docker Desktop, which passes every visit that way, none). Once HTTPS is set up a
+  plain-HTTP visit from elsewhere is sent to HTTPS; one to localhost stays on plain HTTP.
 - Their API (`/opendmtq/api`) is passed on where they are, with a token on each request. Once HTTPS is set up, a
   plain-HTTP request to it is refused (`403 use_https`) and passed on nowhere: its token has gone out in clear already.
   The database keeps a SHA-256 of each token, compared in constant time; a token that works is never throttled, and
@@ -484,10 +486,10 @@ A host install (`host/install.sh`, then `./opendmtq setup`) and the Windows bund
   logs, one door on `LISTEN_PORT` with `server/apache/site.conf`, and the admin pages behind it. The folder variables
   point into `data/`.
 - Apache runs with the system's PHP module (Homebrew's on macOS, the bundle's on Windows); the admin pages run on
-  waitress at `127.0.0.1:<ADMIN_PORT>`; the database keeper, the song list and the app builder are the same as in the
+  waitress on a loopback port of its own (`ADMIN_PORT`, which this program picks and nobody opens); the database keeper, the song list and the app builder are the same as in the
   image. If a program stops by itself, it is started again.
-- There is no edge, so no HTTPS: the admin pages and their API are on the public port only for a local network
-  address, and on this PC at `http://localhost:<ADMIN_PORT>/opendmtq/admin/` always.
+- There is no edge, so no HTTPS: the admin pages and their API are on the server's one port from anywhere for a local
+  network address, and for an internet one from the server PC only, at `http://localhost:<port>/opendmtq/admin/`.
 - The setup pages (`tools/opendmtq_tools/admin/setup.py`) know they run on the server PC from `OPENDMTQ_HOST_INSTALL`,
   which the host program sets. They then look in the owner's folders, run the import as a job, and change the
   address: they write `PUBLIC_HOST` to `.env` and leave `.host/run/restart.request`, and the host program's watch loop

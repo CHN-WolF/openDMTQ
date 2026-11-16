@@ -98,9 +98,9 @@ server, builds the app, checks it all and ends with a QR code for phones. Files 
 ./opendmtq setup --from ~/games/dmtq
 ```
 
-Sign in to the admin pages at the address the setup ends with (`./opendmtq status` shows it again, on this PC
-`http://localhost:8791/opendmtq/admin/` unless port 8791 was taken), as `admin` with `ADMIN_PASSWORD` from `.env`, and make
-an account for each player. To update, `git pull`, then `./opendmtq up`.
+Sign in to the admin pages at the address the setup ends with (`./opendmtq status` shows it again): the server's own
+address with `/opendmtq/admin/`, for example `http://192.168.1.10:8791/opendmtq/admin/`, as `admin` with `ADMIN_PASSWORD`
+from `.env`. The same ID and password sign in to the players' site. Make an account there for each player. To update, `git pull`, then `./opendmtq up`.
 
 ## Kubernetes
 
@@ -152,14 +152,13 @@ then restart.
 
 | Line | What it is | Set by |
 |---|---|---|
-| `PUBLIC_HOST` | The address the app uses: a LAN IPv4 address (`host:port` for another port than 80), or `host:port` when exposed | the setup, `./opendmtq host`, `./opendmtq expose` |
+| `PUBLIC_HOST` | The address the app uses: a LAN IPv4 address with its port (`192.168.1.10:8791`; none for port 80), or `host:port` when exposed | the setup, `./opendmtq host`, `./opendmtq expose` |
 | `SERVER_NAME` | The name after the game's title on phones, `TECHNIKA Q (<name>)`; empty: the whole address | `./opendmtq name` |
-| `LISTEN_PORT` | The port the server listens on (80 when unset): the port in a LAN `PUBLIC_HOST`, or the forwarded one | the setup, `./opendmtq host`, `./opendmtq expose` |
+| `LISTEN_PORT` | The server's one port, for the game, the players' site, the admin pages and the API (8791 on a new install; 80 when unset on one set up before 0.11.0): the port in a LAN `PUBLIC_HOST`, or the forwarded one | the setup, `./opendmtq host`, `./opendmtq expose` |
 | `BASE_APK` | The client to patch when `data/apk/base` holds several (a file name there) | `./opendmtq apk --base` |
-| `ADMIN_PASSWORD` | The owner's password on the admin pages | the setup |
+| `ADMIN_PASSWORD` | The owner's password on the admin pages and the players' site | the setup |
 | `ADMIN_USER` | The owner's ID (`admin` when unset) | by hand |
-| `ADMIN_ON_PUBLIC_PORT` | `yes`: admin pages on the main port at `/opendmtq/admin/`; `no`: only at their own address | `./opendmtq expose` (unless `--admin-public`) |
-| `ADMIN_BIND`, `ADMIN_PORT` | The admin pages' own address (`127.0.0.1` and `8791` when unset: this PC only) | by hand; `ADMIN_PORT` also by `./opendmtq up` when 8791 is taken |
+| `ADMIN_ON_PUBLIC_PORT` | `yes`: admin pages at `/opendmtq/admin/` from anywhere; `no`: from the server PC only, on the same port | `./opendmtq expose` (unless `--admin-public`) |
 | `LIVE_DEFAULT` | `on`: a new player's broadcast starts on until the Broadcasts page says otherwise ([broadcasts](live.md)); `off` when unset | by hand |
 | `RESTART` | `unless-stopped`: the server starts again with Docker | by hand |
 | `BIND_ADDRESS` | The interface the server's port is published on (all when unset) | by hand |

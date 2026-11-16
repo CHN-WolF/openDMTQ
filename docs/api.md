@@ -11,10 +11,10 @@ Beside the admin pages, at `/opendmtq/api/v1/`, and only where they are:
 
 | Install | Address |
 |:---|:---|
-| Docker Compose, on the server PC | The admin pages' address `./opendmtq setup` gives at its end, with `/opendmtq/api/v1/` in place of `/opendmtq/admin/` (`ADMIN_PORT` and `ADMIN_BIND` in `.env` change it) |
-| Docker Compose, from the local network | `https://<server>:<port>/opendmtq/api/v1/`, with port 80 `https://<server>:80/opendmtq/api/v1/`. A request over plain HTTP is refused while HTTPS works (`403 use_https`, with that address) |
+| Docker Compose, on the server PC | The admin pages' address `./opendmtq setup` gives at its end, with `/opendmtq/api/v1/` in place of `/opendmtq/admin/`; `http://localhost:<port>/opendmtq/api/v1/` stays on plain HTTP |
+| Docker Compose, from the local network | `https://<server>:<port>/opendmtq/api/v1/`, with port 8791 `https://<server>:8791/opendmtq/api/v1/`. A request over plain HTTP is refused while HTTPS works (`403 use_https`, with that address) |
 | Docker Compose, exposed to the internet | Only on the server PC, unless `./opendmtq expose --admin-public`: then over HTTPS from anywhere |
-| Host install and Windows | On the server PC, the admin pages' address `./opendmtq status` shows, and on Windows the server's window, with `/opendmtq/api/v1/` in place of `/opendmtq/admin/`; from the local network, `http://<server>:<port>/opendmtq/api/v1/` (without `:<port>` when it is 80) |
+| Host install and Windows | The admin pages' address `./opendmtq status` shows, and on Windows the server's window, with `/opendmtq/api/v1/` in place of `/opendmtq/admin/`, on the server's one port |
 | Kubernetes | Through the router when `admin.onPublicPort` allows it, else `kubectl port-forward` to port 8000 of the api pod ([kubernetes.md](kubernetes.md)) |
 
 The same settings open it or keep it closed as for the admin pages ([admin.md](admin.md), [internet.md](internet.md)):

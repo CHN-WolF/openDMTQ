@@ -545,7 +545,7 @@ class MessageTest(unittest.TestCase):
 
     def test_up_status_and_setup_name_one_admin_address(self):
         # up, status and the setup's end all name the admin pages on the server's one port, at the address phones use,
-        # with where the password is (DEP-43).
+        # with where the password is (CLI-21).
         wanted = "http://192.168.0.10:8791/opendmtq/admin/  (ID admin, password: ADMIN_PASSWORD in .env)"
         with Sandbox("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n") as sb:
             game_data(sb)

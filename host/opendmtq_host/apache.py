@@ -133,6 +133,10 @@ def admin_conf(values):
     lines = [
         # The visitor's real address for the sign-in throttle; whatever the visitor sent is replaced.
         'RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"',
+        # Whether the visit is the server PC's own (loopback): never held up by guesses from elsewhere. Whatever the client
+        # sent is dropped first.
+        "RequestHeader unset X-Server-PC",
+        "RequestHeader set X-Server-PC yes \"expr=-R '127.0.0.0/8'\"",
         # Sign-in forms are tiny; uploads (songs, backups) go to their own pages.
         '<LocationMatch "^/(opendmtq/)?admin/login">',
         "    LimitRequestBody 8192",

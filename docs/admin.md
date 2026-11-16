@@ -82,10 +82,10 @@ Where they are:
 
 | Install | Address |
 |---|---|
-| Docker Compose, on the server PC | The address `./opendmtq setup` gives at its end, and `./opendmtq up` and `./opendmtq status` too: `http://localhost:8791/opendmtq/admin/`, the pages' own port (`ADMIN_PORT` and `ADMIN_BIND` in `.env` change it) |
-| Docker Compose, from the local network | `https://<server>:<port>/opendmtq/admin/` (a plain-HTTP visit is sent there; with port 80 that is `https://<server>:80/opendmtq/admin/`) |
-| Docker Compose, exposed to the internet | Only on the server PC, unless `./opendmtq expose --admin-public`: then over HTTPS from anywhere |
-| Host install and Windows | On the server PC, the address `./opendmtq status` shows, and on Windows the server's window; from the local network, `http://<server>:<port>/opendmtq/admin/` (without `:<port>` when it is 80) |
+| Docker Compose, on the server PC | The address `./opendmtq setup` gives at its end, and `./opendmtq up` and `./opendmtq status` too: the server's address with `/opendmtq/admin/`, on the server's one port. `http://localhost:<port>/opendmtq/admin/` stays on plain HTTP |
+| Docker Compose, from the local network | `https://<server>:<port>/opendmtq/admin/` (a plain-HTTP visit is sent there; with port 8791 that is `https://<server>:8791/opendmtq/admin/`) |
+| Docker Compose, exposed to the internet | Only on the server PC, at `http://localhost:<port>/opendmtq/admin/`, unless `./opendmtq expose --admin-public`: then over HTTPS from anywhere |
+| Host install and Windows | The address `./opendmtq status` shows, and on Windows the server's window: `http://<server>:<port>/opendmtq/admin/`, on the server's one port; exposed to the internet, on the server PC only, at `http://localhost:<port>/opendmtq/admin/` |
 | Kubernetes | Through the router when `admin.onPublicPort` allows it, else `kubectl port-forward` ([kubernetes.md](kubernetes.md)) |
 
 Their API is at the same addresses, under `/opendmtq/api/v1/`, for scripts and other programs ([api.md](api.md)).
@@ -96,11 +96,14 @@ that address leads to the same page at the new one (a permanent redirect, which 
 
 Sign in with an ID and a password: the owner's account, `ADMIN_USER` (`admin` unless set) and `ADMIN_PASSWORD` from
 `.env` (made by `setup`), which works even with the database damaged, or an account made on the Accounts page with
-admin rights.
+admin rights. The owner's ID and password sign in to the players' site too: the admin pages keep a copy of the
+password there as the accounts' table keeps one (`data/state/owner.pass`, readable by the server's user only), made
+again when `.env` changes. An account without admin rights is told it is for the players' site.
 
 Wrong passwords are slowed down. After five failures in ten minutes from one address, that address must wait. Visits
-through the server also count together, and after thirty failures in ten minutes they all wait. The admin pages' own
-address on the PC (`http://localhost:8791/opendmtq/admin/`) is never locked out that way. The address counted is the
+through the server also count together, and after thirty failures in ten minutes they all wait. A visit from the server PC
+itself (`http://localhost:<port>/opendmtq/admin/`) is never locked out that way. A refused sign-in is in the log of
+changes whatever the reason: a wrong password, too many tries, or an account without admin rights. The address counted is the
 connection's own, never a header the client sent. Forms carry a CSRF token, and the session cookie is HttpOnly,
 SameSite=Lax, and Secure when it comes over HTTPS. No page can show these pages in a frame (`X-Frame-Options: DENY`),
 a browser takes each file as the type it is sent as (`X-Content-Type-Options: nosniff`), and a link to another site

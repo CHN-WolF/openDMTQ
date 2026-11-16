@@ -33,7 +33,7 @@ expect() {
   if "$@"; then pass "$name"; else fail "$name"; fi
 }
 # The HTTP status of an address (000 when nothing answers); more curl options after it.
-code() { curl -s -o /dev/null -w '%{http_code}' -m 10 "$@"; }
+code() { curl -s -o /dev/null -w '%{http_code}' -m 10 "$@" || true; }
 # The server's command line, in the server's folder, as its owner runs it.
 cli() { (cd "$SRV" && ./opendmtq "$@"); }
 

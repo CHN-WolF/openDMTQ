@@ -99,6 +99,9 @@ cd openDMTQ
 ./opendmtq setup
 ```
 
+Every install serves on one port, 8791 unless taken: the players' site at `http://<this PC>:8791/` and the admin pages
+at `http://<this PC>:8791/opendmtq/admin/`, where `admin` signs in with `ADMIN_PASSWORD` from `.env`, on both.
+
 <p align="center">
   <img src="docs/images/setup.jpg" alt="The setup in the browser: the game's Android app, the client data and the song data found in Downloads, each labeled with what it is, with a button to import them" width="100%">
 </p>

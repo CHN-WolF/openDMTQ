@@ -97,14 +97,13 @@ When the game does not start or shows no songs, this chart leads to the right se
 - `./opendmtq setup` warns when the firewall step fails (Windows PowerShell not reachable, the administrator prompt
   declined) and goes on; run `./opendmtq firewall` afterwards, or `cli/firewall.ps1 -Port <port>` (with `-Internet` when
   exposed) in an administrator PowerShell.
-- Linux: Docker-published ports bypass ufw, so a ufw rule neither opens nor closes port 80. If the machine is
+- Linux: Docker-published ports bypass ufw, so a ufw rule neither opens nor closes the server's port. If the machine is
   reachable from outside your home network, set `BIND_ADDRESS` in `.env` to its LAN address. A host install's Apache
   is not Docker's: there the system's firewall applies as usual.
 - The port already used by something else. With Docker Compose, `./opendmtq up` then fails to start the edge proxy,
   the small program that holds the server's public port. Stop the other program, or use another port, for example
-  `./opendmtq host 192.168.1.10:8080` (the app is rebuilt for it). Not 8791, which the admin pages use on this PC
-  (`ADMIN_PORT`). A host install and the Windows bundle pick a free port at their setup: 80, else 8080, else 8790,
-  else 8792 to 8795. `./opendmtq host <address>:<port>` (`OpenDMTQ.exe host <address>:<port>`) changes it.
+  `./opendmtq host 192.168.1.10:8792` (the app is rebuilt for it). A new install takes 8791, or the first free port after
+  it when 8791 is taken; the players' site, the admin pages and the API are all on that one port. `./opendmtq host <address>:<port>` (`OpenDMTQ.exe host <address>:<port>`) changes it.
 - `./opendmtq doctor` fails when the port in the address and `LISTEN_PORT` differ: phones would call one port while
   the server listens on the other. `./opendmtq host` sets both.
 

@@ -80,15 +80,23 @@ if [ "${ADMIN_LOCAL:-}" = gateway ] && [ "${EDGE_DOORS:-yes}" = yes ]; then
     # The default route's gateway, from the kernel's table (hexadecimal, its bytes in reverse order).
     gw_hex=$(awk '$2 == "00000000" { print $3; exit }' /proc/net/route 2>/dev/null || true)
     if [ -n "$gw_hex" ]; then
-        # shellcheck disable=SC2046  # Split into its four bytes on purpose.
-        set -- $(echo "$gw_hex" | sed 's/../& /g')
-        LOCAL_FROM=$(printf '%d.%d.%d.%d' "0x$4" "0x$3" "0x$2" "0x$1")
+        # In a function of its own: its arguments are its own, and the script's (Apache's command) stay as they are.
+        dotted() {
+            # shellcheck disable=SC2046  # Split into its four bytes on purpose.
+            set -- $(echo "$1" | sed 's/../& /g')
+            printf '%d.%d.%d.%d' "0x$4" "0x$3" "0x$2" "0x$1"
+        }
+        LOCAL_FROM=$(dotted "$gw_hex")
     fi
 fi
 if [ -n "${ADMIN_URL:-}" ]; then
     cat > "$PASS" <<CONF
 # The visitor's real address for the admin's sign-in throttle; any client-sent value is replaced.
 RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"
+# Whether the visit is the server PC's own (its gateway, see LOCAL_FROM): such a visit is never held up by guesses from
+# elsewhere. Whatever the client sent is dropped first.
+RequestHeader unset X-Server-PC
+$( [ -n "$LOCAL_FROM" ] && echo "RequestHeader set X-Server-PC yes \"expr=-R '$LOCAL_FROM'\"" )
 # Sign-in forms are tiny; uploads (songs, backups) go to their own pages.
 <LocationMatch "^/(opendmtq/)?admin/login">
     LimitRequestBody 8192
