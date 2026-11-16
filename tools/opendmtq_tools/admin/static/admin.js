@@ -591,7 +591,8 @@ for (const search of document.querySelectorAll('input[type=search][data-rows]'))
     const { act, name, who, id } = more.dataset;
     const form = made.content.firstElementChild.cloneNode(true);
     // Rename, Reset and Delete go to this player's address, which says whom the page saw the number belong to.
-    form.action = act;
+    // By its attribute: its buttons named "action" stand in for form.action.
+    form.setAttribute('action', act);
     const field = form.querySelector('input[name=name]'), rename = form.querySelector('button[value=rename]');
     // The name as it is now; none yet leaves the field empty, its placeholder the "Player <n>" the pages show.
     field.value = name;
@@ -873,11 +874,15 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
   };
   document.addEventListener('submit', async e => {
     const form = e.target, button = e.submitter;
-    if (e.defaultPrevented || form.method !== 'post' || !(form.dataset.inplace !== undefined || (button && button.dataset.inplace !== undefined))) return;
+    // The form's own attributes, not its properties: a field named "action" (most of these forms have one) stands in for
+    // form.action.
+    const method = (form.getAttribute('method') || 'get').toLowerCase();
+    if (e.defaultPrevented || method !== 'post' || !(form.dataset.inplace !== undefined || (button && button.dataset.inplace !== undefined))) return;
     // Sent the usual way once: after a failure here, or for the sign-in that ended.
     if (form.dataset.plain) { delete form.dataset.plain; return; }
     e.preventDefault();
-    const url = button && button.hasAttribute('formaction') ? button.formAction : form.action;
+    // Where it goes: the pressed button's own address, or the form's, or this page's when it names none, as a browser sends it.
+    const url = button && button.hasAttribute('formaction') ? button.formAction : new URL(form.getAttribute('action') || location.href, location.href).href;
     const body = new FormData(form);
     if (button && button.name) body.append(button.name, button.value);
     // Done, either way: the form can be sent again, and the page is not taken back to where it was (nothing moved).

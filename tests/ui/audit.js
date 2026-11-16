@@ -761,6 +761,7 @@ async function inPlace(contexts) {
   // The Broadcasts page: the server's switch on and off again.
   await page.goto(`${A}/recordings`, { waitUntil: 'domcontentloaded' });
   const word = () => document.querySelector('#broadcasts .auto-line b').textContent;
+  await page.waitForSelector('#broadcasts .auto-line b');
   const was = await page.evaluate(word);
   const flip = () => page.click('#broadcasts button[name=action][value^="broadcasts-"]').then(async () => {
     // Turning them off with someone on air asks first: yes.
@@ -775,6 +776,7 @@ async function inPlace(contexts) {
   check("the Broadcasts page's settings are saved in place", saved.ok, saved.detail);
   // The Accounts page: an account switched off and on again.
   await page.goto(`${A}/accounts`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('tr:has(input[value="manager"]) .account-state');
   const stateText = () => document.querySelector('tr:has(input[value="manager"]) .account-state').textContent.trim();
   const acc = await page.evaluate(stateText);
   const accOff = await sameWay(page, () => page.click('tr:has(td.primary) form:has(input[value=off]):has(input[value="manager"]) button'),
@@ -785,12 +787,14 @@ async function inPlace(contexts) {
   check('an account is switched off and on again in place', accOff.ok && accOn.ok, `${accOff.detail} | ${accOn.detail}`);
   // The Songs page: a song hidden and shown again.
   await page.goto(`${A}/songs`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('tr[data-n="2"]');
   const hidden = () => !!document.querySelector('tr[data-n="2"] .mark.off');
   const hide = await sameWay(page, () => page.click('tr[data-n="2"] form:has(input[name=action][value=hide]) button'), () => !!document.querySelector('tr[data-n="2"] .mark.off'));
   const show = await sameWay(page, () => page.click('tr[data-n="2"] form:has(input[name=action][value=show]) button'), () => !document.querySelector('tr[data-n="2"] .mark.off'));
   check('a song is hidden and shown again in place', hide.ok && show.ok && !(await page.evaluate(hidden)), `${hide.detail} | ${show.detail}`);
   // The Maintenance page: on (it asks first), then off.
   await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.auto-line b');
   const maintWord = () => document.querySelector('.auto-line b').textContent;
   const m1 = await page.evaluate(maintWord);
   const mOn = await sameWay(page, async () => { await page.click('button[name=action][value=on]'); await page.waitForSelector('#ask[open]'); await page.click('#ask [value=yes]'); },
