@@ -386,15 +386,17 @@ def restart_running(values):
     the old run on its way out."""
     before = admin_instance(values)
     ask_running_program("restart.request", str(int(time.time())))
-    # As long as a start may take (START_WAIT), and the request's own look every two seconds.
-    deadline = time.time() + START_WAIT + 10
+    tell("The server is starting again with it.")
+    # As long as a slow first start may take three times over (an antivirus looking at every program again, Wine), and
+    # the request's own look every two seconds.
+    deadline = time.time() + max(3 * START_WAIT, 180)
     while time.time() < deadline:
         now = admin_instance(values)
         if now is not None and now != before and health(values) is not None:
             ok("the server started again with it")
             return
         time.sleep(1)
-    ok(f"the server is starting again with it; {CLI} status says when it answers")
+    ok(f"the server is still starting again; {CLI} status says when it answers")
 
 
 def data_sizes(values, found):

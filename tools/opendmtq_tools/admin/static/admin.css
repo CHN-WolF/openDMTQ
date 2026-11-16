@@ -13,7 +13,7 @@ body[data-section="admin"] { --gap: 14px; }
 .nav.pages::-webkit-scrollbar { display: none; }
 .nav.pages > a { padding: 0 11px; font: 700 var(--t-md)/1 var(--text-face); letter-spacing: -0.005em; }
 .bar-in { gap: 18px; }
-/* A second row under the wordmark on anything narrower than the nine pages need in one row beside the keys: 1240 px,
+/* A second row under the wordmark on anything narrower than the ten pages need in one row beside the keys: 1240 px,
    with the game server's OFFLINE light and the profile's badge there too (at 1200 px they were 27 px too wide). */
 @media (max-width: 1240px) {
   .bar-in { flex-wrap: wrap; row-gap: 0; }
@@ -22,14 +22,17 @@ body[data-section="admin"] { --gap: 14px; }
   .nav.pages > a.on::after { inset: auto 6px 0; }
 }
 @media (max-width: 720px) and (orientation: portrait) {
-  /* The public site's menu at the thumb has four places; the console's nine pages stay on the bar, in three even rows so
+  /* The public site's menu at the thumb has four places; the console's ten pages stay on the bar, in three even rows so
      that none is out of view or alone on a row, and the bar goes away with the page so that it does not take a third of
      the screen. */
   .bar:has(.nav.pages) { position: static; }
   .bar:has(.nav.pages) .bar-in { column-gap: 8px; }
   .bar:has(.nav.pages) .bar-end { gap: 8px; }
-  .bar .nav.pages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-inline: 0; padding-bottom: 4px; }
+  .bar .nav.pages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-inline: 0; padding-bottom: 4px; }
   .bar .nav.pages > a { justify-content: center; min-width: 0; min-height: 42px; padding: 0 2px; font-size: var(--t-xs); }
+  /* Ten pages in rows of four: the last row's two take two places each, so that the rows stay even and no page is left
+     alone at the end (three to a row left one alone on a fourth row). */
+  .bar .nav.pages > a:nth-child(4n+1):nth-last-child(2), .bar .nav.pages > a:nth-child(4n+2):nth-last-child(1) { grid-column: span 2; }
   body[data-section="admin"] { padding-bottom: env(safe-area-inset-bottom); }
 }
 
@@ -732,14 +735,15 @@ table.sortable :is(th.r, th.rank)[data-sort]::after { position: absolute; margin
 @keyframes rise { from { transform: scaleY(0); } }
 @keyframes drop-in { from { opacity: 0; transform: translateY(-4px); } }
 
-/* The console's bar has nine pages and, while the game server is down, its OFFLINE light: the profile is its badge
+/* The console's bar has ten pages and, while the game server is down, its OFFLINE light: the profile is its badge
    alone at every width (the account and its role in the badge's title, and for screen readers), or the pages would
    scroll sideways (35 px at 1280 with the light on). On a narrow phone (360 px) not even the badge: the logo with its
    ADMIN word, both languages and Sign out fill the row; from 391 px (412 on a Galaxy) it fits. */
 .bar .auth-who .who-text { display: none; }
 @media (max-width: 390px) { .auth-who { display: none; } }
-/* The pages' strip a little tighter below 800 px, where the nine of them were 6 px wider than the screen (740 px). */
-@media (max-width: 800px) { .nav.pages > a { padding: 0 9px; } }
+/* The pages' strip a little tighter below 860 px, so that the row fits the bar whole and never scrolls sideways: the
+   nine of them were 6 px wider than the screen at 740 px, and the ten 31 px at 744 px in English with 9 px each side. */
+@media (max-width: 860px) { .nav.pages > a { padding: 0 7px; } .nav.pages > a.on::after { inset: auto 3px 0; } }
 
 /* The setup (setup.html): its four steps in a row, each a link, the one open marked, the done ones ticked. Their own
    class names: the site's stylesheet gives .done a message box of its own. */
