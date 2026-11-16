@@ -403,13 +403,13 @@ async function floatingLayers(contexts) {
     await page.goto(`${A}/players`, { waitUntil: 'domcontentloaded' });
     await openRow('first', 'the first row');
     await openRow('last', 'the last row');
-    // A row at the window's foot: the page scrolled so that its More sits on the last line of the window.
-    await page.evaluate(rows => {
-      const row = document.querySelector(rows);
-      scrollBy(0, row.getBoundingClientRect().bottom - innerHeight + 4);
-    }, shown);
+    // A row at the window's foot: the window made just tall enough for the first row's More and a few pixels more, so that
+    // its panel has no room below it.
+    await page.evaluate(() => { for (const d of document.querySelectorAll('.row-more[open]')) d.open = false; scrollTo(0, 0); });
+    const foot = await page.$eval(`${shown} .row-more > summary`, e => Math.ceil(e.getBoundingClientRect().bottom));
+    await page.setViewport({ width, height: foot + 12, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
     await openRow('first', 'a row at the window\'s foot');
-    await page.evaluate(() => scrollTo(0, 0));
+    await page.setViewport({ width, height, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
     // A search that leaves one row.
     const name = await page.$eval('table.players tbody tr:nth-child(3)', r => r.dataset.k);
     await page.$eval('#player-search', (e, v) => { e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, name);
@@ -560,7 +560,7 @@ async function portalFlows(contexts) {
   check('and back', await fresh.$eval('html', e => e.lang) === 'en');
   await typeId(fresh, 'input[name=user]', 'dmtq');
   await fresh.type('input[name=password]', PASSWORD);
-  await press(fresh, '.signin-form button');
+  await press(fresh, '.signin-form button[type=submit]');
   check('signing in leads to the page asked for', new URL(fresh.url()).pathname === '/opendmtq/ranking.php', fresh.url());
   await own.close();
   // The front page: the big logo carries the server's version, and what the site is for comes first, the app one press
@@ -725,12 +725,12 @@ async function portalFlows(contexts) {
     // No ID kept from this browser's earlier sign-ins: both fields empty.
     await empty.evaluate(() => localStorage.clear());
     await empty.reload({ waitUntil: 'domcontentloaded' });
-    await empty.click('.signin-form button');
+    await empty.click('.signin-form button[type=submit]');
     // The words under the field they are about.
     const under = name => empty.$eval(`.field:has(input[name=${name}]) .field-error`, e => e.textContent).catch(() => '');
     const first = [await under('user'), await empty.evaluate(() => document.activeElement.name)];
     await typeId(empty, 'input[name=user]', 'dmtq');
-    await empty.click('.signin-form button');
+    await empty.click('.signin-form button[type=submit]');
     const second = [await under('password'), await empty.evaluate(() => document.activeElement.name),
       await empty.$eval('input[name=password]', e => e.getAttribute('aria-invalid'))];
     check(`a field left empty is said by the site in its own words (${lang})`, first[0] === noId && first[1] === 'user'
@@ -1409,7 +1409,7 @@ async function adminFlows(contexts) {
   await friend.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
   await typeId(friend, 'input[name=user]', 'friend1');
   await friend.type('input[name=password]', made);
-  await press(friend, '.signin-form button');
+  await press(friend, '.signin-form button[type=submit]');
   check('the new account signs in to the site', new URL(friend.url()).pathname === '/opendmtq/' && await visible(friend, '.stage'), friend.url());
   await page.goto(`${A}/accounts`, { waitUntil: 'domcontentloaded' });
   check('the password is not shown again', !(await page.$('.account-keys')));

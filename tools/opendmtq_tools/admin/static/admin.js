@@ -117,9 +117,9 @@ for (const form of document.querySelectorAll('form[data-remember]')) {
   let kept = '';
   try { kept = localStorage.getItem(key) || ''; } catch (_) { /* storage off */ }
   if (!id.value && kept) id.value = kept;
-  // The first field left to fill takes the focus, on a computer only (a phone's keyboard would cover the page), and not over
-  // the field the server's answer chose (autofocus).
-  if (matchMedia('(pointer: fine)').matches && !form.querySelector('[autofocus]')) (id.value && password ? password : id).focus();
+  // The first field left to fill takes the focus, not where a finger is the pointer (a phone's keyboard would cover the
+  // page), and not over the field the server's answer chose (autofocus).
+  if (!matchMedia('(pointer: coarse)').matches && !form.querySelector('[autofocus]')) (id.value && password ? password : id).focus();
   form.addEventListener('submit', e => {
     if (e.defaultPrevented || !id.value.trim()) return;
     try { localStorage.setItem(key, id.value.trim()); } catch (_) { /* storage off */ }

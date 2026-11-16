@@ -119,9 +119,9 @@
     let kept = '';
     try { kept = localStorage.getItem(key) || ''; } catch (_) { /* storage off */ }
     if (!id.value && kept) id.value = kept;
-    // The first field left to fill takes the focus: on a computer only, where no keyboard covers the page for it, and not
-    // over a field the server's answer already chose.
-    if (matchMedia('(pointer: fine)').matches && !form.querySelector('[autofocus]')) (id.value && password ? password : id).focus();
+    // The first field left to fill takes the focus: not where a finger is the pointer (a phone, a tablet), whose keyboard
+    // would come up over the page, and not over a field the server's answer already chose.
+    if (!matchMedia('(pointer: coarse)').matches && !form.querySelector('[autofocus]')) (id.value && password ? password : id).focus();
     form.addEventListener('submit', e => {
       if (e.defaultPrevented || !id.value.trim()) return;
       try { localStorage.setItem(key, id.value.trim()); } catch (_) { /* storage off */ }
