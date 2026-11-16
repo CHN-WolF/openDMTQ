@@ -22,6 +22,7 @@
 #include "keyplay.h"
 #include "mixer.h"
 #include "soundmix.h"
+#include "game_screen.h"
 #include "pacing.h"
 #include "player.h"
 #include "tweaks.h"
@@ -149,6 +150,8 @@ bool load_library(const std::string& guest_path) {
     player::keyplay_library_loaded(guest_path.substr(guest_path.rfind('/') + 1), h);
     // The game's OpenAL: its music and effects apart, before the game looks up any of its calls (soundmix.cpp).
     player::soundmix_library_loaded(guest_path.substr(guest_path.rfind('/') + 1), h);
+    // And the game's Screen, for the size it renders at (game_screen.cpp).
+    player::game_screen_library_loaded(guest_path.substr(guest_path.rfind('/') + 1), h);
     // The natives it exports by name first; its JNI_OnLoad registers its own after, and they win.
     jni_bind_exports(&jvm::attach().jni, h, host_of(guest_path));
     gaddr onload = g.dlsym(h, "JNI_OnLoad");
@@ -439,6 +442,8 @@ int main(int argc, char** argv) {
     g_render_hook = [](Thread& th) {
         player::keyplay_render(th);
         player::soundmix_render(th);
+        // The size the game renders at, kept to the window's (game_screen.h).
+        player::game_screen_render(th);
     };
     // UnityPlayer's static initializer: System.loadLibrary("main").
     if (!player::load_library(a.lib_dir + "/libmain.so")) {

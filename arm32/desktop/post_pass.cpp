@@ -1313,6 +1313,18 @@ bool present(const arm32::OffscreenFrame& f) {
         else arm32::log("player: the game draws at %dx%d, the window's own size: no upscaler", f.width, f.height);
         arm32::log("player: anti-aliasing: %s", p.aa == 1 ? "CMAA 2" : p.aa == 2 ? "SMAA" : "off");
     }
+    // The viewport the game drew its frame's last draw with, said when it changes: the size the game really renders its
+    // frame at, whatever it was told (a game that kept an old size, or drew a smaller picture, would show it here).
+    {
+        GLint viewport[4] = {0, 0, 0, 0};
+        g.get_integer(GL_VIEWPORT, viewport);
+        static GLint said[4] = {-1, -1, -1, -1};
+        if (viewport[2] != said[2] || viewport[3] != said[3] || viewport[0] != said[0] || viewport[1] != said[1]) {
+            std::memcpy(said, viewport, sizeof said);
+            arm32::log("player: the game's frame drawn with a viewport of %dx%d at %d,%d (its frame %dx%d)", viewport[2], viewport[3], viewport[0], viewport[1],
+                       f.width, f.height);
+        }
+    }
     // A check's shot of this frame (PLAYER_SHOTS): the game's own frame saved too, before the passes change it.
     if (const std::string shot = arm32::shot_due(false); !shot.empty()) arm32::save_texture_shot(f.texture, f.width, f.height, shot);
     Saved saved;

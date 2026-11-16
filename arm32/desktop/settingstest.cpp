@@ -17,6 +17,7 @@
 #include "bar_gesture.h"
 #include "frame_rate.h"
 #include "keyboard_play.h"
+#include "live_notice.h"
 #include "overlay_motion.h"
 #include "overlay_scale.h"
 #include "player.h"
@@ -517,12 +518,13 @@ void counter_checks() {
     }
     check(never_larger, "every area from 270 to 2160 lines, 4:3 to 21:9, at 100 to 300 %: the counter never larger than the rest of the overlay");
     // The game's pause button in a song, as measured on its frames: its right edge (its last column, plus one) at
-    // 1280x720, 1920x1080, 1920x1200 (16:10), 1024x768 (4:3) and 2520x1080 (the 21:9 area of a 2560x1080 window).
+    // 1280x720, 1920x1080, 1920x1200 (16:10), 1024x768 (4:3) and 2520x1080 (the 21:9 area of a 2560x1080 window, where
+    // the game lays itself out at its height's scale once it knows its size, as at its start: 109 there, as at 1080).
     struct Pause {
         int w, h, right;
     };
     bool beside = true;
-    for (const Pause& p : {Pause{1280, 720, 73}, Pause{1920, 1080, 109}, Pause{1920, 1200, 109}, Pause{1024, 768, 58}, Pause{2520, 1080, 144}}) {
+    for (const Pause& p : {Pause{1280, 720, 73}, Pause{1920, 1080, 109}, Pause{1920, 1200, 109}, Pause{1024, 768, 58}, Pause{2520, 1080, 109}}) {
         // The counter laid out as the overlay lays it at the top left: its inset and glass at its own scale.
         const float k = counter_scale_for(p.w, p.h, 1.0f);
         const int inset = static_cast<int>(std::lround(kInset * k));
@@ -1216,6 +1218,65 @@ void sound_panel_checks() {
     check(bad == 0, "the sound panel and its button over 16 shapes and scales: inside, apart, padded, large enough, room for the notice");
 }
 
+// The broadcast's notices as the PC player reads them (live_notice.h): each numbered notice once, never by its words,
+// the LIVE tag by its kind, off notices shown even where the PC cannot send, keys found only with their colon, and the
+// player's own notice when the server stops answering while it broadcasts and when it answers again.
+void live_notice_checks() {
+    using namespace player::live_notice;
+    const Fields numbered = fields_of(R"({"on":false,"toast":"Ended\nWatch","toast_id":7,"toast_kind":"off","switch":false})");
+    check(numbered.id == 7 && numbered.kind == "off", "notice: its number and its kind read");
+    const Fields older = fields_of(R"({"on":true,"token":"abc","toast":"On air\nWatch"})");
+    check(older.id == -1 && older.kind.empty(), "notice: an older server's answer has no number (-1) and no kind");
+    check(fields_of(R"({"toast_kind":"on","on":true,"toast_id":3})").kind == "on" && value_at(R"({"toast_kind":"on","on":true})", "on") == 24,
+          "notice: the kind's value on before the key on is no key");
+    int last = 0;
+    auto with = [](int id, const char* kind) {
+        Fields f;
+        f.id = id;
+        f.kind = kind;
+        return f;
+    };
+    const Notice a = notice_of(true, true, "On air\nWatch", with(1, "on"), last, false);
+    check(a.show && a.live && last == 1, "notice: the first on notice shows, with the LIVE tag");
+    const Notice b = notice_of(true, false, "Ended\nWatch", with(2, "off"), last, false);
+    check(b.show && !b.live && last == 2, "notice: the off notice shows, without the tag");
+    const Notice c = notice_of(true, true, "On air\nWatch", with(3, "on"), last, false);
+    check(c.show && c.live, "notice: on again with the same words shows again");
+    check(!notice_of(true, true, "On air\nWatch", with(3, "on"), last, false).show, "notice: the same number again is a repeat, left out");
+    check(notice_of(true, false, "Ended\nOff here", with(4, "end"), last, false).show, "notice: the server's broadcasts off shows");
+    check(notice_of(true, false, "Switched on\nWaits", with(5, "wait"), last, false).show && notice_of(true, false, "Off\nStays off", with(6, "held"), last, false).show,
+          "notice: switched on or off while the server's are off shows");
+    check(!notice_of(true, true, "On air\nWatch", with(7, "on"), last, true).show && last == 7, "notice: the on notice left out where this computer cannot send");
+    check(notice_of(true, false, "Ended\nWatch", with(8, "off"), last, true).show, "notice: the off notice shows even where this computer cannot send");
+    check(!notice_of(true, false, "", with(0, ""), last, false).show, "notice: an answer without a notice shows none");
+    int old_last = 0;
+    check(notice_of(true, true, "On air", Fields{}, old_last, false).live && notice_of(true, false, "Ended", Fields{}, old_last, false).show &&
+              notice_of(true, true, "On air", Fields{}, old_last, false).show,
+          "notice: an older server's notices each show, the tag while on air");
+    // The server quiet while on air.
+    int misses = 0;
+    bool lost = false;
+    check(!reach_notice(true, true, false, misses, lost, false).show, "reach: an answer on air says nothing");
+    check(!reach_notice(false, false, true, misses, lost, false).show && !reach_notice(false, false, true, misses, lost, false).show,
+          "reach: two asks unanswered say nothing yet");
+    const Notice gone = reach_notice(false, false, true, misses, lost, false);
+    check(gone.show && !gone.live && gone.text == "Your broadcast has stopped\nThe server is not answering", "reach: the third says the broadcast stopped");
+    check(!reach_notice(false, false, true, misses, lost, false).show, "reach: once, not again while it stays quiet");
+    const Notice back = reach_notice(true, true, true, misses, lost, false);
+    check(back.show && back.live && back.text == "Your broadcast is back on\nThe server answers again", "reach: its next answer on air says it is back");
+    for (int i = 0; i < 3; ++i) reach_notice(false, false, true, misses, lost, true);
+    check(lost && !reach_notice(true, false, true, misses, lost, false).show && !lost, "reach: back off air says nothing");
+    int m2 = 0;
+    bool l2 = false, any = false;
+    for (int i = 0; i < 6; ++i) any |= reach_notice(false, false, false, m2, l2, false).show;
+    check(!any && !l2, "reach: asks unanswered while off air say nothing");
+    int m3 = 0;
+    bool l3 = false;
+    reach_notice(false, false, true, m3, l3, true);
+    reach_notice(false, false, true, m3, l3, true);
+    check(reach_notice(false, false, true, m3, l3, true).text.rfind("\xeb\xb0\xa9\xec\x86\xa1", 0) == 0, "reach: in Korean when the player speaks it");
+}
+
 int main() {
     // A file of its own beside the program's current folder.
     const std::string path = "settingstest.txt";
@@ -1380,6 +1441,8 @@ int main() {
     sound_settings_checks();
     // The sound panel's layout and the bar's Sound button.
     sound_panel_checks();
+    // The broadcast's notices.
+    live_notice_checks();
     if (g_failed) {
         std::printf("%d of %d checks FAILED\n", g_failed, g_checks);
         return 1;

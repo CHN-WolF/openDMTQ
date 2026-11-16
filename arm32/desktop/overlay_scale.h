@@ -101,9 +101,11 @@ inline float counter_scale_for(int area_w, int area_h, float dpi) {
 // on the game's frames.
 constexpr float kPauseRight = 73;
 
-// The pause button's right edge in an area `area_w` pixels wide: stretched across with the game's layout (73 at 1280
-// wide, 109.5 at 1920 whatever the height, 58.4 at 1024x768, 143.7 at 2520x1080), not grown with its height.
-inline float pause_right(int area_w) { return kPauseRight * static_cast<float>(area_w) / kGameWide; }
+// The pause button's right edge in an area of area_w by area_h: at the game's own scale, the narrower of its width over
+// 1280 and its height over 720 (73 at 1280x720, 109.5 at 1920x1080 and 1920x1200 and 2520x1080, 58.4 at 1024x768). The
+// game lays its screens out at that one scale in every shape once it knows its size (game_screen.h); before 0.11 a
+// window resized after the start left the game stretched across, its button 143.7 wide at 2520x1080.
+inline float pause_right(int area_w, int area_h) { return kPauseRight * handle_scale_for(area_w, area_h); }
 
 // Where the counter's glass goes, chip_w by chip_h, in its corner (1 top left, 2 top right, 3 bottom left, 4 bottom
 // right) of an area of area_w by area_h, `inset` in from the area's edges (8 at 720 lines, at the counter's own scale);
@@ -116,7 +118,7 @@ inline CounterAt counter_at(int corner, int area_w, int area_h, int inset, int c
     // Which sides of the area the corner touches.
     const bool right = corner == 2 || corner == 4, bottom = corner == 3 || corner == 4;
     // The top left: beside the pause button's right edge, rounded to a whole pixel.
-    const int left = corner == 1 ? static_cast<int>(std::lround(pause_right(area_w))) + inset : inset;
+    const int left = corner == 1 ? static_cast<int>(std::lround(pause_right(area_w, area_h))) + inset : inset;
     return CounterAt{right ? area_w - inset - chip_w : left, bottom ? area_h - inset - chip_h : inset + top_room};
 }
 
