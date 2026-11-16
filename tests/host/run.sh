@@ -364,7 +364,7 @@ job_ends() {
     grep -o '<p class="flash bad"[^>]*>[^<]*' <<<"$said" | sed 's/<[^>]*>//' >&2
     echo failed
   else
-    echo done
+    echo "done"
   fi
 }
 # has_actions: the Server page in $page has each of the forms a host install has.
@@ -401,7 +401,7 @@ inside "rm OpenDMTQ/server/portal/robots.txt && echo changed >> OpenDMTQ/docs/fa
 signed_in
 went=$(web "$admin" -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf=$(web "$admin" "$A/server" | token)" "$A/server/repair")
 state=$(job_ends "$went")
-expect "Check and repair on the Server page ends ($state) (SRV-47)" test "$state" = done
+expect "Check and repair on the Server page ends ($state) (SRV-47)" test "$state" = "done"
 expect "the program file that was gone is back" inside "test -s OpenDMTQ/server/portal/robots.txt"
 expect "the one that was changed is as the release has it" inside "! grep -q '^changed$' OpenDMTQ/docs/faq.md"
 expect "the data folder is there again" inside "test -d OpenDMTQ/data/backups"
@@ -417,7 +417,7 @@ signed_in
 went=$(web "$admin" -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf=$(web "$admin" "$A/server" | token)" -d part=backups -d part=logs \
   -d backup=yes -d confirm=delete "$A/server/data")
 state=$(job_ends "$went")
-expect "deleting the backups and the logs on the Server page ends ($state) (ADM-113)" test "$state" = done
+expect "deleting the backups and the logs on the Server page ends ($state) (ADM-113)" test "$state" = "done"
 expect "the old backup is gone" inside "test ! -e OpenDMTQ/data/backups/opendmtq-20200101-000000-manual.tar.gz"
 expect "the backup made first stays" inside "ls OpenDMTQ/data/backups | grep -q before-delete"
 expect "the programs' log was emptied" inside "test \$(stat -c %s OpenDMTQ/data/state/logs/programs.log) -lt 4096"
