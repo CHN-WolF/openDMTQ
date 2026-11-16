@@ -167,7 +167,7 @@ of a line is checked before any is applied, so one the launcher does not take ch
   Windows' animation effects switched off it comes and goes at once. It stays while the pointer is on it and goes up
   soon after the pointer leaves, so it never sits on the game's own controls at the top while they are used; a pointer
   that comes back while it goes up turns it back from where it is. On its left is the OpenDMTQ wordmark as the
-  launcher's header draws it; on its right are three buttons in the launcher's own shape and depth (two corners cut,
+  launcher's menu column draws it; on its right are three buttons in the launcher's own shape and depth (two corners cut,
   raised, sunk while held): **minimise** and **full screen** (or back to a window) as secondary buttons, quiet metal
   with a lighter plate under the pointer, and the **X** that quits as the main button, in the launcher's lime from the
   start so that it is seen at once. A button acts only when let go where it was pressed, as the bar stood when it was
@@ -193,7 +193,7 @@ of a line is checked before any is applied, so one the launcher does not take ch
   first brings the window back and lets the game draw itself again, so that the question stands over the game. The game
   holds still while it asks, as a phone's game does when its owner leaves it and as it does minimised: a song stops
   where it was, with the game's own pause screen after.
-- **The window**: the game has a title bar to move it by and a frame to size it by, dark as the launcher's header (on
+- **The window**: the game has a title bar to move it by and a frame to size it by, dark as the launcher's menu column (on
   Windows 11 in its very colours; Windows 10 dark where it can), and no buttons of its own: it is minimised, put in
   full screen and quit from the bar. A double click on the title bar does nothing.
 - **The pointer** over the game is a dart in the logo's look: a chrome left face and a lime right face with a dark rim.
