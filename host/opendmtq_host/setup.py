@@ -163,3 +163,5 @@ def summary(values):
         tell("Windows may ask whether Apache may use the network: allow it on private networks. If your Wi-Fi is set "
             "as a public network, phones and other PCs cannot connect: in Settings, Network & internet, choose Private "
             "for it.")
+    # A line of room before the running server's own lines.
+    say("")
