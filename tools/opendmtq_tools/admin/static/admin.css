@@ -814,6 +814,7 @@ table.data-parts .runtime { font-weight: 400; }
 /* The word to type before what deletes for good, in the question's own box. */
 .ask-type { display: grid; gap: 7px; margin-top: 16px; font-size: var(--t-sm); color: var(--ash); }
 .ask-type[hidden] { display: none; }
+.ask-type b { color: #fff; font-family: var(--mono); }
 .ask-type input { height: var(--ctl); padding: 0 12px; font: 600 var(--t-md)/1 var(--mono); color: #fff; background: #11161b; border: 1px solid var(--seam); border-radius: 0; }
 .ask-type input:focus-visible { outline: 2px solid var(--chalk); outline-offset: 1px; }
 .ask .btn[disabled] { opacity: 0.42; cursor: not-allowed; }

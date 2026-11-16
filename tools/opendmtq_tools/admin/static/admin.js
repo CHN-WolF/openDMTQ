@@ -187,8 +187,9 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   const need = button && button.dataset.need;
   if (need && !form.querySelector(`input[name="${need}"]:checked`)) {
-    formSays(form, button.dataset.needWords || '');
-    form.querySelector(`input[name="${need}"]`)?.focus();
+    // Said beside the button that was pressed, where the eyes are; the first box takes the keyboard, the page stays.
+    formSays(form, button.dataset.needWords || '', button.closest('.btn-line'));
+    form.querySelector(`input[name="${need}"]`)?.focus({ preventScroll: true });
     return;
   }
   ask.querySelector('p').textContent = question.replace('{n}', form.querySelectorAll('input[name=sel]:checked').length);
@@ -201,7 +202,11 @@ document.addEventListener('submit', e => {
   field.value = '';
   yes.disabled = Boolean(word);
   if (word) {
-    typed.querySelector('span').textContent = button.dataset.typeLabel || word;
+    // The label's words with the word to type in them, that word set apart ({word} in data-type-label).
+    const [before, after] = (button.dataset.typeLabel || '{word}').split('{word}');
+    const label = typed.querySelector('span'), strong = document.createElement('b');
+    strong.textContent = word;
+    label.replaceChildren(before || '', strong, after || '');
     field.oninput = () => { yes.disabled = field.value.trim().toLowerCase() !== word.toLowerCase(); };
     field.onkeydown = ev => {
       if (ev.key !== 'Enter') return;
@@ -225,12 +230,14 @@ document.addEventListener('submit', e => {
   if (word) field.focus();
 });
 
-// A message said just above a form, in the page's look (as the page's own checks say theirs): one per form.
-function formSays(form, words) {
-  let says = form.previousElementSibling;
+// A message said in the page's look (as the page's own checks say theirs), one per form: just above the form, or above
+// the part of it given (the line of the button that was pressed).
+function formSays(form, words, at) {
+  const place = at || form;
+  let says = place.previousElementSibling;
   if (!says || !says.matches('.form-says')) {
     says = document.createElement('p');
-    form.before(says);
+    place.before(says);
   }
   says.className = 'form-says flash bad';
   says.setAttribute('role', 'alert');
@@ -239,9 +246,10 @@ function formSays(form, words) {
 // A box ticked: the form's message about it goes.
 document.addEventListener('change', e => {
   const box = e.target;
-  if (box.type !== 'checkbox' || !box.form) return;
-  const says = box.form.previousElementSibling;
-  if (says && says.classList.contains('form-says') && box.form.querySelector('input[type=checkbox]:checked')) says.remove();
+  if (box.type !== 'checkbox' || !box.form || !box.form.querySelector('input[type=checkbox]:checked')) return;
+  for (const says of box.form.parentElement.querySelectorAll('.form-says')) {
+    if (says.closest('form') === box.form || says.nextElementSibling === box.form) says.remove();
+  }
 });
 
 // Forms: a button that was pressed shows that it is working (a backup or an upload takes a while; its data-busy says what

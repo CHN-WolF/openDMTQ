@@ -25,7 +25,7 @@
     <form method="post" action="{{ url_for('server_restart') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-ask="{{ tp('server.restart_confirm') }}" data-yes="{{ tp('server.restart') }}">{{ t('server.restart') }}</button></form>
     <form method="post" action="{{ url_for('server_stop') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-danger" data-ask="{{ tp('server.confirm') }}" data-yes="{{ tp('server.stop') }}">{{ t('server.stop') }}</button></form>
   </div>
-  {% else %}
+  {% elif commands %}
   <p class="lead">{{ t(command_leads[kind]) }}</p>
   <pre class="log cmd">{{ commands.stop }}
 {{ commands.restart }}</pre>
@@ -57,8 +57,8 @@
       </tbody>
     </table></div>
     <div class="btn-line data-go">
-      <label class="check"><input type="checkbox" name="backup" value="yes" checked> {{ t('data.backup_first') }}</label>
-      <button class="btn btn-danger" data-ask="{{ tp('data.confirm') }}" data-yes="{{ tp('data.delete') }}" data-type="{{ tp('data.delete_word') }}" data-type-label="{{ tp('server.type_label', word=tp('data.delete_word')) }}" data-need="part" data-need-words="{{ tp('data.none_chosen') }}">{{ t('data.delete') }}</button>
+      <label class="check"><input type="checkbox" name="backup" value="yes" checked><span>{{ t('data.backup_first') }}</span></label>
+      <button class="btn btn-danger" data-ask="{{ tp('data.confirm') }}" data-yes="{{ tp('data.delete') }}" data-type="{{ tp('data.delete_word') }}" data-type-label="{{ tp('server.type_label', word='{word}') }}" data-need="part" data-need-words="{{ tp('data.none_chosen') }}">{{ t('data.delete') }}</button>
     </div>
   </form>
 </section>
@@ -70,12 +70,12 @@
   <ul class="removes">{% for item in removes %}<li>{{ t(remove_words[item], root=root) }}</li>{% endfor %}</ul>
   <form method="post" action="{{ url_for('server_uninstall') }}">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="confirm" value="">
-    <div class="btn-line">
-      <label class="check"><input type="checkbox" name="keep" value="yes"> {{ t('server.keep_data') }}</label>
-      <button class="btn btn-danger" data-ask="{{ tp('server.remove_confirm') }}" data-yes="{{ tp('server.remove') }}" data-type="{{ tp('server.remove_word') }}" data-type-label="{{ tp('server.type_label', word=tp('server.remove_word')) }}">{{ t('server.remove') }}</button>
+    <div class="btn-line data-go">
+      <label class="check"><input type="checkbox" name="keep" value="yes"><span>{{ t('server.keep_data') }}</span></label>
+      <button class="btn btn-danger" data-ask="{{ tp('server.remove_confirm') }}" data-yes="{{ tp('server.remove') }}" data-type="{{ tp('server.remove_word') }}" data-type-label="{{ tp('server.type_label', word='{word}') }}">{{ t('server.remove') }}</button>
     </div>
   </form>
-  {% else %}
+  {% elif commands %}
   <ul class="removes">{% for item in removes %}<li>{{ t(remove_words[item], root=root) }}</li>{% endfor %}</ul>
   <pre class="log cmd">{{ commands.uninstall }}{% if kind == 'kubernetes' %}
 {{ commands.delete_data }}{% endif %}</pre>
