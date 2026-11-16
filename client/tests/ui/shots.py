@@ -1369,8 +1369,11 @@ def page_shorter_check(app, tag, problems):
     area = app.body
     area.canvas.yview_moveto(1.0)
     settle(app)
-    cards = [c for c in area.inner.winfo_children()[0].winfo_children() if isinstance(c, widgets.Card)]
-    cards[-1].destroy()
+    cards = [c for c in widgets_of(area.inner) if isinstance(c, widgets.Card)]
+    # The last card gone with what holds it on the page (pages.Sections keeps each card in a holder of its own).
+    content = area.inner.winfo_children()[0]
+    gone = cards[-1] if cards[-1].master is content else cards[-1].master
+    gone.destroy()
     wait_out(app.root, 0.5)
     region = [float(v) for v in str(area.canvas.cget("scrollregion")).split()]
     seen = area.canvas.winfo_height()

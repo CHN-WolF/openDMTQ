@@ -162,7 +162,8 @@ class LauncherState:
         if not os.path.isfile(path):
             return state
         try:
-            with open(path, encoding="utf-8") as f:
+            # utf-8-sig: a file saved again by Notepad starts with a byte-order mark, which json would refuse.
+            with open(path, encoding="utf-8-sig") as f:
                 data = json.load(f)
         except (OSError, ValueError) as e:
             raise StateError("cannot read %s: %s" % (path, e), path) from None
@@ -185,7 +186,8 @@ class LauncherState:
     def _from(cls, data, state):
         """Fill `state` from a settings file's data (a field of the wrong kind raises)."""
         # Kept only once the player chose one: without it, the launcher follows Windows' display language.
-        state.picked_language = data.get("language") if data.get("language") in LANGUAGES else None
+        language = str(data.get("language") or "").strip().lower()
+        state.picked_language = language if language in LANGUAGES else None
         state.guide_done = bool(data.get("guide_done", False))
         # A hand-edited value the launcher does not offer keeps that setting's default, the others stay.
         state.values = choices.normalize(data.get("values") or {}, strict=False)

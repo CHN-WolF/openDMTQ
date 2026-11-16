@@ -312,6 +312,9 @@ def took_back(values, text):
         name = name.strip()
         if not sep or name not in AUDIO_BACK:
             continue
+        # A value as a person may write it in Notepad: in quotes, with spaces round it (a line end of Windows' is gone
+        # with splitlines).
+        value = value.strip().strip('"').strip("'").strip()
         try:
             found[name] = _one(name, value)
         except ChoiceError:

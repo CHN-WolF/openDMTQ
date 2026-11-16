@@ -442,7 +442,6 @@ TEXT = {
     "guide.need.server": ("Connect to a server to go on.", "서버에 연결하면 다음으로 넘어갑니다."),
     "guide.need.login": ("Sign in to go on.", "로그인하면 다음으로 넘어갑니다."),
     "guide.need.download": ("Get the app to go on.", "앱을 받으면 다음으로 넘어갑니다."),
-    "guide.step": ("Step {n} of {total}", "{total}단계 중 {n}단계"),
     "guide.power.name": ("POWER ON", "POWER ON"),
     "guide.power.title": ("Welcome to OpenDMTQ", "OpenDMTQ에 오신 것을 환영합니다"),
     "guide.power.text": ("A few steps to your first song.", "첫 곡까지 몇 단계면 됩니다."),

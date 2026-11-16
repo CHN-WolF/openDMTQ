@@ -148,7 +148,7 @@ class Rail(tk.Frame):
     colour, with a seam along its right edge where the page begins."""
 
     # The column's width, the room inside it either side, above the wordmark, and under it (logical pixels).
-    WIDTH, EDGE, TOP, UNDER_BRAND = 248, 18, 22, 26
+    WIDTH, EDGE, TOP, UNDER_BRAND = 248, 18, 22, 24
 
     def __init__(self, parent, ui, brand, nav=(), on_nav=None, steps=()):
         px = ui.px
@@ -365,6 +365,8 @@ class RailList(tk.Canvas):
 SETTLE = 60
 # The steps the picture behind a page is drawn tall in (logical pixels): a page that grows within its step keeps it.
 BACKDROP_ROOM = 480
+# How far a press must move before it drags the page rather than taps (logical pixels).
+PAN_START = 8
 
 
 class ScrollArea(tk.Frame):
@@ -396,6 +398,8 @@ class ScrollArea(tk.Frame):
         self.canvas.odq_picture = self._picture_on_show
         # The part of the wheel's turning that has not made a whole step yet (a touchpad sends it a little at a time).
         self._wheel_rest = 0.0
+        # A press on the page that may become a drag of it (a finger on a touch screen): where it began.
+        self._pan = None
         self.canvas.configure(yscrollcommand=self._bar_set)
         # The canvas spans the whole width, its picture behind with it, so the page's backdrop goes on from the header's
         # to the window's edge; the scroll bar lies over its right edge when the page scrolls. The column keeps the bar's
@@ -595,8 +599,70 @@ class ScrollArea(tk.Frame):
         if on:
             for sequence, handler in (("<MouseWheel>", self._on_wheel),                                # Windows, macOS
                                       ("<Button-4>", lambda e: self.canvas.yview_scroll(-3, "units")),  # X11 wheel up
-                                      ("<Button-5>", lambda e: self.canvas.yview_scroll(3, "units"))):  # X11 wheel down
+                                      ("<Button-5>", lambda e: self.canvas.yview_scroll(3, "units")),   # X11 wheel down
+                                      # A finger (or the mouse) dragged on the page itself moves it, as on a phone.
+                                      ("<ButtonPress-1>", self._pan_start), ("<B1-Motion>", self._pan_move),
+                                      ("<ButtonRelease-1>", self._pan_end)):
                 self._wheel_commands[sequence] = self.bind_all(sequence, handler)
+
+    def _pannable(self, widget):
+        """Whether a press on `widget` may move the page: the page's own field, a card, a frame or words that do
+        nothing when pressed; never a control (a field, a button, a switch, a slider, a drop-down, a link, a key's box)."""
+        if not str(widget).startswith(str(self)):
+            return False
+        if widget is self.canvas or isinstance(widget, tk.Frame):
+            return True
+        if isinstance(widget, tk.Label):
+            # Words a press does something on show the pointing hand (links), or take the keyboard.
+            try:
+                return str(widget.cget("cursor")) != "hand2" and str(widget.cget("takefocus")) in ("", "0")
+            except tk.TclError:
+                return False
+        return False
+
+    def _pan_start(self, event):
+        """A press that may become a drag of the page: where it began, and where the page was."""
+        self._pan = None
+        if self._pannable(event.widget):
+            self._pan = {"y": event.y_root, "top": self.canvas.canvasy(0), "moved": False}
+
+    def _pan_move(self, event):
+        """The page follows the finger once it has moved further than a tap's wobble."""
+        pan = getattr(self, "_pan", None)
+        if not pan:
+            return
+        dy = event.y_root - pan["y"]
+        if not pan["moved"] and abs(dy) < self.ui.px(PAN_START):
+            return
+        pan["moved"] = True
+        region = [float(v) for v in str(self.canvas.cget("scrollregion")).split()] if self.canvas.cget("scrollregion") else []
+        seen = self.canvas.winfo_height()
+        if len(region) != 4 or region[3] <= seen:
+            return
+        target = max(0.0, min(pan["top"] - dy, region[3] - seen))
+        self.canvas.yview_moveto(target / region[3])
+
+    def _pan_end(self, event):
+        self._pan = None
+
+    def page_key(self, event):
+        """Page Up and Page Down (and Home and End away from a field) move the page by the keyboard: a page whose words
+        no control reaches is read to its foot without a mouse."""
+        if not self.winfo_viewable():
+            return None
+        focus = self.focus_get()
+        if event.keysym in ("Home", "End") and isinstance(focus, (tk.Entry, ttk.Combobox)):
+            # A field's own Home and End.
+            return None
+        if event.keysym == "Prior":
+            self.canvas.yview_scroll(-1, "pages")
+        elif event.keysym == "Next":
+            self.canvas.yview_scroll(1, "pages")
+        elif event.keysym == "Home":
+            self.canvas.yview_moveto(0)
+        elif event.keysym == "End":
+            self.canvas.yview_moveto(1)
+        return None
 
     def _on_wheel(self, event):
         # Windows reports 120 a notch (3 steps), a touchpad much less at a time: what does not make a whole step yet is
@@ -1085,7 +1151,8 @@ class Slider(tk.Frame):
         for key, to in (("<Left>", lambda v: v - self.step), ("<Right>", lambda v: v + self.step),
                         ("<Down>", lambda v: v - self.step), ("<Up>", lambda v: v + self.step),
                         ("<Home>", lambda v: self.least), ("<End>", lambda v: self.most)):
-            self.canvas.bind(key, lambda e, to=to: self._key(to))
+            # "break": the key is the slider's, never the page's too (Home and End move the page elsewhere).
+            self.canvas.bind(key, lambda e, to=to: self._key(to) or "break")
         self._draw()
 
     def _fraction(self, value):
@@ -1264,7 +1331,11 @@ class DropList(tk.Toplevel):
         # The chosen row in view, in the list's middle when it can be.
         self._scroll_to(self.active, middle=True)
         self.draw()
-        for sequence, handler in (("<Motion>", self._pointer), ("<ButtonRelease-1>", self._release), ("<MouseWheel>", self._wheel),
+        # A press that becomes a drag scrolls the rows, as a finger does on a touch screen; a press that does not move
+        # chooses its row when it is let go.
+        self._drag = None
+        for sequence, handler in (("<Motion>", self._pointer), ("<ButtonRelease-1>", self._release),
+                                  ("<ButtonPress-1>", self._drag_start), ("<B1-Motion>", self._drag_move), ("<MouseWheel>", self._wheel),
                                   ("<Button-4>", lambda e: self._scroll(-1)), ("<Button-5>", lambda e: self._scroll(1))):
             self.canvas.bind(sequence, handler)
         for key, move in (("<Down>", 1), ("<Up>", -1), ("<Next>", self.ROWS), ("<Prior>", -self.ROWS)):
@@ -1279,8 +1350,12 @@ class DropList(tk.Toplevel):
         self.bind("<ISO_Left_Tab>", lambda e: self.close(then_tab=-1))
         # A press anywhere outside the list closes it (the grab sends every press to the list, with where it was).
         self.bind("<ButtonPress-1>", self._press_anywhere)
-        # The window going away (minimised) closes it too, and so does the keyboard going to another program.
-        self._root_unmap = select.winfo_toplevel().bind("<Unmap>", lambda e: self.close(), add="+")
+        # The window going away (minimised) or moving closes it too (the list would stay where the box was), and so
+        # does the keyboard going to another program.
+        top = select.winfo_toplevel()
+        self._root_unmap = top.bind("<Unmap>", lambda e: self.close(), add="+")
+        self._root_place = (top.winfo_rootx(), top.winfo_rooty(), top.winfo_width(), top.winfo_height())
+        self._root_moved = top.bind("<Configure>", lambda e: e.widget is top and self._moved(top), add="+")
         self.after_idle(lambda: self.winfo_exists() and self.bind("<FocusOut>", self._focus_out))
         self.update_idletasks()
         try:
@@ -1370,7 +1445,29 @@ class DropList(tk.Toplevel):
             self.active, self.keyboard = index, False
             self.draw()
 
+    def _drag_start(self, event):
+        self._drag = {"y": event.y_root, "top": self.top_row, "moved": False}
+
+    def _drag_move(self, event):
+        drag = self._drag
+        if not drag or not self.scrolls:
+            return
+        dy = event.y_root - drag["y"]
+        if not drag["moved"] and abs(dy) < self.ui.px(PAN_START):
+            return
+        drag["moved"] = True
+        rows = int(round(-dy / float(self.ui.px(self.ROW_H))))
+        top = max(0, min(drag["top"] + rows, self.count - self.ROWS))
+        if top != self.top_row:
+            self.top_row = top
+            self.draw()
+
     def _release(self, event):
+        dragged = bool(self._drag and self._drag["moved"])
+        self._drag = None
+        if dragged:
+            # A drag scrolled the rows: nothing chosen.
+            return
         index = self._at(event.y)
         if index is not None and 0 <= event.x < int(self.canvas.cget("width")):
             self.choose(index)
@@ -1382,6 +1479,12 @@ class DropList(tk.Toplevel):
             self.close()
             return "break"
         return None
+
+    def _moved(self, top):
+        """The window moved or changed its size: the list, placed for where the box was, closes."""
+        place = (top.winfo_rootx(), top.winfo_rooty(), top.winfo_width(), top.winfo_height())
+        if place != self._root_place:
+            self.close()
 
     def _focus_out(self, event):
         """The keyboard went to another program (the list's own window keeps it while open): the list closes."""
@@ -1404,8 +1507,9 @@ class DropList(tk.Toplevel):
         to from it."""
         if not self.winfo_exists():
             return "break"
-        # Only this list's line of the window's binding goes (Python's unbind would take every line with it).
+        # Only this list's lines of the window's bindings go (Python's unbind would take every line with them).
         unbind_one(self.select.winfo_toplevel(), "<Unmap>", self._root_unmap)
+        unbind_one(self.select.winfo_toplevel(), "<Configure>", self._root_moved)
         try:
             self.grab_release()
         except tk.TclError:
@@ -1665,10 +1769,16 @@ class Field(tk.Canvas):
             longest = max(ui.fonts.small.measure(words) for words in reveal)
             self.toggle = tk.Label(self, text=reveal[0], font=ui.fonts.small, fg=theme.MUTED, bg=theme.FIELD,
                                    cursor="hand2", width=0, anchor="e")
-            self.toggle.bind("<Button-1>", lambda e: self.show_typed(self.entry.cget("show") != ""))
+            # By a tap or a click, and by the keyboard: Tab reaches it after the password (its cyan ring), Enter or
+            # Space shows or hides what was typed.
+            focus_ring(self.toggle, ui, theme.FIELD)
+            for sequence in ("<Button-1>", "<Return>", "<KP_Enter>", "<space>"):
+                self.toggle.bind(sequence, lambda e: self.show_typed(self.entry.cget("show") != "") or "break")
             self.toggle.bind("<Enter>", lambda e: self.toggle.configure(fg=theme.TEXT))
             self.toggle.bind("<Leave>", lambda e: self.toggle.configure(fg=theme.MUTED))
-            self.create_window(width_px - self.pad, height_px // 2, window=self.toggle, anchor="e", width=longest)
+            ring = int(self.toggle.cget("highlightthickness"))
+            self.create_window(width_px - self.pad + ring, height_px // 2, window=self.toggle, anchor="e",
+                               width=longest + 2 * ring)
             room = longest + px(10)
         # The entry in the middle of the face, between its rooms.
         self.create_window(self.pad, height_px // 2, window=self.entry, anchor="w", width=width_px - 2 * self.pad - room)

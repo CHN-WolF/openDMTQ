@@ -37,12 +37,16 @@ _spec.loader.exec_module(keyboard)
 # How long the film runs after a change (seconds): the page's late work (its picture behind, a second look at a page
 # that got shorter) comes within 0.2 s.
 FILM = 0.6
-# The frames in between allowed for a change of a value: none. It shows as the screen after it in one step.
-FRAMES_ALLOWED = 0
+# The frames in between allowed for a change of a value: one, within a 60 Hz display's frame (the control and its hint
+# are two windows the X server may show a moment apart; nothing of the page goes blank).
+FRAMES_ALLOWED, FRAMES_MS = 1, 17
 # For a change that brings or takes a row (or makes a hint a line longer): Tk lays the page out parent by parent, and
 # the rows under it move down within this many frames and milliseconds (two of a 60 Hz display's frames, and a margin
 # for a busy test machine), never a page or a card emptied as before (7 to 11 frames over 150 ms and more).
 MOVING_FRAMES, MOVING_MS = 2, 50
+# For an answer that makes one card of a page again with other content (signed out: the sign-in form in place of the
+# account), that card alone: its frames while it is laid out, never the page's other cards made again.
+CARD_FRAMES, CARD_MS = 6, 150
 # Where a frame between is saved as a picture for each change that has one (--frames), or None.
 FRAMES_OUT = None
 
@@ -131,7 +135,7 @@ def run_until(app, seconds):
         time.sleep(0.005)
 
 
-def measure_change(app, name, act, results, rows_allowed=0, focus=None, moves=False):
+def measure_change(app, name, act, results, rows_allowed=0, focus=None, moves=False, expect_change=True):
     """Film `act()` (a change as a person makes it) and count: the frames between the screen before and after, and the
     widgets the change made anew. `rows_allowed`: the widgets the change may make (the rows it brings). `focus()` gives
     the control the keyboard is on before the film starts (its ring is no part of the change)."""
@@ -156,7 +160,8 @@ def measure_change(app, name, act, results, rows_allowed=0, focus=None, moves=Fa
     settled = [t for f, t in zip(film.frames, film.times) if f == after]
     span = int(round(1000 * (settled[0] - shown[0]))) if shown and settled and settled[0] >= shown[0] else 0
     changed = before != after
-    results.append({"change": name, "moves": moves, "frames_between": len(between), "span": span, "made": made, "gone": gone, "changed": changed,
+    results.append({"change": name, "moves": moves, "expect_change": expect_change, "frames_between": len(between),
+                    "span": span, "made": made, "gone": gone, "changed": changed,
                     "rows_allowed": rows_allowed})
     if between and FRAMES_OUT:
         # The frame in the middle of the ones between, as a picture: what a person sees for a moment.
@@ -235,6 +240,22 @@ def main():
             change(app, "%s: %s" % (page, name), results, find, kind, key, act, canvas=kind is widgets.Slider,
                    moves=moves)
 
+    # ---- Answers that change a card of a page, never the page: Help's Check again with nothing changed makes nothing
+    # anew; Online's Sign out makes the sign-in card again and leaves the server's and the app's cards as they were.
+    app.nav_go("help")
+    shots.settle(app)
+    recheck = shots.button(app, w("help.recheck"))
+    measure_change(app, "help: Check again, nothing changed", lambda: recheck.press(), results, focus=lambda: recheck,
+                   expect_change=False)
+    app.nav_go("online")
+    shots.settle(app)
+    kept = [x for x in shots.widgets_of(app.body.inner) if isinstance(x, widgets.Field)]
+    sign_out = shots.button(app, w("online.signout"))
+    measure_change(app, "online: Sign out, its card alone", lambda: sign_out.press(), results, rows_allowed=60,
+                   focus=lambda: sign_out, moves="card")
+    if not kept or not all(x.winfo_exists() for x in kept):
+        results.append({"change": "online: Sign out", "missing": "the server's card was made again"})
+
     for job in app.root.tk.splitlist(app.root.tk.call("after", "info")):
         app.root.after_cancel(job)
     app.root.destroy()
@@ -249,14 +270,15 @@ def main():
             continue
         lines.append("%-48s frames between %2d over %3d ms, widgets made %3d, gone %3d" % (
             r["change"], r["frames_between"], r["span"], r["made"], r["gone"]))
-        frames, ms = (MOVING_FRAMES, MOVING_MS) if r["moves"] else (FRAMES_ALLOWED, 0)
+        frames, ms = {"card": (CARD_FRAMES, CARD_MS), True: (MOVING_FRAMES, MOVING_MS),
+                      False: (FRAMES_ALLOWED, FRAMES_MS)}[r["moves"]]
         if r["frames_between"] > frames or r["span"] > ms:
             problems.append("%s: %d frames between the screen before and after, over %d ms" % (
                 r["change"], r["frames_between"], r["span"]))
         if r["made"] > r["rows_allowed"]:
             problems.append("%s: %d widgets made anew (the rows it brings: %d at most)" % (r["change"], r["made"],
                                                                                          r["rows_allowed"]))
-        if not r["changed"]:
+        if not r["changed"] and r.get("expect_change", True):
             problems.append("%s: the screen did not change" % r["change"])
     report = "flicker %s %s: %d changes, %d problems\n" % (args.lang, args.size, len(results), len(problems))
     report += "".join("  %s\n" % line for line in lines)

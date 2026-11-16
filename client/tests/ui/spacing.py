@@ -88,6 +88,32 @@ def _shown_box(widget, origin):
     return tuple(box)
 
 
+def _raw(widget, origin):
+    """The widget's box as Tk places it, its ring and all, in the window's pixels."""
+    x, y = widget.winfo_rootx() - origin[0], widget.winfo_rooty() - origin[1]
+    return (x, y, x + widget.winfo_width(), y + widget.winfo_height())
+
+
+def _text_box(label, origin):
+    """Where a label's words are: its box as wide as the words ask (a label packed to fill its line is wider than its
+    words), from its left, its right or its middle as it is anchored."""
+    box = _shown_box(label, origin)
+    if box is None:
+        return None
+    inset = _inset(label)
+    words = label.winfo_reqwidth() - 2 * inset
+    room = box[2] - box[0]
+    if words >= room:
+        return box
+    anchor = str(label.cget("anchor"))
+    if "w" in anchor:
+        return (box[0], box[1], box[0] + words, box[3])
+    if "e" in anchor:
+        return (box[2] - words, box[1], box[2], box[3])
+    middle = (box[0] + box[2]) // 2
+    return (middle - words // 2, box[1], middle + words - words // 2, box[3])
+
+
 def _whole(widget, origin):
     """The widget's whole box (not cut), inset by its ring, in the window's pixels."""
     x, y = widget.winfo_rootx() - origin[0], widget.winfo_rooty() - origin[1]
@@ -176,7 +202,8 @@ def check(root, ui, name):
             if box is not None:
                 found.append((child, kind, box))
     solids = [f for f in found if f[1] in ("card", "field", "button", "control", "menu", "foot")]
-    texts = [f for f in found if f[1] == "text"]
+    texts = [(t, k, _text_box(t, origin)) for t, k, _b in found if k == "text"]
+    texts = [t for t in texts if t[2] is not None]
     # ---- two boxes that touch or overlap, neither part of the other.
     for i, (a, kind_a, box_a) in enumerate(solids):
         for b, kind_b, box_b in solids[i + 1:]:
@@ -218,38 +245,37 @@ def check(root, ui, name):
             if sides:
                 problems.append("%s: %s is closer to its card's %s than the card's padding (%s px)" % (
                     name, _name(child), "/".join(sides), "/".join(str(by) for by in short if by > SLACK)))
-    # ---- the gaps between siblings in a stack, on the spacing scale.
+    # ---- the gaps between siblings in a stack, on the spacing scale: each pair packed one after the other on the same
+    # side (the room between a left and a right one is the stretch between them, no gap of the scale).
     seen = set()
     for widget, _k, _b in found:
         parent = widget.master
         if parent in seen or parent is None:
             continue
         seen.add(parent)
-        for axis in ("top", "left"):
-            kids = []
-            for child in parent.pack_slaves() if hasattr(parent, "pack_slaves") else ():
-                try:
-                    if not child.winfo_ismapped():
-                        continue
-                    side = child.pack_info().get("side", "top")
-                except tk.TclError:
+        sides = {}
+        try:
+            slaves = parent.pack_slaves()
+        except tk.TclError:
+            continue
+        for child in slaves:
+            try:
+                if not child.winfo_ismapped() or getattr(child, "odq_skip", False):
                     continue
-                if (side in ("top", "bottom")) != (axis == "top"):
-                    continue
-                if child.winfo_width() <= 1 or child.winfo_height() <= 1:
-                    continue
-                kids.append(child)
-            boxes = sorted(((_whole(k, origin), k) for k in kids), key=lambda item: item[0][1 if axis == "top" else 0])
-            for (box_a, a), (box_b, b) in zip(boxes, boxes[1:]):
-                # The room between the two boxes themselves, their rings left out of neither (pack's room is box to box).
-                raw_a = (a.winfo_rootx() - origin[0], a.winfo_rooty() - origin[1],
-                         a.winfo_rootx() - origin[0] + a.winfo_width(), a.winfo_rooty() - origin[1] + a.winfo_height())
-                raw_b = (b.winfo_rootx() - origin[0], b.winfo_rooty() - origin[1],
-                         b.winfo_rootx() - origin[0] + b.winfo_width(), b.winfo_rooty() - origin[1] + b.winfo_height())
-                gap = raw_b[1] - raw_a[3] if axis == "top" else raw_b[0] - raw_a[2]
+                side = child.pack_info().get("side", "top")
+            except tk.TclError:
+                continue
+            if child.winfo_width() <= 1 and child.winfo_height() <= 1:
+                # Nothing to see (an empty frame).
+                continue
+            sides.setdefault(side, []).append(child)
+        for side, kids in sides.items():
+            for a, b in zip(kids, kids[1:]):
+                ra, rb = _raw(a, origin), _raw(b, origin)
+                gap = {"top": rb[1] - ra[3], "bottom": ra[1] - rb[3], "left": rb[0] - ra[2],
+                       "right": ra[0] - rb[2]}[side]
                 if gap < 0 or not _in_scale(gap, ui):
-                    shown_a, shown_b = _shown_box(a, origin), _shown_box(b, origin)
-                    if shown_a is None or shown_b is None:
+                    if _shown_box(a, origin) is None or _shown_box(b, origin) is None:
                         continue
                     problems.append("%s: %d px between %s and %s, off the spacing scale" % (
                         name, gap, _name(a), _name(b)))

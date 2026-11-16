@@ -33,6 +33,12 @@ PRESET_EVERY = 40
 # How long the server's last answer to the ready check stands (seconds): the PLAY and Help pages ask for a check each
 # time they show, and the server is asked again only after this, or when the player presses Check again.
 REACH_FOR = 30
+# How often the window looks again by itself, while it is on screen and nothing is under way (seconds): whether the
+# server answers, whether it still takes the sign-in, whether it has a newer app. Each change is said as it comes, every
+# time (a server that stopped answering, came back and stopped again is said each time).
+WATCH_EVERY = 60
+# How often the window looks for a newer launcher after the look at its start (seconds): one found later is said too.
+UPDATE_EVERY = 6 * 3600
 
 
 class LauncherApp:
@@ -96,6 +102,9 @@ class LauncherApp:
         self.failure_said = False       # the first such failure of this run was said (the next ones go to the log)
         # Shown again while a game runs (the window was closed, then OpenDMTQ started again): it stays after the game.
         self.root.bind("<Map>", self._mapped, add="+")
+        # Page Up and Page Down move the page on show by the keyboard (Home and End too, away from a field).
+        for key in ("<Prior>", "<Next>", "<Home>", "<End>"):
+            self.root.bind(key, self._page_key, add="+")
         # Back to the front (after a game, from another window): the sound the player's in-game menu set comes back.
         self.root.bind("<FocusIn>", lambda e: self.took_back(), add="+")
         # The displays and their rates, once a start, in the log: what the Screen page's frame limits come from.
@@ -104,8 +113,11 @@ class LauncherApp:
         self.root.after(50, self._pump)
         self.show()
         self._update_outcome()
-        # Once a start: whether a newer launcher is on offer, said on the Launcher page and the status line when it is.
+        # At the start, then every UPDATE_EVERY: whether a newer launcher is on offer, said on the Launcher page and the
+        # status line when it is.
         self.look_for_update()
+        # The server, the sign-in and the server's app looked at again by themselves (watch).
+        self.root.after(WATCH_EVERY * 1000, self._watch_tick)
 
     # --------------------------------------------------------------------------------------- frame
 
@@ -181,7 +193,7 @@ class LauncherApp:
         # step shows.
         self.play_button = widgets.PlaySlab(foot, ui, self.words("bottom.play"), self.play,
                                             width=self.rail.inner_width())
-        self.play_button.pack(side="bottom", anchor="w", pady=(px(14), 0))
+        self.play_button.pack(side="bottom", anchor="w", pady=(px(16), 0))
         # Lit or not as things stand now, before the page under it is drawn: a page's main button is lime only while
         # PLAY is not (pages.main_button reads it).
         self._paint_play()
@@ -244,6 +256,27 @@ class LauncherApp:
         else:
             # Ready: nothing more to say, whatever the line said before (a passing note, an outcome given way).
             self.set_status(i18n.Said("status.ready"), "normal")
+
+    def _page_key(self, event):
+        """A page key for the page area on show: the guide's step, or the launcher's page."""
+        area = self.guide.body if self.guide is not None else getattr(self, "body", None)
+        if area is not None and area.winfo_exists():
+            area.page_key(event)
+
+    def follow_page(self, *pages):
+        """The page on show updated for a change of the launcher's state, in place: its own update (page_follow: the
+        cards whose content changed made again) when it has one, else drawn again where it was. Only when it is one of
+        `pages` (any page when none is named); the guide's step follows its own way."""
+        from opendmtq_client import pages as page_module
+        if self.guide is not None:
+            self.guide.redraw()
+            return
+        if pages and self.page not in pages:
+            return
+        if self.page_follow is not None:
+            self.page_follow()
+        else:
+            page_module.redraw_in_place(self, self.page)
 
     def nav_go(self, page):
         """A page chosen from the menu (a click, or Enter or Space)."""
@@ -357,8 +390,8 @@ class LauncherApp:
             self.download_error, self.app_note = None, None
             self._paint_play()
             if self.guide is None and self.page == "online":
-                # The page draws the bar and Cancel for it.
-                self.go("online")
+                # The page's app card draws the bar and Cancel for it.
+                self.follow_page("online")
         self._download_moved(done, total)
 
     def _play_cancelled(self):
@@ -369,8 +402,8 @@ class LauncherApp:
         self.set_status(self.download_error[0], "warn", sticky=True)
         self._paint_play()
         self.refresh_checks()
-        if self.guide is None and self.page in ("online", "play"):
-            self.go(self.page)
+        if self.guide is None:
+            self.follow_page("online", "play")
 
     def _started(self, session):
         from opendmtq_client import playing
@@ -417,11 +450,10 @@ class LauncherApp:
         # PLAY says at once that the game is over, never PLAYING until the ready check comes back (a few seconds with
         # the server away): lit as before the game, and the check's answer says more when it comes.
         self._paint_play()
-        if self.guide is None and self.page in GAME_PAGES:
+        if self.guide is None:
             # The page on show follows the game's end where it shows what a game changes, in place: the last game on
             # PLAY, the player's log on Help, the app on Online (a newer one PLAY got first).
-            from opendmtq_client import pages
-            pages.redraw_in_place(self, self.page)
+            self.follow_page(*GAME_PAGES)
 
     def open_player_log(self):
         """Show the player's log for the current server's app (Explorer, the file selected); the Help page when there
@@ -462,19 +494,77 @@ class LauncherApp:
 
         def work():
             found = updates.Look().newer()
-            if found is not None:
+            if found is not None and (self.update_found is None or found.version != self.update_found.version):
+                # A newer one than the one said before, or the first: said (each newer version once it comes).
                 self.post(lambda: self._update_on_offer(found))
 
         threading.Thread(target=work, daemon=True, name="update-look").start()
+        # Again later: a launcher left open for days hears of a version that came meanwhile.
+        try:
+            self.root.after(UPDATE_EVERY * 1000, self.look_for_update)
+        except tk.TclError:
+            # The window went.
+            pass
+
+    def _watch_tick(self):
+        """Every WATCH_EVERY: the window's own look (watch), while it is on screen with nothing under way."""
+        try:
+            self.root.after(WATCH_EVERY * 1000, self._watch_tick)
+        except tk.TclError:
+            return
+        if self.guide is not None or self.dialog is not None or self.busy_now() or self.root.state() != "normal":
+            # The guide asks the server itself; a dialog, work under way or a window out of sight waits for the next.
+            return
+        self.watch()
+
+    def watch(self, then=None):
+        """Look again, on a worker thread: whether the server answers, and while signed in, whether it still takes the
+        sign-in and what app it offers (actions.check_app, its changes made on the window's thread); then the ready
+        check, which says on the status line and the pages what changed. A sign-in the server no longer takes is said
+        as it ends, each time it does. `then` runs on the window's thread after (the tests)."""
+        server = self.state.server()
+        if server is None:
+            return
+        signed_before = self.state.signed_in(server)
+
+        def work():
+            import time
+            reached = actions.reach(self.state)
+            # The answer kept for the ready check that follows, as its own asking would keep it.
+            self.server_reached = {"url": server["url"], "reached": reached, "at": time.time()}
+            ended = False
+            if reached is True and signed_before:
+                try:
+                    actions.check_app(self.state, change=self.post)
+                except srv.SignedOut:
+                    ended = True
+                except Exception:  # noqa: BLE001  (any failure leaves things as they were; the next look asks again)
+                    log.info("the watch could not ask %s for its app", server["url"], exc_info=True)
+            self.post(lambda: self._watched(ended, then))
+
+        threading.Thread(target=work, daemon=True, name="watch").start()
+
+    def _watched(self, ended, then):
+        """The watch's answers: a sign-in that ended said (kept until the player acts), the ready check made again
+        (its answers say the rest), the page on show following what changed."""
+        if ended:
+            log.info("the server no longer takes the sign-in")
+            self.state.save()
+            self.set_status(i18n.Said("status.signed_out"), "warn", sticky=True)
+        self.refresh_checks()
+        if self.guide is None:
+            self.follow_page("play", "online", "help")
+        if then:
+            then()
 
     def _update_on_offer(self, result):
         """A newer launcher is on offer, found at the start: the Launcher page, on show, draws its answer and its update;
         the status line says it (update_on_offer)."""
-        from opendmtq_client import pages, updates
+        from opendmtq_client import updates
         log.info("OpenDMTQ %s is available (this is %s)", result.version, updates.shown_version())
         self.update_on_offer(result)
-        if self.guide is None and self.page == "about":
-            pages.redraw_in_place(self, "about")
+        if self.guide is None:
+            self.follow_page("about")
 
     def update_on_offer(self, result):
         """Keep a newer launcher on offer (found at the start or by the Launcher page's Check for updates): the status
@@ -599,10 +689,7 @@ class LauncherApp:
             # Known before, another one in use: the installer's is the one played on from now on.
             self.set_status(i18n.Said("status.preset.switched", name=brought["name"]), "ok", sticky=True)
         self.refresh_checks()
-        if self.guide is not None:
-            self.guide.redraw()
-        elif self.page in ("play", "online"):
-            self.go(self.page)
+        self.follow_page("play", "online")
 
     def refresh_checks(self, force=False):
         """Make the ready check again on a worker thread, the server asked whether it answers (its last answer used for
@@ -756,8 +843,8 @@ class LauncherApp:
         self.refresh_checks()
         if done_then:
             done_then(error)
-        elif self.guide is None and self.page in ("online", "play"):
-            self.go(self.page)
+        elif self.guide is None:
+            self.follow_page("online", "play")
 
     def cancel_download(self):
         """Stop the download under way: said at once, done as soon as the next piece is in."""
@@ -847,7 +934,8 @@ class LauncherApp:
             # --set, which keeps them after): nothing in it the launcher does not have.
             return
         try:
-            with open(player.settings_path(), encoding="utf-8", errors="replace") as f:
+            # utf-8-sig: a file the player, or a person in Notepad, wrote with a byte-order mark.
+            with open(player.settings_path(), encoding="utf-8-sig", errors="replace") as f:
                 text = f.read()
         except OSError:
             return

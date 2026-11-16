@@ -119,7 +119,8 @@ def _trust_path():
 def _trusted():
     """{site address: PEM text} of the servers that brought their own authority; empty when there is none to read."""
     try:
-        with open(_trust_path(), encoding="utf-8") as f:
+        # utf-8-sig: as saved again by Notepad, with a byte-order mark.
+        with open(_trust_path(), encoding="utf-8-sig") as f:
             found = json.load(f)
     except (OSError, ValueError):
         return {}

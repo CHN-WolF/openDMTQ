@@ -51,6 +51,82 @@ def _card(parent, ui, title, last=False):
 # The gap between two cards (the site's --gap is 20 px; the window is smaller than a page).
 CARD_GAP = 16
 
+
+class Sections:
+    """A page's cards, each made by its own builder from what it shows (its key, a function of the launcher's state):
+    refresh() makes again only the cards whose key changed, each in its own place, the others as they were. An answer
+    that came (a server connected, a sign-in, a download done, a game that ended) changes its own card, never the page
+    drawn again (client/tests/ui/flicker.py)."""
+
+    def __init__(self, parent, ui, after=None):
+        self.parent, self.ui, self.after = parent, ui, after
+        # Each card: its holder frame (in the page's order), its key, its builder, the key it was made for, and the
+        # gap above it now.
+        self.items = []
+
+    def add(self, key, build, expand=False):
+        """A card at the end, made now: `build(holder)` makes it in its holder, `key()` says what it shows. `expand`:
+        the holder takes the height left to its column (the PLAY page's Last game)."""
+        holder = tk.Frame(self.parent, bg=self.parent.cget("bg"))
+        item = {"holder": holder, "key": key, "build": build, "made": object(), "gap": None, "expand": expand}
+        self.items.append(item)
+        self._make(item)
+        return holder
+
+    def _make(self, item):
+        """The card made (again) in its holder; the holder shown in its place while it holds something."""
+        holder = item["holder"]
+        for child in holder.winfo_children():
+            child.destroy()
+        item["build"](holder)
+        # The gap between two cards is the holders' (_gaps), not the cards' own: a card made last today may have
+        # another under it tomorrow.
+        for child in holder.pack_slaves():
+            child.pack_configure(pady=0)
+        # What it was made for, as the state is once it is made (a builder may start work that changes it).
+        item["made"] = item["key"]()
+        shown = bool(holder.winfo_children())
+        if shown and not holder.winfo_manager():
+            later = [i["holder"] for i in self.items[self.items.index(item) + 1:] if i["holder"].winfo_manager()]
+            fill = {"fill": "both", "expand": True} if item["expand"] else {"fill": "x"}
+            if later:
+                holder.pack(before=later[0], **fill)
+            else:
+                holder.pack(**fill)
+        elif not shown and holder.winfo_manager():
+            holder.pack_forget()
+        if not shown:
+            # Packed again later with its gap set afresh.
+            item["gap"] = None
+        self._gaps()
+
+    def _gaps(self):
+        """The cards' gap above each shown card but the first."""
+        first = True
+        for item in self.items:
+            holder = item["holder"]
+            if not holder.winfo_manager():
+                continue
+            wanted = 0 if first else self.ui.px(CARD_GAP)
+            if item["gap"] != wanted:
+                holder.pack_configure(pady=(wanted, 0))
+                item["gap"] = wanted
+            first = False
+
+    def refresh(self):
+        """Each card whose key changed made again in its place; True when any was."""
+        changed = False
+        for item in self.items:
+            if not item["holder"].winfo_exists():
+                return changed
+            if item["key"]() != item["made"]:
+                self._make(item)
+                changed = True
+        if changed and self.after is not None:
+            # What the page does once a card of it is made again (its names' column fitted to the new rows).
+            self.after()
+        return changed
+
 # The names of the setting rows the PC brings to a page or takes from it (the game's log once the game has run, Repair and
 # Uninstall in an installed launcher): counted in the page's names' column whether shown or not (widgets.fit_names), so
 # that none of them moves the controls when it comes. The rows a choice brings (a window's size, the counter's corner,
@@ -65,13 +141,13 @@ def rows_that_come(page):
     return [words for key in ROWS_THAT_COME.get(page, ()) for words in i18n.TEXT[key] if words]
 
 
-def _columns(parent, ui, weights=(3, 2)):
+def _columns(parent, ui, weights=(3, 2), gap_above=0):
     """Cards side by side: a frame for each column, as wide as its share of the row less the gaps; one under another
     when the row is narrower than STACK_BELOW (the smallest window, beside the menu column). The shares come from the
     row's own width alone: a grid that sized them from what they hold would loop for ever, as the text in each wraps to
     the width it is given and so asks for what it got (one pixel going back and forth between the columns)."""
     row = tk.Frame(parent, bg=theme.BG)
-    row.pack(fill="x")
+    row.pack(fill="x", pady=(ui.px(gap_above), 0))
     columns = []
     for i in range(len(weights)):
         column = tk.Frame(row, bg=theme.BG)
@@ -148,32 +224,51 @@ def _server_card(app, parent):
 
 def build_play(app, parent):
     ui, w = app.ui, app.words
-    _server_card(app, parent)
-    left, right = _columns(parent, ui)
+    # The server's card over the two columns, made again only when the server or its sign-in changed.
+    top = Sections(parent, ui)
+    top.add(lambda: _server_key(app), lambda holder: _server_card(app, holder))
+    left, right = _columns(parent, ui, gap_above=CARD_GAP)
     # Left: the ready check, filled in when the worker thread finishes it, as tall as the column, so that the row's cards
     # end on one line. Check again stands at its title's right end, as on Help, and its rows from the top: the room the
-    # column gives it lies under them, and nothing of it goes under the bottom bar at the window's own size
-    # (client/tests/ui/shots.py, play_fits).
+    # column gives it lies under them (client/tests/ui/shots.py, play_fits).
     ready = widgets.Card(left, ui, w("play.ready"))
     ready.pack(fill="both", expand=True)
     widgets.Button(ready.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
     app.check_box = tk.Frame(ready.body, bg=theme.PANEL)
     app.check_box.pack(fill="x")
-    # Right: how to play, keyboard play first, and how the last game went, the last as tall as what is left of the column.
-    how = _card(right, ui, w("play.how"))
-    how_to_play(app, how.body)
-    last = widgets.Card(right, ui, w("play.last"))
-    last.pack(fill="both", expand=True)
-    record = app.state.last_session or {}
-    if record.get("crashed") or record.get("failed_start"):
-        # The reason is in the player's log: one press away, on the card's own line at its title's right end (as Help
-        # has Check again), never at a foot that the bottom bar can cover.
-        widgets.Button(last.head, ui, w("status.open_log"), app.open_player_log).pack(side="right")
-    widgets.label(last.body, ui, _last_session(app), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+    # Right: how to play, keyboard play first, and how the last game went, the last as tall as what is left of the
+    # column; each made again only when what it says changed (the keys, the game that ended).
+    side = Sections(right, ui)
+    side.add(lambda: tuple(app.state.values[name] for name in ("keyboard",) + tuple(choices.LANES)) + (w.language,),
+             lambda holder: how_to_play(app, _card(holder, ui, w("play.how")).body))
+    side.add(lambda: repr(sorted((app.state.last_session or {}).items())), lambda holder: _last_card(app, holder),
+             expand=True)
+    app.page_follow = lambda: (top.refresh(), side.refresh())
     # Made again each time the page shows: a sign-in can have ended, or an app come, since the last one. Until it
     # comes back, the box says it is being made.
     app.refresh_checks()
     refresh_checks(app)
+
+
+def _server_key(app):
+    """What the PLAY page's server card shows: the server, its name, its sign-in."""
+    server = app.state.server()
+    if server is None:
+        return None
+    return (server["url"], server["name"], st.has_own_name(server), app.state.signed_in(server), server.get("account"))
+
+
+def _last_card(app, holder):
+    """The PLAY page's Last game: how the last game went, and the player's log one press away after a crash."""
+    ui, w = app.ui, app.words
+    last = widgets.Card(holder, ui, w("play.last"))
+    last.pack(fill="both", expand=True)
+    record = app.state.last_session or {}
+    if record.get("crashed") or record.get("failed_start"):
+        # The reason is in the player's log: one press away, on the card's own line at its title's right end (as Help
+        # has Check again).
+        widgets.Button(last.head, ui, w("status.open_log"), app.open_player_log).pack(side="right")
+    widgets.label(last.body, ui, _last_session(app), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
 
 
 # How to play's lines after keyboard play's: the touch screen and the mouse in one, so that the card and Last game
@@ -207,9 +302,8 @@ def how_to_play(app, body, link=True):
         beside = (to,)
     widgets.label(line, ui, keys_line(w, app.state.values), wrap_margin=12, beside=beside).pack(side="left", fill="x")
     for key in HOW_TO_PLAY:
-        # One line each, split by the card's faint lines, a little closer than before: with keyboard play's line on top,
-        # the card and Last game under it still end above the bottom bar at the window's own size (shots.py, play_fits).
-        widgets.divider(body, ui, pady=5)
+        # One line each, split by the card's faint lines as the ready check's rows are.
+        widgets.divider(body, ui, pady=CHECK_GAP)
         widgets.label(body, ui, w(key), wrap_margin=0).pack(fill="x")
 
 
@@ -226,27 +320,37 @@ def _last_session(app):
 
 def refresh_checks(app):
     """Fill the ready check (PLAY page, Help page, the guide's last step) from app.checks: a row a line, each with its
-    lamp, its name, and at the right end what it is about or the way to fix it."""
+    lamp, its name, and at the right end what it is about or the way to fix it. The rows are made again only when what
+    they say changed: a check that came back the same (the window asks again every half minute) leaves them be."""
     box = getattr(app, "check_box", None)
     if box is None or not box.winfo_exists():
         return
-    for child in box.winfo_children():
-        child.destroy()
     ui, w = app.ui, app.words
     # While a check is made (it may ask the server for a few seconds), the last one that came back stays on show: the
     # rows do not blink to "..." and back each time a page asks for one.
     checks = app.checks if app.checks is not None else getattr(app, "shown_checks", None)
     if checks is None:
-        widgets.label(box, ui, "...", fg=theme.MUTED).pack(anchor="w")
+        if getattr(box, "odq_shown", None) != "waiting":
+            for child in box.winfo_children():
+                child.destroy()
+            widgets.label(box, ui, "...", fg=theme.MUTED).pack(anchor="w")
+            box.odq_shown = "waiting"
         return
     from opendmtq_client import installed
     # Asked once for every row: whether this launcher was installed, so that its player can be put back by Repair.
     root = installed.root()
-    for i, check in enumerate(checks):
+    rows = [(check, check_row(check, w, on_play=app.page == "play" and app.guide is None, in_guide=app.guide is not None,
+                              installed=bool(root))) for check in checks]
+    # What the rows say, in the window's language: the same as on show, nothing is made again.
+    shown = tuple((check.key, w("check." + check.key), tuple(sorted(row.items()))) for check, row in rows)
+    if getattr(box, "odq_shown", None) == shown:
+        return
+    for child in box.winfo_children():
+        child.destroy()
+    box.odq_shown = shown
+    for i, (check, row) in enumerate(rows):
         if i:
-            widgets.divider(box, ui, pady=9)
-        row = check_row(check, w, on_play=app.page == "play" and app.guide is None, in_guide=app.guide is not None,
-                        installed=bool(root))
+            widgets.divider(box, ui, pady=CHECK_GAP)
         # The row's way on: Repair runs here, a page name opens that page (none in the guide, which has no menu).
         action = None
         if row["go"] == "repair":
@@ -257,6 +361,11 @@ def refresh_checks(app):
             action = lambda p=row["go"]: app.nav_go(p)
         widgets.check_line(box, ui, row["state"], w("check." + check.key), row["link"], action,
                            value=row["value"]).pack(fill="x")
+
+
+# The room either side of the faint line between two rows of a list in a card (the ready check, Help's lines, the
+# Controls page's lines), in logical pixels: on the launcher's spacing scale.
+CHECK_GAP = 8
 
 
 def check_row(check, w, on_play=False, in_guide=False, installed=False):
@@ -658,7 +767,7 @@ def build_controls(app, parent):
         for i, key in enumerate(keys):
             # One line each, split by the card's faint lines.
             if i:
-                widgets.divider(card.body, ui, pady=9)
+                widgets.divider(card.body, ui, pady=CHECK_GAP)
             widgets.label(card.body, ui, w(key), wrap_margin=0).pack(fill="x")
 
 
@@ -1059,7 +1168,7 @@ def form_label(parent, ui, text, top=0):
 
 # The room between a field's name and the field, between one field and the next name, and above a form's button
 # (logical pixels).
-FORM_LABEL_GAP, FORM_FIELD_GAP, FORM_BUTTON_GAP = 6, 14, 16
+FORM_LABEL_GAP, FORM_FIELD_GAP, FORM_BUTTON_GAP = 6, 16, 16
 
 
 def connect_panel(app, parent, rerender, forget=False):
@@ -1110,10 +1219,25 @@ def connect_panel(app, parent, rerender, forget=False):
             return
         # What is asked is what the field holds: kept for the page drawn again with the answer.
         remember()
-        check_server(app, address.get(), then=rerender)
+        check_server(app, address.get(), then=lambda: (answered(), rerender()))
         # Said at once, before the server answers.
         answer.set(w("online.connecting"))
         field.set_error(False)
+
+    def answered():
+        """The server's answer in place: the line under the field and its edge, and the address as the launcher
+        writes it once it connected."""
+        if not answer.winfo_exists():
+            # The card was made again for another server: the new one shows the answer.
+            return
+        text, _colour = server_line(app)
+        tone = server_tone(app)
+        answer.set(text, tone)
+        field.set_error(tone == "bad")
+        if app.address_draft is None and app.state.current and address.get() != app.state.current:
+            address.delete(0, "end")
+            address.insert(0, app.state.current)
+            field.refresh()
 
     address.bind("<Return>", lambda e: connect())
     address.bind("<KP_Enter>", lambda e: connect())
@@ -1347,7 +1471,7 @@ def known_servers(app, parent, rerender):
     for i, s in enumerate(others):
         # One row a server, split by the card's faint lines.
         if i:
-            widgets.divider(card.body, ui, pady=9)
+            widgets.divider(card.body, ui, pady=CHECK_GAP)
         line = tk.Frame(card.body, bg=theme.PANEL)
         line.pack(fill="x")
 
@@ -1401,18 +1525,77 @@ def forget_server(app, server, rerender):
     rerender()
 
 
+def online_keys(app):
+    """What each card of the Online page (and the guide's steps that show them) shows, as keys for Sections: the server
+    in use, its sign-in, its app and the download, and the other servers."""
+    state = app.state
+    server = state.server()
+    url = server["url"] if server else None
+
+    def server_key():
+        return (url and state.server()["url"], server and state.server()["name"]) if state.server() else None
+
+    def signin_key():
+        current = state.server()
+        return (current["url"], state.signed_in(current), current.get("account")) if current else None
+
+    def app_key():
+        current = state.server()
+        if current is None:
+            return None
+        have = apps.local(current["url"])
+        download = app.download
+        return (current["url"], have and have.get("sha256"), (current.get("app") or {}).get("sha256"),
+                state.signed_in(current), download is not None and bool(download.get("stopping")),
+                download is None, str(app.download_error), str(app.app_note))
+
+    def others_key():
+        return tuple((s["url"], s["name"]) for s in state.servers if s["url"] != state.current)
+
+    return server_key, signin_key, app_key, others_key
+
+
 def build_online(app, parent):
-    rerender = lambda: app.page == "online" and app.go("online")  # noqa: E731  (the page drawn again)
-    connect_panel(app, parent, rerender, forget=True)
-    signin_panel(app, parent, rerender)
-    app_panel(app, parent, rerender)
-    known_servers(app, parent, rerender)
+    """The Online page in cards (Sections): the server, the sign-in, the server's app, the other servers; an answer
+    changes its own card in place."""
+    sections = Sections(parent, app.ui)
+    # A change of the launcher's state redraws the cards it changed, while the page is on show.
+    again = lambda: app.page == "online" and app.guide is None and sections.refresh()  # noqa: E731
+    server_key, signin_key, app_key, others_key = online_keys(app)
+    # The server's card is keyed by the server in use only: its line under the address follows each answer in place.
+    sections.add(lambda: (app.state.current,), lambda holder: connect_panel(app, holder, again, forget=True))
+    sections.add(signin_key, lambda holder: signin_panel(app, holder, again))
+    sections.add(app_key, lambda holder: app_panel(app, holder, again))
+    sections.add(others_key, lambda holder: known_servers(app, holder, again))
+    app.page_follow = sections.refresh
 
 
 # ---------------------------------------------------------------------------------------------- Help
 
 
+def _player_log(app):
+    """The player's log for the current server's app, and whether it is there (once the game has run with the app)."""
+    server = app.state.server()
+    have = apps.local(server["url"]) if server else None
+    log_file = player.app_log(have)
+    return log_file, bool(log_file and os.path.isfile(log_file))
+
+
 def build_help(app, parent):
+    ui, w = app.ui, app.words
+    from opendmtq_client import installed
+    sections = Sections(parent, ui, after=lambda: widgets.fit_names(parent, ui, rows_that_come("help")))
+    # The ready check, its rows made again in place when they change (refresh_checks).
+    sections.add(lambda: None, lambda holder: _help_checks(app, holder))
+    # The lines and the tools that follow the player's log (there once the game has run) and the install.
+    sections.add(lambda: _player_log(app)[1], lambda holder: _help_trouble(app, holder))
+    sections.add(lambda: (_player_log(app), installed.root()), lambda holder: _help_tools(app, holder))
+    sections.add(lambda: (installed.root(), bool(installed.root() and installed.updater(installed.root()))),
+                 lambda holder: _help_remove(app, holder))
+    app.page_follow = sections.refresh
+
+
+def _help_checks(app, parent):
     ui, w = app.ui, app.words
     card = _card(parent, ui, w("help.checks"))
     # Check again at the title's right end: the server asked again too, whatever its last answer.
@@ -1421,18 +1604,19 @@ def build_help(app, parent):
     app.check_box.pack(fill="x")
     app.refresh_checks()
     refresh_checks(app)
+
+
+def _help_trouble(app, parent):
+    ui, w = app.ui, app.words
     card = _card(parent, ui, w("help.trouble"))
-    # Each line with the page it names one press away.
-    server = app.state.server()
-    have = apps.local(server["url"]) if server else None
-    # The first line points at the player's log below, which is there once the game has run with the app.
-    log_file = player.app_log(have)
-    has_log = bool(log_file and os.path.isfile(log_file))
+    # Each line with the page it names one press away. The first line points at the player's log below, which is
+    # there once the game has run with the app.
+    _log_file, has_log = _player_log(app)
     first = "help.trouble.1" if has_log else "help.trouble.1.none"
     for i, (key, page) in enumerate(((first, None), ("help.trouble.2", "screen"), ("help.trouble.3", "sound"),
                                      ("help.trouble.4", None))):
         if i:
-            widgets.divider(card.body, ui, pady=9)
+            widgets.divider(card.body, ui, pady=CHECK_GAP)
         line = tk.Frame(card.body, bg=theme.PANEL)
         line.pack(fill="x")
         beside = ()
@@ -1442,7 +1626,12 @@ def build_help(app, parent):
             to.pack(side="right", anchor="n")
             beside = (to,)
         widgets.label(line, ui, w(key), wrap_margin=12, beside=beside).pack(side="left", fill="x")
+
+
+def _help_tools(app, parent):
+    ui, w = app.ui, app.words
     card = _card(parent, ui, w("help.tools"))
+    log_file, has_log = _player_log(app)
     if has_log:
         widgets.setting_row(card.body, ui, w("help.player_log"),
                             lambda p: widgets.Button(p, ui, w("common.open"), lambda: actions.show_file(log_file)),
@@ -1461,6 +1650,12 @@ def build_help(app, parent):
         widgets.setting_row(card.body, ui, w("help.repair.row"),
                             lambda p: widgets.Button(p, ui, w("help.repair"), lambda: maintenance.repair_program(app)),
                             w("help.repair.hint")).pack(fill="x")
+
+
+def _help_remove(app, parent):
+    ui, w = app.ui, app.words
+    from opendmtq_client import installed
+    root = installed.root()
     # From the least to the most: the game's data, the launcher's, the program.
     card = _card(parent, ui, w("help.remove"), last=True)
     widgets.setting_row(card.body, ui, w("help.clear.row"),
@@ -1495,6 +1690,32 @@ def build_about(app, parent):
     widgets.setting_row(card.body, ui, w("about.language"),
                         lambda p: widgets.Segmented(p, ui, language_options(app), app.state.picked_language or "system",
                                                     app.set_language)).pack(fill="x")
+    # The updates' card, made again in place when the look at the start finds a newer launcher; the cards after it as
+    # they were.
+    sections = Sections(parent, ui)
+    sections.add(lambda: app.update_found and app.update_found.version, lambda holder: _updates_card(app, holder))
+    app.page_follow = sections.refresh
+    # Its gap under it, as a card's own (the holder's card has none).
+    tk.Frame(parent, bg=theme.BG, height=ui.px(CARD_GAP)).pack(fill="x")
+    card = _card(parent, ui, w("about.guide"))
+
+    def rerun():
+        app.state.guide_done = False
+        app.state.save()
+        app.show()
+
+    widgets.Button(card.body, ui, w("about.guide.run"), rerun).pack(anchor="w")
+    card = _card(parent, ui, w("about.legal"), last=True)
+    for i, key in enumerate(("about.license", "about.notice")):
+        if i:
+            widgets.divider(card.body, ui, pady=CHECK_GAP)
+        widgets.label(card.body, ui, w(key), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+
+
+def _updates_card(app, parent):
+    """The About page's updates: the version, Check for updates, and the answer with Update to vX when one is on
+    offer."""
+    ui, w = app.ui, app.words
     card = _card(parent, ui, w("about.updates"))
     # The version the header shows beside the logo too: the installed one, else the code's.
     version = updates.shown_version()
@@ -1558,19 +1779,6 @@ def build_about(app, parent):
         answer.pack(fill="x", pady=(ui.px(10), 0))
         slot.pack(fill="x")
         show(app.update_found)
-    card = _card(parent, ui, w("about.guide"))
-
-    def rerun():
-        app.state.guide_done = False
-        app.state.save()
-        app.show()
-
-    widgets.Button(card.body, ui, w("about.guide.run"), rerun).pack(anchor="w")
-    card = _card(parent, ui, w("about.legal"), last=True)
-    for i, key in enumerate(("about.license", "about.notice")):
-        if i:
-            widgets.divider(card.body, ui, pady=9)
-        widgets.label(card.body, ui, w(key), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
 
 
 BUILDERS = {

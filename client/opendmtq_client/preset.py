@@ -99,7 +99,8 @@ def take():
     on (server.trust), under its address as the launcher writes every address."""
     path = os.path.join(st.config_dir(), FILE_NAME)
     try:
-        with open(path, encoding="utf-8") as f:
+        # utf-8-sig: as saved again by Notepad, with a byte-order mark.
+        with open(path, encoding="utf-8-sig") as f:
             details = json.load(f)
     except FileNotFoundError:
         return None

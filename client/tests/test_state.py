@@ -122,6 +122,38 @@ class State(Folder):
             st.LauncherState.load()
         self.assertFalse(caught.exception.newer)
 
+    def test_a_file_saved_again_by_notepad_is_read(self):
+        # Notepad saves with a byte-order mark and Windows' line ends; a person types a language in capitals with spaces:
+        # the launcher reads it as it reads its own (P4), its settings, servers and language as they were.
+        os.makedirs(st.config_dir())
+        s = st.LauncherState()
+        s.language = "ko"
+        s.set_value("music_volume", 40)
+        s.add_server("http://example.test:8080", "A server", "example.test:8080")
+        s.save()
+        with open(st.LauncherState.path(), encoding="utf-8") as f:
+            data = json.load(f)
+        data["language"] = " KO "
+        with open(st.LauncherState.path(), "w", encoding="utf-8-sig", newline="\r\n") as f:
+            f.write(json.dumps(data, indent=2))
+        again = st.LauncherState.load()
+        self.assertEqual(again.language, "ko")
+        self.assertEqual(again.values["music_volume"], 40)
+        self.assertEqual(again.server()["name"], "A server")
+        # The installer's hand-over and the trusted authorities, saved again the same way, are read too.
+        os.makedirs(st.config_dir(), exist_ok=True)
+        with open(os.path.join(st.config_dir(), preset.FILE_NAME), "w", encoding="utf-8-sig", newline="\r\n") as f:
+            json.dump({"version": preset.FORMAT, "url": "http://192.168.1.10:8080", "name": "Club"}, f)
+        self.assertEqual(preset.take()["name"], "Club")
+
+    def test_the_players_settings_written_back_by_hand(self):
+        # The settings file the player writes back, edited in Notepad: a byte-order mark, Windows' line ends, spaces
+        # and quotes round a value; the sound's keys are taken, nothing else.
+        from opendmtq_client import values as choices
+        text = "\ufeffvolume = 40\r\nmusic_volume=\"55\"\r\neq=' bass '\r\ndisplay=window\r\n"
+        found = choices.took_back(choices.normalize({}), text.lstrip("\ufeff"))
+        self.assertEqual(found, {"volume": 40, "music_volume": 55, "eq": "bass", "eq_low": 6, "eq_mid": 1})
+
     def test_a_bad_setting_keeps_its_default(self):
         os.makedirs(st.config_dir())
         with open(st.LauncherState.path(), "w") as f:

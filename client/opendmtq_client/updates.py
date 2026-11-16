@@ -165,7 +165,8 @@ def outcome():
     from opendmtq_client import state as st
     path = os.path.join(st.config_dir(), PENDING)
     try:
-        with open(path, encoding="utf-8") as f:
+        # utf-8-sig: as saved again by Notepad, with a byte-order mark.
+        with open(path, encoding="utf-8-sig") as f:
             note = json.load(f)
     except (OSError, ValueError):
         return None

@@ -49,7 +49,8 @@ def local(url):
     with one whose file has gone)."""
     base = folder(url)
     try:
-        with open(os.path.join(base, DETAILS), encoding="utf-8") as f:
+        # utf-8-sig: as saved again by Notepad, with a byte-order mark.
+        with open(os.path.join(base, DETAILS), encoding="utf-8-sig") as f:
             details = json.load(f)
     except (OSError, ValueError):
         return None

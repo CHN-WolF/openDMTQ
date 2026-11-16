@@ -89,10 +89,13 @@ class Guide:
         self.body.set_heading(w("guide.%s.title" % key), w(lead) if lead else "")
         content = tk.Frame(self.body.inner, bg=theme.BG)
         content.pack(fill="both", expand=True)
+        # The step's cards, each made again in place when what it shows changes (pages.Sections): an answer from the
+        # server, a sign-in, a download that ended change their own card, never the step drawn again.
+        self.sections = pages.Sections(content, app.ui)
         getattr(self, "_" + key)(content)
-        # What Next waits for, at the foot of the step's last card (packed by _update_next while it waits).
-        cards = [child for child in content.winfo_children() if isinstance(child, widgets.Card)]
-        self.need = widgets.label(cards[-1].body, app.ui, "", fg=theme.MUTED, wrap_margin=0) if cards else None
+        # What Next waits for, under the step's cards (packed by _update_next while it waits).
+        self.need = widgets.Said(content, app.ui)
+        self.need_room = app.ui.px(pages.CARD_GAP)
         # One column for the names of the step's settings, as a page has (pages.ROWS_THAT_COME names the guide's own as
         # "guide:<step>", apart from the pages' names).
         widgets.fit_names(content, app.ui, pages.rows_that_come("guide:" + key))
@@ -105,7 +108,7 @@ class Guide:
         if last:
             self.next_button.pack_forget()
             self.skip.pack_forget()
-            self.play_slab.pack(side="top", anchor="w", pady=(px(14), 0))
+            self.play_slab.pack(side="top", anchor="w", pady=(px(16), 0))
         else:
             self.play_slab.pack_forget()
             self.next_button.pack(side="right")
@@ -115,10 +118,16 @@ class Guide:
         self.body.to_top()
 
     def redraw(self):
-        """The step on show, drawn again (an answer came, a choice changed its rows), where it was scrolled to and with
-        the keyboard on the control it was on (pages.keep_place)."""
-        if self.app.guide is self:
-            pages.keep_place(self.body, self.app.root, lambda: self.show(self.index))
+        """The step on show follows a change (an answer came, a sign-in, a download that ended): its cards whose
+        content changed made again in their places, Next and the line about what it waits for as things stand."""
+        if self.app.guide is not self:
+            return
+        sections = getattr(self, "sections", None)
+        if sections is not None and sections.parent.winfo_exists():
+            sections.refresh()
+            self._update_next()
+            return
+        pages.keep_place(self.body, self.app.root, lambda: self.show(self.index))
 
     def _can_go_on(self):
         """SERVER needs a server that answered; SIGN IN a sign-in; DOWNLOAD the app; the last step what PLAY needs."""
@@ -145,9 +154,10 @@ class Guide:
         line = getattr(self, "need", None)
         if line is not None and line.winfo_exists():
             if need:
-                line.configure(text=self.app.words(need))
-                line.pack(fill="x", pady=(self.app.ui.px(12), 0))
-            else:
+                line.set(self.app.words(need))
+                if not line.winfo_manager():
+                    line.pack(fill="x", pady=(self.need_room, 0))
+            elif line.winfo_manager():
                 line.pack_forget()
         # The last step's PLAY lit when the ready check lets it go, dark and still otherwise.
         self.play_slab.set("ready" if can else "waiting")
@@ -190,7 +200,7 @@ class Guide:
         card = pages._card(parent, ui, w("guide.power.need"), last=True)
         for i, key in enumerate(("guide.power.need.1", "guide.power.need.2")):
             if i:
-                widgets.divider(card.body, ui, pady=9)
+                widgets.divider(card.body, ui, pady=pages.CHECK_GAP)
             widgets.label(card.body, ui, w(key), wrap_margin=0).pack(fill="x")
 
     def _language(self, language):
@@ -214,14 +224,15 @@ class Guide:
             # go on. Once only: after that, the answer on show is the one to the address the player typed.
             self.auto_asked = server["url"]
             pages.check_server(app, server["url"], then=self.redraw)
-        # The address, Connect, and one line under them: connecting, connected, or why not.
-        pages.connect_panel(app, parent, self.redraw)
+        # The address, Connect, and one line under them: connecting, connected, or why not (in place).
+        self.sections.add(lambda: (app.state.current,), lambda holder: pages.connect_panel(app, holder, self.redraw))
 
     # ------------------------------------------------------------------------------ 3 SIGN IN
 
     def _login(self, parent):
         app = self.app
-        pages.signin_panel(app, parent, self.redraw)
+        _server_key, signin_key, _app_key, _others = pages.online_keys(app)
+        self.sections.add(signin_key, lambda holder: pages.signin_panel(app, holder, self.redraw))
 
     # ----------------------------------------------------------------------------- 4 DOWNLOAD
 
@@ -232,7 +243,8 @@ class Guide:
             # The app is what this step is for: its download starts by itself, once.
             self.download_tried = True
             app.get_app(done_then=lambda error: self.redraw())
-        pages.app_panel(app, parent, self.redraw)
+        _server_key, _signin, app_key, _others = pages.online_keys(app)
+        self.sections.add(app_key, lambda holder: pages.app_panel(app, holder, self.redraw))
 
     # -------------------------------------------------------------------------- 5 SOUND CHECK
 

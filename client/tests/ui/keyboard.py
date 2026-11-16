@@ -198,6 +198,88 @@ def main():
             problems.append("Controls: Tab on a waiting box left it %s, the keyboard on %r" % (
                 "waiting" if boxes[0].waiting else "still", app.root.focus_get()))
 
+    # ---- By touch and by the keyboard alone (nothing only under the pointer): Page Down and Page Up move a page whose
+    # words no control reaches; a finger dragged on the page moves it, a tap on a control does not; a drop-down's long
+    # list scrolls under a finger without choosing; the password's Show is reached by Tab and pressed by Enter.
+    app.nav_go("help")
+    shots.settle(app)
+    area = app.body
+    area.to_top()
+    app.root.update()
+    app.root.focus_force()
+    app.rail.list.focus_set()
+    app.root.update()
+    app.rail.list.event_generate("<Next>")
+    app.root.update()
+    if area.canvas.canvasy(0) <= 0:
+        problems.append("Help at 960x640: Page Down did not move the page")
+    app.rail.list.event_generate("<Prior>")
+    app.root.update()
+    if area.canvas.canvasy(0) != 0:
+        problems.append("Help: Page Up did not bring the page back to its top")
+    # A finger on a card's words, dragged up: the page moves with it.
+    words = next(x for x in shots.widgets_of(area.inner) if x.winfo_class() == "Label" and x.winfo_ismapped()
+                 and len(str(x.cget("text"))) > 20 and str(x.cget("cursor")) != "hand2")
+    x, y = words.winfo_rootx() + 5, words.winfo_rooty() + 5
+    words.event_generate("<Enter>", x=5, y=5)
+    area.event_generate("<Enter>")
+    words.event_generate("<ButtonPress-1>", x=5, y=5, rootx=x, rooty=y)
+    for step in range(1, 9):
+        words.event_generate("<B1-Motion>", x=5, y=5 - 20 * step, rootx=x, rooty=y - 20 * step)
+    words.event_generate("<ButtonRelease-1>", x=5, y=5 - 160, rootx=x, rooty=y - 160)
+    app.root.update()
+    if area.canvas.canvasy(0) < app.ui.px(100):
+        problems.append("Help: a finger dragged 160 px up moved the page %d px" % area.canvas.canvasy(0))
+    area.to_top()
+    # The frame limit's long list under a finger: dragged, it scrolls and chooses nothing.
+    app.nav_go("screen")
+    shots.settle(app)
+    select = setting_control(app.body, widgets.Select, w("screen.fps"))
+    before = app.state.values["fps"]
+    select.event_generate("<ButtonPress-1>", x=5, y=5)
+    shots.wait_out(app.root, 0.3)
+    found = select.droplist
+    if found is None or not found.scrolls:
+        problems.append("Screen: the frame limit's list did not open, or does not scroll")
+    else:
+        c = found.canvas
+        top = found.top_row
+        cx, cy = c.winfo_rootx() + 30, c.winfo_rooty() + c.winfo_height() - 20
+        c.event_generate("<ButtonPress-1>", x=30, y=c.winfo_height() - 20, rootx=cx, rooty=cy)
+        for step in range(1, 7):
+            c.event_generate("<B1-Motion>", x=30, y=c.winfo_height() - 20 - 30 * step, rootx=cx, rooty=cy - 30 * step)
+        c.event_generate("<ButtonRelease-1>", x=30, y=c.winfo_height() - 200, rootx=cx, rooty=cy - 180)
+        app.root.update()
+        if found.winfo_exists() and found.top_row <= top:
+            problems.append("Screen: a finger dragged up the frame limit's list did not scroll it")
+        if not found.winfo_exists() or app.state.values["fps"] != before:
+            problems.append("Screen: a drag on the frame limit's list chose a row (fps %s)" % app.state.values["fps"])
+        if found.winfo_exists():
+            found.close()
+    # The password's Show by the keyboard.
+    app.state.forget_sign_in()
+    app.nav_go("online")
+    shots.settle(app)
+    password = [x for x in shots.widgets_of(app.body.inner) if isinstance(x, widgets.Field) and x.secret][0]
+    password.entry.focus_set()
+    app.root.update()
+    after = password.entry.tk_focusNext()
+    if after is not password.toggle:
+        problems.append("Online: Tab from the password goes to %r, not its Show" % (name_of(after),))
+    password.toggle.focus_set()
+    app.root.update()
+    password.toggle.event_generate("<Return>")
+    app.root.update()
+    if password.entry.cget("show") != "" or password.toggle.cget("text") != w("online.password.hide"):
+        problems.append("Online: Enter on Show did not show the password")
+    password.toggle.event_generate("<space>")
+    app.root.update()
+    if password.entry.cget("show") == "":
+        problems.append("Online: Space on Hide did not hide the password again")
+    actions_module = __import__("opendmtq_client.actions", fromlist=["sign_in"])
+    actions_module.sign_in(app.state, stub.ACCOUNT, stub.PASSWORD)
+    app.state.save()
+
     # ---- The guide's SOUND CHECK: VSync switched with Space keeps the step's place and the keyboard.
     app.state.guide_done = False
     app.state.save()
