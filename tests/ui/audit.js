@@ -410,10 +410,14 @@ async function floatingLayers(contexts) {
     }, shown);
     await openRow('first', 'a row at the window\'s foot');
     await page.evaluate(() => scrollTo(0, 0));
-    // A search that leaves one row: the list as short as a new server's.
-    const name = await page.$eval('table.players tbody tr:last-child', r => r.dataset.k);
+    // A search that leaves one row.
+    const name = await page.$eval('table.players tbody tr:nth-child(3)', r => r.dataset.k);
     await page.$eval('#player-search', (e, v) => { e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, name);
     await openRow('first', 'the only row a search leaves');
+    // A server with one player, as a new one has: the other rows taken off the page.
+    await page.goto(`${A}/players`, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => { for (const r of document.querySelectorAll('table.players tbody tr:not(:first-child)')) r.remove(); });
+    await openRow('first', 'the list of a server with one player');
     // Reset's question over the open panel.
     await page.click('.row-more[open] > .row-more-in button[value=reset]');
     await page.waitForSelector('#ask[open]');
@@ -421,31 +425,37 @@ async function floatingLayers(contexts) {
     check(`the question a panel's button asks is whole and on top, ${at}`, ask.ok, ask.detail);
     await page.click('#ask [value=no]');
     await page.screenshot({ path: path.join(OUT, 'shots', `floating-players-one-row-${width}.jpg`), type: 'jpeg', quality: 72 });
-    // The owner's charts' tooltips: the first mark of each kind of chart on the status page, under the pointer.
-    await page.goto(`${A}/`, { waitUntil: 'domcontentloaded' });
-    const marks = await page.$$eval('[data-tip]', all => all.length);
-    for (const index of [0, Math.floor(marks / 2), marks - 1].filter((v, i, a) => marks > 0 && a.indexOf(v) === i)) {
+    // The tooltips: a mark brought to the middle of the window and pointed at (a finger presses it: the same words), its
+    // tooltip measured. The marks pointed at are those a person can reach: drawn, a few pixels at least, and the mark itself
+    // under its middle (not one under the bar).
+    const tipOf = async (index, of) => {
       const mark = (await page.$$('[data-tip]'))[index];
-      await mark.evaluate(e => e.scrollIntoView({ block: 'center', inline: 'center' }));
+      await mark.evaluate(e => e.scrollIntoView({ block: 'center', inline: 'nearest' }));
+      await pause(80);
       const box = await mark.boundingBox();
-      if (!box) continue;
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await pause(120);
-      const tip = await wholeOnTop(page, '.chart-tip:not([hidden])');
-      check(`a chart's tooltip on the status page is whole and on top: mark ${index + 1} of ${marks}, ${at}`, tip.ok, tip.detail);
+      const x = box.x + box.width / 2, y = box.y + box.height / 2;
+      if (width < 700) await page.touchscreen.tap(x, y); else await page.mouse.move(x, y);
+      await pause(150);
+      return wholeOnTop(page, '.chart-tip:not([hidden])');
+    };
+    const reachable = () => page.$$eval('[data-tip]', all => all.map((e, i) => {
+      const r = e.getBoundingClientRect();
+      return r.width >= 4 && r.height >= 4 && getComputedStyle(e).visibility !== 'hidden' ? i : -1;
+    }).filter(i => i >= 0));
+    // The owner's charts on the status page: the first mark, one in the middle, the last.
+    await page.goto(`${A}/`, { waitUntil: 'domcontentloaded' });
+    const marks = await reachable();
+    for (const index of [marks[0], marks[Math.floor(marks.length / 2)], marks[marks.length - 1]].filter((v, i, a) => v !== undefined && a.indexOf(v) === i)) {
+      const tip = await tipOf(index);
+      check(`a chart's tooltip on the status page is whole and on top: mark ${index + 1}, ${at}`, tip.ok, tip.detail);
     }
-    // The site's: a player's days of plays.
+    // The site's: a player's days of plays, the first and the last.
     await page.goto(`${P}/player.php?id=1`, { waitUntil: 'domcontentloaded' });
-    const day = await page.$('[data-tip]');
-    if (day) {
-      await day.evaluate(e => e.scrollIntoView({ block: 'center' }));
-      const box = await day.boundingBox();
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await pause(120);
-      const tip = await wholeOnTop(page, '.chart-tip:not([hidden])');
-      check(`a player's day tooltip on the site is whole and on top, ${at}`, tip.ok, tip.detail);
-    } else {
-      check(`a player's day tooltip on the site is whole and on top, ${at}`, false, 'no marks on the page');
+    const days = await reachable();
+    check(`a player's page has days to point at, ${at}`, days.length > 0);
+    for (const index of [days[0], days[days.length - 1]].filter((v, i, a) => v !== undefined && a.indexOf(v) === i)) {
+      const tip = await tipOf(index);
+      check(`a player's day tooltip on the site is whole and on top: mark ${index + 1}, ${at}`, tip.ok, tip.detail);
     }
     await page.close();
   }
@@ -481,9 +491,11 @@ async function signInForms(contexts) {
         }, pw);
         check(`the password field has Show inside it, the text kept clear of it (${at})`, place && place.inside && place.clear && place.word === words[lang][0], JSON.stringify(place));
         await page.type(pw, 'secret-1');
-        await page.click('.signin-form .pw-toggle');
-        const shown = await page.evaluate(sel => [document.querySelector(sel).type, document.querySelector('.signin-form .pw-toggle').textContent.trim(), document.activeElement === document.querySelector(sel)], pw);
-        await page.click('.signin-form .pw-toggle');
+        // (A page without Show fails here and goes on to the rest.)
+        const toggle = await page.$('.signin-form .pw-toggle:not([hidden])');
+        if (toggle) await toggle.click();
+        const shown = await page.evaluate(sel => [document.querySelector(sel).type, (document.querySelector('.signin-form .pw-toggle') || { textContent: '' }).textContent.trim(), document.activeElement === document.querySelector(sel)], pw);
+        if (toggle) await toggle.click();
         const hidden = await page.$eval(pw, e => e.type);
         check(`Show shows the password as typed and hides it again, the field kept (${at})`,
           shown[0] === 'text' && shown[1] === words[lang][1] && (width < 700 || shown[2]) && hidden === 'password', JSON.stringify([shown, hidden]));

@@ -2840,11 +2840,32 @@ class FormChecksTest(unittest.TestCase):
         # files, the recordings' limits and the plays' days: none of them left out.
         self.assertEqual(checked, 14)
 
+    def test_the_sign_in_and_the_password_fields_are_labelled_with_show_and_the_kept_id(self):
+        with Install() as inst:
+            old_game_database(admin.core.DB, [])
+            login = inst.client.get("/opendmtq/admin/login").get_data(as_text=True)
+            # Each field named by a label of its own, the password field's Show pointing at it, the ID kept for next time.
+            self.assertIn('<label for="login-name">', login)
+            self.assertIn('id="login-name"', login)
+            self.assertIn('<label for="login-password">', login)
+            self.assertIn('aria-controls="login-password"', login)
+            self.assertIn('data-remember="admin"', login)
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/accounts").get_data(as_text=True)
+            # Both password fields of Make an account have Show; the second says when it is not the first.
+            self.assertIn('aria-controls="acc-password"', page)
+            self.assertIn('aria-controls="acc-password2"', page)
+            self.assertIn('data-same="password" data-same-bad="The two passwords are not the same."', page)
+
     def test_the_words_are_in_the_pages_language(self):
         with Install() as inst:
             old_game_database(admin.core.DB, [])
             inst.client.set_cookie("opendmtq_lang", "ko")
-            self.assertIn('data-bad="아이디와 비밀번호를 입력하세요."', inst.client.get("/opendmtq/admin/login").get_data(as_text=True))
+            login = inst.client.get("/opendmtq/admin/login").get_data(as_text=True)
+            # Each field's own words when left empty, said under it; Show and Hide in the password field.
+            self.assertIn('data-bad="아이디를 입력하세요."', login)
+            self.assertIn('data-bad="비밀번호를 입력하세요."', login)
+            self.assertIn('data-show="보기" data-hide="숨기기"', login)
             inst.sign_in()
             page = inst.client.get("/opendmtq/admin/accounts").get_data(as_text=True)
             self.assertIn('data-bad="아이디는 영문, 숫자, 점(.), 하이픈(-), 밑줄(_)로 3~20자입니다."', page)
