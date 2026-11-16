@@ -2,8 +2,8 @@
 
 POWER ON (language, what is needed), SERVER (the server's address, or the one the installer brought), SIGN IN (the ID
 and password its owner made), DOWNLOAD (that server's app), SOUND CHECK (sound and screen), STAGE START (the ready
-check and how to play, then PLAY). Each step's question is its page's title, its few words under it, and the step's
-name stays in the strip across the header; while Next waits, a line at the foot of the step's card says for what.
+check and how to play, then PLAY). Each step's question is its page's title, its few words under it, and the steps go
+down the launcher's column, the one on show lit; while Next waits, a line at the foot of the step's card says for what.
 Every choice is the same setting the launcher's pages show, so the guide never knows anything the pages do not.
 """
 
@@ -46,40 +46,29 @@ class Guide:
         return bool(check and check["state"] == "checking")
 
     def build(self):
-        from opendmtq_client.app import BAR_HEIGHT, EDGE
         app, ui, px, w = self.app, self.app.ui, self.app.ui.px, self.app.words
         root = app.root
-        # The launcher's header: the wordmark and the version, leaving the guide at the other end, and the six steps
-        # across under them, as the site's numbered steps.
-        self.header = app.make_header(root, steps=[w("guide.%s.name" % key) for key in STEPS])
-        # The bar along the foot: where the guide is, Back, and Next (PLAY on the last step).
-        bottom = tk.Frame(root, bg=theme.STRIP)
-        bottom.pack(side="bottom", fill="x")
-        # The launcher's bar height on every step: Next and the last step's PLAY sit in the same bar.
-        bar = tk.Frame(bottom, bg=theme.STRIP, height=px(BAR_HEIGHT))
-        bar.pack(fill="x", padx=px(EDGE), pady=px(12))
-        bar.pack_propagate(False)
-        self.counter = tk.Label(bar, text="", font=app.fonts.step if w.language == "en" else app.fonts.body_bold,
-                                fg=theme.MUTED, bg=theme.STRIP)
-        self.counter.pack(side="left")
-        self.next_button = widgets.Button(bar, ui, w("guide.next"), self.next, kind="primary")
-        self.next_button.pack(side="right")
-        # The last step's PLAY: the launcher's own lime slab in place of Next (not packed until then).
-        self.play_slab = widgets.PlaySlab(bar, ui, w("bottom.play"), self.next)
-        self.back_button = widgets.Button(bar, ui, w("guide.back"), self.back)
-        self.back_button.pack(side="right", padx=(0, px(10)))
-        # Leaving the guide for the launcher: a quiet link before Back, which the keyboard reaches too (packed by
-        # show(), which leaves it out on the last step, where PLAY is the way on and the setting up is done).
-        self.skip = skip = widgets.link(bar, ui, w("guide.skip"), lambda: self.finish(play=False), fg=theme.MUTED,
-                                        font=app.fonts.small, chevron=False)
+        # The launcher's column: the wordmark and the version, then the six steps down the side, as the site's
+        # numbered steps.
+        self.rail = app.make_rail(root, steps=[w("guide.%s.name" % key) for key in STEPS])
         # The step's page: its question as the page's title over the site's field, its few words under it.
-        self.body = app.make_page(root, self.header)
-        # Tab goes as the window reads: the page first, then the bar, left to right (Skip, Back, Next or PLAY). Tk's
-        # Tab follows each parent's stacking order, the order its children were made in until one is raised.
-        # (Misc's own raise: a canvas's raise moves its items instead.)
-        tk.Misc.tkraise(bottom)
-        for later in (skip, self.back_button, self.next_button, self.play_slab):
-            tk.Misc.tkraise(later)
+        self.body = app.make_page(root)
+        # The column's foot: Skip, then Back and Next (PLAY on the last step, under Back), made after the page so that
+        # Tab goes the page, then Skip, Back and Next.
+        foot = app.make_foot(self.rail)
+        # Leaving the guide for the launcher: a quiet link over the buttons, which the keyboard reaches too (shown by
+        # show(), which leaves it out on the last step, where PLAY is the way on and the setting up is done).
+        self.skip = skip = widgets.link(foot, ui, w("guide.skip"), lambda: self.finish(play=False), fg=theme.MUTED,
+                                        font=app.fonts.small, chevron=False)
+        self.buttons = tk.Frame(foot, bg=theme.STRIP)
+        self.buttons.pack(side="top", fill="x")
+        self.back_button = widgets.Button(self.buttons, ui, w("guide.back"), self.back)
+        self.back_button.pack(side="left")
+        self.next_button = widgets.Button(self.buttons, ui, w("guide.next"), self.next, kind="primary")
+        self.next_button.pack(side="right")
+        # The last step's PLAY: the launcher's own lime slab under Back (not packed until then).
+        self.play_slab = widgets.PlaySlab(foot, ui, w("bottom.play"), self.next, width=self.rail.inner_width())
+        self.foot = foot
         self.show(self.index)
 
     # ------------------------------------------------------------------------------------- steps
@@ -107,22 +96,21 @@ class Guide:
         # One column for the names of the step's settings, as a page has (pages.ROWS_THAT_COME names the guide's own as
         # "guide:<step>", apart from the pages' names).
         widgets.fit_names(content, app.ui, pages.rows_that_come("guide:" + key))
-        self.header.set_step(index)
-        self.counter.configure(text=w("guide.step", n=index + 1, total=len(STEPS)).upper()
-                               if w.language == "en" else w("guide.step", n=index + 1, total=len(STEPS)))
+        self.rail.set_step(index)
         self.back_button.enable(index > 0)
         last = index == len(STEPS) - 1
-        # Next on every step but the last, where the big PLAY takes its place; Skip on every step but the last too, as
-        # the last one sets nothing up that Skip would leave undone.
+        # Next on every step but the last, where the big PLAY takes its place under Back; Skip over them on every step
+        # but the last too, as the last one sets nothing up that Skip would leave undone.
+        px = self.app.ui.px
         if last:
             self.next_button.pack_forget()
-            self.play_slab.pack(side="right", before=self.back_button)
             self.skip.pack_forget()
+            self.play_slab.pack(side="top", anchor="w", pady=(px(14), 0))
         else:
             self.play_slab.pack_forget()
-            self.next_button.pack(side="right", before=self.back_button)
-            # Left of Back, with the room the bar keeps before it.
-            self.skip.pack(side="right", padx=(0, self.app.ui.px(18)), after=self.back_button)
+            self.next_button.pack(side="right")
+            if not self.skip.winfo_manager():
+                self.skip.pack(side="top", anchor="w", before=self.buttons, pady=(0, px(10)))
         self._update_next()
         self.body.to_top()
 

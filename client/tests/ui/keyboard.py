@@ -35,7 +35,7 @@ def name_of(widget):
         return "button %r" % widget.words
     if isinstance(widget, widgets.PlaySlab):
         return "PLAY"
-    if isinstance(widget, widgets.Header):
+    if isinstance(widget, widgets.RailList):
         return "the menu"
     if getattr(widget, "odq_where", None):
         # A lane's box on the Controls page: its mode, lane and box.
@@ -117,7 +117,7 @@ def main():
     # ---- Tab's order on the Online page: the menu, then the page's controls, then PLAY at the foot.
     app.nav_go("online")
     shots.settle(app)
-    order = tab_order(app.header)
+    order = tab_order(app.rail.list)
     page = [x for x in order if str(x).startswith(str(app.body.inner) + ".")]
     if not order or not page or order.index(page[0]) != 0 or order[-1] is not app.play_button:
         problems.append("Online: Tab goes %s, not the page then PLAY" % " -> ".join(name_of(x) for x in order))
@@ -127,7 +127,7 @@ def main():
     app.nav_go("screen")
     shots.settle(app)
     area = app.body
-    below = [x for x in tab_order(app.header) if str(x).startswith(str(area.inner) + ".") and not in_view(area, x)]
+    below = [x for x in tab_order(app.rail.list) if str(x).startswith(str(area.inner) + ".") and not in_view(area, x)]
     if not below:
         problems.append("Screen at 960x640: no control below the part in view to reach (the check checks nothing)")
     for widget in below:
@@ -171,7 +171,7 @@ def main():
     app.nav_go("controls")
     shots.settle(app)
     area = app.body
-    order = tab_order(app.header)
+    order = tab_order(app.rail.list)
     page = [x for x in order if str(x).startswith(str(area.inner) + ".")]
     expected = [(name, lane, slot) for name, count in choices.LANES.items() for lane in range(count) for slot in (0, 1)]
     found = [getattr(x, "odq_where", None) for x in page[1:-1]]
@@ -228,7 +228,7 @@ def main():
     # ---- The guide's Tab order: the step's page, then the bar left to right (Skip, Back, Next).
     app.guide.back()
     shots.settle(app)
-    order = tab_order(app.guide.header)
+    order = tab_order(app.guide.rail.list)
     bar = [x for x in order if not str(x).startswith(str(app.guide.body.inner) + ".")]
     names = [name_of(x) for x in bar]
     expected = ["link %r" % w("guide.skip"), "button %r" % w("guide.back"), "button %r" % w("guide.next")]

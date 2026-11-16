@@ -24,14 +24,14 @@ class ShownVersion(unittest.TestCase):
             self.assertEqual(updates.shown_version(), __version__)
 
     def test_the_logo_shows_the_same_version(self):
-        # The header's version block beside the wordmark (app.make_header) takes it from shown_version, as the Launcher
-        # page does: an installed 9.8.7 is v9.8.7 there, whatever the code says.
+        # The menu column's version block beside the wordmark (app.make_rail) takes it from shown_version, as the
+        # Launcher page does: an installed 9.8.7 is v9.8.7 there, whatever the code says.
         from opendmtq_client import app as app_module
         from opendmtq_client import art, widgets
         fake = types.SimpleNamespace(scale=1.0, ui=None)
         with mock.patch.object(updates, "current_version", return_value="9.8.7"), \
-                mock.patch.object(art, "brand") as brand, mock.patch.object(widgets, "Header"):
-            app_module.LauncherApp.make_header(fake, None)
+                mock.patch.object(art, "brand") as brand, mock.patch.object(widgets, "Rail"):
+            app_module.LauncherApp.make_rail(fake, None)
         self.assertEqual(brand.call_args[0][1], "v9.8.7")
 
     def test_no_other_place_works_the_version_out_itself(self):

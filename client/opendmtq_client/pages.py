@@ -66,18 +66,33 @@ def rows_that_come(page):
 
 
 def _columns(parent, ui, weights=(3, 2)):
-    """Cards side by side: a frame for each column, as wide as its share of the row less the gaps. The shares come from
-    the row's own width alone: a grid that sized them from what they hold would loop for ever, as the text in each
-    wraps to the width it is given and so asks for what it got (one pixel going back and forth between the columns)."""
+    """Cards side by side: a frame for each column, as wide as its share of the row less the gaps; one under another
+    when the row is narrower than STACK_BELOW (the smallest window, beside the menu column). The shares come from the
+    row's own width alone: a grid that sized them from what they hold would loop for ever, as the text in each wraps to
+    the width it is given and so asks for what it got (one pixel going back and forth between the columns)."""
     row = tk.Frame(parent, bg=theme.BG)
     row.pack(fill="x")
     columns = []
     for i in range(len(weights)):
         column = tk.Frame(row, bg=theme.BG)
-        column.grid(row=0, column=i, sticky="nsew", padx=(ui.px(CARD_GAP) if i else 0, 0))
         columns.append(column)
+    laid = {"stacked": None}
 
     def fit(event):
+        stacked = event.width < ui.px(STACK_BELOW)
+        if stacked != laid["stacked"]:
+            # Laid out again only when the arrangement changes: the cells' places, then their widths below.
+            laid["stacked"] = stacked
+            for i, column in enumerate(columns):
+                if stacked:
+                    column.grid(row=i, column=0, sticky="nsew", padx=0, pady=(ui.px(CARD_GAP) if i else 0, 0))
+                else:
+                    column.grid(row=0, column=i, sticky="nsew", padx=(ui.px(CARD_GAP) if i else 0, 0), pady=0)
+        if stacked:
+            row.columnconfigure(0, minsize=event.width, weight=0)
+            for i in range(1, len(weights)):
+                row.columnconfigure(i, minsize=0, weight=0)
+            return
         room = max(1, event.width - ui.px(CARD_GAP) * (len(weights) - 1))
         given = 0
         for i, weight in enumerate(weights):
@@ -86,7 +101,15 @@ def _columns(parent, ui, weights=(3, 2)):
             row.columnconfigure(i, minsize=width + (ui.px(CARD_GAP) if i else 0), weight=0)
 
     row.bind("<Configure>", fit)
+    # Side by side until the row is laid out (the first <Configure> settles it).
+    for i, column in enumerate(columns):
+        column.grid(row=0, column=i, sticky="nsew", padx=(ui.px(CARD_GAP) if i else 0, 0))
+    row.odq_stacked = lambda: bool(laid["stacked"])
     return columns
+
+
+# A row of cards side by side narrower than this (logical pixels) puts them one under another.
+STACK_BELOW = 760
 
 
 # ---------------------------------------------------------------------------------------------- PLAY
@@ -668,8 +691,9 @@ def lanes_card(app, parent):
 
 
 class LaneKeys:
-    """The lanes of each LINE mode, from the top, with their keys: a table with the lanes' numbers down its left, a
-    column for each of 2, 3 and 4 LINE, and in each lane a box for its key and one for a second key (widgets.KeyBox).
+    """The lanes of each LINE mode, from the top, with their keys: a block for each of 2, 3 and 4 LINE, side by side
+    while the card holds them so (one under another in a narrow window with long keys), each lane's number before a box
+    for its key and one for a second key (widgets.KeyBox).
 
     A click on a box (or Enter or Space on it) makes it wait for a key; the key pressed goes in by its place on the
     keyboard (keys.place_of), unless the mode plays it in another box, or no lane takes it: refused in words on the line
@@ -679,8 +703,33 @@ class LaneKeys:
     waits, Windows' input method is off on the window that gets the keys (keys.typing_off), and a key held down counts
     once: its repeats count from its release on."""
 
-    # The room between two modes' columns, between a lane's two boxes, and above and under each lane (logical pixels).
-    COLUMN_GAP, BOX_GAP, LANE_GAP = 24, 6, 3
+    # The room between two modes' blocks side by side, or one under another, after a lane's number, between a lane's
+    # two boxes, and above and under each lane (logical pixels).
+    COLUMN_GAP, ROW_GAP, NUMBER_GAP, BOX_GAP, LANE_GAP = 32, 16, 12, 6, 3
+
+    def _flow(self):
+        """The modes' blocks side by side when the card holds them so, else one under another; laid out again only
+        when that changes (the card's width alone decides it, never what the blocks are given)."""
+        if not self.table.winfo_exists():
+            return
+        px = self.ui.px
+        body = self.card.body
+        room = body.winfo_width() - 2 * int(body.cget("padx"))
+        if room <= 1:
+            # Not laid out yet: once it is, the card's <Configure> asks again.
+            room = None
+        need = sum(block.winfo_reqwidth() for block in self.blocks) + px(self.COLUMN_GAP) * (len(self.blocks) - 1)
+        across = room is None or need <= room
+        if across == self.across:
+            return
+        self.across = across
+        for i, block in enumerate(self.blocks):
+            block.pack_forget()
+        for i, block in enumerate(self.blocks):
+            if across:
+                block.pack(side="left", anchor="n", padx=(px(self.COLUMN_GAP) if i else 0, 0))
+            else:
+                block.pack(side="top", anchor="w", pady=(px(self.ROW_GAP) if i else 0, 0))
 
     def show_reset(self, shown):
         """Reset keys at the card's title while the lanes show, gone while keyboard play is off."""
@@ -714,27 +763,30 @@ class LaneKeys:
         self.reset_button.pack(side="right")
         widgets.divider(holder, ui)
         table = tk.Frame(holder, bg=theme.PANEL)
-        table.pack(anchor="w")
+        table.pack(anchor="w", fill="x")
+        self.table = table
         # The page going (another page, a language, the window closing) ends a wait as well: the input method comes back.
         table.bind("<Destroy>", lambda e: self.typing_back() if e.widget is table else None)
-        # Each mode's name over its column, as the game's tabs name it, in the launcher's wide face for English names.
-        for column, name in enumerate(choices.LANES, 1):
-            tk.Label(table, text=choices.mode(name), font=ui.fonts.step, fg=theme.MUTED, bg=theme.PANEL).grid(
-                row=0, column=column, sticky="w", padx=(px(self.COLUMN_GAP), 0), pady=(0, px(6)))
-        # The lanes' numbers down the left, from the top, as many as the mode with the most has.
-        for lane in range(max(choices.LANES.values())):
-            tk.Label(table, text=str(lane + 1), font=ui.fonts.body_bold, fg=theme.MUTED, bg=theme.PANEL).grid(
-                row=lane + 1, column=0, sticky="w")
         # Whether a box shows what the keyboard prints beside its key's name: the line under the table then says what it is.
         shown = False
         # Every box, in Tab's order (again() finds the one the keyboard was on by its place).
         self.boxes = []
-        # Made mode by mode, each from its top lane: Tab goes down a column, then to the next.
-        for column, name in enumerate(choices.LANES, 1):
+        # A block for each mode: its name over its lanes, each lane's number before its boxes. Side by side while the
+        # card has the room, one under another when it has not (long keys in a narrow window): _flow().
+        self.blocks = []
+        # Made mode by mode, each from its top lane: Tab goes down a mode's lanes, then to the next mode.
+        for name in choices.LANES:
+            block = tk.Frame(table, bg=theme.PANEL)
+            self.blocks.append(block)
+            # The mode's name, as the game's tabs name it, in the launcher's wide face for English names.
+            tk.Label(block, text=choices.mode(name), font=ui.fonts.step, fg=theme.MUTED, bg=theme.PANEL).grid(
+                row=0, column=0, columnspan=2, sticky="w", pady=(0, px(6)))
             for lane, lane_keys in enumerate(choices.lanes_of(name, values[name])):
-                cell = tk.Frame(table, bg=theme.PANEL)
-                cell.grid(row=lane + 1, column=column, sticky="w", padx=(px(self.COLUMN_GAP), 0),
-                          pady=px(self.LANE_GAP))
+                # The lane's number from the top, then its boxes.
+                tk.Label(block, text=str(lane + 1), font=ui.fonts.body_bold, fg=theme.MUTED, bg=theme.PANEL).grid(
+                    row=lane + 1, column=0, sticky="w", padx=(0, px(self.NUMBER_GAP)))
+                cell = tk.Frame(block, bg=theme.PANEL)
+                cell.grid(row=lane + 1, column=1, sticky="w", pady=px(self.LANE_GAP))
                 # The lane's keys, then one empty box while it has room for a second.
                 for slot in range(min(len(lane_keys) + 1, choices.LANE_KEYS)):
                     key = lane_keys[slot] if slot < len(lane_keys) else None
@@ -750,6 +802,10 @@ class LaneKeys:
                     # A held key's release: its next press counts again (pressed() leaves its repeats out).
                     box.bind("<KeyRelease>", self.released)
                     box.bind("<FocusOut>", lambda e, b=box: self.left(b))
+        # Laid out for the card's width now, and again as the window's width changes it.
+        self.across = None
+        self._flow()
+        card.body.bind("<Configure>", lambda e: self._flow(), add="+")
         # What to do, said under the table; what a box waits for, or why a key was refused, said in its place. The
         # line about the grey prints only while a box shows one.
         self.hint = i18n.sentences(w("controls.keys.hint"), w("controls.keys.hint.print") if shown else "")
@@ -979,23 +1035,52 @@ def check_server(app, address, then=None):
     threading.Thread(target=work, daemon=True, name="connect").start()
 
 
+def server_tone(app):
+    """The tone of server_line's words: "ok" connected, "bad" a failure, None for a plain note (connecting, the server
+    to play on)."""
+    check, server = app.server_check, app.state.server()
+    if check and check["state"] == "failed":
+        return "bad"
+    if server and check and check["state"] == "ok" and check["url"] == server["url"]:
+        return "ok"
+    return None
+
+
+# How wide the forms' fields are, in characters of the text face: the server's address, the ID and the password.
+ADDRESS_CHARS, ACCOUNT_CHARS = 38, 30
+
+
+def form_label(parent, ui, text, top=0):
+    """A field's name over it, in the names' face, as the setting rows name theirs."""
+    name = tk.Label(parent, text=text, font=ui.fonts.body_bold, fg=theme.TEXT, bg=parent.cget("bg"), anchor="w")
+    name.pack(anchor="w", pady=(ui.px(top), ui.px(FORM_LABEL_GAP)))
+    return name
+
+
+# The room between a field's name and the field, between one field and the next name, and above a form's button
+# (logical pixels).
+FORM_LABEL_GAP, FORM_FIELD_GAP, FORM_BUTTON_GAP = 6, 14, 16
+
+
 def connect_panel(app, parent, rerender, forget=False):
-    """The server's card: its address and Connect, and one line under them (server_line). With `forget`, the server in
-    use can be forgotten there too (the Online page; the guide only connects)."""
+    """The server's card: its address over a field, Connect beside the field, and one line under them that says how it
+    stands (server_line: connecting, connected, or why not, with its lamp). With `forget`, the server in use can be
+    forgotten there too, at the card's title (the Online page; the guide only connects)."""
     ui, w = app.ui, app.words
     card = _card(parent, ui, w("online.server"))
     parent, bg = card.body, theme.PANEL
+    server = app.state.server()
+    form_label(parent, ui, w("online.address"))
     row = tk.Frame(parent, bg=bg)
     row.pack(fill="x")
-    tk.Label(row, text=w("online.address"), font=ui.fonts.small, fg=theme.MUTED, bg=bg).grid(row=0, column=0, sticky="w")
-    field = widgets.Field(row, ui, width=34)
-    field.grid(row=1, column=0, sticky="w", padx=(0, ui.px(12)))
+    field = widgets.Field(row, ui, width=ADDRESS_CHARS, placeholder=w("online.address.example"))
+    field.pack(side="left")
     address = field.entry
-    server = app.state.server()
     in_use = server["url"] if server else ""
     # The field holds what the player typed until it connects or the server in use changes (app.address_draft): a
     # failed Connect keeps it, as the line under it names it, instead of the server in use or nothing coming back.
     address.insert(0, in_use if app.address_draft is None else app.address_draft)
+    field.refresh()
 
     def remember(event=None):
         # What the field holds, kept for the page's next drawing; the address in use again is no draft.
@@ -1005,31 +1090,43 @@ def connect_panel(app, parent, rerender, forget=False):
     # Each key the player types (a paste with Ctrl+V too) is in the field by the time the key comes up. A binding of the
     # field's own goes with the field, where a variable traced for it would outlive every page that drew one.
     address.bind("<KeyRelease>", remember, add="+")
-    text, colour = server_line(app)
-    answer = widgets.label(parent, ui, text, font=ui.fonts.small, fg=colour, bg=bg, wrap_margin=0)
-    answer.pack(fill="x", pady=(ui.px(8), 0))
+    answer = widgets.Said(parent, ui)
+    answer.pack(fill="x", pady=(ui.px(10), 0))
+    text, _colour = server_line(app)
+    tone = server_tone(app)
+    answer.set(text, tone)
+    # A failure is about what the field holds: its edge says so too.
+    field.set_error(tone == "bad")
 
     def connect():
         if app.busy_now():
-            answer.configure(text=w("online.busy"), fg=theme.WARN)
+            answer.set(w("online.busy"), "warn")
+            return
+        if not address.get().strip():
+            # Nothing typed: said in place, nothing asked.
+            answer.set(w("error.server.empty"), "bad")
+            field.set_error(True)
+            address.focus_set()
             return
         # What is asked is what the field holds: kept for the page drawn again with the answer.
         remember()
         check_server(app, address.get(), then=rerender)
         # Said at once, before the server answers.
-        answer.configure(text=w("online.connecting"), fg=theme.MUTED)
+        answer.set(w("online.connecting"))
+        field.set_error(False)
 
     address.bind("<Return>", lambda e: connect())
+    address.bind("<KP_Enter>", lambda e: connect())
     # The page's main action is the next step: Connect while there is no server (then Sign in, then the app's download).
     if server:
         connect_button = widgets.Button(row, ui, w("online.connect"), connect)
     else:
         connect_button = main_button(app, row, w("online.connect"), connect)
-    connect_button.grid(row=1, column=1, sticky="w")
+    connect_button.pack(side="left", padx=(ui.px(10), 0))
     if server and forget:
-        # After Connect, apart from it: the next server this launcher knows becomes the one PLAY plays on.
-        widgets.Button(row, ui, w("online.forget"), lambda: forget_server(app, server, rerender),
-                       kind="danger").grid(row=1, column=2, sticky="w", padx=(ui.px(8), 0))
+        # At the card's title, apart from Connect: the next server this launcher knows becomes the one PLAY plays on.
+        widgets.Button(card.head, ui, w("online.forget"), lambda: forget_server(app, server, rerender),
+                       kind="danger").pack(side="right")
     if not server:
         # Not connected yet: typing goes to the address, Enter connects.
         address.after_idle(address.focus_set)
@@ -1037,7 +1134,9 @@ def connect_panel(app, parent, rerender, forget=False):
 
 
 def signin_panel(app, parent, rerender):
-    """The sign-in on the current server: who is signed in and Sign out, or the ID and password and Sign in."""
+    """The sign-in on the current server: who is signed in and Sign out, or the form: the ID and the password, each
+    named over its field, the password shown on demand, Sign in under them; Enter in either field signs in. What is
+    wrong is said in place, under the field it is about (an empty one, a wrong password), or under the button."""
     ui, w = app.ui, app.words
     server = app.state.server()
     if server is None:
@@ -1066,19 +1165,38 @@ def signin_panel(app, parent, rerender):
             side="left", padx=(ui.px(6), 0))
         widgets.Button(signed, ui, w("online.signout"), sign_out).pack(side="left", padx=(ui.px(16), 0))
         return
-    form = tk.Frame(parent, bg=bg)
-    form.pack(anchor="w")
-    fields = {}
-    for col, (key, secret) in enumerate((("online.id", False), ("online.password", True))):
-        tk.Label(form, text=w(key), font=ui.fonts.small, fg=theme.MUTED, bg=bg).grid(row=0, column=col, sticky="w")
-        box = widgets.Field(form, ui, width=16, secret=secret)
-        box.grid(row=1, column=col, sticky="w", padx=(0, ui.px(12)))
-        fields[key] = box.entry
+    # Where these go: the server's name and address, in the card's first line.
+    widgets.label(parent, ui, w("online.signin.on", name=st.label(server)), font=ui.fonts.small, fg=theme.MUTED,
+                  wrap_margin=0).pack(fill="x", pady=(0, ui.px(FORM_FIELD_GAP)))
+    fields, said = {}, {}
+    for i, (key, secret) in enumerate((("online.id", False), ("online.password", True))):
+        form_label(parent, ui, w(key), top=FORM_FIELD_GAP if i else 0)
+        box = widgets.Field(parent, ui, width=ACCOUNT_CHARS, secret=secret,
+                            reveal=(w("online.password.show"), w("online.password.hide")) if secret else None)
+        box.pack(anchor="w")
+        # Under each field, what is wrong with it, in place (empty until there is something to say).
+        line = widgets.Said(parent, ui)
+        fields[key], said[key] = box, line
     if server.get("account"):
         # The account signed in before: only the password to type again.
-        fields["online.id"].insert(0, server["account"])
-    message = widgets.label(parent, ui, w("online.signin.hint"), font=ui.fonts.small, fg=theme.MUTED, bg=bg,
-                            wrap_margin=0)
+        fields["online.id"].entry.insert(0, server["account"])
+
+    def say(key, text):
+        """What is wrong with one field under it (None: nothing), its edge in the error's colour while it is."""
+        line = said[key]
+        if text:
+            line.set(text, "bad")
+            if not line.winfo_manager():
+                line.pack(fill="x", pady=(ui.px(6), 0), after=fields[key])
+        elif line.winfo_manager():
+            line.pack_forget()
+        fields[key].set_error(bool(text))
+
+    buttons = tk.Frame(parent, bg=bg)
+    buttons.pack(fill="x", pady=(ui.px(FORM_BUTTON_GAP), 0))
+    message = widgets.Said(parent, ui)
+    message.pack(fill="x", pady=(ui.px(10), 0))
+    message.set(w("online.signin.hint"))
 
     # One sign-in at a time: Enter pressed twice sends one request (the server counts every try).
     asking = {"now": False}
@@ -1086,9 +1204,15 @@ def signin_panel(app, parent, rerender):
     def sign_in():
         if asking["now"]:
             return
+        user, password = fields["online.id"].entry.get(), fields["online.password"].entry.get()
+        # An empty field is said under it, nothing asked of the server.
+        say("online.id", None if user.strip() else w("error.signin.no_id"))
+        say("online.password", None if password else w("error.signin.no_password"))
+        if not user.strip() or not password:
+            (fields["online.id"] if not user.strip() else fields["online.password"]).entry.focus_set()
+            return
         asking["now"] = True
-        message.configure(text=w("online.signing"), fg=theme.MUTED)
-        user, password = fields["online.id"].get(), fields["online.password"].get()
+        message.set(w("online.signing"))
 
         def work():
             try:
@@ -1098,17 +1222,23 @@ def signin_panel(app, parent, rerender):
             except Exception as e:  # noqa: BLE001
                 # The server's own words for it go to the log (never the password); the form says it plainly.
                 log.info("could not sign in to %s as %s: %s", server["url"], user, e)
-                app.post(lambda text=w.error(e): refused(text))
+                app.post(lambda error=e, text=w.error(e): refused(error, text))
 
         threading.Thread(target=work, daemon=True, name="sign-in").start()
 
-    def refused(text):
-        """The server said no: what it said, and the password ready to type again."""
+    def refused(error, text):
+        """The server said no: a wrong ID or password under the password, ready to type again; anything else under the
+        button."""
         asking["now"] = False
         if not message.winfo_exists():
             return
-        message.configure(text=text, fg=theme.BAD)
-        password = fields["online.password"]
+        password = fields["online.password"].entry
+        if getattr(error, "key", None) == "error.signin.wrong":
+            say("online.password", text)
+            fields["online.id"].set_error(True)
+            message.set(w("online.signin.hint"))
+        else:
+            message.set(text, "bad")
         password.focus_set()
         password.select_range(0, "end")
 
@@ -1120,13 +1250,13 @@ def signin_panel(app, parent, rerender):
         app.refresh_checks()
         rerender()
 
-    for field in fields.values():
-        field.bind("<Return>", lambda e: sign_in())
-    # Typing goes to the first empty field; Tab to the next; Enter signs in.
+    for box in fields.values():
+        box.entry.bind("<Return>", lambda e: sign_in())
+        box.entry.bind("<KP_Enter>", lambda e: sign_in())
+    # Typing goes to the first empty field; Tab to the next, then Sign in; Enter signs in.
     first = fields["online.password"] if server.get("account") else fields["online.id"]
-    first.after_idle(first.focus_set)
-    main_button(app, form, w("online.signin"), sign_in).grid(row=1, column=2, sticky="w")
-    message.pack(fill="x", pady=(ui.px(8), 0))
+    first.entry.after_idle(first.entry.focus_set)
+    main_button(app, buttons, w("online.signin"), sign_in).pack(side="left")
 
 
 def app_panel(app, parent, rerender):

@@ -38,6 +38,36 @@ def work_area(root):
     return 0, 0, root.winfo_screenwidth(), root.winfo_screenheight()
 
 
+def room_at(root, x, y):
+    """(left, top, width, height) of the work area of the display that holds the point x, y (a drop-down's list opens
+    inside it, never past its edge): on Windows that display's work area (MonitorFromPoint, GetMonitorInfo), else the
+    main one's (work_area)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class MonitorInfo(ctypes.Structure):
+                _fields_ = (("size", wintypes.DWORD), ("monitor", wintypes.RECT), ("work", wintypes.RECT),
+                            ("flags", wintypes.DWORD))
+
+            user32 = ctypes.windll.user32
+            user32.MonitorFromPoint.restype = wintypes.HANDLE
+            user32.MonitorFromPoint.argtypes = (wintypes.POINT, wintypes.DWORD)
+            # MONITOR_DEFAULTTONEAREST: the display nearest the point when it lies on none.
+            monitor = user32.MonitorFromPoint(wintypes.POINT(int(x), int(y)), 2)
+            info = MonitorInfo()
+            info.size = ctypes.sizeof(MonitorInfo)
+            if monitor and user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+                work = info.work
+                if work.right > work.left and work.bottom > work.top:
+                    return work.left, work.top, work.right - work.left, work.bottom - work.top
+        except (AttributeError, OSError, ValueError):
+            # A Windows or a Wine without the calls: the main display's work area.
+            pass
+    return work_area(root)
+
+
 def title_bar_height():
     """What Windows puts above and below a window's own area (its title bar and its sizing frame), in pixels; 0 where the
     window manager's decorations are not Windows' (Linux, where the tests run)."""

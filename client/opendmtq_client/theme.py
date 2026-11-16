@@ -26,6 +26,7 @@ LINE = "#3a434d"        # 1-pixel seams: an input's edge (--seam)
 FIELD = "#0e1216"       # inside inputs and lists (the site's .input)
 STRIP = "#151a20"       # the strip along the window's foot with PLAY (the site's bar once a page has moved)
 DIVIDER = "#2b3035"     # the faint line between rows in a card (white at 7.5 % on the deck)
+SEAM = "#2a3038"        # the line along the menu column's right edge, where the page begins
 
 # Text.
 TEXT = "#eef2f6"        # body text (--chalk)

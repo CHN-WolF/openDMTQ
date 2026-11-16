@@ -24,6 +24,12 @@ from opendmtq_client import safety, widgets  # noqa: E402
 from tests import stub  # noqa: E402
 from tests.base import FAKE_PLAYER  # noqa: E402
 
+# The boxes' room, from the file beside this one.
+import importlib.util  # noqa: E402
+_spec = importlib.util.spec_from_file_location("spacing", os.path.join(os.path.dirname(__file__), "spacing.py"))
+spacing = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(spacing)
+
 # What the launcher logs in this run, line by line (its file handler is set up by main(), which the run skips).
 LOGGED = []
 
@@ -77,6 +83,9 @@ def measure(app, name, problems, root=None):
             problems.append("%s: a field selects in %s" % (name, w.cget("selectbackground")))
     if root is app.root:
         lime_check(app, name, problems)
+        # The boxes and the room round them (tests/ui/spacing.py): nothing touching, words inside their padding, the
+        # gaps on the launcher's scale.
+        problems.extend(spacing.check(root, app.ui, name))
 
 
 def lime_check(app, name, problems):
@@ -155,6 +164,11 @@ def entries(app):
     return [w for w in widgets_of(app.root) if isinstance(w, tk.Entry) and w.winfo_ismapped()]
 
 
+def dialog_problems(dialog, name):
+    """A dialog's own layout check (dialogs.Dialog.layout_problems) and its room (spacing.check_dialog)."""
+    return ["%s: %s" % (name, p) for p in dialog.layout_problems()] + spacing.check_dialog(dialog, name)
+
+
 def through_dialog(app, out, name, press, answer, problems, extra=None, seconds=10.0):
     """Press a page button that asks first, as a person would; screenshot and measure the question it opens (after the
     work some buttons do first under a dialog that says so, such as counting what would go), then answer it with
@@ -174,7 +188,7 @@ def through_dialog(app, out, name, press, answer, problems, extra=None, seconds=
         seen["dialog"] = dialog
         wait_out(app.root, 0.4)
         shot(app.root, out, name)
-        problems.extend("%s: %s" % (name, p) for p in dialog.layout_problems())
+        problems.extend(dialog_problems(dialog, name))
         if extra:
             extra(dialog)
         answer(dialog)
@@ -385,6 +399,9 @@ def play_fills(app, name, problems):
     if ready is None or last is None:
         problems.append("%s: no Ready check or Last game card on the PLAY page" % name)
         return
+    if ready.winfo_rootx() == last.winfo_rootx():
+        # One under another (the smallest window): the cards in a column, nothing to end on one line.
+        return
     ends = [card.winfo_rooty() + card.winfo_height() for card in (ready, last)]
     if abs(ends[0] - ends[1]) > 1:
         problems.append("%s: the ready check ends %d px above the Last game card" % (name, ends[1] - ends[0]))
@@ -468,9 +485,9 @@ def wheel_bindings_check(app, problems):
         problems.append("the wheel's commands outlived the page area: %r" % seen["left"])
     errors = len(problems)
     for sequence in ("<Button-4>", "<Button-5>"):
-        app.header.event_generate(sequence, x=5, y=5)
+        app.rail.event_generate(sequence, x=5, y=5)
     try:
-        app.header.event_generate("<MouseWheel>", delta=-120, x=5, y=5)
+        app.rail.event_generate("<MouseWheel>", delta=-120, x=5, y=5)
     except tk.TclError:
         # A Tk without wheel events to make: X11's buttons above are the wheel there.
         pass
@@ -549,7 +566,8 @@ def redraw_check(app, problems, tag):
         return None
 
     def upscaler_shown():
-        return any(isinstance(c, tk.Label) and c.cget("text") == w("screen.upscaler") for c in widgets_of(area.inner))
+        return any(isinstance(c, tk.Label) and c.cget("text") == w("screen.upscaler") and c.winfo_ismapped()
+                   for c in widgets_of(area.inner))
 
     for value, shown in (("100", False), ("75", True)):
         select = scale_select()
@@ -574,10 +592,12 @@ def redraw_check(app, problems, tag):
 
 
 def opened_list_check(app, out, tag, problems):
-    """A drop-down opened (the Screen page's frame limit), as a person sees it: the list's words start where the closed
-    box's words do, the same choice's words in both at the same column of pixels (once 10 px to the left at 100 % and
-    21 at 200 %, flush with the list's edge); the lit row inside the list's edge, not from edge to edge. The list is a
-    window of its own over the launcher's: the shot is of the screen where the launcher is."""
+    """A drop-down opened (the Screen page's frame limit, the longest list), as a person sees and uses it: the list is
+    the launcher's own (widgets.DropList), under the box and inside the screen; its words start where the closed box's
+    words do (the same column of pixels); the chosen row carries the lime rule; a list longer than its rows scrolls (End
+    brings the last row into view, the bar along its edge); the arrow keys light a row with the cyan ring, Esc closes it
+    as it was, Enter chooses; and with the box near the screen's foot the list opens over it, never past the edge. The
+    list is a window of its own over the launcher's: the shots are of the screen where they are."""
     from PIL import Image
     w = app.words
     area = app.body
@@ -592,42 +612,115 @@ def opened_list_check(app, out, tag, problems):
         return
     area.show_widget(select)
     app.root.update()
-    tk = app.root.tk
-    tk.call("ttk::combobox::Post", str(select))
+    before = select.current()
+    # Opened as a person opens it: a press on the box.
+    select.event_generate("<ButtonPress-1>", x=5, y=5)
+    wait_out(app.root, 0.4)
+    found = select.droplist
+    if found is None or not found.winfo_exists():
+        problems.append("%s: a press on the frame limit's box opened no list" % tag)
+        return
     try:
-        wait_out(app.root, 0.5)
-        popdown = str(tk.call("ttk::combobox::PopdownWindow", str(select)))
-        listbox = popdown + ".f.l"
-        geometry = lambda path: [int(tk.call("winfo", k, path)) for k in ("rootx", "rooty", "width", "height")]  # noqa: E731
+        geometry = lambda path: [int(app.root.tk.call("winfo", k, path)) for k in ("rootx", "rooty", "width", "height")]  # noqa: E731
+        lx, ly, lw, lh = geometry(str(found))
+        cx, cy, cw, ch = geometry(str(select))
+        screen = (app.root.winfo_screenwidth(), app.root.winfo_screenheight())
+        problems.extend(spacing.check_list(found, app.ui, "%s_screen-list-open" % tag))
+        if lx < 0 or ly < 0 or lx + lw > screen[0] or ly + lh > screen[1]:
+            problems.append("%s: the opened list reaches past the screen (%d,%d %dx%d)" % (tag, lx, ly, lw, lh))
+        if not ly >= cy + ch:
+            problems.append("%s: the opened list is not under its box with room for it under" % tag)
+        if lw < cw:
+            problems.append("%s: the opened list (%d px) is narrower than its box (%d px)" % (tag, lw, cw))
+        # The window's part of the screen with the list in it.
         rx, ry, rw, rh = geometry(str(app.root))
+        bottom = max(ry + rh, ly + lh)
         target = os.path.join(out, "%s_screen-list-open.png" % tag)
-        subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (rw, rh, rx, ry), target], check=True)
+        subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (rw, bottom - ry, rx, ry), target],
+                       check=True)
         with Image.open(target) as image:
             image = image.convert("RGB")
 
-        def ink(x_from, x_to, y_from, y_to):
-            # The first column, from the left, with a pixel of the words' light (the list's lit row is darker).
-            for x in range(x_from, x_to):
-                if any(sum(image.getpixel((x - rx, y - ry))) > 300 for y in range(y_from, y_to)):
-                    return x
-            return None
+            def ink(x_from, x_to, y_from, y_to):
+                # The first column, from the left, with a pixel of the words' light.
+                for x in range(x_from, x_to):
+                    if any(sum(image.getpixel((x - rx, y - ry))) > 300 for y in range(y_from, y_to)):
+                        return x
+                return None
 
-        cx, cy, cw, ch = geometry(str(select))
-        lx, ly, lw, lh = geometry(listbox)
-        # The list's own window: its edge, the rows inside it.
-        px = geometry(popdown)[0]
-        closed = ink(cx + 2, cx + cw // 2, cy + 4, cy + ch - 4)
-        chosen = int(select.current())
-        x, y, _w, h = (int(v) for v in tk.splitlist(tk.call(listbox, "bbox", chosen)))
-        opened = ink(lx, lx + lw // 2, ly + y, ly + y + h)
-        if closed is None or opened is None or abs(closed - opened) > 1:
-            problems.append("%s: the opened list's words start at %r, the closed box's at %r" % (tag, opened and opened - cx,
-                                                                                                closed and closed - cx))
-        # The lit row (the chosen one) starts inside the list's edge, with room before it: the rows do not reach it.
-        if lx - px < 2 * max(1, app.ui.px(1)):
-            problems.append("%s: the opened list's rows reach its edge (%d px in)" % (tag, lx - px))
+            closed = ink(cx + 2, cx + cw // 2, cy + 4, cy + ch - 4)
+            row = found._rows_box(found.chosen)
+            canvas_x, canvas_y = found.canvas.winfo_rootx(), found.canvas.winfo_rooty()
+            if row is None:
+                problems.append("%s: the chosen row is not in view in the opened list" % tag)
+            else:
+                # Past the chosen row's lime rule (3 logical pixels at the row's left edge), where its words are.
+                opened = ink(canvas_x + row[0] + app.ui.px(4), canvas_x + row[2] // 2, canvas_y + row[1] + 4,
+                             canvas_y + row[3] - 4)
+                if closed is None or opened is None or abs(closed - opened) > 1:
+                    problems.append("%s: the opened list's words start at %r, the closed box's at %r" % (
+                        tag, opened and opened - cx, closed and closed - cx))
+                rule = image.getpixel((canvas_x + row[0] + 1 - rx, canvas_y + (row[1] + row[3]) // 2 - ry))
+                from opendmtq_client import theme
+                if rule != tuple(int(theme.OK[i:i + 2], 16) for i in (1, 3, 5)):
+                    problems.append("%s: the chosen row has no lime rule (%r)" % (tag, rule))
+        if found.count > found.ROWS:
+            if not found.scrolls:
+                problems.append("%s: a list of %d rows does not scroll" % (tag, found.count))
+            # End: the last row lit and in view, with the keyboard's ring.
+            found.event_generate("<End>")
+            app.root.update()
+            if found.active != found.count - 1 or found._rows_box(found.count - 1) is None or not found.keyboard:
+                problems.append("%s: End in the opened list did not bring its last row into view" % tag)
+            shot_list = os.path.join(out, "%s_screen-list-end.png" % tag)
+            subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (lw, lh, lx, ly), shot_list],
+                           check=True)
+        # Esc: closed as it was, the keyboard on the box.
+        found.event_generate("<Escape>")
+        app.root.update()
+        if select.droplist is not None or found.winfo_exists():
+            problems.append("%s: Esc did not close the opened list" % tag)
+        if select.current() != before:
+            problems.append("%s: Esc changed the frame limit" % tag)
+        if app.root.focus_get() is not select:
+            problems.append("%s: after Esc the keyboard is on %r, not the drop-down" % (tag, app.root.focus_get()))
+        # Down then Enter by the keyboard: the next row chosen, said as a choice; then back as it was.
+        select.event_generate("<Down>")
+        wait_out(app.root, 0.2)
+        if select.droplist is None:
+            problems.append("%s: Down on the box opened no list" % tag)
+        else:
+            select.droplist.event_generate("<Down>")
+            select.droplist.event_generate("<Return>")
+            app.root.update()
+            if select.current() != min(before + 1, len(select.options) - 1):
+                problems.append("%s: Down and Enter in the list chose row %d, not %d" % (tag, select.current(),
+                                                                                     before + 1))
+            select.set_value(select.options[before][0])
+            select.event_generate("<<ComboboxSelected>>")
+            app.root.update()
+        # Near the screen's foot: the list opens over its box, inside the screen.
+        place = app.root.geometry()
+        rx, ry, rw, rh = geometry(str(app.root))
+        offset = select.winfo_rooty() - ry
+        app.root.geometry("+%d+%d" % (rx, screen[1] - offset - ch - app.ui.px(20)))
+        wait_out(app.root, 0.3)
+        select.event_generate("<ButtonPress-1>", x=5, y=5)
+        wait_out(app.root, 0.3)
+        found = select.droplist
+        if found is None:
+            problems.append("%s: no list opened near the screen's foot" % tag)
+        else:
+            lx, ly, lw, lh = geometry(str(found))
+            if ly + lh > screen[1] or ly < 0 or not found.opened_above:
+                problems.append("%s: near the screen's foot the list reaches %d px of %d (over its box: %s)" % (
+                    tag, ly + lh, screen[1], found.opened_above))
+            found.close()
+        app.root.geometry(place)
+        wait_out(app.root, 0.3)
     finally:
-        tk.call("ttk::combobox::Unpost", str(select))
+        if select.droplist is not None:
+            select.droplist.close()
         app.root.update()
 
 
@@ -651,7 +744,8 @@ def counter_check(app, problems, tag):
         return None
 
     def position_shown():
-        return any(isinstance(c, tk.Label) and c.cget("text") == w("screen.counter.position") for c in widgets_of(area.inner))
+        return any(isinstance(c, tk.Label) and c.cget("text") == w("screen.counter.position") and c.winfo_ismapped()
+                   for c in widgets_of(area.inner))
 
     corner = app.state.values["fps_position"]
     for on in (not (app.state.values["show_fps"] == "on"), app.state.values["show_fps"] == "on"):
@@ -682,7 +776,8 @@ def keys_fit(app, name, problems):
     boxes = [x for x in widgets_of(app.body.inner) if isinstance(x, widgets.KeyBox) and x.winfo_ismapped()]
     if card is None or not boxes:
         return
-    table = boxes[0].master.master
+    # A box, its lane, its mode's block, then the table of the blocks.
+    table = boxes[0].master.master.master
     if table.winfo_reqwidth() > table.winfo_width() + 1:
         problems.append("%s: the keys' table is %d px wide where it needs %d" % (name, table.winfo_width(),
                                                                                 table.winfo_reqwidth()))
@@ -721,7 +816,8 @@ def keys_check(app, out, tag, problems):
     def line():
         """The line under the table: the last thing its card's body holds."""
         found = boxes()
-        return found[0].master.master.master.pack_slaves()[-1] if found else None
+        # A box, its lane, its mode's block, the table, then what holds the table and the line under it.
+        return found[0].master.master.master.master.pack_slaves()[-1] if found else None
 
     def press(target, code, keysym):
         """A key pressed with the keyboard on `target`, as the virtual screen sends it."""
@@ -746,19 +842,19 @@ def keys_check(app, out, tag, problems):
     if len(boxes()) != 18:
         problems.append("%s: the keys card has %d boxes, not 18 (9 lanes, each a key and an empty box)" % (tag, len(boxes())))
         return
-    table = boxes()[0].master.master
-    for row in range(1, 5):
-        middles = [b.winfo_rooty() + b.winfo_height() / 2.0 for b in boxes() if int(b.master.grid_info()["row"]) == row]
-        number = table.grid_slaves(row=row, column=0)
-        middles += [n.winfo_rooty() + n.winfo_height() / 2.0 for n in number]
-        if max(middles) - min(middles) > 1:
-            problems.append("%s: lane %d's boxes and number have middles at %r" % (tag, row, middles))
-    for column in range(1, 4):
-        starts = {b.winfo_rootx() for b in boxes() if int(b.master.grid_info()["column"]) == column
-                  and b.odq_where[2] == 0}
+    # Each mode's block: each lane's boxes and its number on one middle, the mode's first boxes from one line.
+    for name in choices.LANES:
+        mine = [b for b in boxes() if b.odq_where[0] == name]
+        block = mine[0].master.master
+        for lane in range(choices.LANES[name]):
+            middles = [b.winfo_rooty() + b.winfo_height() / 2.0 for b in mine if b.odq_where[1] == lane]
+            middles += [n.winfo_rooty() + n.winfo_height() / 2.0 for n in block.grid_slaves(row=lane + 1, column=0)]
+            if max(middles) - min(middles) > 1:
+                problems.append("%s: %s lane %d's boxes and number have middles at %r" % (tag, choices.mode(name),
+                                                                                          lane + 1, middles))
+        starts = {b.winfo_rootx() for b in mine if b.odq_where[2] == 0}
         if len(starts) != 1:
-            problems.append("%s: the column of %s starts at %r" % (tag, choices.mode(list(choices.LANES)[column - 1]),
-                                                                 sorted(starts)))
+            problems.append("%s: the column of %s starts at %r" % (tag, choices.mode(name), sorted(starts)))
     said(hint, theme.MUTED, "at first")
     # ---- a box clicked waits for a key.
     target = box("keys_3line", 0, 0)
@@ -1069,7 +1165,7 @@ def dialogs_check(app, out, tag, problems):
         app.root.geometry("960x640")
         wait_out(app.root, 0.6)
         shot(app.root, out, "%s_dialog-forget-960" % tag)
-        problems.extend("%s_dialog-forget-960: %s" % (tag, p) for p in dialog.layout_problems())
+        problems.extend(dialog_problems(dialog, "%s_dialog-forget-960" % tag))
         if dialog.size != (app.root.winfo_width(), app.root.winfo_height()):
             problems.append("%s: the dialog was not drawn again after a resize" % tag)
     answer = through_dialog(app, out, "%s_dialog-forget-click" % tag, forget[0].press,
@@ -1099,7 +1195,7 @@ def dialogs_check(app, out, tag, problems):
                             w("about.updating.detail"), progress=True)
     wait_out(app.root, 0.6)
     shot(app.root, out, "%s_dialog-updating" % tag)
-    problems.extend("%s_dialog-updating: %s" % (tag, p) for p in dialog.layout_problems())
+    problems.extend(dialog_problems(dialog, "%s_dialog-updating" % tag))
     dialog.canvas.event_generate("<Escape>")
     wait_out(app.root, 0.1)
     if dialog.closed:
@@ -1376,7 +1472,7 @@ def next_dialog(app, out, name, problems, want, answer, seconds=5.0):
         seen["dialog"] = dialog
         wait_out(app.root, 0.4)
         shot(app.root, out, name)
-        problems.extend("%s: %s" % (name, p) for p in dialog.layout_problems())
+        problems.extend(dialog_problems(dialog, name))
         answer(dialog)
 
     app.root.after(100, look)
@@ -1430,7 +1526,7 @@ def maintenance_check(app, out, tag, problems):
         dialog = dialogs.Dialog(app.root, app.ui, "info", w(key), w(key), detail=detail, progress=True)
         wait_out(app.root, 0.6)
         shot(app.root, out, "%s_dialog-%s" % (tag, key.replace(".", "-")))
-        problems.extend("%s_dialog-%s: %s" % (tag, key, p) for p in dialog.layout_problems())
+        problems.extend(dialog_problems(dialog, "%s_dialog-%s" % (tag, key)))
         dialog.close(None)
     # Repair with a file of the launcher missing: put back, and said to need a restart. The page at its foot first, where
     # the tools are: the ready check that comes back after the repair leaves it there.
@@ -1476,7 +1572,7 @@ def stopped_check(out, tag, lang, problems):
                                   language=lang)
     wait_out(root, 1.0)
     shot(root, out, "%s_stopped" % tag)
-    problems.extend("%s_stopped: %s" % (tag, p) for p in dialog.layout_problems())
+    problems.extend(dialog_problems(dialog, "%s_stopped" % tag))
     dialog.canvas.event_generate("<Return>")
     root.update()
     if not dialog.closed or dialog.result != "close":
@@ -1492,7 +1588,7 @@ def standalone_check(out, tag, lang, problems):
     root, dialog = dialogs.window(*main.cannot_start_dialog(error, lang), language=lang)
     wait_out(root, 1.0)
     shot(root, out, "%s_cannot-start" % tag)
-    problems.extend("%s_cannot-start: %s" % (tag, p) for p in dialog.layout_problems())
+    problems.extend(dialog_problems(dialog, "%s_cannot-start" % tag))
     dialog.canvas.event_generate("<Escape>")
     root.update()
     if not dialog.closed or dialog.result != "close":
@@ -1573,7 +1669,7 @@ def installer_check(out, tag, lang, problems):
         inst = installer.Installer()
         run_until(inst, 0.6)
         shot(inst.root, out, "%s_setup-%s" % (tag, name))
-        problems.extend("%s_setup-%s: %s" % (tag, name, p) for p in inst.dialog.layout_problems())
+        problems.extend(dialog_problems(inst.dialog, "%s_setup-%s" % (tag, name)))
         inst.dialog.canvas.event_generate("<Escape>")
         run_until(inst, 0.3)
     # Install from a site's installer: the work under way, then the end, the server handed over, the launcher started.
@@ -1585,7 +1681,7 @@ def installer_check(out, tag, lang, problems):
     inst.dialog.canvas.event_generate("<Return>")
     run_until(inst, 0.5)
     shot(inst.root, out, "%s_setup-working" % tag)
-    problems.extend("%s_setup-working: %s" % (tag, p) for p in inst.dialog.layout_problems())
+    problems.extend(dialog_problems(inst.dialog, "%s_setup-working" % tag))
     run_until(inst, 2.0, until=lambda: inst.process.poll() is not None)
     run_until(inst, 0.4)
     shot(inst.root, out, "%s_setup-done" % tag)
@@ -1605,7 +1701,7 @@ def installer_check(out, tag, lang, problems):
     run_until(inst, 2.5, until=lambda: inst.process is not None and inst.process.poll() is not None)
     run_until(inst, 0.6)
     shot(inst.root, out, "%s_setup-failed" % tag)
-    problems.extend("%s_setup-failed: %s" % (tag, p) for p in inst.dialog.layout_problems())
+    problems.extend(dialog_problems(inst.dialog, "%s_setup-failed" % tag))
     # The full disk said in the installer's language, then where the log is; Velopack's own words only in the logs.
     if not (inst.dialog.detail or "").startswith(w("fault.disk_full") + "\n") or "57.59" in inst.dialog.detail:
         problems.append("%s: the failure did not say the full disk plainly: %r" % (tag, inst.dialog.detail))
@@ -1616,7 +1712,7 @@ def installer_check(out, tag, lang, problems):
     inst = installer.Installer()
     run_until(inst, 0.5)
     shot(inst.root, out, "%s_setup-game-running" % tag)
-    problems.extend("%s_setup-game-running: %s" % (tag, p) for p in inst.dialog.layout_problems())
+    problems.extend(dialog_problems(inst.dialog, "%s_setup-game-running" % tag))
     if inst.dialog.message != w("setup.game"):
         problems.append("%s: the installer did not wait for the game: %r" % (tag, inst.dialog.message))
     inst.root.destroy()

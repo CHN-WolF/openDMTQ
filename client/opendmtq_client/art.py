@@ -565,13 +565,13 @@ def slider_track(width, height, fraction, colour, scale=1.0, bg=theme.PANEL, ori
 # A field's edges, as a recess in the card: dark along its top and left, catching the light along its foot and right;
 # brighter edges under the pointer, the accent all round while it is typed in (the site's .input:focus).
 FIELD_EDGES = {"normal": ("#06080b", "#3d4651"), "hover": ("#06080b", "#55606c"), "focus": (theme.OK, theme.OK),
-               "disabled": ("#0b0e12", "#272e36")}
+               "disabled": ("#0b0e12", "#272e36"), "error": (theme.BAD, theme.BAD)}
 
 
 def field_face(width, height, state="normal", scale=1.0, bg=theme.PANEL):
     """A text field's (or a drop-down's) face: the site's dark field let into its card, one pixel of edge round it
-    (FIELD_EDGES), darker at its top, with a soft shadow inside its top and left edges. `state`: normal, hover, focus or
-    disabled."""
+    (FIELD_EDGES), darker at its top, with a soft shadow inside its top and left edges. `state`: normal, hover, focus,
+    disabled, or error (what was typed there was refused: the error's colour all round)."""
     k = SS
     w, h = width * k, height * k
     # The well in the field's own colour (the entry's words sit on the same colour in its middle), its shadow inside

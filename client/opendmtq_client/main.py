@@ -38,7 +38,7 @@ import os
 import sys
 import threading
 
-from opendmtq_client import __version__, actions, apps, dpi, i18n, player, preset
+from opendmtq_client import __version__, actions, apps, console, dpi, i18n, player, preset
 from opendmtq_client import server as srv
 from opendmtq_client import state as st
 from opendmtq_client import values as choices
@@ -157,13 +157,46 @@ def _single_instance():
     return False
 
 
-def _say(text, error=False):
-    """Print for the console copy; the window copy has no console, so everything also goes to the log."""
+def _say(text, error=False, shown=None):
+    """Print for the console copy; the window copy has no console, so everything also goes to the log. `shown` is the
+    same words as the console shows them (console.py's colours and columns), when they differ from the log's."""
     stream = sys.stderr if error else sys.stdout
     if stream is not None:
+        # In a terminal that shows colours, the console's look (an error in the problems' red); anywhere else (a pipe, a
+        # file, a script reading it) the log's words, which stay the same from one version to the next.
+        designed = console.colour_on(stream)
+        out = (shown if shown is not None else console.paint(text, "bad", stream=stream) if error else text) \
+            if designed else text
         # Flushed at once: --update hands the process to Velopack, which ends it without Python's own exit.
-        print(text, file=stream, flush=True)
+        print(out, file=stream, flush=True)
     (log.error if error else log.info)(text)
+
+
+def _show(text):
+    """Print what only a terminal's look has (a title, a part's name, a blank line): not for the log, nor a pipe."""
+    if sys.stdout is not None and console.colour_on():
+        print(text, flush=True)
+
+
+def _leave_own_console():
+    """Close the console that Windows opened for this program alone (no other program shares it: a double click, not a
+    terminal it was typed in); what would be printed goes to the log, as for the window copy. True when it went."""
+    if sys.platform != "win32" or sys.stdout is None:
+        return False
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        processes = (ctypes.c_uint32 * 4)()
+        # The programs sharing this console: one (this one) when Windows made it for this start.
+        if kernel32.GetConsoleProcessList(processes, 4) != 1:
+            return False
+        kernel32.FreeConsole()
+    except (AttributeError, OSError):
+        return False
+    # Nothing left to print to: the window copy's ways (dialogs, the log) from now on.
+    sys.stdout = sys.stderr = None
+    log.info("the console copy started with no job: its console closed, the window opens")
+    return True
 
 
 def _windowed():
@@ -366,37 +399,56 @@ def _uninstall(delete_data, yes):
 
 def _status(state):
     """--status: where PLAY plays, what it has, the ready check, and the launcher with a newer one on offer (the window's
-    look at its start, with the same time limit); 0 when PLAY can go."""
+    look at its start, with the same time limit); 0 when PLAY can go. Laid out in parts, each under its name, the
+    names and values in columns (console.py); the log has each line as words."""
     from opendmtq_client import updates
     # Started first, so that it asks the release feed while the server is asked: the two waits overlap.
     look = updates.Look()
+    this = updates.shown_version()
+    _show(console.title(this))
     server = state.server()
+    pairs = []
     if server is None:
-        _say("server: none (connect with --server URL)")
+        pairs.append(("server", "none (connect with --server URL)", "warn"))
     else:
         # Its name and address, or its address once when it has no name of its own (as the ready check's line says it).
-        _say("server: %s" % st.label(server))
+        pairs.append(("server", st.label(server)))
         signed = state.signed_in(server)
-        _say("signed in: %s" % (server["account"] if signed else "no" + (" (%s, ended)" % server["account"]
-                                                                          if server.get("account") else "")))
+        pairs.append(("signed in", server["account"] if signed else "no" + (
+            " (%s, ended)" % server["account"] if server.get("account") else ""), None if signed else "warn"))
         have = apps.local(server["url"])
-        _say("app: %s" % ("%s (%s)" % (have["file"], have.get("built_at") or "?") if have else "none on this PC"))
-    _say("settings: " + ", ".join("%s=%s" % (k, state.values[k]) for k in choices.NAMES))
-    _say("language: %s%s" % (state.language, "" if state.picked_language else " (Windows' display language)"))
-    # Where the logs are, as Help's Open buttons show them.
-    for name, path in _log_paths(state).items():
-        _say("%s log: %s" % (name, path or "none yet (no app on this PC)"))
+        pairs.append(("app", "%s (%s)" % (have["file"], have.get("built_at") or "?") if have else "none on this PC",
+                      None if have else "warn"))
+    pairs.append(("language", "%s%s" % (state.language, "" if state.picked_language else " (Windows' display language)")))
+    _part("PLAY", pairs)
     # The server asked as the window's ready check asks it: one that does not answer is said, and does not stop PLAY.
     checks = actions.readiness(state, reached=actions.reach(state))
+    _show(console.heading("Ready check"))
+    width = max(len(c.key) for c in checks) if checks else 0
     for c in checks:
-        mark = "ok  " if c.ok else ("play" if c.play_fixes else "todo" if c.blocks else "warn")
-        _say("  [%s] %s: %s" % (mark, c.key, c.detail))
+        kind = "ok" if c.ok else ("play" if c.play_fixes else "todo" if c.blocks else "warn")
+        _say("  [%s] %s: %s" % (console.MARKS[kind][0].ljust(4), c.key, c.detail),
+             shown="  %s %s  %s" % (console.mark(kind), console.paint(c.key.ljust(width), "muted"), c.detail))
+    _show(console.heading("Settings"))
+    items = ["%s=%s" % (k, state.values[k]) for k in choices.NAMES]
+    _say("settings: " + ", ".join(items), shown=console.words(items))
+    # Where the logs are, as Help's Open buttons show them.
+    _part("Logs", [("%s log" % name, path or "none yet (no app on this PC)") for name, path in _log_paths(state).items()])
     # The launcher's version, and a newer one when the look found it (nothing more without a network or an answer in
     # time); it changes nothing of the exit code, which is about PLAY.
     newer = look.newer()
-    this = updates.shown_version()
-    _say("launcher: %s" % this + ("; OpenDMTQ %s is available (--update)" % newer.version if newer else ""))
+    offer = "; OpenDMTQ %s is available (--update)" % newer.version if newer else ""
+    _show("")
+    _say("launcher: %s%s" % (this, offer), shown=console.rows([("launcher", this + offer, "ok" if newer else None)]))
     return 0 if actions.can_play(checks) else 1
+
+
+def _part(name, pairs):
+    """A part of what --status prints: its name, then its names and values in two columns; each line in the log as
+    "name: value"."""
+    _show(console.heading(name))
+    for pair in pairs:
+        _say("%s: %s" % (pair[0], pair[1]), shown=console.rows([pair], indent=2))
 
 
 def _log_paths(state):
@@ -414,8 +466,15 @@ def _password(prompt):
 
 
 def _say_downloading(done, total):
-    """How far a download is, in the window's numbers (i18n.mb), for --app and --play."""
-    _say("  downloading: %s of %s MB" % (i18n.mb(done), i18n.mb(total)))
+    """How far a download is, in the window's numbers (i18n.mb), for --app and --play: in a terminal one bar that
+    moves in place, its last state left on its line when it is done; elsewhere a line each time, as the log has them."""
+    words = "  downloading: %s of %s MB" % (i18n.mb(done), i18n.mb(total))
+    if sys.stdout is not None and console.colour_on():
+        line = console.bar(done, total, "  Downloading the app") + "  %s of %s MB" % (i18n.mb(done), i18n.mb(total))
+        print("\r" + line, end="\n" if total and done >= total else "", flush=True)
+        log.info(words)
+        return
+    _say(words)
 
 
 def _get_app(state):
@@ -468,41 +527,55 @@ def _play(state):
 
 
 def parse(argv):
-    p = argparse.ArgumentParser(prog="OpenDMTQ", description="The OpenDMTQ launcher for PCs.")
+    p = argparse.ArgumentParser(
+        prog="OpenDMTQ", formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="OpenDMTQ %s, the launcher for PCs. Without a job, the launcher's window opens; each job here does "
+                    "what a button of the window does." % __version__,
+        epilog="Several jobs in one command run in order: --server, --sign-in, --app, then --play.")
     p.add_argument("--version", action="version", version="OpenDMTQ " + __version__)
-    p.add_argument("--status", action="store_true",
-                   help="print the server, the sign-in, the app, the ready check and a newer launcher on offer")
-    p.add_argument("--server", metavar="URL", help="connect to the server at this address and play on it")
-    p.add_argument("--sign-in", metavar="ID", help="sign in to the server (the password from standard input)")
-    p.add_argument("--sign-out", action="store_true", help="forget the sign-in")
-    p.add_argument("--app", action="store_true", help="download the server's app, or a newer one")
-    p.add_argument("--set", metavar="NAME=VALUE", action="append", default=[],
-                   help="change a PC setting: " + ", ".join(choices.NAMES) + " (show_fps=on|off; fps_position=top_left|"
-                        "top_right|bottom_left|bottom_right, the counter's corner, bottom_right unless chosen; "
-                        "keyboard=on|off, keyboard play; keys_2line=\"F J\", keys_3line=\"D F J\", keys_4line=\"D F J K\": "
-                        "the lanes from the top separated by spaces, a lane's keys one or two joined by /, each named as "
-                        "the US layout's key at its place)")
-    p.add_argument("--audio-devices", action="store_true", help="list the sound devices the player can play on")
-    p.add_argument("--language", choices=st.LANGUAGES + ("system",),
-                   help="the launcher's language (system: Windows' display language)")
-    p.add_argument("--guide", action="store_true", help="open the first-start guide again at the next start")
-    p.add_argument("--skip-guide", action="store_true",
-                   help="open the window on its pages next time, the first-start guide done (as the guide's Skip)")
-    p.add_argument("--servers", action="store_true",
-                   help="list the servers this launcher knows, the one PLAY plays on marked *")
-    p.add_argument("--open-log", choices=("player", "launcher"), help="show the player's or the launcher's log")
-    p.add_argument("--play", action="store_true", help="get ready and start the game")
-    p.add_argument("--forget", metavar="URL", help="forget a server, its sign-in and its app")
-    p.add_argument("--reset", action="store_true", help="forget the servers, the sign-ins, the apps and the settings")
-    p.add_argument("--update", action="store_true", help="look for a newer launcher and install it")
-    p.add_argument("--repair", action="store_true", help="put back the program's files that are missing or changed")
-    p.add_argument("--clear-game-data", action="store_true",
-                   help="delete the game's data on this PC (this PC stays the same player)")
-    p.add_argument("--uninstall", action="store_true", help="uninstall OpenDMTQ from this PC")
-    p.add_argument("--delete-data", action="store_true",
-                   help="with --uninstall: delete the settings, sign-ins and game data on this PC too")
-    p.add_argument("--yes", action="store_true",
-                   help="do not ask before --forget, --reset, --update, --clear-game-data or --uninstall")
+    # The jobs in parts, as the window's pages have them: what PLAY needs, the PC's settings, then help and upkeep.
+    play = p.add_argument_group("play")
+    play.add_argument("--status", action="store_true",
+                      help="print the server, the sign-in, the app, the ready check and a newer launcher on offer")
+    play.add_argument("--play", action="store_true", help="get ready and start the game")
+    online = p.add_argument_group("server and sign-in")
+    online.add_argument("--server", metavar="URL", help="connect to the server at this address and play on it")
+    online.add_argument("--sign-in", metavar="ID", help="sign in to the server (the password from standard input)")
+    online.add_argument("--sign-out", action="store_true", help="forget the sign-in")
+    online.add_argument("--app", action="store_true", help="download the server's app, or a newer one")
+    online.add_argument("--servers", action="store_true",
+                        help="list the servers this launcher knows, the one PLAY plays on marked *")
+    online.add_argument("--forget", metavar="URL", help="forget a server, its sign-in and its app")
+    settings = p.add_argument_group("settings")
+    settings.add_argument("--set", metavar="NAME=VALUE", action="append", default=[],
+                          help="change a PC setting: " + ", ".join(choices.NAMES) + " (show_fps=on|off; "
+                               "fps_position=top_left|top_right|bottom_left|bottom_right, the counter's corner, "
+                               "bottom_right unless chosen; fps=auto|unlimited|30 to 1000; volume, music_volume, "
+                               "effects_volume=0 to 100; eq=flat|bass|vocal|treble|custom, eq_low, eq_mid, "
+                               "eq_high=-12 to 12 dB, a band set alone making the equaliser custom; keyboard=on|off, "
+                               "keyboard play; keys_2line=\"F J\", keys_3line=\"D F J\", keys_4line=\"D F J K\": the lanes "
+                               "from the top separated by spaces, a lane's keys one or two joined by /, each named as "
+                               "the US layout's key at its place)")
+    settings.add_argument("--audio-devices", action="store_true", help="list the sound devices the player can play on")
+    settings.add_argument("--language", choices=st.LANGUAGES + ("system",),
+                          help="the launcher's language (system: Windows' display language)")
+    settings.add_argument("--guide", action="store_true", help="open the first-start guide again at the next start")
+    settings.add_argument("--skip-guide", action="store_true",
+                          help="open the window on its pages next time, the first-start guide done (as the guide's "
+                               "Skip)")
+    upkeep = p.add_argument_group("help and upkeep")
+    upkeep.add_argument("--open-log", choices=("player", "launcher"), help="show the player's or the launcher's log")
+    upkeep.add_argument("--update", action="store_true", help="look for a newer launcher and install it")
+    upkeep.add_argument("--repair", action="store_true", help="put back the program's files that are missing or changed")
+    upkeep.add_argument("--clear-game-data", action="store_true",
+                        help="delete the game's data on this PC (this PC stays the same player)")
+    upkeep.add_argument("--reset", action="store_true",
+                        help="forget the servers, the sign-ins, the apps and the settings")
+    upkeep.add_argument("--uninstall", action="store_true", help="uninstall OpenDMTQ from this PC")
+    upkeep.add_argument("--delete-data", action="store_true",
+                        help="with --uninstall: delete the settings, sign-ins and game data on this PC too")
+    upkeep.add_argument("--yes", action="store_true",
+                        help="do not ask before --forget, --reset, --update, --clear-game-data or --uninstall")
     # Velopack passes its own --veloapp-* arguments (each with its value); they are handled before this parser runs and
     # are let through here. Anything else unknown is a mistake, said as argparse says it (exit code 2).
     args, unknown = p.parse_known_args(argv)
@@ -576,6 +649,9 @@ def main(argv=None):
         # Before the settings are read: none of this needs them, and after --delete-data a save would bring them back.
         return _maintain(args)
     if not jobs:
+        # The console copy started with no job (a double click on OpenDMTQ-cmd.exe): the window opens as from the
+        # shortcut, and the console Windows opened for it goes, never a black box beside the launcher.
+        _leave_own_console()
         # The window copy: sharp at any scaling and only once, settled before any window (a dialog too) opens.
         dpi.aware()
         if not _single_instance():
@@ -674,7 +750,10 @@ def _servers(state):
         _say("No servers yet (connect with --server URL).")
         return
     for server in sorted(state.servers, key=lambda s: s["url"] != state.current):
-        _say("%s %s" % ("*" if server["url"] == state.current else " ", st.label(server)))
+        current = server["url"] == state.current
+        # The one PLAY plays on marked, in lime in a terminal.
+        _say("%s %s" % ("*" if current else " ", st.label(server)),
+             shown="%s %s" % (console.paint("*", "ok") if current else " ", console.paint(st.label(server), bold=current)))
 
 
 def _run(state, args, jobs):
@@ -761,7 +840,11 @@ def _run(state, args, jobs):
         if not devices:
             _say("The player listed no sound devices (the game plays through Windows' default output).")
         for d in devices:
-            _say("%s%s\n    %s" % (d["name"], "  (default)" if d["default"] else "", d["id"]))
+            # Its name (the default one marked in lime), its id under it in grey, as --set audio_device= takes it.
+            _say("%s%s\n    %s" % (d["name"], "  (default)" if d["default"] else "", d["id"]),
+                 shown="%s%s\n    %s" % (console.paint(d["name"], bold=True),
+                                          console.paint("  (default)", "ok") if d["default"] else "",
+                                          console.paint(d["id"], "muted")))
     if args.open_log:
         path = _log_paths(state)[args.open_log]
         if path is None:

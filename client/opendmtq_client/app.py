@@ -1,4 +1,5 @@
-"""The launcher window: the menu column, the page header, the page, and the bottom bar with PLAY.
+"""The launcher window: the menu column down its left (the wordmark and the version, the pages, and at its foot the
+status and PLAY), and the page beside it.
 
 Slow work (asking the server, downloading its app, listing the sound devices, update checks) runs on worker threads;
 they hand results back through a queue the window empties every 50 ms, because Tk may only be touched from the thread
@@ -22,10 +23,11 @@ NAV = ("play", "screen", "sound", "controls", "online", "help", "about")
 # The pages that show what a game changes (the last game, the player's log, the app PLAY got first): drawn again when a
 # game ends while one of them is on show. The others show settings, which a game leaves as they were.
 GAME_PAGES = ("play", "help", "online")
-# The room at the window's left and right ends (logical pixels), the same in the guide.
-EDGE = 28
-# The bottom bar's height inside its padding: PLAY's slab and its keyboard ring, on every page and every guide step.
-BAR_HEIGHT = 54
+# The room under the column's foot (PLAY, the guide's buttons) to the window's edge, and how far a lamp sits down to stand
+# on the status's first line (logical pixels).
+FOOT_UNDER, STATUS_LAMP_DROP = 20, 3
+# How far down the page its lit top reaches before it has faded (logical pixels): the site's top light.
+PAGE_LIGHT = 324
 # How often the window looks for a server an installer left while it is open, in turns of the 50 ms task pump (2 s).
 PRESET_EVERY = 40
 # How long the server's last answer to the ready check stands (seconds): the PLAY and Help pages ask for a check each
@@ -147,64 +149,67 @@ class LauncherApp:
 
     def _build_main(self):
         ui, px = self.ui, self.ui.px
-        # ---- the header bar: the wordmark and the version, then the menu (as the site's top bar)
+        # ---- the column down the left: the wordmark and the version, the menu, and at its foot the status and PLAY
         # Each name in the menu as its page's title (pages.TITLES).
         from opendmtq_client import pages
-        self.header = self.make_header(self.root, nav=[(key, pages.TITLES[key]) for key in NAV], on_nav=self.nav_go)
-        # ---- the strip along the foot: what is going on at the left, PLAY at the right
-        bottom = tk.Frame(self.root, bg=theme.STRIP)
-        bottom.pack(side="bottom", fill="x")
-        # One height whatever it holds, as the guide's bar.
-        bar = tk.Frame(bottom, bg=theme.STRIP, height=px(BAR_HEIGHT))
-        bar.pack(fill="x", padx=px(EDGE), pady=px(12))
-        bar.pack_propagate(False)
-        # PLAY: the lime slab on the bar's own colour, the same as the guide's last step shows.
-        self.play_button = widgets.PlaySlab(bar, ui, self.words("bottom.play"), self.play)
-        self.play_button.pack(side="right")
-        # Lit or not as things stand now, before the page under it is drawn: a page's main button is lime only while
-        # PLAY is not (pages.main_button reads it).
-        self._paint_play()
-        # The status's lamp in its tone's colour, then its words.
+        self.rail = self.make_rail(self.root, nav=[(key, pages.TITLES[key]) for key in NAV], on_nav=self.nav_go)
+        # ---- the page: its title and its cards over the site's field (widgets.ScrollArea)
+        self.body = self.make_page(self.root)
+        # ---- the column's foot, made after the page so that Tab goes the menu, the page, then the foot
+        foot = self.make_foot(self.rail)
+        # The status: its lamp in its tone's colour and its words, a link under them when there is something to open
+        # (the player's log after a crash); then PLAY under it all.
         from PIL import ImageTk
         self._status_lamps = {tone: art.lamp(colour, self.scale, bg=theme.STRIP) for tone, colour in
                               (("normal", theme.FAINT), ("ok", theme.OK), ("warn", theme.WARN), ("bad", theme.BAD))}
         self._status_images = {tone: ImageTk.PhotoImage(p, master=self.root) for tone, p in self._status_lamps.items()}
-        self.status_glyph = tk.Label(bar, image=self._status_images["normal"], bg=theme.STRIP, bd=0)
-        self.status_glyph.pack(side="left")
-        self.status_label = tk.Label(bar, text="", font=self.fonts.body, fg=theme.MUTED, bg=theme.STRIP,
-                                     justify="left", anchor="w", wraplength=px(560))
-        self.status_label.pack(side="left", padx=(px(4), px(12)))
-        # A link after the words when there is something to open (the player's log after a crash): the words and the
-        # chevron come with the message (_paint_status).
-        self.status_link = widgets.link(bar, ui, "", lambda: self.status_link.odq_action and self.status_link.odq_action(),
-                                        fg=theme.TEXT, bg=theme.STRIP, chevron=False)
+        status = tk.Frame(foot, bg=theme.STRIP)
+        status.pack(side="top", fill="x")
+        self.status_glyph = tk.Label(status, image=self._status_images["normal"], bg=theme.STRIP, bd=0)
+        self.status_glyph.pack(side="left", anchor="n", pady=(px(STATUS_LAMP_DROP), 0))
+        lamp_width = self._status_lamps["normal"].width
+        self.status_label = tk.Label(status, text="", font=self.fonts.small, fg=theme.MUTED, bg=theme.STRIP,
+                                     justify="left", anchor="w",
+                                     wraplength=self.rail.inner_width() - lamp_width - px(6))
+        self.status_label.pack(side="left", fill="x", padx=(px(6), 0))
+        # The link under the words, in the status's own column, when the message has one (_paint_status).
+        self.status_link = widgets.link(foot, ui, "", lambda: self.status_link.odq_action and self.status_link.odq_action(),
+                                        fg=theme.TEXT, bg=theme.STRIP, font=self.fonts.small, chevron=False)
         self.status_link.odq_action = None
-        # ---- the page: its title and its cards over the site's field (widgets.ScrollArea)
-        self.body = self.make_page(self.root, self.header)
-        # Tab goes as the window reads: the menu, the page, then the bar along the foot, its link before PLAY. Tk's Tab
-        # follows each parent's stacking order, the order its children were made in until one is raised.
-        # (Misc's own raise: a canvas's raise moves its items instead.)
-        tk.Misc.tkraise(bottom)
-        tk.Misc.tkraise(self.play_button)
+        self.status_link_place = (lamp_width + px(6) - int(self.status_link.cget("highlightthickness")))
+        # PLAY: the lime slab on the column's own colour, as wide as the column holds, the same as the guide's last
+        # step shows.
+        self.play_button = widgets.PlaySlab(foot, ui, self.words("bottom.play"), self.play,
+                                            width=self.rail.inner_width())
+        self.play_button.pack(side="bottom", anchor="w", pady=(px(14), 0))
+        # Lit or not as things stand now, before the page under it is drawn: a page's main button is lime only while
+        # PLAY is not (pages.main_button reads it).
+        self._paint_play()
         self._paint_status()
 
-    def make_header(self, parent, nav=(), on_nav=None, link=None, steps=()):
-        """The bar across the window's top, as the site's (widgets.Header): the wordmark with PC after it and the
-        version beside it (art.brand), then the menu; the guide's has its steps under them instead."""
+    def make_rail(self, parent, nav=(), on_nav=None, steps=()):
+        """The column down the window's left (widgets.Rail): the wordmark with the version beside it (art.brand), then
+        the menu, or the guide's steps."""
         from opendmtq_client import updates
         # The version the Launcher page shows too: the installed one, else the code's (updates.shown_version).
-        header = widgets.Header(parent, self.ui, art.brand(self.scale, "v" + updates.shown_version()), nav=nav,
-                                on_nav=on_nav, link=link, steps=steps)
-        header.pack(side="top", fill="x")
-        return header
+        rail = widgets.Rail(parent, self.ui, art.brand(self.scale, "v" + updates.shown_version()), nav=nav,
+                            on_nav=on_nav, steps=steps)
+        rail.pack(side="left", fill="y")
+        return rail
 
-    def make_page(self, parent, header):
-        """The page area under a header: the page's backdrop goes on from where the header's ends, and the header turns
-        into the dark bar once the page has moved."""
-        page = widgets.ScrollArea(parent, self.ui, offset=int(header.cget("height")),
-                                  light=self.ui.px(widgets.Header.HEIGHT) + self.ui.px(widgets.Header.LIGHT),
-                                  on_moved=header.set_under)
-        page.pack(fill="both", expand=True)
+    def make_foot(self, rail):
+        """The column's foot (the status and PLAY, or the guide's Back and Next): a frame of the window's own, placed
+        over the column's foot, so that Tab reaches it after the page (Tk's Tab follows the order things were made in)."""
+        px = self.ui.px
+        foot = tk.Frame(self.root, bg=theme.STRIP)
+        foot.place(in_=rail, x=px(widgets.Rail.EDGE), rely=1.0, y=-px(FOOT_UNDER), anchor="sw",
+                   width=rail.inner_width())
+        return foot
+
+    def make_page(self, parent):
+        """The page area beside the column: the page's picture behind from its top, its title and its cards."""
+        page = widgets.ScrollArea(parent, self.ui, offset=0, light=self.ui.px(PAGE_LIGHT))
+        page.pack(side="left", fill="both", expand=True)
         return page
 
     def user_acted(self):
@@ -512,7 +517,7 @@ class LauncherApp:
         from opendmtq_client import pages
         self.page = page
         # The menu lights the page's name.
-        self.header.set_current(page)
+        self.rail.set_current(page)
         for child in self.body.inner.winfo_children():
             child.destroy()
         self.download_bar = None
@@ -784,13 +789,14 @@ class LauncherApp:
         self.status_glyph.configure(image=self._status_images[self.status_tone])
         self.status_glyph.odq_picture = self._status_lamps[self.status_tone]
         self.status_label.configure(text=self.status_text, fg=theme.TEXT if self.status_tone != "normal" else theme.MUTED)
-        # The link after the words: shown with an action, gone without one.
+        # The link under the words: shown with an action, gone without one.
         if self.status_action:
             message, function = self.status_action
             self.status_link.configure(text=self.words.say(message) + "  " + theme.ICON["chevron"])
             self.status_link.odq_action = function
             if not self.status_link.winfo_manager():
-                self.status_link.pack(side="left", after=self.status_label, padx=(0, self.ui.px(12)))
+                self.status_link.pack(side="top", anchor="w", padx=(self.status_link_place, 0),
+                                      pady=(self.ui.px(4), 0))
         elif self.status_link.winfo_manager():
             self.status_link.pack_forget()
 

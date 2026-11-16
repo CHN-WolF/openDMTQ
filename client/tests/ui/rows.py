@@ -56,34 +56,41 @@ def main():
     shots.settle(app)
     w = app.words
 
-    # ---- Online signed out: the address with Connect and Forget, the ID and the password with Sign in.
+    # ---- Online signed out: the address with Connect beside it; the ID and the password, each under its name, Sign in
+    # under them.
     app.state.forget_sign_in()
     app.nav_go("online")
     shots.settle(app)
-    rows = [items for items in rows_of(app.body).values() if any(isinstance(x, widgets.Field) for x in items)]
-    if len(rows) != 2:
-        problems.append("Online: %d rows with a field, not the address's and the sign-in's" % len(rows))
+    rows = [items for items in rows_of(app.body).values() if any(isinstance(x, widgets.Field) for x in items)
+            and any(isinstance(x, widgets.Button) for x in items)]
+    if len(rows) != 1:
+        problems.append("Online: %d rows with a field and a button, not the address's with Connect" % len(rows))
     for items in rows:
         tops = [x.winfo_rooty() for x in items]
         heights = [x.winfo_height() for x in items]
         middles = [top + height / 2.0 for top, height in zip(tops, heights)]
         if max(heights) - min(heights) > 1 or max(middles) - min(middles) > 1:
             problems.append("Online: a row's controls are %r tall with middles at %r" % (heights, middles))
-    # Each field starts where the words over it start (its label, in the grid cell above it).
-    for field in [x for items in rows for x in items if isinstance(x, widgets.Field)]:
-        info = field.grid_info()
-        above = [x for x in field.master.grid_slaves(row=int(info["row"]) - 1, column=int(info["column"]))
-                 if isinstance(x, tk.Label)]
-        if not above:
-            problems.append("Online: a field with no words over it")
+    # Each field starts where the words of its name over it start (the label packed just before it in its card).
+    fields = [x for x in shots.widgets_of(app.body.inner) if isinstance(x, widgets.Field) and x.winfo_ismapped()]
+    if len(fields) != 3:
+        problems.append("Online: %d fields, not the address, the ID and the password" % len(fields))
+    for field in fields:
+        holder = field
+        while not isinstance(holder.master.master, widgets.Card):
+            holder = holder.master
+        stack = [x for x in holder.master.pack_slaves() if x.winfo_ismapped()]
+        before = stack[stack.index(holder) - 1] if stack.index(holder) else None
+        if not isinstance(before, tk.Label) or not before.cget("text"):
+            problems.append("Online: a field with no name over it")
             continue
         # Where the label's words begin: past its own edge (border, padding, ring), as Tk draws them.
-        words = above[0]
+        words = before
         start = words.winfo_rootx() + sum(int(words.winfo_fpixels(str(words.cget(o))))
                                           for o in ("borderwidth", "padx", "highlightthickness"))
         if abs(field.winfo_rootx() - start) > 1:
-            problems.append("Online: a field starts at %d, its words %r at %d" % (field.winfo_rootx(),
-                                                                                 words.cget("text"), start))
+            problems.append("Online: a field starts at %d, its name %r at %d" % (field.winfo_rootx(),
+                                                                                words.cget("text"), start))
 
     # ---- The settings' controls of the Screen page (below 100 %, with every row), of the Sound page and of Help's
     # tools: what shows of each starts on one line (a row name longer than the names' column would push its control
