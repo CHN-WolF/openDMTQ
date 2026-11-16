@@ -7,7 +7,8 @@
 //   off-scale     a gap between two panels other than the page's own gap (--gap), or a gap no stylesheet asked for
 //                 (the spaces between words that inline boxes keep, a stray line)
 // A box is what a person sees as one: something with a background of its own, a border all round, an outer shadow, a
-// picture (a chart too: what has role="img" is one picture, its parts as close as the drawing needs), or a drawn control.
+// picture (a chart too: what has role="img", or a chart whose marks carry their words (data-tips), is one picture, its
+// parts as close as the drawing needs), or a drawn control.
 // Less than NEAR pixels between two boxes, or between a box and its box's edge, reads as touching.
 // Marks on an element: data-spacing-ok says why its room is as it is; decoration (aria-hidden) does not count.
 window.spacingAudit = function spacingAudit() {
@@ -48,8 +49,10 @@ window.spacingAudit = function spacingAudit() {
   // Less room than this between two drawn outlines reads as none: the smallest gap the pages draw between two boxes is
   // 6 px (chips in a row).
   const NEAR = 4;
-  // Part of a picture: a chart (role="img") is drawn as one figure.
-  const inPicture = el => !!el.parentElement && !!el.parentElement.closest('[role="img"]');
+  // A picture as a whole: a chart drawn as one (role="img"), or one whose marks each carry their words (data-tips, the
+  // marks focusable one by one). Its parts are drawn as one figure.
+  const PICTURE = '[role="img"], [data-tips]';
+  const inPicture = el => !!el.parentElement && !!el.parentElement.closest(PICTURE);
   // What a person sees as a box, and which of its edges are drawn: null for what is not one.
   const boxCache = new Map();
   const boxOf = el => {
@@ -67,7 +70,7 @@ window.spacingAudit = function spacingAudit() {
       // A picture, also one a box paints as its background or holds with no words (a jacket's frame): it may run to its
       // box's edge.
       // (Not a button or a link that shows an icon: that is a control, a box only when it is drawn as one.)
-      if (el.matches(MEDIA) || el.matches('[role="img"]') || (!inLetters && /url\(/.test(s.backgroundImage))
+      if (el.matches(MEDIA) || el.matches(PICTURE) || (!inLetters && /url\(/.test(s.backgroundImage))
         || (el.querySelector(MEDIA) && !el.textContent.trim() && !el.querySelector(CONTROL) && !el.matches(`${CONTROL}, a`))) found = { kind: 'media', sides: ALL };
       else if (el.matches(CONTROL) && (filled || sides.length)) found = { kind: 'control', sides: filled ? ALL : sides };
       else if (filled || sides.length === 4 || outerShadow(s)) found = { kind: 'box', sides: ALL };
@@ -172,7 +175,7 @@ window.spacingAudit = function spacingAudit() {
     if (!n.nodeValue.trim()) continue;
     const el = n.parentElement;
     // (A chart's own labels are part of its picture.)
-    if (!el || decoration(el) || !seen(el) || el.closest('svg, [role="img"]')) continue;
+    if (!el || decoration(el) || !seen(el) || el.closest(`svg, ${PICTURE}`)) continue;
     // The words without the spaces around them: a space before the next box is room, not letters.
     const v = n.nodeValue, first = v.search(/\S/), last = v.length - v.match(/\s*$/)[0].length;
     range.setStart(n, first);
