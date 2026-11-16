@@ -370,6 +370,36 @@ class HostPlayersLineTest(unittest.TestCase):
         self.assertNotIn("Windows PC", self.said())
 
 
+class HostPortsTest(unittest.TestCase):
+    """A host install's ports (host/opendmtq_host/settings.py): one for the server, the admin service's own elsewhere on
+    loopback, never the same (DEP-48)."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(ROOT, "host"))
+        from opendmtq_host import settings
+        cls.settings = settings
+
+    def test_a_new_install_takes_8791(self):
+        with mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": True):
+            self.assertEqual(self.settings.choose_port(), 8791)
+        with mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": port != 8791):
+            self.assertEqual(self.settings.choose_port(), 8792)
+
+    def test_the_admin_service_never_takes_the_servers_port(self):
+        # An install from before 0.11.0: the admin service on 8791, the server on 80. Moved to 8791 by hand later.
+        self.assertEqual(self.settings.admin_port({"PUBLIC_HOST": "192.168.0.10", "LISTEN_PORT": "80", "ADMIN_PORT": "8791"}), 8791)
+        moved = {"PUBLIC_HOST": "192.168.0.10:8791", "LISTEN_PORT": "8791", "ADMIN_PORT": "8791"}
+        self.assertNotEqual(self.settings.admin_port(moved), 8791)
+
+    def test_the_addresses_named_are_on_the_one_port(self):
+        lan = {"PUBLIC_HOST": "192.168.0.10:8791", "LISTEN_PORT": "8791", "ADMIN_PORT": "18791"}
+        self.assertEqual(self.settings.site_url(lan), "http://192.168.0.10:8791/")
+        self.assertEqual(self.settings.admin_url(lan), "http://192.168.0.10:8791/opendmtq/admin/")
+        exposed = {"PUBLIC_HOST": "game.example.com:8790", "LISTEN_PORT": "8790", "ADMIN_PORT": "18791"}
+        self.assertEqual(self.settings.admin_url(exposed), "http://localhost:8790/opendmtq/admin/")
+
+
 class HostAdminConfTest(unittest.TestCase):
     """The admin pages' part of a host install's Apache settings (host/opendmtq_host/apache.py): the API goes where the pages
     go, and nowhere they do not."""

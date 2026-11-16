@@ -21,8 +21,12 @@ def listen_port(values):
 
 
 def admin_port(values):
-    """The admin service's own port, on loopback, behind Apache: never an address anybody opens."""
-    return int(values.get("ADMIN_PORT") or ADMIN_PORT)
+    """The admin service's own port, on loopback, behind Apache: never an address anybody opens. Never the server's own
+    port: an install from before 0.11.0 has 8791 here, which the server may since have been moved to by hand."""
+    port = int(values.get("ADMIN_PORT") or ADMIN_PORT)
+    if port != listen_port(values):
+        return port
+    return ADMIN_PORT if ADMIN_PORT != port else ADMIN_PORT + 1
 
 
 def site_url(values):
