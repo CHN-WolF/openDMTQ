@@ -109,7 +109,7 @@ expect "the players' site answers on it" answers "http://127.0.0.1:$PORT/opendmt
 expect "the admin pages answer on that same port (DEP-47)" answers "http://127.0.0.1:$PORT/opendmtq/admin/login"
 expect "and the API" sh -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:$PORT/opendmtq/api/v1/status)\" = 401 ]"
 expect "the old admin port is closed" test "$(code "http://127.0.0.1:$OLD_ADMIN/opendmtq/admin/login")" = 000
-expect "up names the admin pages at the one address" grep -q "admin pages: http://$HOST/opendmtq/admin/" "$WORK/up.log"
+expect "up names the admin pages at the one address" grep -Eq "Admin pages +http://$HOST/opendmtq/admin/" "$WORK/up.log"
 expect "and never the old port" sh -c "! grep -q ':$OLD_ADMIN' '$WORK/up.log'"
 # From another computer, by the address phones use: sent to HTTPS while it works, as before.
 went=$(code -H "Host: $HOST" "http://127.0.0.1:$PORT/opendmtq/admin/login")

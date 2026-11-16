@@ -6,6 +6,54 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ## [Unreleased]
 
+### Added
+
+- A Server page on the admin pages for the server's whole life: its state and its one address; Restart and Stop the
+  server where the install can do them (the Windows bundle, Linux and macOS), with a page after a stop that says when the
+  server has stopped and when it runs again; Check and repair (the folders, the database's integrity, the owner's sign-in
+  for the players' site, the song list, the phone app, and the program's own files against the install's list of them);
+  the server's data part by part with its size, deleted part by part after a backup, once the word is typed; and
+  Uninstall, which removes the server from this computer (with the data kept or not). With Docker Compose and Kubernetes
+  the page names the commands. Each has its command, `repair`, `delete-data` and `uninstall`, and its API route.
+- The server's start window, `./opendmtq up`, `setup` and `status`: the OpenDMTQ wordmark drawn in text, state words in
+  colour, values in one column, and a block with the one address and the owner's sign-in. Plain text in a log, a pipe or
+  with NO_COLOR.
+- Notices in the game at every change of a broadcast switch, the player's or the server's under it, also when a
+  broadcast ends and while the server's broadcasts are off, each with its own number (`toast_id`, `toast_kind` in
+  `/live/state`); and at every change of the maintenance notice for players already in the game.
+
+### Changed
+
+- One port for everything. The players' site, the admin pages (`/opendmtq/admin/`) and the API (`/opendmtq/api/v1/`)
+  answer on the server's one port, `LISTEN_PORT`: 8791 on a new install, the first free port after it when it is taken,
+  on the Windows bundle, a host install, Docker Compose and the Helm chart alike. The admin pages have no port of their
+  own any more. A server set up before keeps its port, so the phones' app keeps its address. An exposed server's admin
+  pages stay on that same port for the server PC (`localhost`).
+- The owner's ID and password from `.env` sign in to the players' site too. A sign-in to the admin pages outlives a
+  restart of the server.
+- Sign-in and password forms: labels, Show inside the password field, what is missing said under the field, the ID kept
+  for the next time, Enter sends; the other forms of the admin pages say what is wrong under the field, and every field
+  and search box has the sign-in's look.
+- Switches and small changes on the admin pages (the players' and the server's broadcasts, the Broadcasts page's
+  settings, accounts, maintenance, songs) change the page in place, with the server's words in a band under the bar.
+- Words shown only under a mouse pointer (the keyboard mark's count, dates, the marks of charts and days) also come with
+  a tap and with the keyboard.
+- The Broadcasts page, the Players page and the API say how the server's switch and each player's go together.
+- What the server hands out and keeps is named for what it is: `OpenDMTQ-PC-Client-<version>-windows-x64-Setup-<address>.exe`,
+  `OpenDMTQ-Phone-App-<date>-android-<address>.apk`, `OpenDMTQ-Server-Backup-<time>-<why>.tar.gz` (backups named before
+  still count), the players' and plays' files, the request log and recordings.
+
+### Fixed
+
+- The ID and password the server's window and `.env` named did not open the players' site, the page the server's own
+  address shows, only the admin pages: signing in there failed every time.
+- A player's menu on the admin Players page opened under the next card or was cut off by its own on a short list.
+- Boxes that touched or ran into their padding on the admin pages, and gaps off the pages' own spacing.
+- OFFLINE and the sentence about the game server came only when a page was opened; the site's maintenance word and the
+  home page's broadcasts did not come back on a page left open.
+- `.env` as Notepad saves it (a byte order mark, Windows line ends, spaces around `=`) is read the same everywhere.
+- A sign-in refused for too many tries is in the log of changes; an account without admin rights is told so.
+
 ## [0.10.0] - 2026-11-13
 
 ### Added
