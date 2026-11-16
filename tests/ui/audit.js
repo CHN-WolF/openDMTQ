@@ -748,7 +748,8 @@ async function portalFlows(contexts) {
     const said = [];
     for (let i = 0; i < 10; i++) {
       const r = await fetch('/opendmtq/login.php', { method: 'POST', body: new URLSearchParams({ user: i % 2 ? 'dmtq' : '', password: '' }) });
-      said.push((await r.text()).match(/<p class="error"[^>]*>([^<]*)</)?.[1] || '');
+      // The server's words for a field left empty, under that field as the page's own check puts them.
+      said.push((await r.text()).match(/<span class="field-error"[^>]*>([^<]*)</)?.[1] || '');
     }
     const right = await fetch('/opendmtq/login.php', { method: 'POST', body: new URLSearchParams({ user: 'dmtq', password }), redirect: 'manual' });
     return [said, right.type === 'opaqueredirect' || right.redirected];

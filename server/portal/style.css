@@ -1377,6 +1377,8 @@ a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; 
   .door + .signin { margin-top: 0; }
   .signin { padding-block: 16px; }
   .signin h2 { font-size: var(--t-xl); }
+  /* The line under the heading: the heading and the fields say it there, where the button must stay on the screen. */
+  .signin-lead { display: none; }
   .signin-form { gap: 10px; margin-top: 10px; }
   .signin-form .field input { height: 40px; }
 }
