@@ -94,7 +94,8 @@ own `set`, never through a program that presses keys or moves the pointer (Windo
 away as a trojan); the player's own switches tap, type and save frames inside it (`PLAYER_TAPS`, `PLAYER_KEYS`,
 `PLAYER_SHOTS`). They stay off the desktop with:
 
-- `PLAYER_WINDOW_AT=10000,10000`: the window at a place no monitor has, shown without taking the focus;
+- `PLAYER_WINDOW_AT=10000,10000`: the window at a place no monitor has, shown without taking the focus, and a window
+  there even where the settings ask for full screen or name no display (full screen is the default);
 - `PLAYER_WINDOW_UNLISTED=1`: a tool window, which Windows gives no taskbar button and no place in Alt+Tab or Task View,
   with DWM's animations off for it and never in full screen (which would cover a monitor); a reason the player cannot
   start said in its log (or its output before there is a log) with no box, and no box of Windows' own for a crash. The

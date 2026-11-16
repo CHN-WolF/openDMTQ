@@ -49,8 +49,10 @@ App& app();
 // The PC's own settings for the picture and the sound (settings.cpp has the file's keys), which the PC client chooses
 // before a start: a phone's app sets these for itself, a computer's are the player's to apply.
 struct Settings {
-    // Full screen from the start, and the game's area in a window (0: fitted to the display).
-    bool fullscreen = false;
+    // Full screen from the start, and the game's area in a window (0: fitted to the display). Full screen unless the file
+    // says otherwise, as the launcher's own default: the game is made for a phone's whole screen, and a song is played
+    // best with nothing of the desktop around it.
+    bool fullscreen = true;
     int window_w = 0, window_h = 0;
     // Frames on the display's refreshes, and the most a second (0: the display's own rate).
     bool vsync = true;
@@ -58,11 +60,19 @@ struct Settings {
     // The share of the game's area the game draws at, in percent: the picture is stretched to the area.
     int render_scale = 100;
     // What makes the picture of a render scale below 100 % the window's size (post_pass.cpp): the plain stretch ANGLE
-    // gives a surface of a fixed size, or a pass of our own over the game's frame drawn at the scaled size.
+    // gives a surface of a fixed size, or a pass of our own over the game's frame drawn at the scaled size. AMD FSR 1
+    // unless the file says otherwise: measured on the game's words against 100 % it keeps them as sharp (1.02 to 1.07)
+    // where the plain stretch loses a tenth to a fifth; within 0.4 dB of NIS at 85 and 75 %, as near at 67 % and nearer
+    // at 50 % (where a slow graphics card needs it most), its words crisper below 75 %; under 0.1 ms of an RTX 4090 a
+    // frame.
+    // A player who lowers the render scale wants the picture kept.
     enum class Upscaler { kBilinear, kFsr1, kNis };
-    Upscaler upscaler = Upscaler::kBilinear;
+    Upscaler upscaler = Upscaler::kFsr1;
     // How the edges of the game's shapes are smoothed (post_pass.cpp): not at all, or by a pass over the finished picture
-    // (CMAA 2, SMAA 1x).
+    // (CMAA 2, SMAA 1x). Off unless the file says otherwise: the game's pictures are filtered images, soft at their edges
+    // already, so a pass changes a third of the strong edges and little else, softens the game's words a little, and
+    // costs more the busier the picture (CMAA 2 0.1 ms of an RTX 4090 in the menus, up to 1.5 ms over a song's video,
+    // many times that on a laptop's graphics): a choice for a player who sees jagged edges.
     enum class AntiAliasing { kOff, kCmaa2, kSmaa };
     AntiAliasing anti_aliasing = AntiAliasing::kOff;
     // A counter of the frames a second in a corner of the game (overlay_win32.cpp): none, or on in its corner, the bottom

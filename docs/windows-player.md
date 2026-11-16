@@ -294,25 +294,26 @@ off, says why in its log, and the game plays by touch as before.
   lighter for the graphics card, and softer. The share keeps the window's shape exactly where its size has fine enough
   steps (1920x1080 is 120 steps of 16x9): 67 % of 1920x1080 is 1280x720, so the game lays itself out as it does at full
   size, its parts where they belong.
-- **The upscaler**, below 100 %: how the smaller picture reaches the window's size. **Bilinear** (the default) is the
-  plain stretch of the window's surface. **AMD FSR 1** (FidelityFX Super Resolution 1) enlarges it with its
-  edge-adaptive filter (EASU) and sharpens the result (RCAS, at AMD's sample's 0.25 stops). **NVIDIA NIS** (Image
-  Scaling) enlarges in one pass with its edge-adaptive filter, with no sharpening added: the SDK's default of 50 % drew
-  rims around the game's text and lines. Both are spatial: they need only the
-  finished picture. At 100 % no upscaler is used, and the row is not shown. Measured against 100 % on the game's words
-  in a 1280x720 window: bilinear keeps 0.93 of their sharpness at 85 %, 0.90 at 75 %, 0.81 at 50 %; FSR 1 and NIS keep
-  them as sharp (1.02 to 1.07) and nearer to 100 %, NIS a little nearer, FSR 1 a little crisper. Each costs under
-  0.1 ms of an RTX 4090 a frame. They are for a graphics card that cannot keep the display's rate at 100 %: lighter
-  for it, at the price of some sharpness with bilinear and much less with FSR 1 or NIS.
+- **The upscaler**, below 100 %: how the smaller picture reaches the window's size. **AMD FSR 1** (FidelityFX Super
+  Resolution 1, the default) enlarges it with its edge-adaptive filter (EASU) and sharpens the result (RCAS, at AMD's
+  sample's 0.25 stops). **NVIDIA NIS** (Image Scaling) enlarges in one pass with its edge-adaptive filter, with no
+  sharpening added: the SDK's default of 50 % drew rims around the game's text and lines. Both are spatial: they need
+  only the finished picture. **Bilinear** is the plain stretch of the window's surface. At 100 % no upscaler is used,
+  and the row is not shown. Measured against 100 % on the game's words in a 1280x720 window: bilinear keeps 0.93 of
+  their sharpness at 85 %, 0.90 at 75 %, 0.81 at 50 %; FSR 1 and NIS keep them as sharp (1.02 to 1.07) and nearer to
+  100 %, NIS a little nearer at 85 and 75 %, FSR 1 as near at 67 % and nearer at 50 %, and a little crisper. Each costs under 0.1 ms
+  of an RTX 4090 a frame. They are for a graphics card that cannot keep the display's rate at 100 %: lighter for it, at
+  the price of some sharpness with bilinear and much less with FSR 1 or NIS.
 - **Anti-aliasing** smooths the jagged edges of the game's shapes. **CMAA 2** (Intel's Conservative Morphological
   Anti-Aliasing 2) smooths them over the finished picture and keeps text and thin lines sharp; it runs on compute shaders
   (OpenGL ES 3.1), and where the graphics card has none the player uses SMAA instead and says so in its log. **SMAA**
   (SMAA 1x, Ultra preset) smooths them with three light passes over the finished picture. The game's pictures are
   filtered images, soft at their own edges already, so either changes little: measured on the same frames of its music
   list, the frame as the game drew it against the frame shown, CMAA 2 changes a fifth to a third of the strong edges
-  (1 to 5 % of the pixels), and SMAA 9 % of the pixels, three tenths of the edges, its words as they were; the
-  difference shows on the diagonal edges of the game's frames, arrows and cards. On an RTX 4090 at 1280x720 CMAA 2
-  takes 0.1 ms of the graphics card a frame in the menus (0.3 to 1.5 ms over a song's video), SMAA under 0.1 ms. With an upscaler,
+  (1 to 5 % of the pixels), its words within 2 % of their sharpness, and SMAA 9 % of the pixels, three tenths of the
+  edges, its words 5 % softer; the difference shows on the diagonal edges of the game's frames, arrows and cards. On an
+  RTX 4090 at 1280x720 CMAA 2 takes 0.1 ms of the graphics card a frame in the menus (0.3 to 1.5 ms over a song's
+  video), SMAA under 0.1 ms. Off is the default: the game's picture as it drew it, at no cost. With an upscaler,
   anti-aliasing comes first, at the size the game draws at. MSAA, which 0.9 offered, is gone: it left the game's picture
   as it was, and a setting of `msaa2`, `msaa4` or `msaa8` reads as CMAA 2. Temporal methods (DLSS, FSR 2 and 3, TAA, DLAA) need what a closed game does not hand
   over (its motion vectors and depth), and frame generation adds delay: none of them is offered.

@@ -1304,15 +1304,15 @@ int main() {
     // Every key, each at a value other than its default, the way the client writes them.
     const player::Settings& all = read(path,
                                        "# written by the PC client\n"
-                                       "display=fullscreen\nwindow=1600x900\nvsync=off\nfps=144\nrender_scale=75\nupscaler=fsr1\nanti_aliasing=smaa\n"
+                                       "display=window\nwindow=1600x900\nvsync=off\nfps=144\nrender_scale=75\nupscaler=nis\nanti_aliasing=smaa\n"
                                        "show_fps=bottom_right\n"
                                        "audio_device={0.0.0.00000000}.{abc}\naudio_mode=exclusive\naudio_buffer=low\nvolume=40\n");
-    check(all.fullscreen, "display=fullscreen is full screen");
+    check(!all.fullscreen, "display=window is a window");
     check(all.window_w == 1600 && all.window_h == 900, "window=1600x900 is that size");
     check(!all.vsync, "vsync=off is off");
     check(all.fps == 144, "fps=144 is 144");
     check(all.render_scale == 75, "render_scale=75 is 75");
-    check(all.upscaler == player::Settings::Upscaler::kFsr1, "upscaler=fsr1 is AMD FSR 1");
+    check(all.upscaler == player::Settings::Upscaler::kNis, "upscaler=nis is NVIDIA NIS");
     check(all.anti_aliasing == player::Settings::AntiAliasing::kSmaa, "anti_aliasing=smaa is SMAA");
     check(all.show_fps == player::Settings::ShowFps::kBottomRight, "show_fps=bottom_right is the bottom right corner");
     check(all.audio_device == "{0.0.0.00000000}.{abc}", "audio_device keeps the id whole, braces and dots");
@@ -1329,15 +1329,17 @@ int main() {
     check(read(path, "show_fps=middle\n").show_fps == player::Settings::ShowFps::kOff, "a corner it does not know shows no frame counter");
     check(read(path, "show_fps=on\n").show_fps == player::Settings::ShowFps::kBottomRight, "show_fps=on is the bottom right, its own place");
     // The other words each key takes.
-    const player::Settings& words = read(path, "display=window\nwindow=auto\nvsync=on\nfps=unlimited\naudio_device=default\n"
+    const player::Settings& words = read(path, "display=fullscreen\nwindow=auto\nvsync=on\nfps=unlimited\naudio_device=default\n"
                                                "audio_mode=shared\naudio_buffer=safe\n");
-    check(!words.fullscreen && words.window_w == 0 && words.vsync && words.fps == 1000, "window, auto, on, unlimited");
+    check(words.fullscreen && words.window_w == 0 && words.vsync && words.fps == 1000, "full screen, auto, on, unlimited");
     check(words.audio_device.empty() && !words.audio_exclusive && words.audio_buffer == 2, "default, shared, safe");
     check(read(path, "fps=auto\n").fps == 0, "fps=auto is the display's own rate");
-    // Each upscaler and each anti-aliasing by its name, from the defaults (the plain stretch, none).
-    check(read(path, "upscaler=nis\n").upscaler == player::Settings::Upscaler::kNis, "upscaler=nis is NVIDIA NIS");
+    // Each upscaler and each anti-aliasing by its name, and the defaults: full screen, AMD FSR 1 below 100 %, no
+    // anti-aliasing (player.h says why each).
+    check(read(path, "upscaler=fsr1\n").upscaler == player::Settings::Upscaler::kFsr1, "upscaler=fsr1 is AMD FSR 1");
     check(read(path, "upscaler=bilinear\n").upscaler == player::Settings::Upscaler::kBilinear, "upscaler=bilinear is the plain stretch");
-    check(player::Settings{}.upscaler == player::Settings::Upscaler::kBilinear, "the plain stretch is the default upscaler");
+    check(player::Settings{}.upscaler == player::Settings::Upscaler::kFsr1, "AMD FSR 1 is the default upscaler, as the launcher's");
+    check(player::Settings{}.fullscreen, "full screen is the default display, as the launcher's");
     check(player::Settings{}.anti_aliasing == player::Settings::AntiAliasing::kOff, "no anti-aliasing is the default");
     const char* const aa_names[] = {"off", "cmaa2", "smaa"};
     for (int i = 0; i < 3; ++i) {
@@ -1355,11 +1357,11 @@ int main() {
     const player::Settings& bad = read(path, "display=huge\nwindow=200x100\nvsync=maybe\nfps=20\nrender_scale=40\naudio_mode=loud\nupscaler=dlss\n"
                                              "anti_aliasing=fxaa\n"
                                              "audio_buffer=tiny\nvolume=loud\nvolume2=5\nfps=120\n");
-    check(!bad.fullscreen && bad.window_w == 0 && bad.vsync, "a display, window or vsync it cannot read keeps the default");
+    check(bad.fullscreen && bad.window_w == 0 && bad.vsync, "a display, window or vsync it cannot read keeps the default");
     check(bad.render_scale == 100 && !bad.audio_exclusive && bad.audio_buffer == 1 && bad.volume == 100,
           "a render scale below 50, a mode, a buffer or a volume that is no number keeps the default");
     check(bad.fps == 120, "a frame limit below 30 is left out, and a later good one read");
-    check(bad.upscaler == player::Settings::Upscaler::kBilinear, "an upscaler it does not know keeps the plain stretch");
+    check(bad.upscaler == player::Settings::Upscaler::kFsr1, "an upscaler it does not know keeps the default, AMD FSR 1");
     check(bad.anti_aliasing == player::Settings::AntiAliasing::kOff, "an anti-aliasing it does not know keeps it off");
     check(read(path, "window=1280x720x2\n").window_w == 0, "a size with more after it is not read");
     check(read(path, "fps=1001\n").fps == 0, "a frame limit above 1000 is left out");
@@ -1374,9 +1376,9 @@ int main() {
     const player::Settings& least = read(path, "window=480x270\n");
     check(least.window_w == 480 && least.window_h == 270, "window=480x270, the smallest, is that size");
     // Capitals in keys and names, as a hand-made file may have them; a device's id kept as written.
-    const player::Settings& caps = read(path, "Display=FullScreen\nVSYNC=Off\nUpscaler=FSR1\nAnti_Aliasing=SMAA\nShow_FPS=Top_Right\n"
+    const player::Settings& caps = read(path, "Display=Window\nVSYNC=Off\nUpscaler=NIS\nAnti_Aliasing=SMAA\nShow_FPS=Top_Right\n"
                                               "Audio_Mode=Exclusive\nAUDIO_DEVICE={0.0.0.00000000}.{ABC-def}\nLanguage=KO\n");
-    check(caps.fullscreen && !caps.vsync && caps.upscaler == player::Settings::Upscaler::kFsr1, "keys and names in capitals are read");
+    check(!caps.fullscreen && !caps.vsync && caps.upscaler == player::Settings::Upscaler::kNis, "keys and names in capitals are read");
     check(caps.anti_aliasing == player::Settings::AntiAliasing::kSmaa && caps.show_fps == player::Settings::ShowFps::kTopRight &&
               caps.audio_exclusive,
           "SMAA, Top_Right and Exclusive in capitals");
@@ -1384,8 +1386,8 @@ int main() {
     check(caps.language == "ko", "Language=KO is Korean");
     check(read(path, "anti_aliasing=MSAA4\n").anti_aliasing == player::Settings::AntiAliasing::kCmaa2, "MSAA4 in capitals is CMAA 2 too");
     // A byte order mark at the file's start, as Notepad saves one: the first key still read.
-    const player::Settings& marked = read(path, "\xEF\xBB\xBF" "display=fullscreen\r\nvolume=30\r\n");
-    check(marked.fullscreen && marked.volume == 30, "a byte order mark before the first key");
+    const player::Settings& marked = read(path, "\xEF\xBB\xBF" "display=window\r\nvolume=30\r\n");
+    check(!marked.fullscreen && marked.volume == 30, "a byte order mark before the first key");
     read(path, "\xEF\xBB\xBF" "language=ko\n");
     check(player::settings_language(path) == "ko", "the language read early past a byte order mark");
     // Spaces around the parts, notes, empty lines and Windows' line ends.

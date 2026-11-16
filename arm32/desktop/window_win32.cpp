@@ -1893,15 +1893,20 @@ bool open_window(const std::string& title) {
     // what the person is doing. At a place off every monitor and unlisted (window_unlisted), nothing of it is on the
     // person's desktop.
     int show = SW_SHOW;
+    bool placed = false;
     if (const char* at = std::getenv("PLAYER_WINDOW_AT")) {
         int x = 0, y = 0;
         if (std::sscanf(at, "%d,%d", &x, &y) == 2) {
             SetWindowPos(g_frame, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             show = SW_SHOWNOACTIVATE;
+            placed = true;
         }
     }
-    // Full screen from the start when the PC's settings say so: over the display it would have opened on.
-    if (settings().fullscreen) toggle_fullscreen(g_frame);
+    // Full screen from the start when the PC's settings say so (or say nothing: full screen is the default): over the
+    // display it would have opened on. A check's window placed by PLAYER_WINDOW_AT stays a window where it was put, so
+    // that a check whose settings name no display covers no one's screen.
+    if (settings().fullscreen && placed) jvm::log("player: full screen held back: a check's window at its place (PLAYER_WINDOW_AT)");
+    else if (settings().fullscreen) toggle_fullscreen(g_frame);
     ShowWindow(g_frame, show);
     UpdateWindow(g_frame);
     // The size the game's area has once shown (the frame's scaling may have changed it).
