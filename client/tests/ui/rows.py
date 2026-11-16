@@ -135,6 +135,13 @@ def main():
 
     for page in ("screen", "sound", "help"):
         controls_from_one_line(page, "")
+    # The Sound page's sliders' numbers end on one line: the volumes' and the equaliser's bands' (once 18 px apart).
+    app.nav_go("sound")
+    shots.settle(app, 6, until=lambda: app.devices is not None)
+    ends = {x.number.winfo_rootx() + x.number.winfo_width() for x in shots.widgets_of(app.body.inner)
+            if isinstance(x, widgets.Slider) and x.winfo_ismapped()}
+    if len(ends) != 1:
+        problems.append("sound: the sliders' numbers end at %r" % sorted(ends))
     # The same with the names drawn wider, as Windows draws Pretendard (its Help's Servers and settings is 135 px where
     # Linux makes it about 128): a column fitted to the names still lines the controls up, where a width fixed for one
     # system's font let the widest name push its control out of the line (Start over 3 px right of the others).

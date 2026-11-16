@@ -1118,6 +1118,10 @@ class Segmented(tk.Frame):
             self.set(self.keys[i], notify=True)
 
 
+# The characters a slider's number takes at least: an equaliser's band's "-12 dB".
+SLIDER_NUMBER = 6
+
+
 class Slider(tk.Frame):
     """A slider with its number beside it, from `least` to `most` (0 to 100 for a volume); command(value) runs when the
     drag ends and at each step of the keyboard. Its track is let into the card and runs from the slider's own left edge,
@@ -1136,8 +1140,9 @@ class Slider(tk.Frame):
         self.knob_img = ImageTk.PhotoImage(art.knob(self.knob_size, ring=self.colour, scale=ui.scale), master=parent)
         self.canvas = tk.Canvas(self, width=self.w, height=self.h, bg=bg, highlightthickness=0, cursor="hand2")
         self.canvas.pack(side="left")
-        # As wide as the longest words it can say ("-12 dB"), so that the slider never moves as the number changes.
-        widest = max(len(say(least)), len(say(most)), len(say(0)), 4)
+        # As wide as the longest words any slider says ("-12 dB"), so that the slider never moves as its number changes and
+        # the numbers of a page's sliders end on one line.
+        widest = max(len(say(least)), len(say(most)), len(say(0)), SLIDER_NUMBER)
         self.number = tk.Label(self, text="", font=ui.fonts.body_bold, fg=theme.TEXT, bg=bg, width=widest, anchor="e")
         self.number.pack(side="left", padx=(ui.px(10), 0))
         self.canvas.bind("<Button-1>", self._drag)

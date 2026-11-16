@@ -294,6 +294,8 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
 
 ## The sound
 
+![The launcher's Sound page: the master, music and effects volumes, and the equaliser on Bass with its three bands](images/client-sound.png)
+
 - **The device:** Windows' default output, which the game follows when Windows changes it mid-game, or one chosen.
 - **Shared or Exclusive.** Shared plays alongside other programs' sound. Exclusive (WASAPI's exclusive mode) takes the
   device for the game alone and has the least delay, with buffers of the device's own period (3 ms on a device that
