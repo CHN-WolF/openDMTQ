@@ -1634,6 +1634,7 @@ STRINGS = {
         "login.button": "로그인",
         "login.throttled": "로그인에 너무 여러 번 실패했습니다. 10분 뒤에 다시 시도하세요.",
         "login.wrong": "아이디 또는 비밀번호가 맞지 않습니다.",
+        "login.no_rights": "플레이어 사이트 전용 계정입니다. 관리자 페이지는 관리자 권한이 있는 계정만 들어올 수 있습니다.",
         "login.need_id": "아이디를 입력하세요.",
         "login.need_password": "비밀번호를 입력하세요.",
         "login.lead": "서버 소유자와 관리자 권한이 있는 계정으로 로그인합니다.",

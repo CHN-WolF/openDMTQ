@@ -49,7 +49,7 @@ if [ -z "${KEEP:-}" ]; then
 fi
 
 # owner_signs_in <when>: the ID and password in .env open the admin pages on the server's one port and the players' site,
-# each in a browser of its own (ADM-101). From this PC, as localhost: the visit stays on plain HTTP.
+# each in a browser of its own (ADM-105). From this PC, as localhost: the visit stays on plain HTTP.
 owner_signs_in() {
   local jar status
   jar=$(mktemp)

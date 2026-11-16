@@ -14,7 +14,7 @@ from opendmtq_cli import checks, env, look
 from .paths import HERE, CLI, DATA, ENV_FILE, LOGS, MAC, ROOT, START_WAIT, WINDOWS
 from .output import die, ok, say, tell
 from .programs import programs
-from .settings import admin_port, listen_port, require_settings, settings
+from .settings import admin_url, listen_port, require_settings, settings, site_url
 from .folders import make_folders, tool, version
 from .server import health, running_pid, wait_healthy
 
@@ -48,8 +48,7 @@ def cmd_start(args):
     # setup that comes here shows them itself, once.)
     if getattr(args, "cmd", None) in ("start", "restart"):
         say("")
-        for line in look.address_block(f"http://{values['PUBLIC_HOST']}/",
-                                       f"http://localhost:{admin_port(values)}/opendmtq/admin/",
+        for line in look.address_block(site_url(values), admin_url(values),
                                        values.get("ADMIN_USER") or "admin", where="ADMIN_PASSWORD in .env"):
             say(line)
     return 0
@@ -115,9 +114,10 @@ def cmd_status(args):
     h = health(values)
     look.banner(version())
     user = values.get("ADMIN_USER") or "admin"
-    # Label and value lines in one column; a state word in its colour (running, missing).
-    lines = [("Address", f"http://{values['PUBLIC_HOST']}/"),
-             ("Admin pages", f"http://localhost:{admin_port(values)}/opendmtq/admin/  (ID {user})"),
+    # Label and value lines in one column; a state word in its colour (running, missing). One address: the admin pages
+    # are on the server's own port.
+    lines = [("Address", site_url(values)),
+             ("Admin pages", f"{admin_url(values)}  (ID {user}, password ADMIN_PASSWORD in .env)"),
              ("Server", ("running", "ok") if h is not None else ("not running", "warn"))]
     if h is not None:
         lines += [("Client data", ("yes", "ok") if h.get("game_data") else (f"missing: {CLI} import <folder>", "warn")),

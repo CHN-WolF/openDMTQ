@@ -53,7 +53,7 @@
   {# Its place is always there, empty while the server answers: the page's script fills it and empties it as the server goes
      and comes back (admin.js, from look()). #}
   <div id="server-alert">
-  {% if is_signed_in and not server_ok and ep not in ('login', 'server_stop') %}
+  {% if is_signed_in and not server_ok and ep not in ('login', 'server_stop', 'server_restart', 'server_uninstall') %}
     {% if server_waiting %}
       {% if not (ep or '').startswith('setup') %}<div class="site-alert" role="status"><p>{{ t('down.waiting', url=url_for('setup_page', step='files')) }}</p></div>{% endif %}
     {% else %}

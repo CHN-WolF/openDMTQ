@@ -10,7 +10,7 @@ from opendmtq_cli import discover, look
 from .paths import DATA, ROOT, WINDOWS
 from .output import die, ok, say, tell, warn
 from .programs import programs
-from .settings import admin_port, ensure_settings, settings
+from .settings import admin_url, ensure_settings, settings, site_url
 from .folders import make_folders, version
 from .server import cmd_run, open_setup
 from .commands import app_manifest, build_status, cmd_import, cmd_start, show_address
@@ -146,7 +146,7 @@ def summary(values):
     """Where everything is, once the server runs."""
     say("")
     # The addresses and the owner's sign-in in one block, the password with where it is kept.
-    for line in look.address_block(f"http://{values['PUBLIC_HOST']}/", f"http://localhost:{admin_port(values)}/opendmtq/admin/",
+    for line in look.address_block(site_url(values), admin_url(values),
                                    values.get("ADMIN_USER") or "admin", values.get("ADMIN_PASSWORD"),
                                    f"kept in .env in {ROOT}" + ("; Notepad opens it" if WINDOWS else "")):
         say(line)

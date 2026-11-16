@@ -133,7 +133,7 @@ expect "the window names the admin pages on that port" grep -q "/opendmtq/admin/
 expect "and no other port" sh -c "! grep -q ':$inner' /tmp/first.log"
 expect "the admin pages answer on it" is 200 "http://127.0.0.1:${first:-1}/opendmtq/admin/login"
 # owner_signs_in <port> <password> <when>: the ID and password the window and .env name open the admin pages and the
-# players' site alike (ADM-101), each in a browser of its own. The owner's own case: the site refused them.
+# players' site alike (ADM-105), each in a browser of its own. The owner's own case: the site refused them.
 owner_signs_in() {
   local jar code
   jar=$(mktemp)

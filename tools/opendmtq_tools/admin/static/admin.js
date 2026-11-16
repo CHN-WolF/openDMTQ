@@ -868,6 +868,39 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
   })();
 })();
 
+// The server stopping (or removing itself) from the Server page: which process answers is asked (data-ping), as a
+// restart's page does. Once nothing answers, it has stopped: the heading says so (data-stopped, data-stopped-lead) and
+// its light goes off. Should another process answer later (the server started again on its PC), it runs again
+// (data-again), with the way back to the Server page.
+(() => {
+  const wait = document.getElementById('stop-wait');
+  if (!wait) return;
+  const head = document.getElementById('stop-head'), lead = document.getElementById('stop-lead');
+  const lamp = document.getElementById('stop-lamp');
+  let stopped = false;
+  (async function look() {
+    let instance = null;
+    try {
+      const r = await fetch(wait.dataset.ping, { cache: 'no-store' });
+      if (r.ok) instance = (await r.json()).instance;
+    } catch (e) {
+      // Nothing answers: the server has stopped.
+    }
+    if (instance === null && !stopped) {
+      stopped = true;
+      head.textContent = wait.dataset.stopped;
+      if (wait.dataset.stoppedLead) lead.textContent = wait.dataset.stoppedLead;
+      lamp.className = 'lamp off';
+    } else if (instance !== null && instance !== wait.dataset.instance && wait.dataset.again) {
+      head.textContent = wait.dataset.again;
+      lamp.className = 'lamp on';
+      document.getElementById('stop-back').hidden = false;
+      return;
+    }
+    setTimeout(look, 2000);
+  })();
+})();
+
 // The server's words on what was just done, as a band under the bar when the page changed in place or came back further
 // down (where the words at the page's top are out of sight): part of the bar, across it, over the page for a few seconds
 // with nothing under it moving; its words where the page's text starts. A press takes it away (its cross says so), and it

@@ -1991,7 +1991,7 @@ SITE_LIBRARIES = {"lib.php", "live_lib.php", "ranking_lib.php", "auth.php", "str
 TEMPLATE_PAGES = {"accounts.html": "accounts_page", "app.html": "app_page", "backups.html": "backups_page", "dashboard.html": "dashboard",
                   "logs.html": "logs_page", "maintenance.html": "maintenance_page", "players.html": "players_page",
                   "recordings.html": "recordings_page", "setup.html": "setup_page", "songs.html": "songs_page", "login.html": "login",
-                  "look.html": "look"}
+                  "server.html": "server_page", "look.html": "look"}
 
 # The arguments of an address that make a page show another of its views (a tab, a step, a file), or follow a job.
 VARIANTS = ("tab", "step", "csv", "watch", "dir", "page", "player", "built", "job", "host")

@@ -9,6 +9,8 @@
 //   node audit.js flows    what people do: signing in, searching, the replay player, the owner's forms; every floating
 //                          layer (menus, tooltips, questions) opened and measured whole and on top
 //   node audit.js quiet    broadcasts off for the server with everything in place: nothing of them on the site
+//   node audit.js patterns nothing said only under a mouse pointer, switches that change the page in place, the owner's
+//                          forms saying what is wrong under the field
 //   node audit.js notices  the site's pages left open while the owner begins, changes and ends maintenance, twice: the bar's
 //                          word and the sentence under it come and go by themselves each time
 //   node audit.js away     the owner's pages left open while the game server stops and starts again, twice (run.sh does
@@ -361,6 +363,27 @@ const noFindings = async (page, name) => {
   check(`${name}: nothing wrong with the layout`, items.length === 0, items.slice(0, 6).map(f => `${f.kind} ${f.at} ${f.detail}`.slice(0, 140)).join(' ; '));
 };
 
+// What a press does, done: the page loaded again, or a change made in place (admin.js counts those, window.odqChanges).
+// Thirty seconds at most.
+async function settle(page, act) {
+  const before = await page.evaluate(() => window.odqChanges || 0).catch(() => 0);
+  const loaded = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 });
+  const changed = page.waitForFunction(n => (window.odqChanges || 0) > n, { timeout: 30000, polling: 100 }, before);
+  // The one that does not happen ends in an error later, which nobody waits for.
+  loaded.catch(() => {});
+  changed.catch(() => {});
+  const never = p => p.catch(() => new Promise(() => {}));
+  let timer;
+  const late = new Promise((_, fail) => { timer = setTimeout(() => fail(new Error('the press neither loaded a page nor changed this one')), 30000); });
+  await act();
+  try {
+    await Promise.race([never(loaded), never(changed), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
 // Pages left open while things change (the notices and away stages): their own looks run ten times as often, their
 // timers sped up before the page's scripts run, so that a change shows in seconds; the server's answers are as they are.
 function quickTimers() {
@@ -402,7 +425,7 @@ async function until(page, test, arg, ms = 90000) {
   return false;
 }
 
-// A form on the page, sent by pressing its button, the page coming back afterwards.
+// A form on the page, sent by pressing its button: the page coming back afterwards, or changed in place.
 async function press(page, selector) {
   await settle(page, () => page.click(selector));
 }
@@ -2087,6 +2110,10 @@ async function adminFlows(contexts) {
     await portalFlows(contexts);
     await replayFlows(contexts);
     await adminFlows(contexts);
+  } else if (stage === 'patterns') {
+    await hoverOnly(contexts);
+    await inPlace(contexts);
+    await formsLook(contexts);
   } else if (stage === 'notices') {
     // PAGE-55..57: the home page and the live page left open (both look at the server by themselves) while the owner
     // begins maintenance, gives it a new message, ends it, and begins and ends it again: each time the bar's word and the

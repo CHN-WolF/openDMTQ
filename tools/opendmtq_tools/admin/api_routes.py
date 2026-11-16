@@ -787,7 +787,11 @@ ROUTES = [
           errors=[(400, "message_too_long", "The message is longer than 200 characters.")]),
     Route("DELETE", "/maintenance", "write", "maintenance_clear", "Maintenance", "Turns the notice off.",
           "Players in the game are told between songs that it is over.", answer="Notice"),
-    Route("POST", "/server/stop", "write", "server_stop", "Maintenance", "Stops the server, as the Maintenance page's Stop the server does.",
+    # The Server page (lifecycle.py): the state, stop and restart (setup.stop_server, lifecycle.restart_server), the repair,
+    # the data, the uninstall.
+    Route("GET", "/server", "read", "server_get", "Server", "The server as the Server page shows it: how it is installed, its address, "
+          "what this API can do with it there, and its data part by part.", answer="ServerState"),
+    Route("POST", "/server/stop", "write", "server_stop", "Server", "Stops the server, as the Server page's Stop the server does.",
           "A host install and the Windows bundle only. Every part stops, these pages and the API too: the answer comes first.",
           answer="Stopping", status=202,
           errors=[(404, "host_only", "Not a host install: stop it with ./opendmtq down or Kubernetes."),

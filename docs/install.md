@@ -47,7 +47,7 @@ use and an account for each player, and builds the app.
 - **The server runs while its window is open.** To stop it, close the window, or press **Stop the server** on the admin
   pages' **Server** page. To start it again, `start ~\OpenDMTQ\OpenDMTQ.exe`, or double-click it. The same page repairs
   the install, deletes its data, and uninstalls it.
-- **To update**, close its window and run the same four lines again. The new files replace the program's; your `data`
+- **To update**, close its window and run the same five lines again. The new files replace the program's; your `data`
   folder and `.env` stay.
 
 <details>

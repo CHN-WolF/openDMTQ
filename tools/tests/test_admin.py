@@ -95,7 +95,7 @@ class Install:
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class OwnerOnSiteTest(unittest.TestCase):
     """The owner's ID and password from .env open the players' site too (owner.pass, which the site reads), and a
-    refused sign-in is noted in the log of changes whatever the reason (ADM-100)."""
+    refused sign-in is noted in the log of changes whatever the reason (ADM-104)."""
 
     def read(self, inst):
         with open(inst.path("state/owner.pass"), encoding="utf-8") as f:
@@ -3034,7 +3034,7 @@ class PageJobsTest(unittest.TestCase):
             r = inst.client.post("/opendmtq/admin/backups", data={"csrf": page_token(inst), "action": "create"})
             self.assertEqual(r.headers["Location"], "/opendmtq/admin/backups")
             page = inst.client.get("/opendmtq/admin/backups").get_data(as_text=True)
-            self.assertRegex(page, r'class="flash ok" role="status" data-said>Backup <code>opendmtq-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
+            self.assertRegex(page, r'class="flash ok" role="status" data-said>Backup <code>OpenDMTQ-Server-Backup-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
             job = admin.jobs.listing()[0]
             self.assertEqual((job["kind"], job["state"]), ("backup", "done"))
             # The API's view of it holds nothing of the page's own (its words with their markup, its signal).

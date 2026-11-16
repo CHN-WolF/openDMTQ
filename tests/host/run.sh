@@ -221,7 +221,7 @@ expect "started again, healthy" is 200 "http://127.0.0.1:$PORT/opendmtq/health.p
 sleep 5
 expect "a stop asked of an earlier run is not this run's" is 200 "http://127.0.0.1:$PORT/opendmtq/health.php"
 # owner_signs_in <when>: the ID and password that .env and the console name open both the admin pages and the players'
-# site (ADM-101), each in a browser of its own.
+# site (ADM-105), each in a browser of its own.
 owner_signs_in() {
   local jar code
   jar=$(mktemp)
