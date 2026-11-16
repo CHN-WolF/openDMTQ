@@ -279,6 +279,12 @@ print(f"{checked} programs and libraries checked, {len(problems)} missing DLLs")
 sys.exit(1 if problems else 0)
 PY
 
+step "The list of the program's files"
+# Every file of the program with its SHA-256, as this build made it: the admin pages' Server page and `repair` compare
+# an install with it, to name what is missing or changed. Written last, so that it lists the bundle as it ships.
+python3 "$ROOT/tools/opendmtq_tools/manifest.py" write "$STAGE" "$STAGE/app/MANIFEST.sha256"
+echo "$(wc -l < "$STAGE/app/MANIFEST.sha256") files listed"
+
 step "The zip"
 rm -f "$OUT/OpenDMTQ-windows.zip"
 (cd "$OUT" && zip -q -r -9 OpenDMTQ-windows.zip OpenDMTQ)
