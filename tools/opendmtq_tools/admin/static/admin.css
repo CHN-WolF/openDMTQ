@@ -11,7 +11,9 @@ body[data-section="admin"] { --gap: 14px; }
 /* One row of pages on the bar; it scrolls sideways where it does not fit. Every page in the page's language. */
 .nav.pages { overflow-x: auto; scrollbar-width: none; }
 .nav.pages::-webkit-scrollbar { display: none; }
-.nav.pages > a { padding: 0 11px; font: 700 var(--t-md)/1 var(--text-face); letter-spacing: -0.005em; }
+/* Seven pixels each side: the ten pages, the wordmark, both languages, the OFFLINE light and the badge in one row from
+   1241 px, with room to spare (at 11 px the row was 61 px too wide with the Server page added). */
+.nav.pages > a { padding: 0 7px; font: 700 var(--t-md)/1 var(--text-face); letter-spacing: -0.005em; }
 .bar-in { gap: 18px; }
 /* A second row under the wordmark on anything narrower than the ten pages need in one row beside the keys: 1240 px,
    with the game server's OFFLINE light and the profile's badge there too (at 1200 px they were 27 px too wide). */
@@ -741,9 +743,9 @@ table.sortable :is(th.r, th.rank)[data-sort]::after { position: absolute; margin
    ADMIN word, both languages and Sign out fill the row; from 391 px (412 on a Galaxy) it fits. */
 .bar .auth-who .who-text { display: none; }
 @media (max-width: 390px) { .auth-who { display: none; } }
-/* The pages' strip a little tighter below 860 px, so that the row fits the bar whole and never scrolls sideways: the
-   nine of them were 6 px wider than the screen at 740 px, and the ten 31 px at 744 px in English with 9 px each side. */
-@media (max-width: 860px) { .nav.pages > a { padding: 0 7px; } .nav.pages > a.on::after { inset: auto 3px 0; } }
+/* The pages' strip a little tighter below 860 px, so that the row fits the bar whole and never scrolls sideways down
+   to 721 px: the ten were 31 px wider than the screen at 744 px in English with 9 px each side. */
+@media (max-width: 860px) { .nav.pages > a { padding: 0 5px; } .nav.pages > a.on::after { inset: auto 2px 0; } }
 
 /* The setup (setup.html): its four steps in a row, each a link, the one open marked, the done ones ticked. Their own
    class names: the site's stylesheet gives .done a message box of its own. */
