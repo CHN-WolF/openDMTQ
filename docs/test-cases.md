@@ -356,6 +356,11 @@ it runs ([testing.md](testing.md)):
 | SRV-33 | Players play while the server makes a backup and builds the app on the same two cores | Both end well, and every save is stored | `tests/load/load.py#ended well` | qa |
 | SRV-34 | The server killed (SIGKILL) while players save back to back, then started again | Answering again within a minute; every save it answered as stored still there; the database's integrity check ok; saves stored again | `tests/load/load.py#every save answered as stored is still there` | qa |
 | SRV-35 | The database's disk full while a player saves | Each save refused with SVC.05099, which the game offers to retry, nothing of it kept; the server answering its other requests; with room again saves stored; the database whole | `tests/load/load.py#each save refused with the code the client retries on` | qa |
+| SRV-40 | The server's window or ./opendmtq in a terminal | The OpenDMTQ wordmark with the version beside it, the Q in lime; state words in their colours | `cli/tests/test_look.py#test_the_wordmark_on_a_terminal` | unit |
+| SRV-41 | The same output with NO_COLOR, TERM=dumb, in a pipe or the log | No colour codes; in a pipe or the log one plain name line and no drawing | `cli/tests/test_look.py#test_plain_in_a_pipe` | unit |
+| SRV-42 | Status and the addresses block | Values in one column after the longest label; the players' site, the admin pages, the admin ID and where the password is, between two lines | `cli/tests/test_look.py#test_values_in_one_column` | unit |
+| SRV-43 | The running server's lines in its window | The time in grey and a note or error word in colour; the date and plain text in the log file | `cli/tests/test_look.py#test_log_lines` | unit |
+| SRV-44 | The host install's own messages (the Windows bundle's window) on a terminal | The same state words and colours as ./opendmtq | `cli/tests/test_look.py#test_the_host_window_uses_it` | unit |
 
 ## TS-CLI: the command line
 

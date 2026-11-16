@@ -544,10 +544,11 @@ class MessageTest(unittest.TestCase):
             self.assertNotIn("9791", sb.output())
 
     def test_up_status_and_setup_name_one_admin_address(self):
-        # up, status and the setup's end all name the admin pages on the server's one port, at the address phones use,
-        # with where the password is (CLI-21).
-        wanted = "http://192.168.0.10:8791/opendmtq/admin/  (ID admin, password: ADMIN_PASSWORD in .env)"
-        with Sandbox("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n") as sb:
+        # With the pages on the public port too (the default), up named that address and the setup's end another, and
+        # status none: all three now name the one on this PC, with where its password is, and nothing else of the pages.
+        # (up and the setup's end in their block of addresses, status on its admin line.)
+        wanted = "http://localhost:9791/opendmtq/admin/ on this PC"
+        with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_PORT=9791\nADMIN_PASSWORD=x\n") as sb:
             game_data(sb)
             with mock.patch.object(app.time, "sleep"):
                 self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
@@ -556,6 +557,7 @@ class MessageTest(unittest.TestCase):
                 self.assertEqual(sb.call(app.cmd_setup, host=None, source=None, rebuild_apk=False, no_firewall=True), 0,
                                  sb.output())
             self.assertEqual(sb.output().count(wanted), 3, sb.output())
+            self.assertEqual(sb.output().count("ADMIN_PASSWORD in .env"), 3, sb.output())
             self.assertEqual(sb.output().count("/opendmtq/admin/"), 3, sb.output())
             self.assertNotIn("localhost", sb.output())
 

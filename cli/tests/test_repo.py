@@ -312,7 +312,8 @@ class HostStatusAppLineTest(unittest.TestCase):
                 mock.patch.object(self.commands, "app_manifest", lambda: None), \
                 mock.patch.object(self.commands, "build_status", lambda: {"state": "failed"}):
             self.commands.cmd_status(None)
-        return next(line for line in lines if line.startswith("Phone app"))
+        # The line without the left edge every line of the window shares.
+        return next(line.strip() for line in lines if line.strip().startswith("Phone app"))
 
     def test_before_the_game_files_the_app_waits_for_them(self):
         # A first start's builder ends without a client to build from: no failure to show.
@@ -345,6 +346,7 @@ class HostPlayersLineTest(unittest.TestCase):
         lines = []
         with mock.patch.object(self.commands, "DATA", self.data), \
                 mock.patch.object(self.commands, "say", lambda text: lines.append(text)), \
+                mock.patch.object(self.commands, "tell", lambda text: lines.append(text)), \
                 mock.patch.object(self.commands, "tool", lambda *a, **k: 0):
             self.commands.show_address({"PUBLIC_HOST": "192.168.0.20:8080"})
         return "\n".join(lines)

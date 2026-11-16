@@ -6,7 +6,7 @@ import os
 import sys
 import time
 
-from . import backup, checks, discover, env, system
+from . import backup, checks, discover, env, look, system
 from .system import DATA, ENV_FILE, ROOT, count, die, ok, step, warn
 
 
@@ -223,6 +223,12 @@ def admin_link(values):
     return f"http://localhost:{env.listen_port(values)}/opendmtq/admin/ on this PC"
 
 
+def address_lines(host, values):
+    """The block `up` and the setup's end close with: the players' site, the admin pages and the owner's sign-in."""
+    return look.address_block(f"http://{host}/", admin_link(values), values.get("ADMIN_USER") or "admin",
+                              where="ADMIN_PASSWORD in .env")
+
+
 def admin_sign_in(values):
     """Where the owner signs in to the admin pages on this PC, and with what: the one address `up`, `status` and the
     setup's end all name (their own port, which works on this PC whatever the public port carries), and the ID and where
@@ -247,6 +253,8 @@ def open_firewall(port, internet, replaces=None):
 
 def cmd_up(args):
     host = require_host()
+    # The wordmark with this copy's version, once (setup shows it first and comes here after).
+    look.banner(system.code_version())
     if not have_game_data():
         die("no client data yet; run ./opendmtq import <folder with your game files>")
     # Folders the containers mount must exist and belong to the user they run as, not be created by
@@ -287,8 +295,10 @@ def cmd_up(args):
         time.sleep(1)
     else:
         warn("admin pages are not answering yet; see ./opendmtq logs admin")
-    # The address on this PC, as status and the setup's end name it too.
-    ok(f"admin pages: {admin_sign_in(values)}")
+    # The addresses and the owner's sign-in, as status and the setup's end name them too.
+    print()
+    for line in address_lines(host, values):
+        print(line)
     wait_builder(since)
     if checks.app_lacks_runtime():
         warn(checks.no_runtime_notice())
@@ -352,15 +362,16 @@ def cmd_restart(args):
 
 def cmd_status(args):
     host = env.load(ENV_FILE).get("PUBLIC_HOST", "?")
+    look.banner(system.code_version())
     if host == "?":
         print("Not set up yet. Start with: ./opendmtq setup\n")
     state = system.container_state()
-    print(f"server     {state or 'not created'}")
+    # Label and value lines in one column, a state in its colour (look.rows).
+    lines = [("server", (state, "ok") if state == "running" else (state or "not created", "warn"))]
     h = checks.health() if state == "running" else None
     if h:
-        print(f"address    http://{h['host']}/")
-        print(f"content    {h['songs']} songs, patch {h['patch']}")
-        print(f"players    {h['players']}")
+        lines += [("address", f"http://{h['host']}/"), ("content", f"{h['songs']} songs, patch {h['patch']}"),
+                  ("players", str(h["players"]))]
     m = apk_manifest()
     apk = m["host"] if m else None
     note = ""
@@ -368,17 +379,19 @@ def cmd_status(args):
         note = "  (STALE: run ./opendmtq apk)"
     elif m and checks.key_problem(m):
         note = "  (signing key problem: see ./opendmtq doctor)"
-    print(f"apk        {'built for ' + apk if apk else 'not built'}{note}")
+    lines.append(("apk", (f"{'built for ' + apk if apk else 'not built'}{note}", "warn" if note or not apk else "ok")))
     # The builder's last run for this address failed: `up` stops on it, and players may be told to
     # ask the owner. Also when an earlier app is still offered.
     failed = checks.build_problem(host) if host != "?" else None
     if failed:
-        print(f"build      FAILED: {failed} (./opendmtq logs builder)")
+        lines.append(("build", (f"FAILED: {failed} (./opendmtq logs builder)", "bad")))
     files = backup.listing()
-    print(f"backups    {len(files)}{', newest ' + files[0] if files else ''}")
+    lines.append(("backups", f"{len(files)}{', newest ' + files[0] if files else ''}"))
     # Where to sign in on this PC, as up and the setup's end say it: once there is a server to sign in to.
     if host != "?":
-        print(f"admin      {admin_sign_in(env.load(ENV_FILE))}")
+        lines.append(("admin", admin_sign_in(env.load(ENV_FILE))))
+    for line in look.rows(lines):
+        print(line)
 
 
 def cmd_logs(args):
@@ -773,6 +786,7 @@ def cmd_deploy(args):
 
 
 def cmd_setup(args):
+    look.banner(system.code_version())
     if env.windows_drive(ROOT):
         warn("this repository is on a Windows drive: the database is slow there and file owners cannot be "
              "set. Clone it inside WSL instead (for example ~/openDMTQ)")
@@ -849,9 +863,12 @@ def cmd_setup(args):
     # server's own certificate: what it shows then, said where it applies.
     https = "" if lan else (f"\n     The page opens on HTTPS with the server's own certificate, which browsers warn about once (a phone "
                             f"that installs http://{host}/ca.crt does not).")
+    print()
+    for line in address_lines(host, env.load(ENV_FILE)):
+        print(line)
     print(f"""
 Done. The site and the app download open to accounts you make: on the admin pages, under Accounts, make one for
-each player. The admin pages: {admin_sign_in(env.load(ENV_FILE))}
+each player.
 
 On the phone ({where}):
   1. Open  http://{host}/  in the browser, or scan the code below, and sign in.{https}

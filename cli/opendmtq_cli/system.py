@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 
+from . import look
 from .env import load as load_env
 from .env import save as save_env
 
@@ -23,28 +24,22 @@ def firewall_rule_name(port):
     """Display name of the Windows firewall rule cli/firewall.ps1 creates for a port."""
     return f"OpenDMTQ (TCP {port})"
 
-# Colour only on a terminal.
-_TTY = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
-
-
-def _c(code, text):
-    return f"\033[{code}m{text}\033[0m" if _TTY else text
-
-
 def ok(msg):
-    print(f"  {_c('32', 'ok')}    {msg}")
+    # The state words in their colours on a terminal, plain in a pipe (look.py).
+    print(look.state_line("ok", msg))
 
 
 def warn(msg):
-    print(f"  {_c('33', 'warn')}  {msg}")
+    print(look.state_line("warn", msg))
 
 
 def fail(msg):
-    print(f"  {_c('31', 'FAIL')}  {msg}")
+    print(look.state_line("FAIL", msg))
 
 
 def step(msg):
-    print(_c("1", f"\n== {msg}"))
+    # On a terminal a heading with its line; in a pipe or a log, as it always read there.
+    print("\n" + look.rule(msg) if look.is_terminal() else f"\n== {msg}")
 
 
 def count(n, one, many=None):
@@ -53,7 +48,7 @@ def count(n, one, many=None):
 
 
 def die(msg, code=1):
-    print(_c("31", f"error: {msg}"), file=sys.stderr)
+    print(look.paint(f"error: {msg}", "bad", sys.stderr), file=sys.stderr)
     raise SystemExit(code)
 
 
