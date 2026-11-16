@@ -17,8 +17,8 @@ addresses that `tools/opendmtq_tools/patch_apk.py` looks for in the client.
 
 ## For rights holders
 
-This project respects the rights of NEOWIZ and other rights holders. If a rights holder asks, the repository
-will promptly be made private or taken down, in whole or in the part concerned. No lawsuit or formal notice is
+This project respects the rights of NEOWIZ and other rights holders. If the copyright holder requests it, this project
+may be made private or shut down, in whole or in the part concerned. No lawsuit or formal notice is
 needed: a request in the repository's issues is enough, saying who is asking and what it concerns. The
 maintainer can act on this repository's own contents; about a fork, another copy or a particular server, please
 contact whoever runs it.

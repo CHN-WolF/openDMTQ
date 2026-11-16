@@ -193,5 +193,5 @@ built on Dynarmic.
 
 OpenDMTQ's own code and documentation are under the MIT License ([LICENSE](LICENSE)); the parts it brings with it are
 listed in [the notice](docs/notice.md#license). The license does not cover the game or its files, which are not in this
-repository. DJMAX and TECHNIKA Q are trademarks of NEOWIZ. If a rights holder asks through the issues, the repository
-will promptly be made private or taken down, in whole or in part ([notice](docs/notice.md)).
+repository. DJMAX and TECHNIKA Q are trademarks of NEOWIZ. If the copyright holder requests it through the issues, this
+project may be made private or shut down, in whole or in part ([notice](docs/notice.md)).

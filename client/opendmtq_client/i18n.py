@@ -402,7 +402,7 @@ TEXT = {
     "about.license": ("OpenDMTQ is MIT licensed. The launcher brings no game files: the app comes from the server you play on.",
                       "OpenDMTQ는 MIT 라이선스입니다. 런처에는 게임 파일이 없고, 앱은 플레이하는 서버에서 받습니다."),
     "about.notice": ("An unofficial, non-commercial project, not affiliated with or endorsed by NEOWIZ. DJMAX and TECHNIKA Q belong to NEOWIZ.",
-                     "NEOWIZ와 관계없고 승인받지 않은 비공식 비상업 프로젝트입니다. DJMAX와 TECHNIKA Q의 권리는 NEOWIZ에 있습니다."),
+                     "NEOWIZ와 관련이 없는 비공식·비상업 프로젝트입니다. DJMAX와 TECHNIKA Q의 권리는 NEOWIZ에 있습니다."),
 
     # -------------------------------------------------------------------------------------------- guide
     "guide.skip": ("Skip: I set it up myself", "건너뛰기(직접 설정)"),
