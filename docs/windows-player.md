@@ -22,13 +22,14 @@ then plays against the server as it does on a phone.
    download, the picture and the sound, then the ready check and how to play, and **PLAY**. Each step asks its
    question at the top; while **Next** waits, a line under the step says for what.
 
-The installer from the project's [releases](https://github.com/kanggu12/openDMTQ/releases/latest) (`OpenDMTQ-Setup.exe`)
-is the same program without a server: its first start asks for the server's address. One launcher keeps several
-servers, each with its own sign-in and app, and plays on the one chosen on the **Online** page.
+The installer from the project's [releases](https://github.com/kanggu12/openDMTQ/releases/latest)
+(`OpenDMTQ-PC-Client-<version>-windows-x64-Setup.exe`) is the same program without a server: its first start asks for
+the server's address. One launcher keeps several servers, each with its own sign-in and app, and plays on the one
+chosen on the **Online** page.
 Run on a PC that has OpenDMTQ, the installer offers what to do with it: **Open OpenDMTQ**, **Repair** (every file of the
 program put back as it came), **Update** when the installer is newer (or going back to its older version), and
 **Uninstall**. While the game is open, repairing, updating and uninstalling wait for it to close and then go on.
-`OpenDMTQ-Setup.exe --silent` installs or updates with no window and starts the launcher (`--no-start` leaves it
+Either installer with `--silent` installs or updates with no window and starts the launcher (`--no-start` leaves it
 closed); while a game runs it installs nothing and ends with 3.
 
 ### On Linux, with Wine
@@ -345,7 +346,7 @@ title says so alone), and says where it can be watched.
   Scores are kept on the server. The launcher keeps the server's sign-in cookie, never the password.
 - **Repairing, clearing and removing,** on the launcher's **Help** page, each with the same flag of `OpenDMTQ-cmd.exe`:
   - **Repair** compares the program's files with the package it was installed from and puts back what is missing or
-    changed (`--repair`). Running `OpenDMTQ-Setup.exe` again and choosing **Repair** installs every file again.
+    changed (`--repair`). Running the installer again and choosing **Repair** installs every file again.
   - **Clear game data** deletes what the game keeps, all but the device id: the game downloads its data again at the
     next start, and the PC stays the same player (`--clear-game-data`).
   - **Start over** forgets the servers, the sign-ins, the apps and the settings, and opens the first-start guide; the

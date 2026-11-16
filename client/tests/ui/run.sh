@@ -19,6 +19,8 @@ docker run --rm --network none -e PYTHONDONTWRITEBYTECODE=1 -v "$REPO:/src:ro" -
     Xvfb :99 -screen 0 1920x1200x24 -nolisten tcp >/dev/null 2>&1 &
     # A second screen at twice the pixels to the inch, as Windows draws at 200 % scaling.
     Xvfb :98 -screen 0 3840x2160x24 -dpi 192 -nolisten tcp >/dev/null 2>&1 &
+    # A small screen, as a netbook's, for the installer's window.
+    Xvfb :97 -screen 0 800x480x24 -nolisten tcp >/dev/null 2>&1 &
     sleep 1
     # The fonts Tk uses, known to fontconfig the way Windows loads them privately (the leaning face is drawn into
     # pictures only, as on Windows).
@@ -42,6 +44,10 @@ docker run --rm --network none -e PYTHONDONTWRITEBYTECODE=1 -v "$REPO:/src:ro" -
       # A field and its buttons on one height and middle, under their words; the settings' controls from one line.
       python tests/ui/rows.py --lang \$lang || status=1
       DISPLAY=:98 python tests/ui/rows.py --lang \$lang --size 2360x1520 || status=1
+      # The installer's window: every page at 100 %, at 200 % and on a small screen.
+      python tests/ui/setup_shots.py --out /out --lang \$lang || status=1
+      DISPLAY=:98 python tests/ui/setup_shots.py --out /out --lang \$lang --tag 200 || status=1
+      DISPLAY=:97 python tests/ui/setup_shots.py --out /out --lang \$lang --tag small || status=1
       python tests/ui/sheet.py /out \$lang || status=1
     done
     exit \$status"

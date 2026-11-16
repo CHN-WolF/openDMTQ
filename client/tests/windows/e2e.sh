@@ -97,19 +97,18 @@ docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -
   LOCAL=\$(winepath -u 'C:\\users\\root\\AppData\\Local' 2>/dev/null || echo /tmp/wine/drive_c/users/root/AppData/Local)
   step=0
   snap() { step=\$((step + 1)); import -window root \"/out/\$(printf %02d \$step)-\$1.png\"; echo \"screen \$step: \$1\"; }
-  # The launcher's window, its place and size, and a click at a point given from its bottom-right corner.
+  # The launcher's window by its title.
   window() { xdotool search --name \"\$1\" 2>/dev/null | tail -n 1; }
-  click_from_corner() {
+  # A click at a point given from the window's bottom-left corner (the menu column's foot).
+  click_from_left() {
     local id=\$(window '^OpenDMTQ\$'); eval \$(xdotool getwindowgeometry --shell \"\$id\")
-    xdotool mousemove \$((X + WIDTH - \$1)) \$((Y + HEIGHT - \$2)) click 1
+    xdotool mousemove \$((X + \$1)) \$((Y + HEIGHT - \$2)) click 1
   }
-  # A click at a point given from the window's top-left corner (the menu column's entries).
-  click_from_top() {
-    local id=\$(window '^OpenDMTQ\$'); eval \$(xdotool getwindowgeometry --shell \"\$id\")
-    xdotool mousemove \$((X + \$1)) \$((Y + \$2)) click 1
-  }
-  # The guide's Next (and, on its last step, PLAY): the bottom bar's right end.
-  next() { sleep 1; click_from_corner 66 31; sleep 2; }
+  # The menu column's foot at 96 dpi: 248 wide, its buttons 18 in from either side and 20 up from the window's foot.
+  # The guide's Next: the foot's right end (Next is 66 wide, 36 tall).
+  next() { sleep 1; click_from_left 196 38; sleep 2; }
+  # PLAY, on the guide's last step and at the foot of the launcher's column: the slab across the column (54 tall).
+  play() { click_from_left 123 47; }
   wait_for() { local i; for i in \$(seq 1 \$1); do eval \"\$2\" && return 0; sleep 1; done; return 1; }
   # The player as Wine runs it, by its own command line: this script holds the name too, so a plain match on the name
   # would always find the script itself.
@@ -174,7 +173,7 @@ docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -
   next; snap guide-sound
   next; sleep 3; snap guide-stage
   # PLAY: the game starts in the player, and the launcher steps aside.
-  click_from_corner 66 31
+  play
   wait_for 60 player_running || { snap no-player; echo 'FAIL: the player did not start'; exit 1; }
   echo 'player started'
   watch_reveal &
@@ -384,22 +383,22 @@ docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -
   echo 'launcher back'
   sleep 3; snap launcher-back
   # The Screen page with what Windows says of the display, and the Sound page with the devices the player lists, by the
-  # keyboard as a person without a mouse goes: Tab takes the menu first (its ring on PLAY), Right moves the ring along,
-  # Enter opens the page. A menu that does not answer shows the same page twice, and the run fails on it below.
+  # keyboard as a person without a mouse goes: Tab takes the menu first (its ring on PLAY), Down moves the ring down the
+  # column, Enter opens the page. A menu that does not answer shows the same page twice, and the run fails on it below.
   launcher=\$(window '^OpenDMTQ\$'); xdotool windowfocus --sync \"\$launcher\" 2>/dev/null
-  xdotool key Tab; sleep 0.5; xdotool key Right Return; sleep 3; snap screen-page
-  xdotool key Right Return; sleep 10; snap sound-page
+  xdotool key Tab; sleep 0.5; xdotool key Down Return; sleep 3; snap screen-page
+  xdotool key Down Return; sleep 10; snap sound-page
   if [ \"\$(md5sum < /out/\$(printf %02d \$((step - 1)))-screen-page.png | cut -d' ' -f1)\" = \
        \"\$(md5sum < /out/\$(printf %02d \$step)-sound-page.png | cut -d' ' -f1)\" ]; then
     echo 'FAIL: the Screen and Sound clicks showed the same page'; exit 1
   fi
-  # Keyboard play on the Controls page, by the keyboard alone: Right and Enter on the menu open it; Tab moves the menu's
+  # Keyboard play on the Controls page, by the keyboard alone: Down and Enter on the menu open it; Tab moves the menu's
   # ring along ONLINE, HELP and LAUNCHER, then leaves the menu for the page's switch, then goes to 2 LINE's first lane's
   # key and its empty box; Enter makes the box wait, and the key right of L goes in by its place, read through Windows'
   # layout: Semicolon. Then 2 LINE's second lane's empty box with a French layout (AZERTY) on the X server, which Wine
   # takes as Windows' layout: the key that prints A there, at the US layout's Q place, goes in as Q, with A beside it in
   # grey (and M beside Semicolon); the US layout back after.
-  xdotool key Right Return; sleep 3
+  xdotool key Down Return; sleep 3
   xdotool key Tab Tab Tab Tab Tab Tab Return; sleep 1; xdotool key semicolon; sleep 3; snap controls-key
   xdotool key Tab Tab Return; sleep 1; setxkbmap fr; sleep 3; xdotool key a; sleep 3; snap controls-key-french
   setxkbmap us; sleep 3
@@ -446,7 +445,7 @@ docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -
   sleep 6; snap launcher-again
   echo 'the FPS counter is on (--set show_fps=on), the launcher open again'
   # PLAY again: the game makes its data anew and gets to its menu with the same id.
-  click_from_corner 66 31
+  play
   wait_for 60 player_running || { snap no-player-again; echo 'FAIL: the player did not start after clearing'; exit 1; }
   wait_for 180 '[ -n \"\$(ls \"\$GAME\"/data/shots 2>/dev/null)\" ]' \\
     || { snap no-menu-again; echo 'FAIL: the game did not get to its menu after clearing'; exit 1; }

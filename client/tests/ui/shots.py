@@ -1599,128 +1599,6 @@ def standalone_check(out, tag, lang, problems):
                         % (tag, dialog.closed, dialog.result))
 
 
-def installer_check(out, tag, lang, problems):
-    """The installer's dialogs around a stand-in for Velopack's setup: every question, one set up for a server, the
-    work under way, the end with the server handed to the launcher, a failure, and a game running. Velopack itself runs
-    in the Wine end-to-end test (client/tests/windows). With no launcher installed yet, they speak the language Windows
-    is shown in: here `lang`, standing in for it."""
-    from opendmtq_client import __version__, i18n, installer, preset
-    from opendmtq_client import state as st
-    st.system_language = lambda: lang
-    w = i18n.Words(lang)
-    home = tempfile.mkdtemp()
-    os.environ["LOCALAPPDATA"] = home
-    os.environ["OPENDMTQ_CLIENT_DIR"] = os.path.join(home, "OpenDMTQ", "client")
-    app = os.path.join(home, "OpenDMTQ.Client")
-    os.makedirs(os.path.join(app, "current"))
-    # The installed launcher's stub: here a script that only leaves a mark that it ran.
-    stub_exe = os.path.join(app, "OpenDMTQ.exe")
-    with open(stub_exe, "w") as f:
-        f.write("#!/bin/sh\ntouch '%s/started'\n" % home)
-    os.chmod(stub_exe, 0o755)
-    # An installer a site handed out: the server on its end.
-    setup_file = os.path.join(home, "OpenDMTQ-Setup-club.test-8790.exe")
-    with open(setup_file, "wb") as f:
-        f.write(b"MZ" + bytes(4096) + preset.tail("http://club.test:8790", "Club 서버"))
-
-    def fake_setup(code, version):
-        """A stand-in for Velopack's setup that takes a second, then installs `version` or fails."""
-        path = os.path.join(home, "setup-%d.sh" % code)
-        with open(path, "w") as f:
-            f.write("#!/bin/sh\nsleep 1\n")
-            if code == 0:
-                f.write("printf '<version>%s</version>' > '%s/current/sq.version'\n" % (version, app))
-            else:
-                # Velopack's setup's own line for a disk short of room, as it wrote it under Wine on a 150 MB disk.
-                f.write("echo '[setup:488] [12:00:01] [ERROR] An error has occurred: OpenDMTQ requires at least 187.19 "
-                        "MB disk space to be installed. There is only 57.59 MB available.' >> \"$3\"\n")
-            f.write("exit %d\n" % code)
-        os.chmod(path, 0o755)
-        os.environ["OPENDMTQ_VELOPACK_SETUP"] = path
-
-    def installed(version):
-        sq = os.path.join(app, "current", "sq.version")
-        if version is None:
-            if os.path.exists(sq):
-                os.remove(sq)
-        else:
-            with open(sq, "w") as f:
-                f.write("<version>%s</version>" % version)
-
-    def run_until(inst, seconds, until=lambda: False):
-        end = time.time() + seconds
-        while time.time() < end and not until():
-            try:
-                inst.root.update()
-            except Exception:  # noqa: BLE001  (the window closed itself)
-                return
-            time.sleep(0.02)
-
-    # A version below this one, for the update it offers (whatever this build's version is).
-    major, minor, patch = installer.version_key(__version__)[0]
-    older = ("%d.%d.%d" % (major, minor, patch - 1) if patch else "%d.%d.0" % (major, minor - 1) if minor else
-             "%d.0.0" % (major - 1) if major else "0.0.0")
-    for name, have, running, from_site in (("fresh", None, False, False), ("fresh-server", None, False, True),
-                                           ("update", older, True, True), ("same", __version__, False, False),
-                                           ("newer", "9.0.0", False, False)):
-        installed(have)
-        installer.launcher_open = lambda running=running: running
-        if from_site:
-            os.environ["OPENDMTQ_SETUP_FILE"] = setup_file
-        else:
-            os.environ.pop("OPENDMTQ_SETUP_FILE", None)
-        inst = installer.Installer()
-        run_until(inst, 0.6)
-        shot(inst.root, out, "%s_setup-%s" % (tag, name))
-        problems.extend(dialog_problems(inst.dialog, "%s_setup-%s" % (tag, name)))
-        inst.dialog.canvas.event_generate("<Escape>")
-        run_until(inst, 0.3)
-    # Install from a site's installer: the work under way, then the end, the server handed over, the launcher started.
-    installed(None)
-    fake_setup(0, __version__)
-    os.environ["OPENDMTQ_SETUP_FILE"] = setup_file
-    inst = installer.Installer()
-    run_until(inst, 0.5)
-    inst.dialog.canvas.event_generate("<Return>")
-    run_until(inst, 0.5)
-    shot(inst.root, out, "%s_setup-working" % tag)
-    problems.extend(dialog_problems(inst.dialog, "%s_setup-working" % tag))
-    run_until(inst, 2.0, until=lambda: inst.process.poll() is not None)
-    run_until(inst, 0.4)
-    shot(inst.root, out, "%s_setup-done" % tag)
-    run_until(inst, 2.0)
-    if not os.path.exists(os.path.join(home, "started")):
-        problems.append("%s: the installer did not start the launcher" % tag)
-    if installer.installed_version() != __version__:
-        problems.append("%s: the stand-in setup did not install" % tag)
-    if preset.take() != {"url": "http://club.test:8790", "name": "Club 서버"}:
-        problems.append("%s: the installer did not hand its server to the launcher" % tag)
-    # A failure: Velopack's last error line and where the log is.
-    installed(None)
-    fake_setup(1, __version__)
-    inst = installer.Installer()
-    run_until(inst, 0.5)
-    inst.dialog.canvas.event_generate("<Return>")
-    run_until(inst, 2.5, until=lambda: inst.process is not None and inst.process.poll() is not None)
-    run_until(inst, 0.6)
-    shot(inst.root, out, "%s_setup-failed" % tag)
-    problems.extend(dialog_problems(inst.dialog, "%s_setup-failed" % tag))
-    # The full disk said in the installer's language, then where the log is; Velopack's own words only in the logs.
-    if not (inst.dialog.detail or "").startswith(w("fault.disk_full") + "\n") or "57.59" in inst.dialog.detail:
-        problems.append("%s: the failure did not say the full disk plainly: %r" % (tag, inst.dialog.detail))
-    inst.root.destroy()
-    # A game running: the installer waits instead of replacing the player under it.
-    installed(older)
-    installer.game_running = lambda: True
-    inst = installer.Installer()
-    run_until(inst, 0.5)
-    shot(inst.root, out, "%s_setup-game-running" % tag)
-    problems.extend(dialog_problems(inst.dialog, "%s_setup-game-running" % tag))
-    if inst.dialog.message != w("setup.game"):
-        problems.append("%s: the installer did not wait for the game: %r" % (tag, inst.dialog.message))
-    inst.root.destroy()
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
@@ -1791,7 +1669,7 @@ def main():
     standalone_check(args.out, tag, args.lang, problems)
     stopped_check(args.out, tag, args.lang, problems)
     # The installer in this language (Windows' display language, with no launcher installed yet).
-    installer_check(args.out, tag, args.lang, problems)
+    # The installer's window is measured by tests/ui/setup_shots.py.
     site.stop()
     with open(os.path.join(args.out, "problems-%s.txt" % tag), "w", encoding="utf-8") as f:
         f.write("\n".join(problems) + ("\n" if problems else ""))
