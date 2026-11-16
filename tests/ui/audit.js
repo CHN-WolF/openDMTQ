@@ -571,7 +571,11 @@ async function signInForms(contexts) {
   await page.type('.account-form input[name=password2]', 'another-one');
   await page.click('.account-form .btn-primary');
   await pause(300);
-  const said = await textOf(page, '.form-says');
+  // Said under the second field's row (admin.js), which names the words.
+  const said = await page.$eval('.account-form input[name=password2]', f => {
+    const w = document.getElementById(f.getAttribute('aria-describedby') || '');
+    return w ? w.textContent : '';
+  }).catch(() => '');
   check('two different passwords are said before anything is sent', /not the same/.test(said) && new URL(page.url()).pathname === '/opendmtq/admin/accounts'
     && await page.evaluate(() => document.activeElement.name) === 'password2', said);
   await page.close();
@@ -628,8 +632,9 @@ async function hoverOnly(contexts) {
           return !!box && box.textContent === w;
         }, words);
         const where = `${name}, mark ${index + 1}, ${at}`;
-        // The keyboard: its focus shows the words, whole and on top; Escape takes them away.
-        await mark.focus();
+        // The keyboard: its focus shows the words, whole and on top; Escape takes them away. (By the page's own focus(): a
+        // chart's mark is a drawing's part, which the test's own way to focus refuses.)
+        await mark.evaluate(e => e.focus());
         await pause(150);
         const focused = await shown();
         const whole = await wholeOnTop(page, '.chart-tip:not([hidden])');
@@ -853,9 +858,10 @@ async function portalFlows(contexts) {
   // away (its size and date, the way to the steps) and the way to the broadcasts.
   const front = await contexts.signed.newPage();
   const arrived = await front.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
-  // The release (run.sh passes 0.9.3-abc1234, as a clone past a release's tag has it): v0.9.3, the commit under the pointer.
+  // The release (run.sh passes 0.9.3-abc1234, as a clone past a release's tag has it): v0.9.3, the commit in its words
+  // (data-tip: under a pointer, on a press, on the focus).
   check('the home page shows the version beside the logo', /v\d+\.\d+\.\d+$/.test((await textOf(front, '.stage-mark')).trim())
-    && await front.$eval('.server-ver', e => e.title) === 'abc1234', await textOf(front, '.stage-mark'));
+    && await front.$eval('.server-ver', e => e.dataset.tip) === 'abc1234', await textOf(front, '.stage-mark'));
   check('the front page offers the app and the broadcasts first',
     await front.$eval('.stage-acts .button', a => new URL(a.href).pathname).catch(() => '') === '/apk' && await visible(front, '#watch-live') && await visible(front, '.stage-meta a[href="download.php"]'));
   // The site's answers, its pages, files and JSON alike, are never shown inside another site's page, never taken for
@@ -1190,7 +1196,7 @@ async function keyboardMarks(contexts) {
   const read = page => page.evaluate(() => {
     const num = el => Number((el && el.textContent || '').replace(/[^0-9]/g, '')) || 0;
     const id = (a, key) => a ? Number(new URL(a.href, location.href).searchParams.get(key)) : 0;
-    const mark = el => { const m = el && el.querySelector('.keys-mark'); return m ? [m.getAttribute('title'), m.getAttribute('aria-label'), m.getAttribute('role')] : null; };
+    const mark = el => { const m = el && el.querySelector('.keys-mark'); return m ? [m.getAttribute('data-tip'), m.getAttribute('aria-label'), m.getAttribute('role')] : null; };
     // Each mark where it stands: on a line with what it marks, 4 to 8 px from it (before a score's first figure, or after a
     // name on the podium), at a phone's width too, whole and on the screen.
     const placed = [...document.querySelectorAll('.keys-mark')].map(m => {
