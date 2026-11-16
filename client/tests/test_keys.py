@@ -181,8 +181,8 @@ class SettingsFile(unittest.TestCase):
     def test_the_player_gets_them_after_the_sound(self):
         text = choices.settings_text({"keyboard": "off", "keys_2line": "f/g j", "keys_4line": "1 2 3 4"})
         lines = [line for line in text.splitlines() if not line.startswith("#")]
-        # After the volume, in the player's order, in the names it takes.
-        self.assertEqual(lines[lines.index("volume=100") + 1:],
+        # After the sound's (the volumes, the equaliser), in the player's order, in the names it takes.
+        self.assertEqual(lines[lines.index("eq_high=0") + 1:],
                          ["keyboard=off", "keys_2line=F/G J", "keys_3line=D F J", "keys_4line=1 2 3 4"])
 
 
@@ -288,8 +288,8 @@ class Table(unittest.TestCase):
     def setUp(self):
         from opendmtq_client import pages
         self.pages = pages
-        # The page drawn again in place after a key goes in: nothing to draw here.
-        self.redraw = mock.patch.object(pages, "redraw_in_place")
+        # The table made again in place after a key goes in: nothing to make here.
+        self.redraw = mock.patch.object(pages.LaneKeys, "again")
         self.redraw.start()
         # The launcher's state as the table reads it, and its changes kept to look at.
         self.values = choices.normalize({"keys_3line": "D/E F J"})

@@ -269,6 +269,9 @@ class LauncherState:
         is the player's choice from then on (a corner given as show_fps's value chooses the counter's corner too)."""
         merged = dict(self.values)
         merged[name] = value
+        if name in choices.EQ_BANDS:
+            # A band set by itself is the player's own equaliser: a preset would put its own bands back over it.
+            merged["eq"] = "custom"
         self.values = choices.normalize(merged)
         self.chosen.add(name)
         if name == "show_fps" and str(value).strip().lower() in choices.FPS_POSITION:

@@ -35,6 +35,8 @@ docker run --rm --network none -e PYTHONDONTWRITEBYTECODE=1 -v "$REPO:/src:ro" -
       DISPLAY=:98 python tests/ui/shots.py --out /out --lang \$lang --size 2360x1520 || status=1
       # The keyboard alone: Tab's order, a control it reaches out of view brought into view, redraws in place.
       python tests/ui/keyboard.py --lang \$lang || status=1
+      # A setting changed draws only what it changes: the screen filmed, no frame of a page half drawn.
+      python tests/ui/flicker.py --lang \$lang --report /out/flicker-\$lang.txt || status=1
       # A field and its buttons on one height and middle, under their words; the settings' controls from one line.
       python tests/ui/rows.py --lang \$lang || status=1
       DISPLAY=:98 python tests/ui/rows.py --lang \$lang --size 2360x1520 || status=1

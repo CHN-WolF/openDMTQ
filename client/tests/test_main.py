@@ -148,7 +148,7 @@ class CommandLine(Folder):
         code, said = self.run_main(["--play"])
         self.assertEqual(code, 0, said)
         lines = self.started()["settings"].splitlines()
-        self.assertEqual(lines[lines.index("volume=100") + 1:lines.index("volume=100") + 5],
+        self.assertEqual(lines[lines.index("eq_high=0") + 1:lines.index("eq_high=0") + 5],
                          ["keyboard=on", "keys_2line=F/G J", "keys_3line=D F J", "keys_4line=1 2 3 4"])
 
     def test_audio_devices(self):
@@ -647,6 +647,32 @@ class Maintenance(Folder):
         self.assertEqual(code, 0, said)
         values = st.LauncherState.load().values
         self.assertEqual((values["volume"], values["keys_2line"]), (40, "D K"))
+
+    def test_the_sound_settings_one_by_one(self):
+        # Master, music, effects and the equaliser by --set, each said back; a band set alone makes the equaliser custom;
+        # --status lists them all; the player's settings file has them at once, as the window writes it at a change.
+        from opendmtq_client import player
+        code, said = self.run_main(["--set", "music_volume=40", "--set", "effects_volume=70", "--set", "eq=bass"])
+        self.assertEqual(code, 0, said)
+        for line in ("music_volume=40", "effects_volume=70", "eq=bass"):
+            self.assertIn(line, said)
+        code, said = self.run_main(["--set", "eq_low=-3"])
+        self.assertEqual(code, 0, said)
+        values = st.LauncherState.load().values
+        self.assertEqual((values["eq"], values["eq_low"], values["eq_mid"]), ("custom", -3, 1))
+        with open(player.settings_path(), encoding="utf-8") as f:
+            written = f.read().splitlines()
+        for line in ("music_volume=40", "effects_volume=70", "eq=custom", "eq_low=-3", "eq_mid=1", "eq_high=0"):
+            self.assertIn(line, written)
+        code, said = self.run_main(["--status"])
+        for name in ("music_volume=40", "effects_volume=70", "eq=custom", "eq_low=-3", "eq_mid=1", "eq_high=0"):
+            self.assertIn(name, said)
+        # Out of range, and the frame limit as any rate in the player's range (a 160 Hz display's own).
+        code, said = self.run_main(["--set", "eq_high=13"])
+        self.assertEqual(code, 2, said)
+        code, said = self.run_main(["--set", "fps=160"])
+        self.assertEqual(code, 0, said)
+        self.assertEqual(st.LauncherState.load().values["fps"], "160")
 
     def test_they_run_on_their_own(self):
         for args in (["--repair", "--status"], ["--uninstall", "--clear-game-data"], ["--delete-data"]):

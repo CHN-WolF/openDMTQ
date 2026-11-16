@@ -15,8 +15,12 @@ DISPLAY = ("fullscreen", "window")
 WINDOW_SIZES = ("auto", "1280x720", "1600x900", "1920x1080", "2560x1440", "3840x2160")
 # Frames on the display's refreshes, or as soon as they are drawn.
 VSYNC = ("on", "off")
-# The most frames a second: the display's own rate, a number, or as many as the PC makes.
+# The most frames a second: the display's own rate, a number, or as many as the PC makes. The numbers the Screen page
+# offers follow the PC's displays (displays.frame_limits: up to the fastest one's rate, 160, 165 and 180 Hz included);
+# these are the ones offered where no display says its rate. Any whole number in the player's range is taken (FPS_RANGE).
 FPS = ("auto", "30", "60", "120", "144", "165", "180", "240", "360", "unlimited")
+# The player's range for a number (arm32/desktop/settings.cpp: number(value, 30, 1000, n)).
+FPS_RANGE = (30, 1000)
 # The share of the game's area the game draws at, in percent (the picture is stretched to the area).
 RENDER_SCALE = ("100", "85", "75", "67", "50")
 # Below 100 %, how the picture reaches the area's size: the plain stretch, AMD FidelityFX Super Resolution 1, or NVIDIA
@@ -40,6 +44,20 @@ OLD_FPS_POSITION = "top_left"
 AUDIO_MODE = ("shared", "exclusive")
 # How much sound is kept ahead of the device: less latency, or fewer breaks on a busy PC.
 AUDIO_BUFFER = ("low", "normal", "safe")
+# The three-band equaliser on the game's whole output: flat, a preset, or the player's own bands (custom).
+EQ = ("flat", "bass", "vocal", "treble", "custom")
+# Each preset's bands in dB (low, mid, high): the launcher writes them as eq_low, eq_mid and eq_high with the preset,
+# so the player hears the same whichever of the two it reads.
+EQ_PRESETS = {"flat": (0, 0, 0), "bass": (6, 1, 0), "vocal": (-2, 4, 1), "treble": (0, 1, 6)}
+# The bands' names in the settings file, from the lowest, and the range each takes (dB).
+EQ_BANDS = ("eq_low", "eq_mid", "eq_high")
+EQ_RANGE = (-12, 12)
+# The volumes, each a whole number from 0 to 100: the master (volume, as earlier launchers wrote it), and the music and
+# the effects as a share of it.
+VOLUMES = ("volume", "music_volume", "effects_volume")
+# The sound's settings the player's in-game menu may write back into the settings file (the launcher takes them from
+# there when its window comes back to the front, app.LauncherApp.took_back).
+AUDIO_BACK = VOLUMES + ("eq",) + EQ_BANDS
 # Keyboard play: the lanes' keys play a song's lanes, or play nothing.
 KEYBOARD = ("on", "off")
 # Each LINE mode's keys, by its setting's name, and how many lanes the mode has (the game's rows, counted from the top).
@@ -85,6 +103,12 @@ DEFAULTS = {
     "audio_mode": "shared",
     "audio_buffer": "normal",
     "volume": 100,
+    "music_volume": 100,
+    "effects_volume": 100,
+    "eq": "flat",
+    "eq_low": 0,
+    "eq_mid": 0,
+    "eq_high": 0,
     # Keyboard play on, each lane on the home row's keys under the index and middle fingers, the lanes from the top
     # from left to right on the keyboard.
     "keyboard": "on",
@@ -95,14 +119,15 @@ DEFAULTS = {
 # The order the settings file lists them in, the player's own order: the picture's, the sound's, then keyboard play's.
 # The counter's corner is no key of the player's: show_fps carries it there (off, or the corner it is on in).
 ORDER = ("display", "window", "vsync", "fps", "render_scale", "upscaler", "anti_aliasing", "show_fps", "audio_device",
-         "audio_mode", "audio_buffer", "volume", "keyboard") + tuple(LANES)
+         "audio_mode", "audio_buffer", "volume", "music_volume", "effects_volume", "eq", "eq_low", "eq_mid", "eq_high",
+         "keyboard") + tuple(LANES)
 # Every setting the launcher keeps, in the order it lists them (--set, --status): the player's, the counter's corner
 # after the counter.
 NAMES = ORDER[:ORDER.index("show_fps") + 1] + ("fps_position",) + ORDER[ORDER.index("show_fps") + 1:]
 # The choices of each setting that has a fixed list.
-CHOICES = {"display": DISPLAY, "vsync": VSYNC, "fps": FPS, "render_scale": RENDER_SCALE, "upscaler": UPSCALER,
+CHOICES = {"display": DISPLAY, "vsync": VSYNC, "render_scale": RENDER_SCALE, "upscaler": UPSCALER,
            "anti_aliasing": ANTI_ALIASING, "show_fps": SHOW_FPS, "fps_position": FPS_POSITION, "audio_mode": AUDIO_MODE,
-           "audio_buffer": AUDIO_BUFFER, "keyboard": KEYBOARD}
+           "audio_buffer": AUDIO_BUFFER, "eq": EQ, "keyboard": KEYBOARD}
 # A window size the player takes (its own bounds: 480x270 to 16384 a side). 480x270 is also the smallest area its window
 # holds at 100 %; at Windows' scale it is that many of Windows' own pixels (smallest_on).
 SIZE = re.compile(r"^(\d{3,5})x(\d{3,5})$")
@@ -128,6 +153,16 @@ def _one(name, value):
             raise ChoiceError("%s cannot be %r: it is one of %s" % (name, value, ", ".join(CHOICES[name])), "error.choice",
                               name=name, value=value)
         return text
+    if name == "fps":
+        # The display's own rate, no limit, or a whole number of frames a second in the player's range.
+        text = str(value).strip().lower()
+        if text in ("auto", "unlimited"):
+            return text
+        if not text.isdigit() or not FPS_RANGE[0] <= int(text) <= FPS_RANGE[1]:
+            raise ChoiceError("fps cannot be %r: it is auto, unlimited or a number from %d to %d" % ((value,) + FPS_RANGE),
+                              "error.fps", value=value, least=FPS_RANGE[0], most=FPS_RANGE[1])
+        # Kept without leading zeros, as the page lists it.
+        return str(int(text))
     if name == "window":
         text = str(value).strip().lower()
         found = SIZE.match(text)
@@ -137,15 +172,17 @@ def _one(name, value):
             raise ChoiceError("window cannot be %r: it is auto or WIDTHxHEIGHT (%dx%d or more)" % ((value,) + SMALLEST), "error.choice",
                               name=name, value=value)
         return "%dx%d" % (int(found.group(1)), int(found.group(2)))
-    if name == "volume":
+    if name in VOLUMES or name in EQ_BANDS:
+        # A volume from 0 to 100, or a band from -12 to 12 dB: a whole number, a + before it taken ("+3").
+        least, most = (0, 100) if name in VOLUMES else EQ_RANGE
         try:
             number = int(str(value).strip())
         except ValueError:
-            raise ChoiceError("volume cannot be %r: it is a number from 0 to 100" % (value,), "error.choice", name=name,
-                              value=value) from None
-        if not 0 <= number <= 100:
-            raise ChoiceError("volume cannot be %r: it is a number from 0 to 100" % (value,), "error.choice", name=name,
-                              value=value)
+            raise ChoiceError("%s cannot be %r: it is a number from %d to %d" % (name, value, least, most),
+                              "error.number", name=name, value=value, least=least, most=most) from None
+        if not least <= number <= most:
+            raise ChoiceError("%s cannot be %r: it is a number from %d to %d" % (name, value, least, most),
+                              "error.number", name=name, value=value, least=least, most=most)
         return number
     if name == "audio_device":
         text = str(value).strip()
@@ -260,7 +297,28 @@ def normalize(values, strict=True):
         except ChoiceError:
             if strict:
                 raise
+    if merged["eq"] in EQ_PRESETS:
+        # A preset's bands are the preset's, whatever was set before: the bands the file writes say what is heard.
+        merged.update(zip(EQ_BANDS, EQ_PRESETS[merged["eq"]]))
     return merged
+
+
+def took_back(values, text):
+    """The sound's settings in a settings file the player wrote back (AUDIO_BACK, each line name=value) that differ from
+    `values`, as {name: value}; a line that is none, or a value the launcher does not take, is left out."""
+    found = {}
+    for line in text.splitlines():
+        name, sep, value = line.partition("=")
+        name = name.strip()
+        if not sep or name not in AUDIO_BACK:
+            continue
+        try:
+            found[name] = _one(name, value)
+        except ChoiceError:
+            continue
+    # The bands as the file has them, and a preset's own when it names one (normalize keeps them together).
+    merged = normalize(dict(values, **found), strict=False)
+    return {name: merged[name] for name in AUDIO_BACK if merged[name] != values.get(name)}
 
 
 def settings_text(values):

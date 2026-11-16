@@ -83,6 +83,9 @@ class LauncherApp:
         self.server_reached = None      # the ready check's last answer from the server: {"url", "reached", "at"}
         self.update_found = None        # a newer launcher the look at the start found (updates.Result), or None
         self.pumps = 0                  # turns of the task pump, for the slower look for an installer's server
+        self.page_follow = None         # the page's (or the guide's step's) own update for settings changed from
+        #                                 outside: the Sound page's controls for what the in-game menu wrote back
+        self.took_mtime = None          # the settings file's time when the window last looked at it (took_back)
         self._setup_fonts()
         self._size_window()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -91,6 +94,11 @@ class LauncherApp:
         self.failure_said = False       # the first such failure of this run was said (the next ones go to the log)
         # Shown again while a game runs (the window was closed, then OpenDMTQ started again): it stays after the game.
         self.root.bind("<Map>", self._mapped, add="+")
+        # Back to the front (after a game, from another window): the sound the player's in-game menu set comes back.
+        self.root.bind("<FocusIn>", lambda e: self.took_back(), add="+")
+        # The displays and their rates, once a start, in the log: what the Screen page's frame limits come from.
+        from opendmtq_client import displays
+        log.info("displays: %s", displays.describe(displays.connected()))
         self.root.after(50, self._pump)
         self.show()
         self._update_outcome()
@@ -508,6 +516,8 @@ class LauncherApp:
         for child in self.body.inner.winfo_children():
             child.destroy()
         self.download_bar = None
+        # The page that went took its own update with it; the new one sets its own (Screen, Sound).
+        self.page_follow = None
         content = tk.Frame(self.body.inner, bg=theme.BG)
         content.pack(fill="both", expand=True)
         title, description = pages.heading(self, page)
@@ -787,11 +797,65 @@ class LauncherApp:
     # ------------------------------------------------------------------------------- changes
 
     def changed(self, name, value):
-        """A PC setting changed on a page: remember it (the player reads it at the next PLAY)."""
+        """A PC setting changed on a page: remember it, and write the settings file the player reads (it reads it at the
+        next PLAY; its in-game menu writes the sound's settings back into it)."""
         self.state.set_value(name, value)
         self.state.save()
+        self.write_settings()
         self.user_acted()
         self.set_status(i18n.Said("status.saved"), "normal")
+
+    def write_settings(self):
+        """The player's settings file as the launcher's settings are now; a failure is logged, the next PLAY writes it
+        again."""
+        try:
+            player.write_settings(self.state.values, self.state.picked_language)
+            self.took_mtime = self._settings_mtime()
+        except OSError:
+            log.exception("could not write the player's settings")
+
+    @staticmethod
+    def _settings_mtime():
+        """The player's settings file's time, or None while there is none."""
+        import os
+        try:
+            return os.stat(player.settings_path()).st_mtime_ns
+        except OSError:
+            return None
+
+    def took_back(self):
+        """The sound's settings the player's in-game menu wrote back into its settings file since the launcher last
+        wrote or read it (values.took_back): kept as the launcher's own, and the page on show updated in place. Asked
+        each time the window comes back to the front; a file the window has seen as it is now is not read again."""
+        mtime = self._settings_mtime()
+        if mtime is None or mtime == self.took_mtime:
+            return
+        self.took_mtime = mtime
+        import os
+        try:
+            kept = os.stat(st.LauncherState.path()).st_mtime_ns
+        except OSError:
+            kept = None
+        if kept is not None and mtime <= kept:
+            # Written before the launcher last kept its settings (by the launcher itself, or by the command line's
+            # --set, which keeps them after): nothing in it the launcher does not have.
+            return
+        try:
+            with open(player.settings_path(), encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        except OSError:
+            return
+        from opendmtq_client import values as choices
+        found = choices.took_back(self.state.values, text)
+        if not found:
+            return
+        log.info("the in-game menu set the sound: %s", ", ".join("%s=%s" % item for item in sorted(found.items())))
+        # The preset last: a band set makes the equaliser custom, and a preset the file names puts its own bands back.
+        for name in sorted(found, key=lambda n: n == "eq"):
+            self.state.set_value(name, found[name])
+        self.state.save()
+        if self.page_follow is not None:
+            self.page_follow()
 
     def set_language(self, language):
         """Switch the words and fonts: the whole window is rebuilt in the other language. "system" follows Windows'

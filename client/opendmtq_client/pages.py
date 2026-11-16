@@ -51,14 +51,12 @@ def _card(parent, ui, title, last=False):
 # The gap between two cards (the site's --gap is 20 px; the window is smaller than a page).
 CARD_GAP = 16
 
-# The names of the setting rows a choice or the PC brings to a page or takes from it (a window's size, the counter's
-# corner, the upscaler; the game's log once the game has run, Repair and Uninstall in an installed launcher): counted in
-# the page's names' column whether shown or not (widgets.fit_names), so that none of them moves the controls when it comes.
+# The names of the setting rows the PC brings to a page or takes from it (the game's log once the game has run, Repair and
+# Uninstall in an installed launcher): counted in the page's names' column whether shown or not (widgets.fit_names), so
+# that none of them moves the controls when it comes. The rows a choice brings (a window's size, the counter's corner,
+# the upscaler) are made with their page, hidden while they do not apply, and counted as they are.
 ROWS_THAT_COME = {
-    "screen": ("screen.size", "screen.counter.position", "screen.upscaler"),
     "help": ("help.player_log", "help.repair.row", "help.uninstall.row"),
-    # The guide's SOUND CHECK: the Screen page's first rows, the counter's corner among them.
-    "guide:sound": ("screen.counter.position",),
 }
 
 
@@ -273,107 +271,157 @@ def check_row(check, w, on_play=False, in_guide=False, installed=False):
 # -------------------------------------------------------------------------------------------- Screen
 
 
-def screen_rows(app, parent, redraw, full=True):
+def screen_rows(app, parent, full=True):
     """The Screen page's settings in their cards, which the guide's SOUND CHECK shows too (full=False: the ones a first
-    start needs)."""
+    start needs). Every row is made once: a choice changes its own control, the hints that follow from it and the rows
+    it brings or takes (shown or hidden in place, widgets.RowList), never the page (client/tests/ui/flicker.py)."""
     ui, w, v = app.ui, app.words, app.state.values
     display = displays.main_display(app.root)
-    mode = v["display"]
+    found = displays.connected()
+    rows = {}
 
-    def set_and_redraw(name):
-        def setter(value):
-            app.changed(name, value)
-            # The rows and hints that follow depend on it: draw the page again.
-            redraw()
-        return setter
+    def setter(name, value):
+        app.changed(name, value)
+        # The rows and hints that follow from it, in place.
+        follow()
 
     card = _card(parent, ui, w("screen.display"))
-    widgets.setting_row(card.body, ui, w("screen.mode"),
-                        lambda p: widgets.Segmented(p, ui, [("fullscreen", w("screen.mode.fullscreen")),
-                                                            ("window", w("screen.mode.window"))], mode,
-                                                    set_and_redraw("display")),
-                        w("screen.mode.hint." + mode)).pack(fill="x")
-    if mode == "window" and full:
+    shown = widgets.RowList(card.body, ui)
+    shown.pack(fill="x")
+    slot = shown.add()
+    rows["mode"] = widgets.setting_row(
+        slot.body, ui, w("screen.mode"),
+        lambda p: widgets.Segmented(p, ui, [("fullscreen", w("screen.mode.fullscreen")), ("window", w("screen.mode.window"))],
+                                    v["display"], lambda value: setter("display", value)),
+        w("screen.mode.hint." + v["display"]))
+    rows["mode"].pack(fill="x")
+    if full:
         # Sizes that fit the display with room for the title bar and the taskbar (values.fits, which --set window= uses
         # too); fitted always stays.
-        sizes = [s for s in choices.WINDOW_SIZES if choices.fits(s, display)]
+        sizes = [size for size in choices.WINDOW_SIZES if choices.fits(size, display)]
         if v["window"] not in sizes:
             # A size set on the command line keeps its row.
             sizes.append(v["window"])
-        options = [(s, w("screen.size.auto") if s == "auto" else s.replace("x", " × ")) for s in sizes]
-        widgets.divider(card.body, ui)
-        widgets.setting_row(card.body, ui, w("screen.size"),
-                            lambda p: widgets.Select(p, ui, options, v["window"], lambda s: app.changed("window", s),
+        options = [(size, w("screen.size.auto") if size == "auto" else size.replace("x", " × ")) for size in sizes]
+        rows["size_slot"] = shown.add(shown=v["display"] == "window")
+        widgets.setting_row(rows["size_slot"].body, ui, w("screen.size"),
+                            lambda p: widgets.Select(p, ui, options, v["window"], lambda size: setter("window", size),
                                                      width=22),
                             w("screen.size.hint")).pack(fill="x")
+        slot = shown.add()
+        widgets.label(slot.body, ui, displays_line(w, display, found), font=ui.fonts.small, fg=theme.MUTED,
+                      wrap_margin=0).pack(fill="x")
+    # The frame limits: the display's own rate, every rate up to the fastest display's, and no limit (fps_options).
     hz = display.get("hz")
-    if full:
-        widgets.divider(card.body, ui)
-        widgets.label(card.body, ui, w("screen.main", w=display["width"], h=display["height"]) + (
-            w("screen.main.hz", hz=hz) if hz else ""), font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0).pack(
-            fill="x")
     card = _card(parent, ui, w("screen.frames"), last=not full)
-    vsync = v["vsync"] == "on"
-    widgets.setting_row(card.body, ui, w("screen.vsync"),
-                        lambda p: widgets.Toggle(p, ui, vsync,
-                                                 lambda on: set_and_redraw("vsync")("on" if on else "off")),
-                        w("screen.vsync.hint." + ("on" if vsync else "off"))).pack(fill="x")
-    rate = w("screen.fps.auto.hz", hz=hz) if hz else w("screen.fps.auto")
-    # With VSync on a display whose rate is known, the limits above that rate are left out: VSync holds the game at the
-    # display's rate whatever the limit (values.vsync_refreshes, the player's own arithmetic). A limit set before (with
-    # VSync off, or on the command line) keeps its row, and its hint says so.
-    options = [(f, rate if f == "auto" else w("screen.fps.unlimited") if f == "unlimited" else w("screen.fps.n", n=f))
-               for f in fps_choices(vsync, hz, v["fps"])]
-    widgets.divider(card.body, ui)
-    widgets.setting_row(card.body, ui, w("screen.fps"),
-                        lambda p: widgets.Select(p, ui, options, v["fps"], set_and_redraw("fps"), width=22),
-                        fps_hint(w, vsync, v["fps"], hz)).pack(fill="x")
-    # The frame counter over the game, on or off; while on, its corner (the bottom right unless another is picked). Drawn
-    # again on a change: the corner's row is there only while the counter is on.
-    counter = v["show_fps"] == "on"
-    widgets.divider(card.body, ui)
-    widgets.setting_row(card.body, ui, w("screen.counter"),
-                        lambda p: widgets.Toggle(p, ui, counter,
-                                                 lambda on: set_and_redraw("show_fps")("on" if on else "off")),
-                        w("screen.counter.hint." + ("on" if counter else "off"))).pack(fill="x")
-    if counter:
-        options = [(c, w("screen.counter.position." + c)) for c in choices.FPS_POSITION]
-        widgets.divider(card.body, ui)
-        widgets.setting_row(card.body, ui, w("screen.counter.position"),
-                            lambda p: widgets.Select(p, ui, options, v["fps_position"],
-                                                     lambda c: app.changed("fps_position", c), width=22),
-                            w("screen.counter.position.hint")).pack(fill="x")
-    if not full:
-        return
-    card = _card(parent, ui, w("screen.picture"), last=True)
-    options = [(s, w("screen.scale.full") if s == "100" else "%s%%" % s) for s in choices.RENDER_SCALE]
-    # Drawn again on a change: the upscaler's row is there only below 100 %.
-    widgets.setting_row(card.body, ui, w("screen.scale"),
-                        lambda p: widgets.Select(p, ui, options, v["render_scale"], set_and_redraw("render_scale"),
-                                                 width=22),
-                        w("screen.scale.hint")).pack(fill="x")
-    if v["render_scale"] != "100":
-        # What makes the picture of a lower scale the area's size; its hint says what the chosen one does.
-        options = [(u, w("screen.upscaler." + u)) for u in choices.UPSCALER]
-        widgets.divider(card.body, ui)
-        widgets.setting_row(card.body, ui, w("screen.upscaler"),
-                            lambda p: widgets.Select(p, ui, options, v["upscaler"], set_and_redraw("upscaler"), width=22),
-                            w("screen.upscaler.hint." + v["upscaler"])).pack(fill="x")
-    # The edges smoothed, at any scale; its hint says what the chosen one does.
-    options = [(a, w("screen.aa." + a)) for a in choices.ANTI_ALIASING]
-    kind = v["anti_aliasing"]
-    widgets.divider(card.body, ui)
-    widgets.setting_row(card.body, ui, w("screen.aa"),
-                        lambda p: widgets.Select(p, ui, options, v["anti_aliasing"], set_and_redraw("anti_aliasing"),
-                                                 width=22),
-                        w("screen.aa.hint." + kind)).pack(fill="x")
+    frames = widgets.RowList(card.body, ui)
+    frames.pack(fill="x")
+    rows["vsync"] = widgets.setting_row(
+        frames.add().body, ui, w("screen.vsync"),
+        lambda p: widgets.Toggle(p, ui, v["vsync"] == "on", lambda on: setter("vsync", "on" if on else "off")), " ")
+    rows["vsync"].pack(fill="x")
+    rows["fps"] = widgets.setting_row(
+        frames.add().body, ui, w("screen.fps"),
+        lambda p: widgets.Select(p, ui, fps_options(w, found, hz, v["fps"]), v["fps"], lambda f: setter("fps", f),
+                                 width=22), " ")
+    rows["fps"].pack(fill="x")
+    # The frame counter over the game, on or off; while on, its corner (the bottom right unless another is picked).
+    rows["counter"] = widgets.setting_row(
+        frames.add().body, ui, w("screen.counter"),
+        lambda p: widgets.Toggle(p, ui, v["show_fps"] == "on", lambda on: setter("show_fps", "on" if on else "off")),
+        " ")
+    rows["counter"].pack(fill="x")
+    options = [(corner, w("screen.counter.position." + corner)) for corner in choices.FPS_POSITION]
+    rows["corner_slot"] = frames.add(shown=v["show_fps"] == "on")
+    widgets.setting_row(rows["corner_slot"].body, ui, w("screen.counter.position"),
+                        lambda p: widgets.Select(p, ui, options, v["fps_position"],
+                                                 lambda corner: setter("fps_position", corner), width=22),
+                        w("screen.counter.position.hint")).pack(fill="x")
+    if full:
+        card = _card(parent, ui, w("screen.picture"), last=True)
+        picture = widgets.RowList(card.body, ui)
+        picture.pack(fill="x")
+        options = [(scale, w("screen.scale.full") if scale == "100" else "%s%%" % scale) for scale in choices.RENDER_SCALE]
+        widgets.setting_row(picture.add().body, ui, w("screen.scale"),
+                            lambda p: widgets.Select(p, ui, options, v["render_scale"],
+                                                     lambda scale: setter("render_scale", scale), width=22),
+                            w("screen.scale.hint")).pack(fill="x")
+        # What makes the picture of a lower scale the area's size, there only below 100 %; its hint says what the
+        # chosen one does.
+        options = [(kind, w("screen.upscaler." + kind)) for kind in choices.UPSCALER]
+        rows["upscaler_slot"] = picture.add(shown=v["render_scale"] != "100")
+        rows["upscaler"] = widgets.setting_row(
+            rows["upscaler_slot"].body, ui, w("screen.upscaler"),
+            lambda p: widgets.Select(p, ui, options, v["upscaler"], lambda kind: setter("upscaler", kind), width=22), " ")
+        rows["upscaler"].pack(fill="x")
+        # The edges smoothed, at any scale; its hint says what the chosen one does.
+        options = [(kind, w("screen.aa." + kind)) for kind in choices.ANTI_ALIASING]
+        rows["aa"] = widgets.setting_row(
+            picture.add().body, ui, w("screen.aa"),
+            lambda p: widgets.Select(p, ui, options, v["anti_aliasing"], lambda kind: setter("anti_aliasing", kind),
+                                     width=22), " ")
+        rows["aa"].pack(fill="x")
+
+    def follow():
+        """The hints and the rows that follow from the settings as they are now, in place."""
+        values = app.state.values
+        if not rows["mode"].winfo_exists():
+            # The page went (another page, the guide's next step) before a late change came.
+            return
+        rows["mode"].say(w("screen.mode.hint." + values["display"]))
+        vsync = values["vsync"] == "on"
+        rows["vsync"].say(w("screen.vsync.hint." + ("on" if vsync else "off")))
+        rows["fps"].control.set_options(fps_options(w, found, hz, values["fps"]), values["fps"])
+        rows["fps"].say(fps_hint(w, vsync, values["fps"], single_rate(found, hz)))
+        counter = values["show_fps"] == "on"
+        rows["counter"].say(w("screen.counter.hint." + ("on" if counter else "off")))
+        frames.show(rows["corner_slot"], counter)
+        if full:
+            shown.show(rows["size_slot"], values["display"] == "window")
+            picture.show(rows["upscaler_slot"], values["render_scale"] != "100")
+            rows["upscaler"].say(w("screen.upscaler.hint." + values["upscaler"]))
+            rows["aa"].say(w("screen.aa.hint." + values["anti_aliasing"]))
+
+    follow()
+    return follow
 
 
-def fps_choices(vsync, hz, current):
-    """The frame limits the Screen page offers: all of them, but with VSync on a display whose rate is known none above
-    that rate (VSync holds the game at it whatever the limit); the `current` one keeps its row all the same."""
-    offered = [f for f in choices.FPS if not (vsync and hz) or not choices.above_rate(hz, f)]
+def displays_line(w, display, found):
+    """The line under the display's rows: the main display's size and rate, then the other displays' rates when there
+    are others ("Other displays: 180 Hz")."""
+    hz = display.get("hz")
+    line = w("screen.main", w=display["width"], h=display["height"]) + (w("screen.main.hz", hz=hz) if hz else "")
+    others = [d for d in found if not d.get("main")]
+    if others:
+        rates = ", ".join("%d Hz" % d["hz"] for d in others if d.get("hz"))
+        if rates:
+            line += " · " + w("screen.others", rates=rates)
+    return line
+
+
+def single_rate(found, hz):
+    """The one refresh rate the hints can name: the main display's when no other display has another rate, else None
+    (the game may play on either, and its rate follows the display it is on)."""
+    rates = {d["hz"] for d in found if d.get("hz")}
+    if len(rates) > 1:
+        return None
+    return hz or (rates.pop() if rates else None)
+
+
+def fps_choices(found, current):
+    """The frame limits the Screen page offers, as the settings file writes them: the display's own rate (auto), every
+    rate up to the fastest connected display's (displays.frame_limits: 160, 165 and 180 Hz displays offer their own),
+    and no limit; the `current` one keeps its row all the same (one set on the command line)."""
+    offered = ["auto"] + [str(rate) for rate in displays.frame_limits(found)] + ["unlimited"]
     return offered + ([current] if current not in offered else [])
+
+
+def fps_options(w, found, hz, current):
+    """fps_choices as the drop-down's (value, words): the display's rate by its number when one rate is known."""
+    rate = single_rate(found, hz)
+    auto = w("screen.fps.auto.hz", hz=rate) if rate else w("screen.fps.auto")
+    return [(f, auto if f == "auto" else w("screen.fps.unlimited") if f == "unlimited" else w("screen.fps.n", n=f))
+            for f in fps_choices(found, current)]
 
 
 def fps_hint(w, vsync, fps, hz):
@@ -438,65 +486,136 @@ def redraw_in_place(app, page):
 
 
 def build_screen(app, parent):
-    screen_rows(app, parent, lambda: redraw_in_place(app, "screen"))
+    app.page_follow = screen_rows(app, parent)
 
 
 # --------------------------------------------------------------------------------------------- Sound
 
 
-def sound_rows(app, parent, redraw, full=True):
-    """The Sound page's settings in their cards, which the guide's SOUND CHECK shows too (full=False: the volume
-    alone)."""
+def decibels(w, n):
+    """A band's level as the Sound page says it: "+3 dB", "0 dB", "-3 dB"."""
+    return w("sound.db", sign="+" if n > 0 else "-" if n < 0 else "", n=abs(n))
+
+
+def sound_rows(app, parent, full=True):
+    """The Sound page's settings in their cards, which the guide's SOUND CHECK shows too (full=False: the volumes
+    alone). Made once: a choice changes its own control and the hints and controls that follow from it, in place (an
+    equaliser's preset moves its bands, a band moved makes it Custom); the devices, when the player lists them, take
+    the place of the line that waited for them. Returns follow(), which shows the settings as they are now (values the
+    player's in-game menu wrote back)."""
     ui, w, v = app.ui, app.words, app.state.values
+    rows = {}
     card = _card(parent, ui, w("sound.volume"), last=not full)
-    widgets.setting_row(card.body, ui, w("sound.volume.game"),
-                        lambda p: widgets.Slider(p, ui, v["volume"], lambda val: app.changed("volume", val)),
-                        w("sound.volume.hint")).pack(fill="x")
+    volumes = widgets.RowList(card.body, ui)
+    volumes.pack(fill="x")
+    for name, key in (("volume", "master"), ("music_volume", "music"), ("effects_volume", "effects")):
+        rows[name] = widgets.setting_row(
+            volumes.add().body, ui, w("sound.volume." + key),
+            lambda p, name=name: widgets.Slider(p, ui, v[name], lambda value, name=name: app.changed(name, value)),
+            w("sound.volume.%s.hint" % key))
+        rows[name].pack(fill="x")
+
+    def follow():
+        """The controls and hints as the settings are now, in place."""
+        values = app.state.values
+        if not rows["volume"].winfo_exists():
+            # The page went before a late change came.
+            return
+        for name in choices.VOLUMES:
+            rows[name].control.set(values[name])
+        if full:
+            rows["eq"].control.set(values["eq"])
+            rows["eq"].say(w("sound.eq.hint." + values["eq"]))
+            for band in choices.EQ_BANDS:
+                rows[band].control.set(values[band])
+            rows["mode"].say(w("sound.mode.hint." + values["audio_mode"]))
+            rows["buffer"].say(w("sound.buffer.hint." + values["audio_buffer"]))
+
     if not full:
-        return
+        return follow
+
+    # The equaliser: a preset, or the player's own three bands; a preset sets the bands, a band moved makes it Custom.
+    card = _card(parent, ui, w("sound.eq"))
+    eq = widgets.RowList(card.body, ui)
+    eq.pack(fill="x")
+
+    def preset(value):
+        app.changed("eq", value)
+        follow()
+
+    def band(name, value):
+        app.changed(name, value)
+        follow()
+
+    rows["eq"] = widgets.setting_row(
+        eq.add().body, ui, w("sound.eq.preset"),
+        lambda p: widgets.Segmented(p, ui, [(kind, w("sound.eq." + kind)) for kind in choices.EQ], v["eq"], preset),
+        w("sound.eq.hint." + v["eq"]))
+    rows["eq"].pack(fill="x")
+    least, most = choices.EQ_RANGE
+    for name, key in zip(choices.EQ_BANDS, ("low", "mid", "high")):
+        rows[name] = widgets.setting_row(
+            eq.add().body, ui, w("sound.eq." + key),
+            lambda p, name=name: widgets.Slider(p, ui, v[name], lambda value, name=name: band(name, value), least=least,
+                                                most=most, step=1, say=lambda n: decibels(w, n)))
+        rows[name].pack(fill="x")
+
     card = _card(parent, ui, w("sound.output"), last=True)
-    if app.devices is None:
-        # Asked once from the player, on a worker thread; the page is drawn again with the answer.
-        widgets.setting_row(card.body, ui, w("sound.device"),
-                            lambda p: widgets.label(p, ui, w("sound.device.looking"), fg=theme.MUTED)).pack(fill="x")
-        app.load_devices(then=redraw)
-    else:
+    output = widgets.RowList(card.body, ui)
+    output.pack(fill="x")
+    device_slot = output.add()
+
+    def device_row():
+        """The device's row: the line that waits for the player's list, or the drop-down once it came."""
+        for child in device_slot.body.winfo_children():
+            child.destroy()
+        if app.devices is None:
+            widgets.setting_row(device_slot.body, ui, w("sound.device"),
+                                lambda p: widgets.label(p, ui, w("sound.device.looking"), fg=theme.MUTED)).pack(fill="x")
+            return
+        values = app.state.values
         options = [("default", w("sound.device.default"))]
         options += [(d["id"], d["name"] + (w("sound.device.now_default") if d["default"] else "")) for d in app.devices]
-        if v["audio_device"] != "default" and all(d["id"] != v["audio_device"] for d in app.devices):
+        if values["audio_device"] != "default" and all(d["id"] != values["audio_device"] for d in app.devices):
             # A device chosen before that is not there now (unplugged): it stays chosen, and says so.
-            options.append((v["audio_device"], w("sound.device.gone")))
-        widgets.setting_row(card.body, ui, w("sound.device"),
-                            lambda p: widgets.Select(p, ui, options, v["audio_device"],
+            options.append((values["audio_device"], w("sound.device.gone")))
+        widgets.setting_row(device_slot.body, ui, w("sound.device"),
+                            lambda p: widgets.Select(p, ui, options, values["audio_device"],
                                                      lambda d: app.changed("audio_device", d), width=34),
                             w("sound.device.hint" if app.devices else "sound.device.none")).pack(fill="x")
+        # The page's names' column counts the new row's name as it counted the one before.
+        widgets.fit_names(parent, ui)
 
-    def set_and_redraw(name):
-        def setter(value):
+    device_row()
+    if app.devices is None:
+        # Asked once from the player, on a worker thread; the row alone is made again with the answer, while it is on
+        # show (another page or step since leaves it be).
+        app.load_devices(then=lambda: device_slot.winfo_exists() and device_row())
+
+    def setter(name):
+        def chosen(value):
             app.changed(name, value)
-            redraw()
-        return setter
+            follow()
+        return chosen
 
-    mode = v["audio_mode"]
-    widgets.divider(card.body, ui)
-    widgets.setting_row(card.body, ui, w("sound.mode"),
-                        lambda p: widgets.Segmented(p, ui, [("shared", w("sound.mode.shared")),
-                                                            ("exclusive", w("sound.mode.exclusive"))], mode,
-                                                    set_and_redraw("audio_mode")),
-                        w("sound.mode.hint." + mode)).pack(fill="x")
-    buffer = v["audio_buffer"]
-    widgets.divider(card.body, ui)
-    widgets.setting_row(card.body, ui, w("sound.buffer"),
-                        lambda p: widgets.Segmented(p, ui, [("low", w("sound.buffer.low")),
-                                                            ("normal", w("sound.buffer.normal")),
-                                                            ("safe", w("sound.buffer.safe"))], buffer,
-                                                    set_and_redraw("audio_buffer")),
-                        w("sound.buffer.hint." + buffer)).pack(fill="x")
+    rows["mode"] = widgets.setting_row(
+        output.add().body, ui, w("sound.mode"),
+        lambda p: widgets.Segmented(p, ui, [("shared", w("sound.mode.shared")), ("exclusive", w("sound.mode.exclusive"))],
+                                    v["audio_mode"], setter("audio_mode")),
+        w("sound.mode.hint." + v["audio_mode"]))
+    rows["mode"].pack(fill="x")
+    rows["buffer"] = widgets.setting_row(
+        output.add().body, ui, w("sound.buffer"),
+        lambda p: widgets.Segmented(p, ui, [("low", w("sound.buffer.low")), ("normal", w("sound.buffer.normal")),
+                                            ("safe", w("sound.buffer.safe"))], v["audio_buffer"], setter("audio_buffer")),
+        w("sound.buffer.hint." + v["audio_buffer"]))
+    rows["buffer"].pack(fill="x")
+    return follow
 
 
 def build_sound(app, parent):
-    # Drawn again in place for a choice and for the devices when they come (only while the page is still on show).
-    sound_rows(app, parent, lambda: app.page == "sound" and redraw_in_place(app, "sound"))
+    # Changed in place; the window keeps follow() for values the player's in-game menu writes back (app.took_back).
+    app.page_follow = sound_rows(app, parent)
 
 
 # ------------------------------------------------------------------------------------------ Controls
@@ -522,24 +641,30 @@ def build_controls(app, parent):
 
 def lanes_card(app, parent):
     """Keyboard play's card: the switch for it and, while it is on, each LINE mode's lanes with their keys (LaneKeys)
-    and Reset keys at the card's title. Switched, the page is drawn again in place, the lanes coming or going with it,
-    as the Screen page's FPS counter brings its Position row."""
-    ui, w, v = app.ui, app.words, app.state.values
+    and Reset keys at the card's title. The lanes are made with the page and shown or hidden in place by the switch, the
+    rest of the page as it was."""
+    ui, w = app.ui, app.words
     card = _card(parent, ui, w("controls.keys"))
-    on = v["keyboard"] == "on"
+    on = app.state.values["keyboard"] == "on"
+    # The title's line as tall as it is with Reset keys on it, whether that is there or not: the switch stays where it
+    # was, under the pointer that switched it.
+    tk.Frame(card.head, bg=theme.PANEL, width=1, height=ui.px(widgets.Button.HEIGHT)).pack(side="right")
+    rows = widgets.RowList(card.body, ui, pady=0)
 
     def switch(value):
         app.changed("keyboard", "on" if value else "off")
-        redraw_in_place(app, "controls")
+        row.say(w("controls.keys.play.hint." + ("on" if value else "off")))
+        rows.show(holder, value)
+        table.show_reset(value)
 
-    widgets.setting_row(card.body, ui, w("controls.keys.play"), lambda p: widgets.Toggle(p, ui, on, switch),
-                        w("controls.keys.play.hint." + ("on" if on else "off"))).pack(fill="x")
-    if on:
-        LaneKeys(app, card)
-    else:
-        # The title's line as tall as it is with Reset keys on it: the switch stays where it was, under the pointer that
-        # switched it off.
-        tk.Frame(card.head, bg=theme.PANEL, width=1, height=ui.px(widgets.Button.HEIGHT)).pack(side="right")
+    row = widgets.setting_row(rows.add().body, ui, w("controls.keys.play"), lambda p: widgets.Toggle(p, ui, on, switch),
+                              w("controls.keys.play.hint." + ("on" if on else "off")))
+    row.pack(fill="x")
+    rows.pack(fill="x")
+    # Where the lanes go, under the switch: made whether shown or not, so that the switch only shows them.
+    holder = rows.add(shown=on)
+    table = LaneKeys(app, card, holder.body)
+    table.show_reset(on)
 
 
 class LaneKeys:
@@ -557,10 +682,29 @@ class LaneKeys:
     # The room between two modes' columns, between a lane's two boxes, and above and under each lane (logical pixels).
     COLUMN_GAP, BOX_GAP, LANE_GAP = 24, 6, 3
 
-    def __init__(self, app, card):
+    def show_reset(self, shown):
+        """Reset keys at the card's title while the lanes show, gone while keyboard play is off."""
+        if shown and not self.reset_button.winfo_manager():
+            self.reset_button.pack(side="right")
+        elif not shown and self.reset_button.winfo_manager():
+            self.reset_button.pack_forget()
+
+    @staticmethod
+    def clear(card, holder):
+        """The lanes and Reset keys gone from the card (before they are made again)."""
+        for child in holder.winfo_children():
+            child.destroy()
+        for child in card.head.winfo_children():
+            if isinstance(child, widgets.Button):
+                child.destroy()
+
+    def __init__(self, app, card, holder):
         self.app, self.ui, self.w = app, app.ui, app.words
+        self.card, self.holder = card, holder
         ui, w, px = self.ui, self.w, self.ui.px
         values = app.state.values
+        # Made in the holder, which keeps its place under the switch: whatever was there before goes first.
+        LaneKeys.clear(card, holder)
         # The box that waits for a key, or None.
         self.waiting = None
         # The windows whose input method is off while a box waits (keys.typing_off), given back when the wait ends.
@@ -568,8 +712,8 @@ class LaneKeys:
         # A plain button, as Check again is on the PLAY page: the screen's lime action stays PLAY's.
         self.reset_button = widgets.Button(card.head, ui, w("controls.keys.reset"), self.reset)
         self.reset_button.pack(side="right")
-        widgets.divider(card.body, ui)
-        table = tk.Frame(card.body, bg=theme.PANEL)
+        widgets.divider(holder, ui)
+        table = tk.Frame(holder, bg=theme.PANEL)
         table.pack(anchor="w")
         # The page going (another page, a language, the window closing) ends a wait as well: the input method comes back.
         table.bind("<Destroy>", lambda e: self.typing_back() if e.widget is table else None)
@@ -583,6 +727,8 @@ class LaneKeys:
                 row=lane + 1, column=0, sticky="w")
         # Whether a box shows what the keyboard prints beside its key's name: the line under the table then says what it is.
         shown = False
+        # Every box, in Tab's order (again() finds the one the keyboard was on by its place).
+        self.boxes = []
         # Made mode by mode, each from its top lane: Tab goes down a column, then to the next.
         for column, name in enumerate(choices.LANES, 1):
             for lane, lane_keys in enumerate(choices.lanes_of(name, values[name])):
@@ -598,6 +744,7 @@ class LaneKeys:
                     box.pack(side="left", padx=(px(self.BOX_GAP) if slot else 0, 0))
                     # Which box it is: the mode's setting, the lane from the top, the box in the lane.
                     box.odq_where = (name, lane, slot)
+                    self.boxes.append(box)
                     box.bind("<Button-1>", lambda e, b=box: self.clicked(b))
                     box.bind("<KeyPress>", lambda e, b=box: self.pressed(b, e))
                     # A held key's release: its next press counts again (pressed() leaves its repeats out).
@@ -606,7 +753,7 @@ class LaneKeys:
         # What to do, said under the table; what a box waits for, or why a key was refused, said in its place. The
         # line about the grey prints only while a box shows one.
         self.hint = i18n.sentences(w("controls.keys.hint"), w("controls.keys.hint.print") if shown else "")
-        self.line = widgets.label(card.body, ui, self.hint, font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0)
+        self.line = widgets.label(holder, ui, self.hint, font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0)
         self.line.pack(fill="x", pady=(px(12), 0))
         # Tab reaches Reset keys after the boxes: the switch stays the card's first stop whether the lanes are shown or
         # not, so the page drawn again for it keeps the keyboard on it (keep_place finds a control by its place in the
@@ -742,8 +889,24 @@ class LaneKeys:
         # The wait is over: the input method back before the page is drawn again.
         self.typing_back()
         self.app.changed(name, choices.lanes_text(lanes))
-        redraw_in_place(self.app, "controls")
+        self.again()
         return True
+
+    def again(self, where=None):
+        """The table made again in its place for keys that changed, the keyboard back on the same box ("reset": on Reset
+        keys): only the lanes, the rest of the page as it was."""
+        focused = self.app.root.focus_get()
+        where = where or getattr(focused, "odq_where", None)
+        fresh = LaneKeys(self.app, self.card, self.holder)
+        fresh.show_reset(True)
+        if where == "reset":
+            # Reset keys was pressed: the keyboard stays on it.
+            fresh.reset_button.focus_set()
+            return
+        for box in fresh.boxes:
+            if box.odq_where == where:
+                box.focus_set()
+                break
 
     def reset(self):
         """Reset keys: each mode's default keys back, saved; the page drawn again in place."""
@@ -753,7 +916,8 @@ class LaneKeys:
         for name in choices.LANES:
             if self.app.state.values[name] != choices.DEFAULTS[name]:
                 self.app.changed(name, choices.DEFAULTS[name])
-        redraw_in_place(self.app, "controls")
+        # Only the lanes made again, the keyboard on Reset keys again (it is the button just pressed).
+        self.again(where="reset")
 
 
 # -------------------------------------------------------------------------------------------- Online

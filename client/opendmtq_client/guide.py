@@ -91,6 +91,8 @@ class Guide:
             child.destroy()
         # A progress bar of the page that went: the download's progress waits for the next one.
         app.download_bar = None
+        # The step that went took its own update with it (SOUND CHECK sets its own).
+        app.page_follow = None
         key = STEPS[index]
         # The step's question as the page's title, in the player's language (the strip above names the step), and its
         # few words under it.
@@ -250,9 +252,11 @@ class Guide:
         app, px = self.app, self.app.ui.px
         # The same rows as the Sound and Screen pages, the ones a first start needs: the volume first, in view without
         # scrolling in the smallest window, the picture's rows under it.
-        pages.sound_rows(app, parent, self.redraw, full=False)
+        sound = pages.sound_rows(app, parent, full=False)
         tk.Frame(parent, bg=theme.BG, height=px(pages.CARD_GAP)).pack(fill="x")
-        pages.screen_rows(app, parent, self.redraw, full=False)
+        screen = pages.screen_rows(app, parent, full=False)
+        # What the player's in-game menu writes back shows here as on the pages (app.took_back).
+        app.page_follow = lambda: (sound(), screen())
 
     # ------------------------------------------------------------------------- 6 STAGE START
 

@@ -338,6 +338,8 @@ class Header(tk.Canvas):
 # How long a page that came out shorter than its view reaches waits before it is measured again (ms): the rows made
 # anew have their sizes within a few, in the same turn of the event loop.
 SETTLE = 60
+# The steps the picture behind a page is drawn tall in (logical pixels): a page that grows within its step keeps it.
+BACKDROP_ROOM = 480
 
 
 class ScrollArea(tk.Frame):
@@ -488,7 +490,11 @@ class ScrollArea(tk.Frame):
             self._shrink_job = None
         self._region_height = height
         c.configure(scrollregion=(0, 0, width, height))
-        if self._backdrop_size != (width, content):
+        drawn = self._backdrop_size
+        if drawn is None or drawn[0] != width or drawn[1] < content:
+            # Another width, or a page taller than the picture behind it: drawn once the size settles (a drag fires many
+            # resize events). A page as wide that got shorter, or taller within the picture's room, keeps it: a row
+            # that comes or goes never waits for the picture (BACKDROP_ROOM).
             if self._backdrop_job is not None:
                 self.after_cancel(self._backdrop_job)
             self._backdrop_job = self.after(60, self._draw_backdrop)
@@ -511,6 +517,10 @@ class ScrollArea(tk.Frame):
             return
         width, seen = max(1, c.winfo_width()), max(1, c.winfo_height())
         height = max(seen, self._content_top + self.inner.winfo_reqheight() + self.ui.px(self.BOTTOM))
+        # Drawn taller than the page by up to BACKDROP_ROOM, to the next whole step: rows that come take that room
+        # without a picture drawn again (the field below the page's top is the same all the way down).
+        step = self.ui.px(BACKDROP_ROOM)
+        height = (height + step - 1) // step * step
         self._backdrop_size = (width, height)
         picture = art.backdrop(width, height, self.ui.scale, offset=self.offset, top=self.light)
         self._backdrop_image = ImageTk.PhotoImage(picture, master=c)
@@ -667,8 +677,9 @@ def follow_width(ui, widget, margin=0, beside=()):
             return sum(w.winfo_pixels(str(p)) for p in pad)
         return 2 * w.winfo_pixels(str(pad))
 
-    def update(event=None):
-        width = master.winfo_width()
+    def update(event=None, width=None):
+        # The box's width as laid out, or as a caller knows it will be (a row about to be shown, RowList.show).
+        width = width or master.winfo_width()
         if width <= 1 or not widget.winfo_exists():
             return
         taken = sum(b.winfo_reqwidth() for b in beside if b.winfo_exists())
@@ -683,6 +694,8 @@ def follow_width(ui, widget, margin=0, beside=()):
     widget.configure(wraplength=ui.px(START_WRAP))
     master.bind("<Configure>", update, add="+")
     widget.after_idle(update)
+    # Wrapped for a width the box will have before it is laid out (RowList.show): no moment of narrow text.
+    widget.odq_wrap = lambda width: update(width=width)
 
 
 def focus_ring(widget, ui, bg):
@@ -1012,38 +1025,55 @@ class Segmented(tk.Frame):
 
 
 class Slider(tk.Frame):
-    """A 0-100 slider with its number beside it; command(value) runs when the drag ends. Its track is let into the card
-    and runs from the slider's own left edge, so it starts on the same line as the controls above and under it; the knob
-    stands on the track, inside its ends."""
+    """A slider with its number beside it, from `least` to `most` (0 to 100 for a volume); command(value) runs when the
+    drag ends and at each step of the keyboard. Its track is let into the card and runs from the slider's own left edge,
+    so it starts on the same line as the controls above and under it; the knob stands on the track, inside its ends. A
+    range that goes below zero (an equaliser's band) is lit from its zero, marked on the track. `say(value)` is the
+    number's words ("+3 dB"); `step` what an arrow key moves it by."""
 
-    def __init__(self, parent, ui, value, command, bg=None, width=320):
+    def __init__(self, parent, ui, value, command, bg=None, width=320, least=0, most=100, step=5, say=str):
         bg = bg or parent.cget("bg")
         super().__init__(parent, bg=bg)
         self.ui, self.command, self.value, self.bg = ui, command, int(value), bg
+        self.least, self.most, self.step, self.say = least, most, step, say
         self.w, self.h = ui.px(width), ui.px(26)
         self.colour = theme.OK
         self.knob_size = ui.px(18)
         self.knob_img = ImageTk.PhotoImage(art.knob(self.knob_size, ring=self.colour, scale=ui.scale), master=parent)
         self.canvas = tk.Canvas(self, width=self.w, height=self.h, bg=bg, highlightthickness=0, cursor="hand2")
         self.canvas.pack(side="left")
-        self.number = tk.Label(self, text="", font=ui.fonts.body_bold, fg=theme.TEXT, bg=bg, width=4, anchor="e")
+        # As wide as the longest words it can say ("-12 dB"), so that the slider never moves as the number changes.
+        widest = max(len(say(least)), len(say(most)), len(say(0)), 4)
+        self.number = tk.Label(self, text="", font=ui.fonts.body_bold, fg=theme.TEXT, bg=bg, width=widest, anchor="e")
         self.number.pack(side="left", padx=(ui.px(10), 0))
         self.canvas.bind("<Button-1>", self._drag)
         self.canvas.bind("<B1-Motion>", self._drag)
         self.canvas.bind("<ButtonRelease-1>", lambda e: self.command(self.value))
-        # Tab reaches it; the arrow keys move it by 5 (Home and End to either end), each step saved as a drag's end is.
+        # Tab reaches it; the arrow keys move it by a step (Home and End to either end), each step saved as a drag's end.
         focus_ring(self.canvas, ui, bg)
         # A canvas's ring covers its edge: the drawing starts inside it, and the track's left end that far in.
         self.inset = int(self.canvas.cget("highlightthickness"))
         self.odq_inset = self.inset
-        for key, to in (("<Left>", lambda v: v - 5), ("<Right>", lambda v: v + 5), ("<Down>", lambda v: v - 5),
-                        ("<Up>", lambda v: v + 5), ("<Home>", lambda v: 0), ("<End>", lambda v: 100)):
+        for key, to in (("<Left>", lambda v: v - self.step), ("<Right>", lambda v: v + self.step),
+                        ("<Down>", lambda v: v - self.step), ("<Up>", lambda v: v + self.step),
+                        ("<Home>", lambda v: self.least), ("<End>", lambda v: self.most)):
             self.canvas.bind(key, lambda e, to=to: self._key(to))
         self._draw()
 
+    def _fraction(self, value):
+        """Where a value lies along the range, from 0 to 1."""
+        return (value - self.least) / float(max(1, self.most - self.least))
+
+    def set(self, value):
+        """Show another value (one the player's in-game menu wrote back), saying nothing."""
+        value = int(min(self.most, max(self.least, int(value))))
+        if value != self.value:
+            self.value = value
+            self._draw()
+
     def _key(self, to):
         """A move from the keyboard: the new value, drawn and saved."""
-        value = int(min(100, max(0, to(self.value))))
+        value = int(min(self.most, max(self.least, to(self.value))))
         if value != self.value:
             self.value = value
             self._draw()
@@ -1053,23 +1083,26 @@ class Slider(tk.Frame):
         """Where a value's knob sits: its centre a knob's half inside either end of the track, so the knob never
         stands past the track's ends."""
         half = self.knob_size / 2.0
-        return getattr(self, "inset", 0) + half + (self.w - 2 * half) * value / 100.0
+        return getattr(self, "inset", 0) + half + (self.w - 2 * half) * self._fraction(value)
 
     def _drag(self, event):
         half = self.knob_size / 2.0
         frac = (event.x - getattr(self, "inset", 0) - half) / float(max(1, self.w - 2 * half))
-        self.value = int(round(min(1.0, max(0.0, frac)) * 100))
+        frac = min(1.0, max(0.0, frac))
+        self.value = int(round(self.least + frac * (self.most - self.least)))
         self._draw()
 
     def _draw(self):
         c, mid = self.canvas, getattr(self, "inset", 0) + self.h // 2
         c.delete("all")
         thick = max(4, self.ui.px(6))
-        # The track as a picture let into the card, lit up to the knob's middle, from the slider's left edge.
-        fraction = (self._x(self.value) - getattr(self, "inset", 0)) / float(self.w)
-        picture = art.slider_track(self.w, thick, fraction, self.colour, self.ui.scale, bg=self.bg)
-        self._track_img = ImageTk.PhotoImage(picture, master=c)
         inset = getattr(self, "inset", 0)
+        # The track as a picture let into the card, lit up to the knob's middle from the slider's left edge, or from
+        # the range's zero when it goes below it.
+        fraction = (self._x(self.value) - inset) / float(self.w)
+        origin = (self._x(0) - inset) / float(self.w) if self.least < 0 < self.most else 0.0
+        picture = art.slider_track(self.w, thick, fraction, self.colour, self.ui.scale, bg=self.bg, origin=origin)
+        self._track_img = ImageTk.PhotoImage(picture, master=c)
         c.create_image(inset, mid, image=self._track_img, anchor="w")
         c.create_image(self._x(self.value), mid, image=self.knob_img)
         # A dialog draws the window behind it from the widgets (snapshot.py): the canvas as it looks now, the track and
@@ -1080,7 +1113,7 @@ class Slider(tk.Frame):
         knob = art.knob(self.knob_size, ring=self.colour, scale=self.ui.scale)
         whole.paste(knob, (int(self._x(self.value) - self.knob_size / 2.0), mid - self.knob_size // 2), knob)
         c.odq_picture = whole
-        self.number.configure(text=str(self.value))
+        self.number.configure(text=self.say(self.value))
 
 
 class Select(ttk.Combobox):
@@ -1090,13 +1123,22 @@ class Select(ttk.Combobox):
     their place, never by their words."""
 
     def __init__(self, parent, ui, options, value, command, width=24):
-        self.options = list(options)
+        self.options, self.ui = list(options), ui
         pad, _ = list_pad(ui)
         super().__init__(parent, values=[pad + t for _, t in self.options], state="readonly", width=width,
                          style="Dark.TCombobox", font=ui.fonts.body)
         self.command = command
         self.set_value(value)
         self.bind("<<ComboboxSelected>>", self._chosen)
+
+    def set_options(self, options, value):
+        """Other choices (the frame limits a display brings), the one shown kept, in place."""
+        options = list(options)
+        if options != self.options:
+            pad, _ = list_pad(self.ui)
+            self.options = options
+            self.configure(values=[pad + t for _, t in self.options])
+        self.set_value(value)
 
     def set_value(self, value):
         for i, (v, _) in enumerate(self.options):
@@ -1141,8 +1183,17 @@ def setting_row(parent, ui, title, control_factory, hint=None, bg=None):
     hint_label = None
     if hint:
         hint_label = label(row, ui, hint, font=ui.fonts.small, fg=theme.MUTED, bg=bg, wrap_margin=4)
-        hint_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(ui.px(4), 0))
+        # As wide as the row, whatever its words: other words (a choice's own hint, say) are drawn whole in the same box at
+        # once, never cut for a moment while the row makes room for them.
+        hint_label.grid(row=1, column=0, columnspan=2, sticky="we", pady=(ui.px(4), 0))
     row.control, row.hint = control, hint_label
+
+    def say(text):
+        """Another hint under the row (a choice's own), in place."""
+        if row.hint is not None and row.hint.cget("text") != text:
+            row.hint.configure(text=text)
+
+    row.say = say
     return row
 
 
@@ -1191,6 +1242,73 @@ class Card(tk.Frame):
         corner = tk.Label(self, image=self._corner, bd=0, highlightthickness=0, bg=outside)
         corner.odq_picture = picture
         corner.place(relx=1.0, x=-cut, y=0, width=cut, height=cut)
+
+
+class RowList(tk.Frame):
+    """A card's rows, each in a slot of its own with the card's faint line before it, that come and go in place: a choice
+    that brings a row (the counter's corner, the upscaler) shows its slot, and one that takes it hides it, the rows
+    before and after it as they were. Nothing else of the page is made again, so the window never shows a page half
+    drawn (client/tests/ui/flicker.py)."""
+
+    def __init__(self, parent, ui, pady=12):
+        super().__init__(parent, bg=parent.cget("bg"))
+        self.ui, self.pady = ui, pady
+        # The slots in their order, and which of them show.
+        self.slots, self.shown = [], {}
+
+    def add(self, shown=True):
+        """A new slot at the end: a frame to build its row in (slot.body), its line before it shown as needed."""
+        slot = tk.Frame(self, bg=self.cget("bg"))
+        slot.line = tk.Frame(slot, bg=theme.DIVIDER, height=1)
+        slot.body = tk.Frame(slot, bg=self.cget("bg"))
+        slot.body.pack(side="bottom", fill="x")
+        self.slots.append(slot)
+        self.shown[slot] = False
+        self.show(slot, shown)
+        return slot
+
+    def show(self, slot, shown):
+        """Show or hide one slot; the others stay mapped as they are (a slot taken off the screen and put back would
+        show the card empty for a moment)."""
+        shown = bool(shown)
+        if self.shown.get(slot) == shown:
+            return
+        self.shown[slot] = shown
+        if shown:
+            # Its words wrapped for the width it will have (the list's own) before it shows, as a row shown for the
+            # first time would otherwise show them wrapped narrow for a moment.
+            width = self.winfo_width()
+            if width > 1:
+                found = [slot]
+                while found:
+                    widget = found.pop()
+                    wrap = getattr(widget, "odq_wrap", None)
+                    if wrap is not None and widget.master is not None and widget.master.master is slot.body:
+                        wrap(width)
+                    found.extend(widget.winfo_children())
+            # Packed in its place among the shown ones: before the next shown slot, else after the last.
+            index = self.slots.index(slot)
+            later = [s for s in self.slots[index + 1:] if self.shown[s]]
+            if later:
+                slot.pack(fill="x", before=later[0])
+            else:
+                slot.pack(fill="x")
+        else:
+            slot.pack_forget()
+        self._lines()
+
+    def _lines(self):
+        """A line before each shown slot but the first, changed only where it changes."""
+        first = True
+        for slot in self.slots:
+            if not self.shown[slot]:
+                continue
+            wanted = not first
+            if wanted and not slot.line.winfo_manager():
+                slot.line.pack(side="top", fill="x", pady=self.ui.px(self.pady))
+            elif not wanted and slot.line.winfo_manager():
+                slot.line.pack_forget()
+            first = False
 
 
 def check_line(parent, ui, state, text, action_text=None, action=None, bg=theme.PANEL, value=None):

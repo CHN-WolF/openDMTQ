@@ -661,6 +661,9 @@ def _check_settings(state, args):
     for item in args.set:
         name, _, value = item.partition("=")
         trial[name.strip()] = value.strip()
+        if name.strip() in choices.EQ_BANDS:
+            # As state.set_value takes a band: the equaliser the player's own from then on.
+            trial["eq"] = "custom"
         # As state.set_value checks it: the whole set normalized, a ChoiceError for the value it does not take.
         trial = choices.normalize(trial)
 
@@ -716,6 +719,10 @@ def _run(state, args, jobs):
         # A corner given as show_fps's value is the counter on in that corner: both settings said.
         said = [name.strip()] + (["fps_position"] if name.strip() == "show_fps" else [])
         _say(", ".join("%s=%s" % (n, state.values[n]) for n in said))
+    if args.set:
+        # The player's settings file as they are now, as the window writes it at each change: the player's in-game
+        # menu writes its sound back into it, and the window takes from it only what is newer than its own settings.
+        player.write_settings(state.values, state.picked_language)
     if args.language:
         # "system": no choice kept, Windows' display language from now on.
         state.language = None if args.language == "system" else args.language

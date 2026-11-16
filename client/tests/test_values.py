@@ -22,7 +22,11 @@ class Values(unittest.TestCase):
     def test_choices_are_checked(self):
         self.assertEqual(choices.normalize({"fps": "240"})["fps"], "240")
         self.assertEqual(choices.normalize({"vsync": "OFF"})["vsync"], "off")
-        for name, value in (("fps", "241"), ("vsync", "maybe"), ("render_scale", "25"), ("volume", "101"),
+        # Any whole number of frames in the player's range (160, 165 and 180 Hz displays' own rates among them), auto and
+        # no limit; nothing outside it, nothing that is no whole number.
+        for value in ("160", "165", "180", "241", "30", "1000", "0165"):
+            self.assertEqual(choices.normalize({"fps": value})["fps"], str(int(value)))
+        for name, value in (("fps", "29"), ("fps", "1001"), ("fps", "60.5"), ("fps", "fast"), ("vsync", "maybe"), ("render_scale", "25"), ("volume", "101"),
                             ("volume", "loud"), ("window", "100x100"), ("audio_device", "a\nb"), ("nothing", "1")):
             with self.assertRaises(choices.ChoiceError, msg=(name, value)):
                 choices.normalize({name: value})
@@ -72,7 +76,7 @@ class Values(unittest.TestCase):
         self.assertNotIn("fps_position", choices.settings_text({"show_fps": "on"}))
 
     def test_a_bad_value_keeps_the_default_when_not_strict(self):
-        filled = choices.normalize({"fps": "999", "volume": 40}, strict=False)
+        filled = choices.normalize({"fps": "1001", "volume": 40}, strict=False)
         self.assertEqual(filled["fps"], "auto")
         self.assertEqual(filled["volume"], 40)
 
@@ -130,14 +134,46 @@ class Values(unittest.TestCase):
         self.assertFalse(choices.above_rate(None, "360"))
 
     def test_the_frame_limits_offered_and_their_words(self):
-        # With VSync on a 144 Hz display: nothing above 144 offered, a limit kept from before keeps its row; the hint
-        # names this display's rate and what the limit gives on it, never another display's.
-        from opendmtq_client import i18n, pages
-        offered = pages.fps_choices(True, 144, "auto")
-        self.assertEqual(offered, ["auto", "30", "60", "120", "144"])
-        self.assertEqual(pages.fps_choices(True, 144, "240")[-1], "240")
-        self.assertEqual(pages.fps_choices(False, 144, "auto"), list(choices.FPS))
-        self.assertEqual(pages.fps_choices(True, None, "auto"), list(choices.FPS))
+        # Every rate up to the fastest connected display's, each display's own rate among them, whatever VSync says;
+        # the display's own rate first and no limit last; a limit kept from before keeps its row. Made-up displays.
+        from opendmtq_client import displays, i18n, pages
+
+        def offered(*rates):
+            found = [{"width": 1920, "height": 1080, "hz": hz, "main": i == 0} for i, hz in enumerate(rates)]
+            return pages.fps_choices(found, "auto")
+
+        self.assertEqual(offered(60), ["auto", "30", "60", "unlimited"])
+        self.assertEqual(offered(144), ["auto", "30", "60", "75", "90", "100", "120", "144", "unlimited"])
+        for hz in (160, 165, 180, 240):
+            limits = offered(hz)
+            # The display's own rate is there, and nothing above it.
+            self.assertIn(str(hz), limits, hz)
+            self.assertEqual(max(int(f) for f in limits if f.isdigit()), hz, hz)
+        self.assertIn("170", offered(180))
+        # Mixed displays: up to the fastest, with each display's own (a 60 Hz main beside a 180 Hz touch screen, a
+        # 165 Hz beside a 144 Hz).
+        mixed = offered(60, 180)
+        self.assertIn("180", mixed)
+        self.assertIn("144", mixed)
+        self.assertNotIn("200", mixed)
+        self.assertIn("165", offered(144, 165))
+        # A display's own odd rate (a 59.94 Hz and a 164.999 Hz display read as 60 and 165).
+        self.assertEqual(displays.whole_hz(59940, 1000), 60)
+        self.assertEqual(displays.whole_hz(164999, 1000), 165)
+        self.assertIsNone(displays.whole_hz(1, 1))
+        self.assertIsNone(displays.whole_hz(0, 0))
+        self.assertIn("165", offered(144, displays.whole_hz(164999, 1000)))
+        # No rate known: the common ones up to 240.
+        self.assertEqual(pages.fps_choices([], "auto")[-2:], ["240", "unlimited"])
+        # A limit set on the command line keeps its row.
+        self.assertEqual(pages.fps_choices([{"width": 1, "height": 1, "hz": 60, "main": True}], "240")[-1], "240")
+        # Made-up displays as the tests and the pictures name them.
+        found = displays.made_up("1920x1080@60,2560x1440@164.999*,bad")
+        self.assertEqual([(d["hz"], d["main"]) for d in found], [(165, True), (60, False)])
+        self.assertEqual(displays.describe(found), "2560 x 1440 at 165 Hz (main), 1920 x 1080 at 60 Hz")
+        # The hints name one rate only when every display has it.
+        self.assertEqual(pages.single_rate(found, 165), None)
+        self.assertEqual(pages.single_rate(found[:1], 165), 165)
         w = i18n.Words("en")
         self.assertEqual(pages.fps_hint(w, True, "72", 144), "On this 144 Hz display: 72 fps exactly.")
         self.assertEqual(pages.fps_hint(w, True, "60", 144), "On this 144 Hz display: very nearly 60 fps.")
@@ -146,6 +182,40 @@ class Values(unittest.TestCase):
         self.assertEqual(pages.fps_hint(w, True, "auto", 144), w("screen.fps.hint.vsync_rate"))
         self.assertEqual(pages.fps_hint(w, False, "240", 144), w("screen.fps.hint.free"))
         self.assertNotIn("240", pages.fps_hint(w, True, "120", None))
+        # The drop-down's words: the display's rate by its number when there is one rate.
+        options = dict(pages.fps_options(w, found[:1], 165, "auto"))
+        self.assertEqual(options["auto"], w("screen.fps.auto.hz", hz=165))
+        self.assertEqual(dict(pages.fps_options(w, found, 165, "auto"))["auto"], w("screen.fps.auto"))
+
+    def test_the_sound_settings(self):
+        # Master, music and effects from 0 to 100, all at 100 at first; the equaliser flat, its bands at 0 dB.
+        filled = choices.normalize({})
+        self.assertEqual([filled[n] for n in ("volume", "music_volume", "effects_volume")], [100, 100, 100])
+        self.assertEqual([filled[n] for n in ("eq", "eq_low", "eq_mid", "eq_high")], ["flat", 0, 0, 0])
+        for name, value in (("music_volume", "101"), ("effects_volume", "-1"), ("eq_low", "13"), ("eq_high", "-13"),
+                            ("eq", "loud"), ("eq_mid", "a")):
+            with self.assertRaises(choices.ChoiceError, msg=(name, value)):
+                choices.normalize({name: value})
+        self.assertEqual(choices.normalize({"eq": "custom", "eq_low": "+3", "eq_high": "-12"})["eq_low"], 3)
+        # A preset sets its bands; the file writes them after it, in the contract's order after volume.
+        bass = choices.normalize({"eq": "bass", "eq_low": "-5"})
+        self.assertEqual([bass[b] for b in choices.EQ_BANDS], list(choices.EQ_PRESETS["bass"]))
+        lines = [line for line in choices.settings_text({"eq": "vocal", "music_volume": 40}).splitlines()
+                 if not line.startswith("#")]
+        start = lines.index("volume=100")
+        self.assertEqual(lines[start:start + 7], ["volume=100", "music_volume=40", "effects_volume=100", "eq=vocal",
+                                                  "eq_low=-2", "eq_mid=4", "eq_high=1"])
+        # A band set alone makes the equaliser the player's own (state.set_value, --set eq_low=3).
+        from opendmtq_client import state as st
+        state = st.LauncherState()
+        state.set_value("eq", "treble")
+        state.set_value("eq_mid", "5")
+        self.assertEqual((state.values["eq"], state.values["eq_mid"], state.values["eq_high"]), ("custom", 5, 6))
+        # What the player's in-game menu wrote back: the sound's keys that differ, nothing else, nothing it cannot be.
+        back = choices.took_back(choices.normalize({}), "display=window\nvolume=40\nmusic_volume=x\neq=custom\n"
+                                                         "eq_low=3\neq_mid=0\neq_high=0\nkeyboard=off\n")
+        self.assertEqual(back, {"volume": 40, "eq": "custom", "eq_low": 3})
+        self.assertEqual(choices.took_back(choices.normalize({}), choices.settings_text({})), {})
 
     def test_settings_file(self):
         text = choices.settings_text({"display": "window", "window": "1600x900", "vsync": "off", "fps": "unlimited",
@@ -155,7 +225,8 @@ class Values(unittest.TestCase):
         lines = [line for line in text.splitlines() if not line.startswith("#")]
         self.assertEqual(lines, ["display=window", "window=1600x900", "vsync=off", "fps=unlimited", "render_scale=75",
                                  "upscaler=nis", "anti_aliasing=smaa", "show_fps=bottom_right", "audio_device={0.0.0.00000000}.{x}",
-                                 "audio_mode=exclusive", "audio_buffer=low", "volume=35", "keyboard=on", "keys_2line=F J",
+                                 "audio_mode=exclusive", "audio_buffer=low", "volume=35", "music_volume=100",
+                                 "effects_volume=100", "eq=flat", "eq_low=0", "eq_mid=0", "eq_high=0", "keyboard=on", "keys_2line=F J",
                                  "keys_3line=D F J", "keys_4line=D F J K"])
 
     def test_the_player_reads_every_key_and_value(self):
@@ -164,9 +235,17 @@ class Values(unittest.TestCase):
             source = f.read()
         # Every key, keyboard play's four too: the player's reader takes each by its name (settings.cpp, key == "...").
         # A reader that left one out would log it and play without it, so none is let off.
+        # The sound's keys of 0.11.0 (the in-game menu's volumes and equaliser) come with the player's own branch: until
+        # its reader has any of them, they are left out here; once it has one, it must have them all.
+        added = ("music_volume", "effects_volume", "eq", "eq_low", "eq_mid", "eq_high")
+        has_added = any('key == "%s"' % name in source for name in added)
         for name in choices.ORDER:
+            if name in added and not has_added:
+                continue
             self.assertIn('key == "%s"' % name, source, name)
         for name, offered in choices.CHOICES.items():
+            if name in added and not has_added:
+                continue
             for value in offered:
                 if name in ("fps", "render_scale") and value not in ("auto", "unlimited"):
                     continue
@@ -175,7 +254,9 @@ class Values(unittest.TestCase):
         fps = re.search(r'number\(value, (\d+), (\d+), n\)\)\) s\.fps', source)
         scale = re.search(r'number\(value, (\d+), (\d+), n\)\)\) s\.render_scale', source)
         self.assertTrue(fps and scale)
-        for value in choices.FPS:
+        from opendmtq_client import displays
+        self.assertEqual((int(fps.group(1)), int(fps.group(2))), choices.FPS_RANGE)
+        for value in choices.FPS + tuple(str(rate) for rate in displays.RATES):
             if value.isdigit():
                 self.assertTrue(int(fps.group(1)) <= int(value) <= int(fps.group(2)), value)
         for value in choices.RENDER_SCALE:

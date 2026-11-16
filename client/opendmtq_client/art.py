@@ -531,9 +531,10 @@ def knob(size, colour=theme.TEXT, ring=theme.OK, scale=None):
     return img.resize((size, size), Image.LANCZOS)
 
 
-def slider_track(width, height, fraction, colour, scale=1.0, bg=theme.PANEL):
-    """A slider's track, let into the card it lies on: a rounded groove in rail metal, its part up to `fraction` in
-    `colour`, a soft shadow inside its top. On `bg`."""
+def slider_track(width, height, fraction, colour, scale=1.0, bg=theme.PANEL, origin=0.0):
+    """A slider's track, let into the card it lies on: a rounded groove in rail metal, its part from `origin` to
+    `fraction` in `colour` (from its left end for a volume, from its middle for an equaliser's band, either way), a soft
+    shadow inside its top. On `bg`."""
     k = SS
     w, h = width * k, height * k
     img = Image.new("RGB", (w, h), _rgb(bg))
@@ -541,10 +542,22 @@ def slider_track(width, height, fraction, colour, scale=1.0, bg=theme.PANEL):
     ImageDraw.Draw(groove).rounded_rectangle([0, 0, w - 1, h - 1], radius=h // 2, fill=255)
     img.paste(_rgb(theme.RAIL), (0, 0), groove)
     done = int(round(max(0.0, min(1.0, fraction)) * (w - 1)))
-    if done >= h:
+    start = int(round(max(0.0, min(1.0, origin)) * (w - 1)))
+    left, right = min(start, done), max(start, done)
+    if origin <= 0.0 and done >= h:
         lit = Image.new("L", (w, h), 0)
         ImageDraw.Draw(lit).rounded_rectangle([0, 0, done, h - 1], radius=h // 2, fill=255)
         img.paste(_rgb(colour), (0, 0), lit)
+    elif origin > 0.0 and right - left >= 1:
+        # From the middle: the lit part between the origin and the knob, squared at the origin, inside the groove.
+        lit = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(lit).rectangle([left, 0, right, h - 1], fill=255)
+        lit = Image.composite(lit, Image.new("L", (w, h), 0), groove)
+        img.paste(_rgb(colour), (0, 0), lit)
+    if origin > 0.0:
+        # The origin's mark across the groove: where the band neither lifts nor cuts.
+        mark = max(1, int(round(scale))) * k
+        ImageDraw.Draw(img).rectangle([start - mark // 2, 0, start + mark - mark // 2, h - 1], fill=_rgb(theme.MUTED))
     sunk(img, groove, scale * k, theme.RAIL, depth=2, across=False)
     return img.resize((width, height), Image.LANCZOS)
 
