@@ -964,7 +964,7 @@ class TokenPageTest(unittest.TestCase):
             self.assertEqual(inst.ask("GET", "/status", token=secret).status_code, 200)
             page = inst.client.get("/opendmtq/admin/accounts").get_data(as_text=True)
             self.assertNotIn(secret, page)
-            row = re.search(r"<tr>\s*<td class=\"primary\"[^>]*>my script<span class=\"runtime token-id\">odq_([0-9a-f]{12})_…</span>.*?</tr>", page, re.S)
+            row = re.search(r"<tr id=\"tok-[0-9a-f]{12}\" data-region>\s*<td class=\"primary\"><span class=\"token-name\"[^>]*>my script</span><span class=\"runtime token-id\">odq_([0-9a-f]{12})_…</span>.*?</tr>", page, re.S)
             self.assertTrue(row, page[page.index('id="tokens"'):][:2000])
             self.assertIn("Read and write", row.group(0))
             self.assertIn("Works", row.group(0))

@@ -51,7 +51,7 @@
   </form>
 </section>
 <section class="card">
-  <h2>{{ t('acc.title') }} <span class="meta-inline">{{ accounts|length }}</span></h2>
+  <h2>{{ t('acc.title') }} <span class="meta-inline" id="acc-count" data-region>{{ accounts|length }}</span></h2>
   {% if broken %}<p class="empty">{{ t('dash.db_short') }}</p>
   {% elif not accounts %}<p class="empty">{{ t('acc.none') }}</p>
   {% else %}
@@ -63,23 +63,25 @@
     <thead><tr><th>{{ t('acc.id') }}</th><th>{{ t('acc.player') }}</th><th>{{ t('acc.th_rights') }}</th><th>{{ t('acc.th_last') }}</th><th>{{ t('acc.th_state') }}</th><th></th></tr></thead>
     <tbody>
     {% for a in accounts %}
-      <tr>
-        {# The ID never split; whom it is for under it, and when it was made under the pointer. #}
-        <td class="primary" title="{{ t('acc.made_on', when=a.created_at|rec_date) }}"><span class="account-id">{{ a.name }}</span>{% if a.note %}<span class="runtime">{{ a.note }}</span>{% endif %}</td>
+      {# A part the page changes in place (data-region, admin.js): the row, after a switch, a link or a delete. #}
+      <tr id="acc-{{ a.name }}" data-region>
+        {# The ID never split; whom it is for under it, and when it was made beside the ID under a pointer, on a finger's press
+           and on the keyboard's focus (admin.js). #}
+        <td class="primary"><span class="account-id" data-tip="{{ t('acc.made_on', when=a.created_at|rec_date) }}" tabindex="0">{{ a.name }}</span>{% if a.note %}<span class="runtime">{{ a.note }}</span>{% endif %}</td>
         {# The player it is, changed here at any time: the list comes from the template above. One that is no player now
            (deleted since) reads as none, as before. #}
-        <td data-label="{{ t('acc.player') }}" class="account-player"><form method="post" class="account-link"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="link"><input type="hidden" name="name" value="{{ a.name }}"><select class="input" name="player" data-choice="player-choice" aria-label="{{ t('acc.player') }}: {{ a.name }}">{% if a.guid in names %}<option value="{{ a.guid }}" selected>{{ names[a.guid] }}</option>{% else %}<option value="" selected>{{ t('acc.player_none') }}</option>{% endif %}</select><button class="btn btn-sm">{{ t('acc.link') }}</button></form></td>
+        <td data-label="{{ t('acc.player') }}" class="account-player"><form method="post" class="account-link" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="link"><input type="hidden" name="name" value="{{ a.name }}"><select class="input" name="player" data-choice="player-choice" aria-label="{{ t('acc.player') }}: {{ a.name }}">{% if a.guid in names %}<option value="{{ a.guid }}" selected>{{ names[a.guid] }}</option>{% else %}<option value="" selected>{{ t('acc.player_none') }}</option>{% endif %}</select><button class="btn btn-sm">{{ t('acc.link') }}</button></form></td>
         <td data-label="{{ t('acc.th_rights') }}" class="account-rights">{{ t('acc.rights_admin') if a.admin else t('acc.rights_site') }}</td>
-        <td data-label="{{ t('acc.th_last') }}" class="date">{% if a.signed_in_at %}<span title="{{ a.signed_in_at|rec_date }}">{{ a.last }}</span>{% else %}{{ t('acc.never') }}{% endif %}</td>
+        <td data-label="{{ t('acc.th_last') }}" class="date">{% if a.signed_in_at %}<span data-tip="{{ a.signed_in_at|rec_date }}" tabindex="0">{{ a.last }}</span>{% else %}{{ t('acc.never') }}{% endif %}</td>
         <td data-label="{{ t('acc.th_state') }}"><span class="account-state"><span class="lamp {{ 'off' if a.off else 'on' }}"></span>{{ t('acc.state_off') if a.off else t('acc.state_on') }}</span></td>
         <td class="actions"><div class="btns">
           {# A new password ends the old one and every sign-in with it; switched off, the account cannot sign in until
              switched on again; deleted, it is gone. A button whose word depends on the account carries its other word
              too (data-twin), so that it is as wide in every row and the rows' buttons stand in columns. #}
           <form method="post" data-ask="{{ tp('acc.ask_password', name=a.name) }}" data-yes="{{ tp('acc.new') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="password"><input type="hidden" name="name" value="{{ a.name }}"><button class="btn btn-sm">{{ t('acc.new') }}</button></form>
-          <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ 'on' if a.off else 'off' }}"><input type="hidden" name="name" value="{{ a.name }}"><button class="btn btn-sm twin" data-twin="{{ t('acc.turn_off') if a.off else t('acc.turn_on') }}">{{ t('acc.turn_on') if a.off else t('acc.turn_off') }}</button></form>
-          <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ 'player' if a.admin else 'admin' }}"><input type="hidden" name="name" value="{{ a.name }}"><button class="btn btn-sm twin" data-twin="{{ t('acc.make_admin') if a.admin else t('acc.drop_admin') }}">{{ t('acc.drop_admin') if a.admin else t('acc.make_admin') }}</button></form>
-          <form method="post" data-ask="{{ tp('acc.ask_delete', name=a.name) }}" data-yes="{{ tp('btn.delete') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="name" value="{{ a.name }}"><button class="btn btn-sm btn-danger">{{ t('btn.delete') }}</button></form>
+          <form method="post" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ 'on' if a.off else 'off' }}"><input type="hidden" name="name" value="{{ a.name }}"><button class="btn btn-sm twin" data-twin="{{ t('acc.turn_off') if a.off else t('acc.turn_on') }}">{{ t('acc.turn_on') if a.off else t('acc.turn_off') }}</button></form>
+          <form method="post" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ 'player' if a.admin else 'admin' }}"><input type="hidden" name="name" value="{{ a.name }}"><button class="btn btn-sm twin" data-twin="{{ t('acc.make_admin') if a.admin else t('acc.drop_admin') }}">{{ t('acc.drop_admin') if a.admin else t('acc.make_admin') }}</button></form>
+          <form method="post" data-ask="{{ tp('acc.ask_delete', name=a.name) }}" data-yes="{{ tp('btn.delete') }}" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="name" value="{{ a.name }}"><button class="btn btn-sm btn-danger">{{ t('btn.delete') }}</button></form>
         </div></td>
       </tr>
     {% endfor %}
@@ -90,7 +92,7 @@
 {# The API's tokens: made here for the admin signed in, each for reading or for everything; revoked here for good. The
    list never has a token itself: its id only, which the token begins with. #}
 <section class="card" id="tokens">
-  <h2>{{ t('tok.title') }} <span class="meta-inline">{{ tokens|length }}</span></h2>
+  <h2>{{ t('tok.title') }} <span class="meta-inline" id="tok-count" data-region>{{ tokens|length }}</span></h2>
   <p class="lead">{{ t('tok.lead') }}</p>
   {# A name it needs, checked on the page first (admin.js, novalidate) in the server's words, and by the server again. #}
   <form method="post" class="form-row" novalidate>
@@ -108,17 +110,18 @@
     <thead><tr><th>{{ t('tok.name') }}</th><th>{{ t('tok.scope') }}</th><th>{{ t('tok.th_by') }}</th><th>{{ t('tok.th_used') }}</th><th>{{ t('acc.th_state') }}</th><th></th></tr></thead>
     <tbody>
     {% for k in tokens %}
-      <tr>
+      {# A part the page changes in place (data-region, admin.js): the row, gone once revoked. #}
+      <tr id="tok-{{ k.id }}" data-region>
         {# Its name, and under it the start of the token (its id); when it was made under the pointer. #}
-        <td class="primary" title="{{ t('acc.made_on', when=k.created_at|rec_date) }}">{{ k.name }}<span class="runtime token-id">odq_{{ k.id }}_…</span></td>
+        <td class="primary"><span class="token-name" data-tip="{{ t('acc.made_on', when=k.created_at|rec_date) }}" tabindex="0">{{ k.name }}</span><span class="runtime token-id">odq_{{ k.id }}_…</span></td>
         <td data-label="{{ t('tok.scope') }}">{{ t('tok.scope_write') if k.scope == 'write' else t('tok.scope_read') }}</td>
         {# Whose it is, with Owner under the owner's ID: one piece, so that on a phone both stay in the value's place
            together, as a name and its note do. #}
         <td data-label="{{ t('tok.th_by') }}"><span>{{ k.admin }}{% if k.owner %}<span class="runtime">{{ t('who.owner') }}</span>{% endif %}</span></td>
-        <td data-label="{{ t('tok.th_used') }}" class="date">{% if k.used_at %}<span title="{{ k.used_at|rec_date }}">{{ k.last }}</span>{% else %}{{ t('tok.never') }}{% endif %}</td>
+        <td data-label="{{ t('tok.th_used') }}" class="date">{% if k.used_at %}<span data-tip="{{ k.used_at|rec_date }}" tabindex="0">{{ k.last }}</span>{% else %}{{ t('tok.never') }}{% endif %}</td>
         {# A token whose admin cannot open these pages now does not work; why, under the pointer. #}
-        <td data-label="{{ t('acc.th_state') }}"><span class="account-state"{% if not k.works %} title="{{ tp('tok.off_why', name=k.admin) }}"{% endif %}><span class="lamp {{ 'on' if k.works else 'off' }}"></span>{{ t('tok.state_on') if k.works else t('tok.state_off') }}</span></td>
-        <td class="actions"><div class="btns"><form method="post" data-ask="{{ tp('tok.ask_revoke', name=k.name) }}" data-yes="{{ tp('tok.revoke') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="token" value="{{ k.id }}"><button class="btn btn-sm btn-danger">{{ t('tok.revoke') }}</button></form></div></td>
+        <td data-label="{{ t('acc.th_state') }}"><span class="account-state"{% if not k.works %} data-tip="{{ tp('tok.off_why', name=k.admin) }}" tabindex="0"{% endif %}><span class="lamp {{ 'on' if k.works else 'off' }}"></span>{{ t('tok.state_on') if k.works else t('tok.state_off') }}</span></td>
+        <td class="actions"><div class="btns"><form method="post" data-ask="{{ tp('tok.ask_revoke', name=k.name) }}" data-yes="{{ tp('tok.revoke') }}" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="token" value="{{ k.id }}"><button class="btn btn-sm btn-danger">{{ t('tok.revoke') }}</button></form></div></td>
       </tr>
     {% endfor %}
     </tbody>

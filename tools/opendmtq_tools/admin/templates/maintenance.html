@@ -1,10 +1,11 @@
 {% extends "base.html" %}{% block title %}{{ t('maint.title') }}{% endblock %}
 {% block body %}
-<section class="card">
+{# The notice's state and its form: a part the page changes in place (data-region, data-inplace: admin.js). #}
+<section class="card" id="maintenance" data-region>
   <h2>{{ t('maint.heading') }}</h2>
   <p class="lead">{{ t('maint.lead') }}</p>
   <p class="auto-line big"><span class="lamp {{ 'wait' if on else 'off' }}"></span><b>{{ t('maint.is_on') if on else t('maint.is_off') }}</b></p>
-  <form method="post">
+  <form method="post" data-inplace>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label class="field">{{ t('maint.message') }} <textarea name="message" rows="3" maxlength="{{ max }}" placeholder="{{ t('maint.placeholder') }}">{{ message }}</textarea></label>
     <p class="presets"><span class="presets-label">{{ t('maint.presets') }}</span>

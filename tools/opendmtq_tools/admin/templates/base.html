@@ -33,7 +33,7 @@
       {% if is_signed_in %}{% for e, label in pages %}<a href="{{ url_for(e) }}"{% if ep == e %} class="on" aria-current="true"{% endif %}>{{ t(label) }}</a>{% endfor %}{% endif %}
     </nav>
     {# Both languages always in their own words; the same cookie as the public site's switch. #}
-    <div class="bar-end">{% if not server_ok and not server_waiting and is_signed_in %}<span class="state down" role="img" aria-label="{{ t('dash.down') }}" title="{{ t('dash.down') }}"><i></i>OFFLINE</span>{% endif %}<nav class="lang-switch" aria-label="{{ t('lang.label') }}">{% for code, key, word in [('ko', 'KOR', '한국어'), ('en', 'ENG', 'English')] %}<a lang="{{ code }}" title="{{ word }}" aria-label="{{ word }}" href="{{ url_for('set_lang', to=code, next=request.full_path.rstrip('?')) }}"{% if lang == code %} class="on" aria-current="true"{% endif %}>{{ key }}</a>{% endfor %}</nav>{% if is_signed_in %}<form class="auth-form" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><span class="auth-who" title="{{ who }} · {{ t('who.owner') if who_owner else t('who.admin') }}"><span class="who-badge" aria-hidden="true">{{ (who or '?')[:1]|upper }}</span><span class="who-text"><span class="who-name">{{ who }}</span><span class="who-sub">{{ t('who.owner') if who_owner else t('who.admin') }}</span></span></span><button class="auth">{{ t('nav.signout') }}</button></form>{% endif %}</div>
+    <div class="bar-end">{% if not server_ok and not server_waiting and is_signed_in %}<span class="state down" role="img" aria-label="{{ t('dash.down') }}" data-tip="{{ t('dash.down') }}" tabindex="0"><i></i>OFFLINE</span>{% endif %}<nav class="lang-switch" aria-label="{{ t('lang.label') }}">{% for code, key, word in [('ko', 'KOR', '한국어'), ('en', 'ENG', 'English')] %}<a lang="{{ code }}" aria-label="{{ word }}" href="{{ url_for('set_lang', to=code, next=request.full_path.rstrip('?')) }}"{% if lang == code %} class="on" aria-current="true"{% endif %}>{{ key }}</a>{% endfor %}</nav>{% if is_signed_in %}<form class="auth-form" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><span class="auth-who" data-tip="{{ who }} · {{ t('who.owner') if who_owner else t('who.admin') }}" tabindex="0"><span class="who-badge" aria-hidden="true">{{ (who or '?')[:1]|upper }}</span><span class="who-text"><span class="who-name">{{ who }}</span><span class="who-sub">{{ t('who.owner') if who_owner else t('who.admin') }}</span></span></span><button class="auth">{{ t('nav.signout') }}</button></form>{% endif %}</div>
   </div>
 </header>
 <main class="wrap">
@@ -41,8 +41,9 @@
   <h1 class="page-title">{{ self.title() }}</h1>
   {# The sign-in page shows its message in its box, like the public site's. #}
   {% if ep != 'login' %}
+  {# The server's words on what was just done (data-said): a change made in place shows them the same way (admin.js). #}
   {% for cat, msg in get_flashed_messages(with_categories=true) %}
-    <p class="flash {{ cat }}" role="status">{{ msg }}</p>
+    <p class="flash {{ cat }}" role="status" data-said>{{ msg }}</p>
   {% endfor %}
   {% endif %}
   {# The game server is not answering: what that means here, on every page. A server being set up, with only the game's

@@ -1946,7 +1946,7 @@ class RecordingLimitsAskFirstTest(unittest.TestCase):
             inst.sign_in()
             page = inst.client.get("/opendmtq/admin/recordings").get_data(as_text=True)
             # The list's own form: the first plain one after the limits' (the broadcasts' settings come before both).
-            form = page[page.index('<form method="post">', page.index('class="rec-limits"')):]
+            form = page[page.index('<form method="post" data-inplace>', page.index('class="rec-limits"')):]
             self.assertIn("disabled", form[:form.index("</button>")])
 
 
@@ -2050,7 +2050,7 @@ class PlayersPageFormsTest(unittest.TestCase):
             address = f"/opendmtq/admin/players/2?seen={seen}"
             self.assertIn(f'form="player-switch" formaction="{address}" name="action" value="live-on"', page)
             # The one form holds the token; a press sends it with the button's action, as a browser does with no script.
-            csrf = re.search(r'<form id="player-switch" method="post" hidden><input type="hidden" name="csrf" value="([^"]+)">', page).group(1)
+            csrf = re.search(r'<form id="player-switch" method="post" hidden data-inplace><input type="hidden" name="csrf" value="([^"]+)">', page).group(1)
             self.assertEqual(inst.client.post(address, data={"csrf": csrf, "action": "live-on"}).status_code, 302)
             with sqlite3.connect(admin.core.DB) as con:
                 self.assertEqual(con.execute("SELECT guid, live FROM LiveSwitch").fetchall(), [(2, 1)])
@@ -2589,7 +2589,7 @@ class PlaysTabTest(unittest.TestCase):
                     rows = {score: row for row in re.findall(r"<tr>(.*?)</tr>", page, re.S)
                             for score in re.findall(r">(101|202)</td>", row)}
                     self.assertEqual({score: 'class="keys-mark"' in row for score, row in rows.items()}, {"101": False, "202": True})
-                    self.assertIn('class="keys-mark" role="img" aria-label="Keyboard play" title="Keyboard play"', rows["202"])
+                    self.assertIn('class="keys-mark" role="img" aria-label="Keyboard play" data-tip="Keyboard play" tabindex="0"', rows["202"])
             rows = list(csv.reader(io.StringIO(inst.client.get("/opendmtq/admin/logs?tab=plays&csv=1").get_data(as_text=True).lstrip("\ufeff"))))
             self.assertEqual([(row[5], row[-1]) for row in rows], [("score", "keys"), ("202", "1"), ("101", "0")])
 
@@ -2976,7 +2976,7 @@ class PageJobsTest(unittest.TestCase):
             r = inst.client.post("/opendmtq/admin/backups", data={"csrf": page_token(inst), "action": "create"})
             self.assertEqual(r.headers["Location"], "/opendmtq/admin/backups")
             page = inst.client.get("/opendmtq/admin/backups").get_data(as_text=True)
-            self.assertRegex(page, r'class="flash ok" role="status">Backup <code>OpenDMTQ-Server-Backup-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
+            self.assertRegex(page, r'class="flash ok" role="status" data-said>Backup <code>opendmtq-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
             job = admin.jobs.listing()[0]
             self.assertEqual((job["kind"], job["state"]), ("backup", "done"))
             # The API's view of it holds nothing of the page's own (its words with their markup, its signal).

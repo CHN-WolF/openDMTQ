@@ -18,7 +18,8 @@
 <section class="card live-settings" id="broadcasts">
   <h2>{{ t('live.heading') }}</h2>
   <p class="lead">{{ t('live.lead') }}</p>
-  <form method="post">
+  {# The switch and what it means now: a part the page changes in place (data-region, data-inplace: admin.js). #}
+  <form method="post" id="broadcasts-switch" data-region data-inplace>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <p class="auto-line big"><span class="lamp {{ 'on' if settings.on else 'off' }}"></span><b>{{ t('live.is_on') if settings.on else t('live.is_off') }}</b></p>
     <p class="meta">{{ t('live.counts_on', n=counts.switched_on, m=counts.on_air) if settings.on else t('live.counts_off', n=counts.switched_on) }} <a href="{{ url_for('players_page') }}">{{ t('live.to_players') }}</a></p>
@@ -32,7 +33,7 @@
       {% endif %}
     </div>
   </form>
-  <form method="post">
+  <form method="post" data-inplace>
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="settings">
     <fieldset class="choices pair">
       <legend>{{ t('live.new_players') }}</legend>
@@ -51,7 +52,7 @@
   </form>
 </section>
 
-<section class="card">
+<section class="card" id="rec-disk" data-region>
   <h2>{{ t('rec.disk') }}</h2>
   <p>{{ t('rec.use', used=room.used|human, cap=room.cap|human, free=room.free|human) }}</p>
   {# Full by the share used; anything at all shows as a sliver, not as nothing. #}
@@ -60,7 +61,7 @@
      that is less (it counts as a limit too). Under an hour, the page says so. #}
   <p class="meta">{{ t('rec.room', h=room.hours_left, size=per_hour|human) if room.hours_left else t('rec.room_short', size=per_hour|human) }} {{ t('rec.about') }}</p>
   {# Checked on the page first (admin.js, novalidate), in the server's own words for these limits: it checks them again. #}
-  <form method="post" class="rec-limits" novalidate>
+  <form method="post" class="rec-limits" novalidate data-inplace>
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="limits">
     <label class="field">{{ t('rec.total') }} <input class="input" name="cap_gb" type="number" min="0.001" step="any" value="{{ '%g'|format(pending.cap_gb if pending else room.cap_gb) }}" required data-bad="{{ tp('rec.bad_limits') }}"></label>
     <label class="field">{{ t('rec.days') }} <input class="input" name="days" type="number" min="1" step="1" value="{{ pending.days if pending else room.days }}" required data-bad="{{ tp('rec.bad_limits') }}"></label>
@@ -68,7 +69,7 @@
   </form>
   {# Lower limits delete recordings at once and for good: what they would delete, and the yes for it. #}
   {% if pending %}
-  <form method="post" class="rec-confirm" role="alert">
+  <form method="post" class="rec-confirm" role="alert" data-inplace>
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="limits"><input type="hidden" name="confirmed" value="1">
     <input type="hidden" name="cap_gb" value="{{ '%g'|format(pending.cap_gb) }}"><input type="hidden" name="days" value="{{ pending.days }}">
     <p class="warn">{{ t('rec.limits_confirm', n=pending.n, size=pending.size|human) }}</p>
@@ -77,11 +78,11 @@
   {% endif %}
 </section>
 
-<section class="card">
+<section class="card" id="rec-list" data-region>
   <h2>{{ t('rec.title') }} <span class="meta-inline">{{ groups.values()|map('length')|sum }}</span></h2>
   {% if not groups %}<p class="empty">{{ t('rec.none') }}</p>{% else %}
   <p class="meta">{{ t('rec.players_see') }}</p>
-  <form method="post">
+  <form method="post" data-inplace>
     {# Enter in a check box presses a form's first button, here a player's "delete all". This one comes first and
        is disabled, which turns that off. #}
     <button type="submit" disabled hidden aria-hidden="true" tabindex="-1"></button>
@@ -102,9 +103,10 @@
         <td class="primary date">{{ r.started|rec_date }}{% if r.open %}<span class="runtime">{{ t('rec.now') }}</span>{% elif r.hidden %}<span class="runtime">{{ t('rec.hidden') }}</span>{% endif %}</td>
         <td data-label="{{ t('rec.th_length') }}" class="r">{{ r.duration_ms|rec_length }}</td>
         <td data-label="{{ t('th.size') }}" class="r">{{ r.size|human }}</td>
-        {# Four songs at most: a long broadcast would make its row the tallest thing on the page. All of them under the pointer. #}
+        {# Four songs at most: a long broadcast would make its row the tallest thing on the page. All of them beside the +n
+           under a pointer, on a finger's press and on the keyboard's focus (admin.js). #}
         {% set titles = r.songs|map(attribute='title')|unique|list %}
-        <td data-label="{{ t('rec.th_songs') }}" class="rec-songs" title="{{ titles|join(', ') }}">{{ titles[:4]|join(', ') or '–' }}{% if titles|length > 4 %} +{{ titles|length - 4 }}{% endif %}</td>
+        <td data-label="{{ t('rec.th_songs') }}" class="rec-songs">{{ titles[:4]|join(', ') or '–' }}{% if titles|length > 4 %} <span class="more-songs" data-tip="{{ titles|join(', ') }}" tabindex="0">+{{ titles|length - 4 }}</span>{% endif %}</td>
         <td class="actions"><div class="btns">
           {% if not r.open %}
           <a class="btn btn-sm" href="{{ url_for('recordings_page', watch=name) }}">{{ t('btn.watch') }}</a>

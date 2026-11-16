@@ -601,7 +601,8 @@ table.tokens .token-id { font: var(--t-xs)/1.4 var(--mono); }
 .check { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-sm); color: var(--chalk); cursor: pointer; }
 /* The list scrolls in its own box under fixed headings, so the page stays one screen with the charts in reach. */
 @media (min-width: 701px) { #log-rows .table-scroll { max-height: min(68vh, 680px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--seam) transparent; } }
-.logtable thead th { position: sticky; top: 0; z-index: 1; background: #20262d; }
+/* Over the rows' marks as they scroll under it (those stand over their row's link, style.css). */
+.logtable thead th { position: sticky; top: 0; z-index: 3; background: #20262d; }
 .logtable td { font-size: var(--t-sm); }
 @media (min-width: 701px) { .logtable td { padding-block: 6px; } }
 .logtable td.date { font-variant-numeric: tabular-nums; color: var(--ash); }

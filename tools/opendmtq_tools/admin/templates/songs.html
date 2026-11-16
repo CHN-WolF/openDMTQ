@@ -36,7 +36,7 @@
   </form>
 </section>
 <section class="card">
-  <h2>{{ t('songs.title') }} <span class="meta-inline" id="song-count" data-of="{{ tp('songs.of', shown='{shown}', all='{all}') }}">{{ songs|length }}</span></h2>
+  <h2>{{ t('songs.title') }} <span class="meta-inline" id="song-count" data-region data-of="{{ tp('songs.of', shown='{shown}', all='{all}') }}">{{ songs|length }}</span></h2>
   {# Nothing to search or to line up under a header: the title alone, under what the page says about the missing files. #}
   {% if songs %}
   {# As on the public song list: the count follows the search, and a search that finds nothing says so (admin.js). #}
@@ -48,7 +48,8 @@
     <tbody id="songs">
     {% for s in songs %}
       {# The search finds what the row shows: its title and artist (data-k), and its number in the # column whole (data-n). #}
-      <tr data-k="{{ (s.title ~ ' ' ~ s.artist)|lower }}" data-n="{{ s.song_id }}"{% if s.hidden %} class="dim"{% endif %}>
+      {# A part the page changes in place (data-region, admin.js): the row, after Hide, Show or Remove. #}
+      <tr id="song-{{ s.song_id }}" data-region data-k="{{ (s.title ~ ' ' ~ s.artist)|lower }}" data-n="{{ s.song_id }}"{% if s.hidden %} class="dim"{% endif %}>
         <td data-label="#" class="rank">{{ s.song_id }}</td>
         <td class="primary"><a href="{{ public_url }}/opendmtq/song.php?id={{ s.song_id }}">{{ s.title }}</a>{% if s.added %} <span class="mark new">{{ t('songs.added') }}</span>{% endif %}{% if s.hidden %} <span class="mark off">{{ t('songs.hidden') }}</span>{% endif %}</td>
         <td class="sub">{{ s.artist }}</td>
@@ -59,9 +60,9 @@
            every other admin list does; an added song's Remove comes before it. #}
         <td class="actions"><div class="btns">
           {% if s.added %}
-            <form method="post" data-ask="{{ tp('songs.confirm_remove', title=s.title) }}" data-yes="{{ tp('songs.remove') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="song_id" value="{{ s.song_id }}"><input type="hidden" name="action" value="remove"><button class="btn btn-sm btn-danger">{{ t('songs.remove') }}</button></form>
+            <form method="post" data-ask="{{ tp('songs.confirm_remove', title=s.title) }}" data-yes="{{ tp('songs.remove') }}" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="song_id" value="{{ s.song_id }}"><input type="hidden" name="action" value="remove"><button class="btn btn-sm btn-danger">{{ t('songs.remove') }}</button></form>
           {% endif %}
-          <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="song_id" value="{{ s.song_id }}"><input type="hidden" name="action" value="{{ 'show' if s.hidden else 'hide' }}"><button class="btn btn-sm">{{ t('songs.show') if s.hidden else t('songs.hide') }}</button></form>
+          <form method="post" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="song_id" value="{{ s.song_id }}"><input type="hidden" name="action" value="{{ 'show' if s.hidden else 'hide' }}"><button class="btn btn-sm">{{ t('songs.show') if s.hidden else t('songs.hide') }}</button></form>
         </div></td>
       </tr>
     {% endfor %}

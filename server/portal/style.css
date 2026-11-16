@@ -538,19 +538,41 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
   background: #0e1216;
   border: 1px solid var(--seam);
   border-radius: 0;
+  /* Sunken into the panel, as the sign-in's fields are: every field of the site and the admin pages looks the same. */
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4);
   -webkit-appearance: none;
   appearance: none;
-  transition: border-color var(--quick);
+  transition: border-color var(--quick), box-shadow var(--quick);
 }
 .field textarea { height: auto; min-height: 96px; padding: 10px 13px; line-height: 1.5; resize: vertical; }
 .input:hover, .field input:hover, .field textarea:hover, input.search:hover { border-color: #55606c; }
-.input:focus, .field input:focus, .field textarea:focus, input.search:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
-/* A field the form's check found empty (forms.js, and the server's answer): its edge in the error's red, until typed in. */
-.field input[aria-invalid="true"]:not(:focus) { border-color: color-mix(in srgb, var(--bad) 75%, transparent); }
+.input:focus, .field input:focus, .field textarea:focus, input.search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
+  /* The field with the focus glows a little in the section's colour around its edge, as the sign-in's does. */
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4), 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+/* A field the form's check found wrong (forms.js, admin.js, and the server's answer): its edge in the error's red, until
+   typed in. */
+:is(.input, .field input, .field textarea)[aria-invalid="true"]:not(:focus) { border-color: color-mix(in srgb, var(--bad) 75%, transparent); }
+/* A search box says what it is with a magnifier at its start, as the sign-in's fields carry their marks: the site's and the
+   admin pages' alike. */
+:is(input.search, input.input)[type=search] {
+  padding-left: 40px;
+  background: #0e1216 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8894' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5 20 20'/%3E%3C/svg%3E") no-repeat 14px center / 17px 17px;
+}
 /* What is wrong with one field, right under it (forms.js and admin.js, and the server's own answer), in the error's red with
    its mark; gone once the field is typed in. */
 .field-error { display: flex; gap: 7px; align-items: flex-start; margin: 0; color: #ffb3bd; font-size: var(--t-sm); font-weight: 500; line-height: 1.4; }
 .field-error::before { content: "!"; flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; font: 800 11px/1 var(--text-face); color: #2b0409; background: var(--bad); }
+/* What is wrong with a field of a row of fields side by side (admin.js): a line of its own right under that field's row,
+   across the form, so that the fields of the row stay in line. In a grid it comes right after the row (dense); in a row
+   that wraps, under the whole row. */
+.field-error-row { grid-column: 1 / -1; flex-basis: 100%; }
+form.says-in-grid { grid-auto-flow: row dense; }
+form.says-in-row { flex-wrap: wrap; }
+form.says-in-row > .field-error-row { order: 1; }
 /* A password field's Show: inside the field at its right end, a word in the menus' face (Show, Hide), the field's text
    kept clear of it. Pressed, the password reads as typed until pressed again; the field keeps the focus and the cursor. */
 .slot.pw input { padding-right: 78px; }
@@ -1225,6 +1247,10 @@ td.actions { width: 1%; text-align: right; }
 .level b small { display: inline-block; min-width: 2.4em; text-align: left; font-size: var(--t-xs); color: var(--ash); }
 /* The one tooltip of a page's charts. */
 .chart-tip { position: fixed; z-index: 40; max-width: 320px; padding: 5px 9px; font-size: var(--t-xs); font-weight: 600; color: #fff; background: rgba(21, 26, 32, 0.96); box-shadow: var(--glass-rim), 0 6px 18px rgba(0, 0, 0, 0.5); pointer-events: none; }
+/* A mark with words of its own (tips.js, and admin.js on the admin pages): reached by the keyboard, its ring then in the
+   focus colour; above a row's or a card's link that covers the whole of it, so that a press on the mark is the mark's. */
+[data-tip]:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+:is(td, .feed, .pod) [data-tip]:not(a, button) { position: relative; z-index: 2; }
 /* A player's lists: jacket, song and chart, score, mark, time. */
 table.plays { table-layout: fixed; }
 table.plays td { overflow-wrap: anywhere; padding-block: 8px; }

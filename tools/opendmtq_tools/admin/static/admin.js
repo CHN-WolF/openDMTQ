@@ -14,8 +14,12 @@
 
 // A form the page checks itself (novalidate): what is wrong is said in the page's own look and language, not in the
 // browser's bubble in the browser's. A field with a rule carries the words for it (data-bad): the server's own for the same
-// check, which the server still makes. The first field that breaks its rule is said just above its form and gets the
-// focus, and nothing is sent. In the capture phase: before the question of what cannot be undone and the busy button.
+// check, which the server still makes. The first field that breaks its rule is said right under it and gets the focus, and
+// nothing is sent. In the capture phase: before the question of what cannot be undone and the busy button.
+//
+// Right under it: in a form of fields one under the other (the sign-in, a phone's narrow forms), inside the field under its
+// box; in a form of fields side by side, on a line of its own right under that field's row, across the form, so that the
+// fields of the row stay in line. A field that is not in a labelled box of its own is said just above its form.
 document.addEventListener('submit', e => {
   const form = e.target;
   if (!form.noValidate) return;
@@ -31,20 +35,37 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   // Nothing else hears of this press: no question opens, no button says it is busy.
   e.stopPropagation();
-  // The field's words right under it on the sign-in (its fields stand alone, one under the other); elsewhere one message
-  // per form, just above it, said again for the next field (the forms there are rows of fields side by side, which a line
-  // under one of them would push out of line).
   for (const f of form.querySelectorAll('[aria-invalid]')) unmark(f);
-  const inPlace = form.matches('.signin-form') && wrong.closest('.field');
+  // The field's own box: its labelled field, or the drop box a file field is in.
+  const holder = wrong.closest('.field, .drop');
   let says;
-  if (inPlace) {
+  if (holder && form.contains(holder)) {
     says = document.createElement('span');
     says.className = 'field-error';
     says.id = `${wrong.id || wrong.name}-error`;
-    wrong.closest('.field').append(says);
-    // The server's last word (a wrong password) was about the last try.
+    const look = getComputedStyle(form);
+    const columns = look.display.includes('grid') ? look.gridTemplateColumns.split(' ').length : 1;
+    const row = look.display.includes('flex') && !look.flexDirection.startsWith('column');
+    if (columns > 1) {
+      // Fields side by side in a grid: a line across the form, placed right after the field's row (dense).
+      says.classList.add('field-error-row');
+      form.classList.add('says-in-grid');
+      holder.after(says);
+    } else if (row) {
+      // Fields side by side in a row that wraps: a line of its own under the row.
+      says.classList.add('field-error-row');
+      form.classList.add('says-in-row');
+      holder.after(says);
+    } else if (holder.matches('.field')) {
+      // One under the other: in the field, under its box.
+      holder.append(says);
+    } else {
+      // A drop box: right under it.
+      holder.after(says);
+    }
+    // The server's last word (a wrong password, a refusal) was about the last try.
     const last = form.previousElementSibling;
-    if (last && last.matches('.signin .error, .signin .done')) last.remove();
+    if (last && last.matches('.signin .error, .signin .done, .form-says')) last.remove();
   } else {
     says = form.previousElementSibling;
     if (!says || !says.matches('.form-says, .signin .error, .signin .done')) {
@@ -53,23 +74,26 @@ document.addEventListener('submit', e => {
     }
     // The sign-in box's own error look, as its server message has; the message look of the other pages.
     says.className = form.closest('.signin') ? 'form-says error' : 'form-says flash bad';
+    says.id = says.id || `${wrong.id || wrong.name}-error`;
   }
   says.setAttribute('role', 'alert');
   // The rule's words; the browser's own only for a field that has none.
   says.textContent = (wrong.validity.customError && wrong.validationMessage) || wrong.dataset.bad || wrong.validationMessage;
   // The field itself, marked, named by its words, and in reach of the keyboard.
   wrong.setAttribute('aria-invalid', 'true');
-  if (says.id) wrong.setAttribute('aria-describedby', says.id);
+  wrong.setAttribute('aria-describedby', says.id);
   wrong.focus();
 }, true);
-// A field's mark gone, and its own words under it with it.
+// A field's mark gone, and its own words with it (wherever they were put: the field names them).
 function unmark(field) {
   field.removeAttribute('aria-invalid');
-  const line = field.closest('.field') && field.closest('.field').querySelector('.field-error');
-  if (line) {
+  const id = field.getAttribute('aria-describedby');
+  const line = id && document.getElementById(id);
+  if (line && line.matches('.field-error')) {
     line.remove();
     field.removeAttribute('aria-describedby');
   }
+  if (field.form && !field.form.querySelector('.field-error-row')) field.form.classList.remove('says-in-grid', 'says-in-row');
 }
 // A field put right: its mark and its form's message go.
 document.addEventListener('input', e => {
@@ -80,6 +104,11 @@ document.addEventListener('input', e => {
   unmark(field);
   const says = field.form.previousElementSibling;
   if (says && says.classList.contains('form-says')) says.remove();
+});
+// A file chosen in a drop box puts its field right too.
+document.addEventListener('change', e => {
+  const field = e.target;
+  if (field.matches && field.matches('input[type=file]') && field.getAttribute('aria-invalid') === 'true' && field.validity.valid) unmark(field);
 });
 
 // A password field's Show (.pw-toggle, inside the field): the password as typed, until pressed again. The field keeps the
@@ -276,49 +305,153 @@ addEventListener('pageshow', e => {
   for (const b of document.querySelectorAll('[aria-busy]')) b.removeAttribute('aria-busy');
 });
 
-// One tooltip for every mark with data-tip, under the pointer or the finger, and on keyboard focus. Its words go in as text.
+// One tooltip for every mark with words of its own (data-tip), on every page: what a mark means, a day's plays, a level's
+// records. Nothing is said only under a mouse pointer, where a finger and the keyboard never reach:
+// - a mouse pointer over a mark shows its words until the pointer leaves it;
+// - a finger's press shows them beside the mark, and a second press on it, a press anywhere else or Escape takes them away;
+// - the keyboard's focus on a mark (each one can be reached with Tab) shows them until the focus moves on, or Escape.
+// A mark that is itself a link or a button does what it does when pressed; its words show to the pointer and the focus.
+// The box is the page's one, on top of everything and inside the window; its words go in as text, and a screen reader hears
+// them as the mark's description while they show. The same as the site's tips.js, which these pages do not load.
 (() => {
   const box = document.createElement('div');
   box.className = 'chart-tip';
+  box.id = 'odq-tip';
+  box.setAttribute('role', 'tooltip');
   box.hidden = true;
   document.body.append(box);
-  const place = (x, y) => {
-    const w = box.offsetWidth, h = box.offsetHeight;
-    box.style.left = `${Math.min(innerWidth - w - 8, Math.max(8, x - w / 2))}px`;
-    box.style.top = `${y - h - 12 < 4 ? y + 18 : y - h - 12}px`;
-  };
-  const show = (target, x, y) => {
-    box.textContent = target.dataset.tip;
+  // The mark whose words show, and whether a press or the focus holds them up (a pointer's leaving then does not end them).
+  let shown = null;
+  let held = false;
+  // The mark an element belongs to, if any.
+  const markOf = el => (el && el.closest ? el.closest('[data-tip]') : null);
+  // Marks a press already does something with: their words are for the pointer and the focus only.
+  const acts = mark => mark.matches('a, button, summary, input, select, textarea, label');
+  // The words of a mark, over the point given (a mouse pointer), or else just over the mark, below it when there is no room
+  // above; never past the window's edges.
+  const show = (mark, x, y) => {
+    if (shown && shown !== mark) shown.removeAttribute('aria-describedby');
+    shown = mark;
+    box.textContent = mark.dataset.tip;
     box.hidden = false;
-    place(x, y);
+    mark.setAttribute('aria-describedby', box.id);
+    const w = box.offsetWidth, h = box.offsetHeight;
+    let top;
+    if (x === undefined) {
+      const r = mark.getBoundingClientRect();
+      x = r.left + r.width / 2;
+      top = r.top - h - 8 >= 4 ? r.top - h - 8 : r.bottom + 8;
+    } else {
+      top = y - h - 12 >= 4 ? y - h - 12 : y + 18;
+    }
+    box.style.left = `${Math.min(innerWidth - w - 8, Math.max(8, x - w / 2))}px`;
+    box.style.top = `${Math.min(innerHeight - h - 4, Math.max(4, top))}px`;
   };
-  const answer = e => {
-    const t = e.target.closest && e.target.closest('[data-tip]');
-    if (t) show(t, e.clientX, e.clientY); else box.hidden = true;
+  const hide = () => {
+    box.hidden = true;
+    held = false;
+    if (shown) shown.removeAttribute('aria-describedby');
+    shown = null;
   };
-  document.addEventListener('pointermove', answer, { passive: true });
-  // A finger only ever presses: the press does what moving over it does with a mouse, and leaves the words up to be read.
-  document.addEventListener('pointerdown', answer, { passive: true });
+  // A mouse (or a pen held over the screen): the words of the mark under it, gone when it leaves. Words a press or the focus
+  // holds up stay, until the pointer comes over another mark.
+  document.addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch') return;
+    const mark = markOf(e.target);
+    if (held) {
+      if (mark && mark !== shown) { held = false; show(mark, e.clientX, e.clientY); }
+      return;
+    }
+    if (mark) show(mark, e.clientX, e.clientY); else if (shown) hide();
+  }, { passive: true });
+  // A press: a finger's on a mark shows its words, or takes them away when they already show; a press anywhere else takes
+  // them away.
+  document.addEventListener('pointerdown', e => {
+    const mark = markOf(e.target);
+    if (e.pointerType === 'mouse') {
+      if (held && mark !== shown) hide();
+      return;
+    }
+    if (!mark || acts(mark)) { if (shown) hide(); return; }
+    if (held && shown === mark) { hide(); return; }
+    show(mark);
+    held = true;
+  }, { passive: true });
+  // The focus (the keyboard's, or a press that gave it): the words of the mark it is on, until it moves on.
   document.addEventListener('focusin', e => {
-    const t = e.target.closest && e.target.closest('[data-tip]');
-    if (!t) return;
-    const r = t.getBoundingClientRect();
-    show(t, r.left + r.width / 2, r.top);
+    const mark = markOf(e.target);
+    if (!mark) return;
+    show(mark);
+    held = true;
   });
-  document.addEventListener('focusout', () => { box.hidden = true; });
-  addEventListener('scroll', () => { box.hidden = true; }, { passive: true });
+  document.addEventListener('focusout', e => {
+    if (shown && !(e.relatedTarget && shown.contains(e.relatedTarget)) && shown.contains(e.target)) hide();
+  });
+  // Escape takes them away, wherever the focus is.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && shown) hide();
+  });
+  // Marks that come many together (a chart's, a grid of days: data-tips on their box) are one stop of the Tab key, not one
+  // each: the arrow keys go from mark to mark by where they are drawn (the next one to the right, below and so on), Home and
+  // End to the first and the last, and the mark reached shows its words. The stop is the mark last reached.
+  const marksIn = group => [...group.querySelectorAll('[data-tip]')].filter(m => m.getClientRects().length);
+  const rove = group => {
+    const marks = marksIn(group);
+    const current = marks.find(m => m.tabIndex === 0 && m.dataset.stop) || marks[0];
+    for (const m of group.querySelectorAll('[data-tip]')) m.tabIndex = m === current ? 0 : -1;
+    if (current) current.dataset.stop = '1';
+  };
+  for (const group of document.querySelectorAll('[data-tips]')) rove(group);
+  // The nearest mark in a direction (dx, dy: -1, 0 or 1) from one, on its row or its column.
+  const toward = (marks, from, dx, dy) => {
+    const a = from.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    let best = null, far = Infinity;
+    for (const m of marks) {
+      if (m === from) continue;
+      const b = m.getBoundingClientRect(), bx = b.left + b.width / 2, by = b.top + b.height / 2;
+      const along = dx ? (bx - ax) * dx : (by - ay) * dy, across = dx ? Math.abs(by - ay) : Math.abs(bx - ax);
+      if (along <= 0 || across > (dx ? a.height : a.width) / 2) continue;
+      if (along < far) { far = along; best = m; }
+    }
+    return best;
+  };
+  document.addEventListener('keydown', e => {
+    const mark = markOf(e.target);
+    const group = mark && mark.closest('[data-tips]');
+    if (!group || e.altKey || e.ctrlKey || e.metaKey) return;
+    const marks = marksIn(group);
+    const ways = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+    const next = e.key === 'Home' ? marks[0] : e.key === 'End' ? marks[marks.length - 1]
+      : ways[e.key] ? toward(marks, mark, ...ways[e.key]) : undefined;
+    if (next === undefined) return;
+    // At the edge: nothing moves, and the page does not scroll either.
+    e.preventDefault();
+    if (!next) return;
+    for (const m of group.querySelectorAll('[data-tip]')) { m.tabIndex = -1; delete m.dataset.stop; }
+    next.tabIndex = 0;
+    next.dataset.stop = '1';
+    next.focus();
+  });
+  // Words held up follow their mark as the page scrolls; a pointer's go.
+  addEventListener('scroll', () => {
+    if (held && shown) show(shown); else if (shown) hide();
+  }, { passive: true, capture: true });
+  addEventListener('resize', () => { if (shown) hide(); }, { passive: true });
 })();
 
 // A list of choices sent once (a <template> of its options) and put into every <select> that names it (data-choice): the
 // Accounts page's players, which in every row made the page grow as accounts times players. Each keeps the choice it came
 // with; one the list does not have reads as its first, none.
-for (const select of document.querySelectorAll('select[data-choice]')) {
-  const kept = select.value, list = document.getElementById(select.dataset.choice);
-  if (!list) continue;
-  select.replaceChildren(list.content.cloneNode(true));
-  select.value = kept;
-  if (select.selectedIndex < 0) select.selectedIndex = 0;
+function fillChoices(root) {
+  for (const select of root.querySelectorAll('select[data-choice]')) {
+    const kept = select.value, list = document.getElementById(select.dataset.choice);
+    if (!list) continue;
+    select.replaceChildren(list.content.cloneNode(true));
+    select.value = kept;
+    if (select.selectedIndex < 0) select.selectedIndex = 0;
+  }
 }
+fillChoices(document);
 
 // A button with data-copy copies what the element it names holds. Over plain HTTP the browser only has the older way.
 document.addEventListener('click', async e => {
@@ -339,13 +472,13 @@ document.addEventListener('click', async e => {
   setTimeout(() => { b.textContent = was; }, 1600);
 });
 
-// A message in a box at its full height, while it is typed too: it wraps differently on every screen.
-for (const box of document.querySelectorAll('textarea')) {
-  const fit = () => { box.style.height = 'auto'; box.style.height = `${box.scrollHeight + 2}px`; };
-  fit();
-  box.addEventListener('input', fit);
-  addEventListener('resize', fit);
-}
+// A message in a box at its full height, while it is typed too: it wraps differently on every screen. Each box as the page
+// comes and again when a part of the page is changed in place (fitBoxes), as it is typed, and when the window changes.
+const fitBox = box => { box.style.height = 'auto'; box.style.height = `${box.scrollHeight + 2}px`; };
+function fitBoxes(root) { for (const box of root.querySelectorAll('textarea')) fitBox(box); }
+fitBoxes(document);
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('textarea')) fitBox(e.target); });
+addEventListener('resize', () => fitBoxes(document));
 
 // A job a page started (the app's build, the setup's import, a backup, a restore, a change to the songs), followed in its
 // log box until it ends. The box says where to ask (data-job), where to go once the job is done (data-done) or has failed
@@ -530,18 +663,17 @@ for (const search of document.querySelectorAll('input[type=search][data-rows]'))
 
 // The Recordings page's delete of those ticked: the button says how many it would delete (data-n, with {n}; data-none
 // before any), waits until there is at least one, and stays at the screen's foot once something is ticked.
-(() => {
+// Heard on the page, and counted again when the list is changed in place (bulkCount).
+function bulkCount() {
   const bulk = document.getElementById('rec-bulk');
   if (!bulk) return;
-  const count = () => {
-    const n = bulk.form.querySelectorAll('input[name=sel]:checked').length;
-    bulk.disabled = n === 0;
-    bulk.parentElement.classList.toggle('on', n > 0);
-    bulk.textContent = n ? bulk.dataset.n.replace('{n}', n) : bulk.dataset.none;
-  };
-  bulk.form.addEventListener('change', count);
-  count();
-})();
+  const n = bulk.form.querySelectorAll('input[name=sel]:checked').length;
+  bulk.disabled = n === 0;
+  bulk.parentElement.classList.toggle('on', n > 0);
+  bulk.textContent = n ? bulk.dataset.n.replace('{n}', n) : bulk.dataset.none;
+}
+document.addEventListener('change', e => { if (e.target.matches && e.target.matches('input[name=sel]')) bulkCount(); });
+bulkCount();
 
 // A recording to watch (the Recordings page, data-src): hls.js where it works; Safari plays HLS itself.
 (() => {
@@ -627,10 +759,16 @@ if (document.getElementById('tiles')) {
   });
 })();
 
-// The Maintenance page: a ready-made message in the field, to change or send as it is.
-for (const b of document.querySelectorAll('.presets button')) {
-  b.addEventListener('click', () => { const f = document.querySelector('textarea[name=message]'); f.value = b.dataset.text; f.focus(); });
-}
+// The Maintenance page: a ready-made message in the field, to change or send as it is. Heard on the page, so that it works
+// in a part of the page changed in place too.
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.presets button[data-text]');
+  if (!b) return;
+  const f = document.querySelector('textarea[name=message]');
+  f.value = b.dataset.text;
+  f.dispatchEvent(new Event('input', { bubbles: true }));
+  f.focus();
+});
 
 // The setup's first step. A typed path that named a file: that file in sight in the list.
 (() => {
@@ -684,37 +822,100 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
   })();
 })();
 
-// The server stopping (or removing itself) from the Server page: which process answers is asked (data-ping), as a
-// restart's page does. Once nothing answers, it has stopped: the heading says so (data-stopped, data-stopped-lead) and
-// its light goes off. Should another process answer later (the server started again on its PC), it runs again
-// (data-again), with the way back to the Server page.
+// A switch or a small change (a form marked data-inplace) changes the page where it is: sent in the background, the page as
+// the server now has it is read, and the parts of this page that show what changed (marked data-region, each by its id)
+// are put in place of their old selves; a part the page no longer has (a player deleted) goes. The server's words on
+// what was done (data-said) come as the pages' message at the foot of the screen. Nothing else moves: no white flash, the
+// same place on the page, the same search, the focus on the same button. The form works as before without scripts (the
+// page loads again), and does so here too when the sending fails or the sign-in has ended (the server then says why).
+// An answer that is a job to follow (data-job) or another page loads that page.
 (() => {
-  const wait = document.getElementById('stop-wait');
-  if (!wait) return;
-  const head = document.getElementById('stop-head'), lead = document.getElementById('stop-lead');
-  const lamp = document.getElementById('stop-lamp');
-  let stopped = false;
-  (async function look() {
-    let instance = null;
-    try {
-      const r = await fetch(wait.dataset.ping, { cache: 'no-store' });
-      if (r.ok) instance = (await r.json()).instance;
-    } catch (e) {
-      // Nothing answers: the server has stopped.
+  // The message at the foot of the screen, as the pages float the server's words: a press takes it away, and it goes by
+  // itself, a good one sooner.
+  const say = doc => {
+    for (const old of document.querySelectorAll('.flash[data-said]')) old.remove();
+    const main = document.querySelector('main');
+    for (const m of doc.querySelectorAll('.flash[data-said]')) {
+      const said = document.importNode(m, true);
+      said.classList.add('float');
+      said.addEventListener('click', () => said.remove());
+      main.prepend(said);
+      setTimeout(() => said.remove(), said.classList.contains('ok') ? 5000 : 15000);
     }
-    if (instance === null && !stopped) {
-      stopped = true;
-      head.textContent = wait.dataset.stopped;
-      if (wait.dataset.stoppedLead) lead.textContent = wait.dataset.stoppedLead;
-      lamp.className = 'lamp off';
-    } else if (instance !== null && instance !== wait.dataset.instance && wait.dataset.again) {
-      head.textContent = wait.dataset.again;
-      lamp.className = 'lamp on';
-      document.getElementById('stop-back').hidden = false;
+  };
+  // The parts that changed, put in place; the focus kept on the same control of a part that was replaced.
+  const swap = doc => {
+    const active = document.activeElement;
+    let refocus = null;
+    for (const old of document.querySelectorAll('[data-region][id]')) {
+      const fresh = doc.getElementById(old.id);
+      if (!fresh) { old.remove(); continue; }
+      if (fresh.outerHTML === old.outerHTML) continue;
+      // Which of the part's controls had the focus, by its place among them.
+      if (active && old.contains(active)) {
+        const all = [...old.querySelectorAll('button, a[href], input, select, textarea, summary, [tabindex]')];
+        refocus = [old.id, all.indexOf(active)];
+      }
+      old.replaceWith(document.importNode(fresh, true));
+    }
+    // What the pages do to their parts as they come: the players' choices, the boxes' height, the list's search, the count
+    // on the recordings' delete.
+    fillChoices(document);
+    fitBoxes(document);
+    for (const search of document.querySelectorAll('input[type=search][data-rows]')) if (search.value) search.dispatchEvent(new Event('input'));
+    bulkCount();
+    if (refocus) {
+      const part = document.getElementById(refocus[0]);
+      const all = part ? [...part.querySelectorAll('button, a[href], input, select, textarea, summary, [tabindex]')] : [];
+      const next = all[refocus[1]] || all[0];
+      if (next) next.focus({ preventScroll: true });
+    }
+  };
+  document.addEventListener('submit', async e => {
+    const form = e.target, button = e.submitter;
+    if (e.defaultPrevented || form.method !== 'post' || !(form.dataset.inplace !== undefined || (button && button.dataset.inplace !== undefined))) return;
+    // Sent the usual way once: after a failure here, or for the sign-in that ended.
+    if (form.dataset.plain) { delete form.dataset.plain; return; }
+    e.preventDefault();
+    const url = button && button.hasAttribute('formaction') ? button.formAction : form.action;
+    const body = new FormData(form);
+    if (button && button.name) body.append(button.name, button.value);
+    // Done, either way: the form can be sent again, and the page is not taken back to where it was (nothing moved).
+    const done = () => {
+      delete form.dataset.sent;
+      if (button) button.removeAttribute('aria-busy');
+      sessionStorage.removeItem('odq-back');
+    };
+    // The usual way: the page loads again with the answer. A question asked before (data-ask) is not asked twice.
+    const plain = () => {
+      done();
+      form.dataset.plain = '1';
+      if ((button && button.dataset.ask) || form.dataset.ask) form.dataset.answered = '1';
+      form.requestSubmit(button || undefined);
+    };
+    let r, html;
+    try {
+      r = await fetch(url, { method: 'POST', body, headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' });
+      html = await r.text();
+    } catch (_) {
+      plain();
       return;
     }
-    setTimeout(look, 2000);
-  })();
+    // The sign-in ended: nothing was done, and the usual way says so on the sign-in page.
+    if (r.status === 401) { plain(); return; }
+    done();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const there = new URL(r.url, location.href);
+    // A job to follow, or another page: that page, as it would have come.
+    if (doc.querySelector('[data-job]') || there.pathname !== location.pathname) { location.assign(there.href); return; }
+    // An answer without any of the parts this changes in place (the service's own error page, or a list now empty): the
+    // page as it would have come.
+    if (!doc.querySelector('[data-region][id]')) { document.open(); document.write(html); document.close(); window.odqChanges = (window.odqChanges || 0) + 1; return; }
+    swap(doc);
+    say(doc);
+    // How many changes the page has made in place: the pages' tests wait for the next one.
+    window.odqChanges = (window.odqChanges || 0) + 1;
+  });
 })();
 
 // Back to a page whose form was sent (the busy button's part above kept where it was): the same search, the same place in
@@ -744,7 +945,7 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
   // Further down the page, the message about what was done comes to the screen's foot: it would be out of sight at the
   // top. A good one leaves by itself.
   if (scrollY > 0) {
-    for (const m of document.querySelectorAll('.flash')) {
+    for (const m of document.querySelectorAll('.flash[data-said]')) {
       m.classList.add('float');
       // It lies over the page: a click takes it away, and it leaves by itself, a good one sooner.
       m.addEventListener('click', () => m.remove());
