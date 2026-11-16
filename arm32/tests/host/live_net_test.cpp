@@ -378,6 +378,53 @@ void state_answers() {
     check(parse_state(answer_of(200, "<html>502 Bad Gateway</html>")).answered && !parse_state(answer_of(200, "<html></html>")).on,
           "state: a page that is no JSON is off");
     check(!parse_state(answer_of(200, "")).on, "state: an empty body is off");
+    // A key is a key only with its colon: the notice's kind "on" before the key on is no key (an answer with its keys in
+    // another order still reads on air).
+    check(parse_state(answer_of(200, R"({"toast_kind":"on","token":"abc","on":true})")).on, "state: the kind's value \"on\" before the key on is no key");
+    check(!parse_state(answer_of(200, R"({"toast_kind":"on","on":false,"token":"abc"})")).on, "state: on false after a kind \"on\" is off");
+    // The notice's number and kind: read; none in an older server's answer.
+    const State numbered = parse_state(answer_of(200, R"({"on":false,"toast":"Your broadcast has ended\nWatch it","toast_id":7,"toast_kind":"off","switch":false})"));
+    check(numbered.toast_id == 7 && numbered.toast_kind == "off" && numbered.toast == "Your broadcast has ended\nWatch it", "state: the notice's number and kind");
+    const State older = parse_state(answer_of(200, good));
+    check(older.toast_id == -1 && older.toast_kind.empty(), "state: an older server's answer has no number (-1) and no kind");
+    check(parse_state(answer_of(200, R"({"on":false,"toast":"","toast_id":0,"toast_kind":""})")).toast_id == 0, "state: a newer server's answer without a notice: number 0");
+    // Every notice shown once, on and off alike, by its number, never by its words.
+    {
+        int last = 0;
+        const auto answer = [](bool on, const char* toast, int id, const char* kind) {
+            std::string body = std::string("{\"on\":") + (on ? "true,\"token\":\"abc\"" : "false") + ",\"toast\":\"" + toast + "\",\"toast_id\":" +
+                               std::to_string(id) + ",\"toast_kind\":\"" + kind + "\"}";
+            return parse_state(answer_of(200, body));
+        };
+        Notice a = notice_of(answer(true, "On air\\nWatch", 1, "on"), last, false);
+        check(a.show && a.live && a.text == "On air\nWatch" && last == 1, "notice: the first on notice shows, with the LIVE tag");
+        Notice b = notice_of(answer(false, "Ended\\nWatch", 2, "off"), last, false);
+        check(b.show && !b.live && last == 2, "notice: the off notice shows, without the tag");
+        Notice c = notice_of(answer(true, "On air\\nWatch", 3, "on"), last, false);
+        check(c.show && c.live && last == 3, "notice: on again with the same words shows again");
+        Notice d = notice_of(answer(true, "On air\\nWatch", 3, "on"), last, false);
+        check(!d.show && last == 3, "notice: the same number again is a repeat, left out");
+        Notice e = notice_of(answer(false, "Ended\\nOff here", 4, "end"), last, false);
+        check(e.show && !e.live, "notice: the server's broadcasts off shows, without the tag");
+        Notice f = notice_of(answer(false, "Switched on\\nWaits", 5, "wait"), last, false);
+        check(f.show && !f.live, "notice: switched on while the server's are off shows, without the tag");
+        Notice g = notice_of(answer(false, "Switched off\\nStays off", 6, "held"), last, false);
+        check(g.show && !g.live, "notice: switched off while the server's are off shows");
+        Notice h = notice_of(answer(true, "On air\\nWatch", 7, "on"), last, true);
+        check(!h.show && last == 7, "notice: the on notice left out where this computer cannot send, and not shown later");
+        Notice i = notice_of(answer(false, "Ended\\nWatch", 8, "off"), last, true);
+        check(i.show && !i.live, "notice: the off notice shows even where this computer cannot send");
+        Notice j = notice_of(answer(false, "", 0, ""), last, false);
+        check(!j.show, "notice: an answer without a notice shows none");
+    }
+    // An older server's (no number, no kind): each notice it hands out shows, the tag while on air.
+    {
+        int last = 0;
+        Notice on = notice_of(parse_state(answer_of(200, R"({"on":true,"token":"abc","toast":"On air\nWatch"})")), last, false);
+        Notice off = notice_of(parse_state(answer_of(200, R"({"on":false,"toast":"Ended\nWatch"})")), last, false);
+        Notice again = notice_of(parse_state(answer_of(200, R"({"on":true,"token":"abc","toast":"On air\nWatch"})")), last, false);
+        check(on.show && on.live && off.show && !off.live && again.show && again.live && last == 0, "notice: an older server's notices each show");
+    }
     // The numbers: within what this code makes, the defaults where they are missing or no numbers.
     // Past what an int holds too (4294967300 would be 4 cut to 32 bits, 3000000000 a negative number).
     State big = parse_state(answer_of(200, R"({"on":true,"token":"a","fps":4294967300,"height":4294968296,"bitrate":3000000000,"segment":4294967297})"));

@@ -65,8 +65,9 @@ namespace arm32::desktop_live {
 
 namespace {
 
-// How often the control thread asks the server.
-constexpr Nanos kPollEvery = 15 * kSecond;
+// How often the control thread asks the server: a switch turned on or off in the admin pages shows its notice over the
+// game within this (the server hands out each notice once, numbered).
+constexpr Nanos kPollEvery = 5 * kSecond;
 // No swap for this long: the game is away (minimized, closed), so nothing is sent and the server is not asked.
 constexpr Nanos kAwayAfter = 5 * kSecond;
 // The server's first answer within this of the control thread's start comes at the game's first screens, where making
@@ -81,6 +82,8 @@ void control_main() {
     const Nanos started = now_ns();
     Nanos next_poll = 0;
     bool was_on = false;
+    // The number of the last notice shown (live_net.h notice_of): each new one shows once, a repeat never.
+    int last_notice = 0;
     const std::string lang = player::host_locale().first == "ko" ? "ko" : "en";
     for (;;) {
         sleep_ns(kSecond);
@@ -138,12 +141,15 @@ void control_main() {
         if (was_on && !state.on) g_link.end_stream();
         g_on.store(state.on);
         was_on = state.on;
-        const std::string& notice = state.toast;
-        // A PC that cannot encode sends nothing: the server's "you are live" would not be true here.
-        if (!notice.empty() && state.on && g_gave_up.load()) {
-            log("player: live: the server's notice left out, this PC sends no broadcast: %s", notice.c_str());
-        } else if (!notice.empty()) {
-            player::show_notice(notice, state.on);
+        // Every notice the server hands out, on and off alike, each once (live_net.cpp notice_of). A PC that cannot
+        // encode sends nothing: the server's "you are live" would not be true here, and only that one is left out.
+        const int shown_before = last_notice;
+        const live::Notice notice = live::notice_of(state, last_notice, g_gave_up.load());
+        if (notice.show) {
+            player::show_notice(notice.text, notice.live);
+        } else if (!state.toast.empty()) {
+            log("player: live: the server's notice left out (%s): %s", state.toast_id > 0 && state.toast_id <= shown_before ? "shown already" : "this PC sends no broadcast",
+                state.toast.c_str());
         }
     }
 }

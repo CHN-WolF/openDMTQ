@@ -277,16 +277,22 @@ HttpResult Link::request(const char* method, const std::string& path, const std:
 // ---- reading the server's small JSON answer: flat, with known keys
 
 std::size_t json_value(const std::string& json, const char* key) {
-    // The key with its quotes: a value's own quotes are escaped, so no value can hold this.
+    // The key with its quotes: a value's own quotes are escaped, so a value holds this only as a whole string value of
+    // the same words, which no colon follows.
     const std::string quoted = std::string("\"") + key + "\"";
-    std::size_t at = json.find(quoted);
-    if (at == std::string::npos) return at;
-    at = json.find(':', at + quoted.size());
-    if (at == std::string::npos) return at;
-    ++at;
-    // The white space JSON allows before a value.
-    while (at < json.size() && (json[at] == ' ' || json[at] == '\t' || json[at] == '\n' || json[at] == '\r')) ++at;
-    return at < json.size() ? at : std::string::npos;
+    for (std::size_t from = 0;;) {
+        std::size_t at = json.find(quoted, from);
+        if (at == std::string::npos) return at;
+        from = at + quoted.size();
+        at = from;
+        // The white space JSON allows before the colon, then the colon: a key. Anything else: a value; the next one.
+        while (at < json.size() && (json[at] == ' ' || json[at] == '\t' || json[at] == '\n' || json[at] == '\r')) ++at;
+        if (at >= json.size() || json[at] != ':') continue;
+        ++at;
+        // The white space JSON allows before a value.
+        while (at < json.size() && (json[at] == ' ' || json[at] == '\t' || json[at] == '\n' || json[at] == '\r')) ++at;
+        return at < json.size() ? at : std::string::npos;
+    }
 }
 
 bool json_bool(const std::string& json, const char* key) {
@@ -450,7 +456,26 @@ State parse_state(const HttpResult& r) {
     s.bitrate = std::clamp(json_int(r.body, "bitrate", 2000000), 100000, 20000000);
     s.segment = std::clamp(json_int(r.body, "segment", 2), 1, 10);
     s.toast = json_string(r.body, "toast");
+    // The notice's number and kind (a newer server's): -1 and "" without them.
+    if (json_value(r.body, "toast_id") != std::string::npos) s.toast_id = json_int(r.body, "toast_id", 0);
+    s.toast_kind = json_string(r.body, "toast_kind");
     return s;
+}
+
+Notice notice_of(const State& s, int& last_id, bool gave_up) {
+    Notice n;
+    if (!s.answered || s.toast.empty()) return n;
+    // A numbered one shown already: a repeat, left out. Never by its words: on, off and on again read the same.
+    if (s.toast_id > 0 && s.toast_id <= last_id) return n;
+    if (s.toast_id > 0) last_id = s.toast_id;
+    // Its kind says whether it is the on notice; an older server's (no kind) is on while the answer is.
+    const bool on_notice = s.toast_kind.empty() ? s.on : s.toast_kind == "on";
+    // This computer cannot send: "you are on air" would not be true. Every other notice shows.
+    if (on_notice && gave_up) return n;
+    n.show = true;
+    n.text = s.toast;
+    n.live = on_notice;
+    return n;
 }
 
 void add_id(std::string& ids, std::string_view id) {

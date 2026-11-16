@@ -62,7 +62,8 @@ struct HttpResult {
 
 // ---- the server's small JSON answers: flat, with known keys
 
-// Where the value of "key" starts, or npos.
+// Where the value of "key" starts, or npos: the first "key" followed by a colon (a string value with the same words, as
+// "toast_kind":"on" has for the key on, is no key).
 std::size_t json_value(const std::string& json, const char* key);
 // The value of "key" is true.
 bool json_bool(const std::string& json, const char* key);
@@ -83,12 +84,31 @@ struct State {
     // The stream the server asks for, within what this code makes; its defaults where the answer has none.
     int fps = 30, height = 720, bitrate = 2000000, segment = 2;
     std::string toast;      // the server's notice for the player ("" for none)
+    // The notice's number, higher for each new one of this player (0 with none; -1: the answer has no number, an older
+    // server's, which hands out no notice when the player's switch goes off), and its kind: on (on air from the next
+    // song), off (the player's switch off), end (the server's broadcasts off), wait (switched on while the server's are
+    // off), held (switched off while the server's are off); "" from an older server.
+    int toast_id = -1;
+    std::string toast_kind;
 };
 
 // The checks on GET /live/state's answer: on only with status 200, "on" true and a token of at most 128 letters,
 // digits, '-' and '_' (it goes into a request header as it is); the numbers within 5 to 60 frames a second, 144 to 1080
 // lines, 100 kbit/s to 20 Mbit/s and 1 to 10 s a segment.
 State parse_state(const HttpResult& r);
+
+// What a player shows of an answer to GET /live/state (the PC's overlay): whether to show its notice now, its text
+// ("title\ndetail"), and whether it wears the LIVE tag.
+struct Notice {
+    bool show = false;
+    std::string text;
+    bool live = false;
+};
+// Every notice the server hands out, on and off alike, each once: one numbered not above `last_id` (the number of the
+// last one shown, which this keeps; 0 at first) is a repeat and left out, never one by its words (on, off and on again
+// read the same as before). The LIVE tag on the on notice (by its kind; an older server's, while the answer is on air).
+// The on notice is left out where this computer cannot send (`gave_up`): it would not be true.
+Notice notice_of(const State& s, int& last_id, bool gave_up);
 
 // Adds a device id to the comma-separated list the requests name the player by, once, and only when it is made of what
 // the login's ids are made of (letters, digits, '-' and '_', at most 128): the list goes into a URL as it is.
