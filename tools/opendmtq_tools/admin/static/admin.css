@@ -495,6 +495,12 @@ table.players tbody tr:nth-last-child(-n+2):not(:first-child):not(:nth-child(2))
 
 /* What the owner may want to look at: a line each, with the way to it. */
 .attention { display: grid; gap: 6px; }
+/* Places the pages' scripts fill and empty as things change (base.html #server-alert, the status page's #attention): no box
+   of their own, so that the page's grid lays out what is in them as before, and leaves no gap while they are empty. The
+   sentence keeps the frame it has as the page's own (style.css, main > .site-alert). */
+#server-alert, #attention { display: contents; }
+#server-alert > .site-alert { border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); padding: 0 14px; }
+#server-alert > .site-alert.down { border-color: color-mix(in srgb, var(--bad) 50%, transparent); }
 .alert { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 10px 8px 14px; font-size: var(--t-md); background: var(--glass-sheen), var(--glass); box-shadow: var(--glass-rim); }
 .alert i { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 7px var(--warn); }
 .alert.bad i { background: var(--bad); box-shadow: 0 0 7px var(--bad); }

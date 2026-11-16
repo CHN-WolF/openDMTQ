@@ -1,7 +1,9 @@
 {% extends "base.html" %}{% block title %}{{ t('dash.title') }}{% endblock %}
 {% block body %}
 {% if not counts %}<p class="flash bad" role="status">{{ t('dash.db_failed') }}</p>{% endif %}
-{# What the owner may want to look at, in plain words, each with the way to it. Said only when there is something. #}
+{# What the owner may want to look at, in plain words, each with the way to it. Said only when there is something; its place
+   is always there, for the page's own look every 30 seconds (admin.js) to fill and empty. #}
+<div id="attention">
 {% if attention %}
 <section class="attention" aria-label="{{ t('alert.title') }}">
   {% for level, text, link, words in attention %}
@@ -10,6 +12,7 @@
   {% endfor %}
 </section>
 {% endif %}
+</div>
 {# The server at a glance: each tile leads to the page where it can be changed, and its colour says whether
    it needs attention. The page looks again by itself every 30 seconds (admin.js). #}
 <section class="stats stats-4 tiles" id="tiles">

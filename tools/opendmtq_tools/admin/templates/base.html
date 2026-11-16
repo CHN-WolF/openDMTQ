@@ -18,9 +18,10 @@
    on before the page is first drawn. #}
 <script>document.documentElement.classList.add("arriving");setTimeout(()=>document.documentElement.classList.remove("arriving"),1600)</script>
 </head>
-<body data-section="admin">
+<body data-section="admin" data-page="{{ request.endpoint or '' }}">
 <div class="facets" aria-hidden="true"></div>
-{% set ep = request.endpoint %}
+{# The page: this one, or for the frame alone (look.html) the page that asked for it, whose rules it follows. #}
+{% set ep = page_ep or request.endpoint %}
 {% set pages = [('dashboard', 'nav.status'), ('app_page', 'nav.app'), ('songs_page', 'nav.songs'), ('players_page', 'nav.players'), ('accounts_page', 'nav.accounts'), ('recordings_page', 'nav.recordings'),
                 ('backups_page', 'nav.backups'), ('maintenance_page', 'nav.maintenance'), ('server_page', 'nav.server'), ('logs_page', 'nav.logs')] %}
 <header class="bar">
@@ -49,13 +50,17 @@
   {# The game server is not answering: what that means here, on every page. A server being set up, with only the game's
      files missing, is pointed to the setup instead (whose first step says it there). Not on the page that says the
      whole server is stopping. #}
-  {% if is_signed_in and not server_ok and ep not in ('login', 'server_stop', 'server_restart', 'server_uninstall') %}
+  {# Its place is always there, empty while the server answers: the page's script fills it and empties it as the server goes
+     and comes back (admin.js, from look()). #}
+  <div id="server-alert">
+  {% if is_signed_in and not server_ok and ep not in ('login', 'server_stop') %}
     {% if server_waiting %}
       {% if not (ep or '').startswith('setup') %}<div class="site-alert" role="status"><p>{{ t('down.waiting', url=url_for('setup_page', step='files')) }}</p></div>{% endif %}
     {% else %}
     <div class="site-alert down" role="status"><p>{% if server_problem %}{{ t('down.problem', why=server_problem) }}{% else %}{{ t('down.note') }}{% endif %}</p></div>
     {% endif %}
   {% endif %}
+  </div>
   {% block body %}{% endblock %}
 </main>
 {# The one question the page asks before what cannot be undone (admin.js asks it, for a button or form with data-ask). #}

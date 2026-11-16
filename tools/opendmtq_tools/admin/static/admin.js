@@ -721,8 +721,26 @@ bulkCount();
   }
 })();
 
+// The game server's state as a page just fetched shows it (this page again, or the frame alone: look() in status.py): the
+// bar's word for a server that is not answering and the sentence above the page, put in place or taken away, every time.
+// Only from a whole page: a refusal (signed out meanwhile) has neither, and must not take them away.
+function serverState(page) {
+  if (!page.querySelector('.bar-end')) return;
+  const end = document.querySelector('.bar-end');
+  const now = end && end.querySelector(':scope > .state'), fresh = page.querySelector('.bar-end > .state');
+  if (end) {
+    // The word where it stands, at the bar's end before the language keys, as the page itself puts it.
+    if (fresh && now) now.replaceWith(fresh);
+    else if (fresh) end.prepend(fresh);
+    else if (now) now.remove();
+  }
+  const slot = document.getElementById('server-alert'), said = page.getElementById('server-alert');
+  if (slot && said) slot.replaceChildren(...said.childNodes);
+}
+
 // The status page's tiles and resources look again by themselves: an owner may keep this page open on the side. A new
-// point every five minutes in the resources' charts.
+// point every five minutes in the resources' charts. The things to look at first, the bar's word and the sentence above the
+// page with them.
 if (document.getElementById('tiles')) {
   setInterval(async () => {
     if (document.hidden) return;
@@ -732,7 +750,22 @@ if (document.getElementById('tiles')) {
       if (fresh) document.getElementById('tiles').replaceChildren(...fresh.children);
       const res = page.getElementById('resources');
       if (res) document.getElementById('resources').replaceChildren(...res.children);
+      const attention = page.getElementById('attention');
+      if (attention) document.getElementById('attention').replaceChildren(...attention.childNodes);
+      serverState(page);
     } catch (_) { /* The next look. */ }
+  }, 30000);
+} else if (document.querySelector('.auth-form') && document.getElementById('server-alert')) {
+  // Every other page signed in looks at the frame alone, as often: the bar's word and the sentence come and go with the
+  // game server while the page stays open. Asked for this page (for=), whose own rules say which sentence it shows.
+  const look = new URL('look', document.querySelector('.bar .logo').href);
+  look.searchParams.set('for', document.body.dataset.page || '');
+  setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const r = await fetch(look, { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' });
+      if (r.ok) serverState(new DOMParser().parseFromString(await r.text(), 'text/html'));
+    } catch (_) { /* The admin service itself away a moment: the next look. */ }
   }, 30000);
 }
 

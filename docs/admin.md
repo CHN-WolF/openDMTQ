@@ -114,6 +114,10 @@ the server: the cookie's key and the open sign-ins are kept beside the database 
 of any request. At `localhost` on the server PC the password travels without TLS, but only within this PC. On a host
 install the address on the local network has no TLS either. To change the password, edit `.env`, then restart the server.
 
+While the game server is not answering, every page says so: OFFLINE at the end of the bar and a sentence above the page.
+A page left open looks again every half minute, and the two come and go with the server by themselves; so do the status
+page's things to look at first.
+
 | Page | What it does |
 | :--- | :--- |
 | Setup | The four steps above: the game's files, the address, the players and the app. Reached from the status page while a step is left, and from the Songs page to import songs. |

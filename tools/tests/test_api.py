@@ -1855,6 +1855,9 @@ class DocumentTest(unittest.TestCase):
 # own variants (a tab, a file). What has no route says why.
 PAGE_ACTIONS = {
     "dashboard": ["status", "status_machine", "status_activity", "invite_get"],
+    # The frame every page's script asks for, with the bar's word and the sentence about the game server: the status.
+    "look": ["status"],
+    "look?for": ["status"],
     "app_page": ["app_get", "builds_list", "builds_start", "job_get"],
     "app_page?built": ["job_get"],
     "app_page?job": ["job_get"],
@@ -1988,7 +1991,7 @@ SITE_LIBRARIES = {"lib.php", "live_lib.php", "ranking_lib.php", "auth.php", "str
 TEMPLATE_PAGES = {"accounts.html": "accounts_page", "app.html": "app_page", "backups.html": "backups_page", "dashboard.html": "dashboard",
                   "logs.html": "logs_page", "maintenance.html": "maintenance_page", "players.html": "players_page",
                   "recordings.html": "recordings_page", "setup.html": "setup_page", "songs.html": "songs_page", "login.html": "login",
-                  "server.html": "server_page"}
+                  "look.html": "look"}
 
 # The arguments of an address that make a page show another of its views (a tab, a step, a file), or follow a job.
 VARIANTS = ("tab", "step", "csv", "watch", "dir", "page", "player", "built", "job", "host")
@@ -2036,6 +2039,7 @@ GET_ARGS = {
     "setup_start?key": "the one-time link that signs a browser in on the server PC: the API takes a token instead",
     "setup_start?step": "the step that one-time link opens, in a browser",
     "login?next": "the page a browser goes back to after signing in: the API has no sign-in",
+    "look?for": "the page whose frame it is, for which of its sentences shows: the API's status has the server's state itself",
     "set_lang?to": "the pages' language: the API answers in English",
     "set_lang?next": "the page a browser goes back to after the language switch",
     # The players' site.
@@ -2063,7 +2067,7 @@ ARG_HELPERS = {"plays_tab": "logs_page?tab=plays", "recordings_view": "recording
 
 # What the pages' script (static/admin.js) adds to a page's own address, with the page it does that on: the Logs page's
 # look at new requests asks for its rows alone.
-SCRIPT_ARGS = {"rows": "logs_page"}
+SCRIPT_ARGS = {"rows": "logs_page", "for": "look"}
 
 
 def page_actions():

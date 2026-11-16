@@ -8,7 +8,7 @@ import sqlite3
 import threading
 import time
 
-from flask import render_template, url_for
+from flask import render_template, request, url_for
 
 from .. import songs, windows_client
 from . import apps, auth, backups, charts, core, insights, recordings, song_pages
@@ -412,6 +412,15 @@ def facts():
             "backup_age": backup_age, "maintenance": on, "build": build, "failed": failed,
             # Counted with the disk's figures (disk_counts): every recording is read at most once a minute for both.
             "recordings": disk_counts()["recording_count"]}
+
+
+@app.route(BASE + "/look")
+def look():
+    """The frame of a page as every page has it now, with nothing in it: the bar's word for a game server that is not
+    answering, and the sentence about it above the page. Each page's script asks for it every half minute and puts those
+    two in place (admin.js), so that they come and go with the server, every time, without the page being opened again.
+    for: the page that asks (its endpoint), whose own rules say which sentence it shows (the setup's pages leave one out)."""
+    return render_template("look.html", page_ep=request.args.get("for", "")[:40])
 
 
 @app.route(BASE + "/")

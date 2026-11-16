@@ -2248,6 +2248,47 @@ class SignInWithAnyTextTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class ServerLookTest(unittest.TestCase):
+    """ADM-116: the frame every page's script asks for (look()): the bar's word and the sentence above the page as they stand
+    now, so that they come and go with the game server on a page left open. Before: no such thing, and both stayed as the
+    page was first drawn."""
+
+    def look(self, inst, health, page="players_page"):
+        with mock.patch.object(admin.core, "server_health", lambda fresh=False: health):
+            r = inst.client.get(f"/opendmtq/admin/look?for={page}", headers={"X-Requested-With": "fetch"})
+        return r.status_code, r.get_data(as_text=True)
+
+    def alert(self, text):
+        """What the sentence's place holds, without its spaces."""
+        return re.search(r'<div id="server-alert">(.*?)</div>\s*\n', text, re.S).group(1).strip()
+
+    def test_the_word_and_the_sentence_come_and_go_with_the_server(self):
+        with Install() as inst:
+            old_game_database(admin.core.DB, [])
+            inst.sign_in()
+            for health, down in ((None, True), ({"ok": True}, False), (None, True), ({"ok": True}, False)):
+                status, text = self.look(inst, health)
+                self.assertEqual(status, 200)
+                self.assertEqual("OFFLINE</span>" in text, down)
+                self.assertEqual("The game server is not answering" in self.alert(text), down)
+                if not down:
+                    self.assertEqual(self.alert(text), "")
+
+    def test_the_page_that_asks_keeps_its_own_rules(self):
+        # A server waiting for the game's files: the setup's pages say so in their first step, not above the page.
+        waiting = {"ok": False, "database": True, "writable": True, "game_data": False}
+        with Install() as inst:
+            old_game_database(admin.core.DB, [])
+            inst.sign_in()
+            self.assertIn("setup", self.alert(self.look(inst, waiting, "players_page")[1]))
+            self.assertEqual(self.alert(self.look(inst, waiting, "setup_page")[1]), "")
+
+    def test_signed_out_it_is_a_plain_refusal(self):
+        with Install() as inst:
+            self.assertEqual(self.look(inst, None)[0], 401)
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class DashboardTilesTest(unittest.TestCase):
     def page(self, inst):
         inst.sign_in()
