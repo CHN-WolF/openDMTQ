@@ -185,7 +185,7 @@ TEXT = {
     "sound.eq.bass": ("Bass", "저음 강조"),
     "sound.eq.vocal": ("Vocal", "보컬"),
     "sound.eq.treble": ("Treble", "고음 강조"),
-    "sound.eq.custom": ("Custom", "사용자"),
+    "sound.eq.custom": ("Custom", "사용자 설정"),
     "sound.eq.hint.flat": ("The game's sound as it is.", "게임 소리를 그대로 냅니다."),
     "sound.eq.hint.bass": ("The low end lifted: kicks and bass lines come forward.",
                            "저음을 올려 킥과 베이스가 앞으로 나옵니다."),
