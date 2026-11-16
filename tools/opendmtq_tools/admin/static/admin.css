@@ -157,6 +157,9 @@ td.song-plays { width: 11em; }
 .rec-group h3 { margin: 0; font-size: var(--t-lg); font-weight: 700; overflow-wrap: anywhere; }
 .rec-bulk { margin: 14px 0 0; }
 table.recordings td.rec-songs { white-space: normal; overflow-wrap: anywhere; }
+/* The songs past the first four: how many, with all of them beside it on a pointer, a press or the focus (admin.js), marked as
+   having more to say by a dotted line under it. */
+table.recordings .more-songs { white-space: nowrap; text-decoration: underline dotted; text-underline-offset: 3px; }
 /* The same columns in every player's table. */
 @media (min-width: 1000px) {
   table.recordings { table-layout: fixed; }
@@ -553,6 +556,8 @@ table.accounts .account-id { white-space: nowrap; }
 }
 /* The API's tokens: under each name the start of the token, its id, in the code's face as the token is written. */
 table.tokens .token-id { font: var(--t-xs)/1.4 var(--mono); }
+/* A token's name: its words (when it was made) beside it on a pointer, a press or the focus (admin.js); a long name wraps. */
+table.tokens .token-name { overflow-wrap: anywhere; }
 /* A button whose word changes from row to row (Disable or Enable, Give or Remove admin rights) as wide as the longer of
    its two words, so that every row's buttons stand in the same columns: the other word is laid out unseen under it. */
 .btn.twin { flex-direction: column; }
