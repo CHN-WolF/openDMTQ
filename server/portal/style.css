@@ -547,6 +547,36 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
 .input:focus, .field input:focus, .field textarea:focus, input.search:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 /* A field the form's check found empty (forms.js, and the server's answer): its edge in the error's red, until typed in. */
 .field input[aria-invalid="true"]:not(:focus) { border-color: color-mix(in srgb, var(--bad) 75%, transparent); }
+/* What is wrong with one field, right under it (forms.js and admin.js, and the server's own answer), in the error's red with
+   its mark; gone once the field is typed in. */
+.field-error { display: flex; gap: 7px; align-items: flex-start; margin: 0; color: #ffb3bd; font-size: var(--t-sm); font-weight: 500; line-height: 1.4; }
+.field-error::before { content: "!"; flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; font: 800 11px/1 var(--text-face); color: #2b0409; background: var(--bad); }
+/* A password field's Show: inside the field at its right end, a word in the menus' face (Show, Hide), the field's text
+   kept clear of it. Pressed, the password reads as typed until pressed again; the field keeps the focus and the cursor. */
+.slot.pw input { padding-right: 78px; }
+.pw-toggle {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  min-width: 64px;
+  height: 32px;
+  margin-top: -16px;
+  padding: 0 10px;
+  font: 700 var(--t-2xs)/1 var(--wide);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+  background: var(--rail);
+  border: 0;
+  cursor: pointer;
+  transition: color var(--quick), background-color var(--quick);
+}
+.pw-toggle:hover { color: #fff; background: var(--rail-up); }
+.pw-toggle.on { color: var(--accent-ink); background: var(--accent); }
+.pw-toggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+:lang(ko) .pw-toggle { font-family: var(--text-face); letter-spacing: 0; text-transform: none; font-size: var(--t-xs); }
+/* Edge and Internet Explorer's own eye in a password field: the field has Show already. */
+.pw input::-ms-reveal, .pw input::-ms-clear { display: none; }
 .input::placeholder, .field input::placeholder, input.search::placeholder { color: #8d97a2; }
 .input-sm { height: var(--ctl-sm); padding: 0 10px; font-size: var(--t-md); }
 @media (pointer: coarse) { .input-sm { height: var(--ctl); } }
@@ -1325,9 +1355,18 @@ a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; 
 @media (max-width: 1099px) { .who-text { display: none; } }
 @media (max-width: 720px) { .auth-form { gap: 10px; } }
 .signin h2 { font-size: 22px; }
-.signin-form { display: grid; gap: 14px; margin: 16px 0 0; }
-.signin-form .field input { height: 46px; font-size: var(--t-lg); }
-.signin-form .button { margin-top: 4px; }
+/* One line under the heading: whose ID and password these are. */
+.signin-lead { margin: 6px 0 0; color: var(--ash); font-size: var(--t-sm); line-height: 1.5; }
+.signin-form { display: grid; gap: 16px; margin: 18px 0 0; }
+/* The sign-in's fields: a sunken slot with the field's mark at its left (a person for the ID, a lock for the password),
+   the mark and the slot's edge lit in the section's colour while it has the focus. Taller than the site's other fields: on
+   a phone this is the first thing anyone types into. */
+.signin-form .field input { height: 48px; padding-left: 44px; font-size: var(--t-lg); box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45); }
+.signin-form .field input:focus { box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+.slot { position: relative; display: block; }
+.slot > svg { position: absolute; left: 14px; top: 50%; width: 18px; height: 18px; margin-top: -9px; fill: none; stroke: #7d8894; stroke-width: 1.7; pointer-events: none; transition: stroke var(--quick); }
+.slot:focus-within > svg { stroke: var(--accent); }
+.signin-form .button { margin-top: 2px; }
 /* A phone held sideways, as the game's own web view shows this page (its score viewer is behind the sign-in): the wordmark
    beside the form, smaller, so that the form is on the screen without scrolling. What else the page says (a notice) goes
    across both. */

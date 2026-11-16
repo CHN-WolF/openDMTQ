@@ -322,6 +322,8 @@ table.players td.actions { position: relative; }
 .row-more[open] > summary { background: #414b57; }
 .row-more-in { position: absolute; z-index: 5; right: 0; top: calc(100% - 4px); display: grid; gap: 8px; width: 300px; padding: 12px; background: #2a3138; box-shadow: var(--glass-rim), 0 10px 26px rgba(0, 0, 0, 0.55); }
 table.players tbody tr:nth-last-child(-n+2):not(:first-child):not(:nth-child(2)) .row-more-in { top: auto; bottom: calc(100% - 4px); }
+/* On the page's top layer (admin.js places it): none of the popover's own frame, centring or scroll. */
+.row-more-in:popover-open { position: fixed; inset: auto; margin: 0; border: 0; color: inherit; overflow: visible; }
 .row-more-in .btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .row-more-in .btns .btn { width: 100%; }
 .rename { gap: 6px; }

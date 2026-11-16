@@ -6,7 +6,8 @@
 //   node audit.js air      the pages that change while players are on air, and the video playing
 //   node audit.js maint    the owner turns maintenance on: the notice, whole, on every page that shows it; then off again
 //   node audit.js down     the game server stopped: the owner's pages keep their look and say what is wrong
-//   node audit.js flows    what people do: signing in, searching, the replay player, the owner's forms
+//   node audit.js flows    what people do: signing in, searching, the replay player, the owner's forms; every floating
+//                          layer (menus, tooltips, questions) opened and measured whole and on top
 //   node audit.js quiet    broadcasts off for the server with everything in place: nothing of them on the site
 // Exit status 1 when anything failed. Reads SITE, ADMIN (addresses), PASSWORD and OUT from the environment.
 const puppeteer = require('puppeteer');
@@ -168,12 +169,12 @@ async function signIn(context) {
   // (With the game server stopped, only the owner's pages are there to sign in to.)
   if (stage !== 'down') {
     await page.goto(`${P}/login.php?next=%2Fopendmtq%2F`, { waitUntil: 'domcontentloaded' });
-    await page.type('input[name=user]', 'dmtq');
+    await typeId(page, 'input[name=user]', 'dmtq');
     await page.type('input[name=password]', PASSWORD);
     await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.keyboard.press('Enter')]);
   }
   await page.goto(`${A}/login`, { waitUntil: 'domcontentloaded' });
-  await page.type('input[name=name]', 'admin');
+  await typeId(page, 'input[name=name]', 'admin');
   await page.type('input[name=password]', PASSWORD);
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.keyboard.press('Enter')]);
   await page.close();
@@ -325,6 +326,12 @@ async function self(contexts) {
 
 const visible = (page, selector) => page.$eval(selector, e => !e.hidden && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0).catch(() => false);
 const textOf = (page, selector) => page.$eval(selector, e => e.textContent).catch(() => '');
+// An ID typed into a sign-in's field as a person does, over whatever the page put there: the field comes back filled with the
+// ID last used on that browser (forms.js and admin.js, data-remember).
+const typeId = async (page, selector, text) => {
+  await page.$eval(selector, e => { e.value = ''; });
+  await page.type(selector, text);
+};
 const noFindings = async (page, name) => {
   // The layout, and on the owner's pages one primary button to a screen, in whatever state the steps left the page.
   const items = [...await audit(page), ...await twoPrimaries(page)];
@@ -343,6 +350,187 @@ async function pressAndConfirm(page, selector) {
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#ask [value=yes]')]);
 }
 
+// A floating layer (a row's menu, a tooltip, a question) whole and on top: points over all of it, five by five just
+// inside its edges, each in the window and each hitting the layer itself (elementFromPoint), not a card drawn over it or
+// the page behind a part cut off. A layer the pointer passes through (a tooltip) takes the pointer for the measurement.
+// Pictures cannot tell a menu drawn under a card's glass from one on top of it; this can.
+async function wholeOnTop(page, selector) {
+  return page.$eval(selector, layer => {
+    const passes = getComputedStyle(layer).pointerEvents === 'none';
+    if (passes) layer.style.pointerEvents = 'auto';
+    const r = layer.getBoundingClientRect();
+    const missed = [];
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 5; j++) {
+        const x = r.left + 3 + (r.width - 6) * i / 4, y = r.top + 3 + (r.height - 6) * j / 4;
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) { missed.push(`${Math.round(x)},${Math.round(y)} off the window`); continue; }
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || !layer.contains(hit)) {
+          missed.push(`${Math.round(x)},${Math.round(y)} ${hit ? hit.tagName.toLowerCase() + (hit.className && typeof hit.className === 'string' ? '.' + hit.className.split(' ')[0] : '') : 'nothing'}`);
+        }
+      }
+    }
+    if (passes) layer.style.pointerEvents = '';
+    return { ok: r.width > 0 && r.height > 0 && missed.length === 0, detail: `${Math.round(r.width)}x${Math.round(r.height)} at ${Math.round(r.left)},${Math.round(r.top)}; ${missed.slice(0, 4).join(' ; ')}` };
+  }).catch(e => ({ ok: false, detail: String(e).slice(0, 120) }));
+}
+
+// Every floating layer of the pages, opened as people open them, at a phone's width and a laptop's: whole and on top.
+// The Players page's More on its first row, its last, the only row left after a search, and a row at the window's foot; the
+// question one of its buttons asks; the tooltips of the owner's charts and of a player's days on the site.
+async function floatingLayers(contexts) {
+  for (const [width, height] of [[360, 740], [1280, 800]]) {
+    const page = await contexts.signed.newPage();
+    await page.setViewport({ width, height, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
+    const at = `${width}px`;
+    const shown = 'table.players tbody tr:not([style*="none"])';
+    const openRow = async (which, name) => {
+      // Any open panel closed first, by a press outside, as a person closes one.
+      await page.evaluate(() => { for (const d of document.querySelectorAll('.row-more[open]')) d.open = false; });
+      const more = await page.evaluateHandle((rows, which) => {
+        const all = [...document.querySelectorAll(rows)];
+        return (which === 'last' ? all[all.length - 1] : all[0]).querySelector('.row-more');
+      }, shown, which);
+      await more.evaluate(d => d.querySelector('summary').scrollIntoView({ block: 'nearest' }));
+      await more.evaluate(d => d.querySelector('summary').click());
+      await page.waitForFunction(d => d.open && d.querySelector('.row-more-in'), {}, more);
+      await pause(250);
+      await more.evaluate(d => d.setAttribute('data-measured', ''));
+      const found = await wholeOnTop(page, '.row-more[data-measured] > .row-more-in');
+      await more.evaluate(d => d.removeAttribute('data-measured'));
+      check(`a player's More opens whole and on top: ${name}, ${at}`, found.ok, found.detail);
+    };
+    await page.goto(`${A}/players`, { waitUntil: 'domcontentloaded' });
+    await openRow('first', 'the first row');
+    await openRow('last', 'the last row');
+    // A row at the window's foot: the page scrolled so that its More sits on the last line of the window.
+    await page.evaluate(rows => {
+      const row = document.querySelector(rows);
+      scrollBy(0, row.getBoundingClientRect().bottom - innerHeight + 4);
+    }, shown);
+    await openRow('first', 'a row at the window\'s foot');
+    await page.evaluate(() => scrollTo(0, 0));
+    // A search that leaves one row: the list as short as a new server's.
+    const name = await page.$eval('table.players tbody tr:last-child', r => r.dataset.k);
+    await page.$eval('#player-search', (e, v) => { e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, name);
+    await openRow('first', 'the only row a search leaves');
+    // Reset's question over the open panel.
+    await page.click('.row-more[open] > .row-more-in button[value=reset]');
+    await page.waitForSelector('#ask[open]');
+    const ask = await wholeOnTop(page, '#ask[open] > *');
+    check(`the question a panel's button asks is whole and on top, ${at}`, ask.ok, ask.detail);
+    await page.click('#ask [value=no]');
+    await page.screenshot({ path: path.join(OUT, 'shots', `floating-players-one-row-${width}.jpg`), type: 'jpeg', quality: 72 });
+    // The owner's charts' tooltips: the first mark of each kind of chart on the status page, under the pointer.
+    await page.goto(`${A}/`, { waitUntil: 'domcontentloaded' });
+    const marks = await page.$$eval('[data-tip]', all => all.length);
+    for (const index of [0, Math.floor(marks / 2), marks - 1].filter((v, i, a) => marks > 0 && a.indexOf(v) === i)) {
+      const mark = (await page.$$('[data-tip]'))[index];
+      await mark.evaluate(e => e.scrollIntoView({ block: 'center', inline: 'center' }));
+      const box = await mark.boundingBox();
+      if (!box) continue;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await pause(120);
+      const tip = await wholeOnTop(page, '.chart-tip:not([hidden])');
+      check(`a chart's tooltip on the status page is whole and on top: mark ${index + 1} of ${marks}, ${at}`, tip.ok, tip.detail);
+    }
+    // The site's: a player's days of plays.
+    await page.goto(`${P}/player.php?id=1`, { waitUntil: 'domcontentloaded' });
+    const day = await page.$('[data-tip]');
+    if (day) {
+      await day.evaluate(e => e.scrollIntoView({ block: 'center' }));
+      const box = await day.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await pause(120);
+      const tip = await wholeOnTop(page, '.chart-tip:not([hidden])');
+      check(`a player's day tooltip on the site is whole and on top, ${at}`, tip.ok, tip.detail);
+    } else {
+      check(`a player's day tooltip on the site is whole and on top, ${at}`, false, 'no marks on the page');
+    }
+    await page.close();
+  }
+}
+
+// The sign-in forms, the site's and the admin pages', and the Accounts page's password fields, as a person uses them, at a
+// phone's width and a laptop's, in both languages: every field named by its label; Show inside the password field, the
+// typed text kept clear of it, showing the password and hiding it again with the cursor left in the field; a field left
+// empty said right under itself; Enter sending the form; the ID typed last back in its field the next time, the focus then
+// on the password (on a computer).
+async function signInForms(contexts) {
+  const words = { en: ['Show', 'Hide', 'Enter your ID.', 'Enter your password.'], ko: ['보기', '숨기기', '아이디를 입력하세요.', '비밀번호를 입력하세요.'] };
+  for (const [form, url, idName, who] of [['site', `${P}/login.php`, 'user', 'dmtq'], ['admin', `${A}/login`, 'name', 'admin']]) {
+    for (const [width, height] of [[360, 740], [1280, 800]]) {
+      for (const lang of ['en', 'ko']) {
+        const at = `${form}, ${width}px, ${lang}`;
+        const own = await contexts.browser.createBrowserContext();
+        const page = await own.newPage();
+        await page.setViewport({ width, height, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
+        await page.setCookie({ name: 'opendmtq_lang', value: lang, url: SITE });
+        // (The language's cookie is the host's, whatever the port: the admin pages read the same one.)
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        const id = `.signin-form input[name=${idName}]`, pw = '.signin-form input[name=password]';
+        const labelled = await page.$$eval('.signin-form input:not([type=hidden])', all => all.every(i => i.labels && i.labels.length && i.labels[0].textContent.trim()));
+        check(`every field of the sign-in has its label (${at})`, labelled);
+        // Show, inside the field at its right end, the text clear of it.
+        const place = await page.evaluate(sel => {
+          const f = document.querySelector(sel), b = document.querySelector('.signin-form .pw-toggle');
+          if (!b || b.hidden) return null;
+          const fr = f.getBoundingClientRect(), br = b.getBoundingClientRect();
+          return { inside: br.left >= fr.left && br.right <= fr.right && br.top >= fr.top && br.bottom <= fr.bottom,
+            clear: parseFloat(getComputedStyle(f).paddingRight) >= br.width + 4, word: b.textContent.trim() };
+        }, pw);
+        check(`the password field has Show inside it, the text kept clear of it (${at})`, place && place.inside && place.clear && place.word === words[lang][0], JSON.stringify(place));
+        await page.type(pw, 'secret-1');
+        await page.click('.signin-form .pw-toggle');
+        const shown = await page.evaluate(sel => [document.querySelector(sel).type, document.querySelector('.signin-form .pw-toggle').textContent.trim(), document.activeElement === document.querySelector(sel)], pw);
+        await page.click('.signin-form .pw-toggle');
+        const hidden = await page.$eval(pw, e => e.type);
+        check(`Show shows the password as typed and hides it again, the field kept (${at})`,
+          shown[0] === 'text' && shown[1] === words[lang][1] && (width < 700 || shown[2]) && hidden === 'password', JSON.stringify([shown, hidden]));
+        if (width >= 700) await page.screenshot({ path: path.join(OUT, 'shots', `forms-${form}-shown-${lang}-${width}.jpg`), type: 'jpeg', quality: 80 });
+        // Empty: the ID's words under the ID.
+        await page.$eval(pw, e => { e.value = ''; });
+        await page.$eval(id, e => { e.value = ''; });
+        await page.click('.signin-form button[type=submit], .signin-form .button');
+        await pause(150);
+        const under = await page.$eval(`.field:has(${id.replace('.signin-form ', '')}) .field-error`, e => e.textContent.trim()).catch(() => '');
+        const focus = await page.evaluate(() => document.activeElement.name);
+        check(`a field left empty is said under itself, the focus on it (${at})`, (form === 'site' ? under === words[lang][2] : under !== '') && focus === idName,
+          JSON.stringify([under, focus]));
+        await page.screenshot({ path: path.join(OUT, 'shots', `forms-${form}-empty-${lang}-${width}.jpg`), type: 'jpeg', quality: 80 });
+        await noFindings(page, `the sign-in with a field left empty (${at})`);
+        // Enter sends it: a wrong password, said by the server.
+        await page.type(id, who);
+        await page.type(pw, 'not-the-password');
+        const sent = await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).then(() => true, () => false), page.keyboard.press('Enter')]);
+        check(`Enter in the password field sends the form (${at})`, sent[0] && /\S/.test(await textOf(page, '.signin .error')));
+        await page.screenshot({ path: path.join(OUT, 'shots', `forms-${form}-wrong-${lang}-${width}.jpg`), type: 'jpeg', quality: 80 });
+        // The next visit: the ID back, the focus on the password on a computer.
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await pause(100);
+        const back = await page.evaluate((sel, pw) => [document.querySelector(sel).value, document.activeElement === document.querySelector(pw)], id, pw);
+        check(`the ID typed last is back the next time${width >= 700 ? ', the focus on the password' : ''} (${at})`,
+          back[0] === who && (width < 700 || back[1]), JSON.stringify(back));
+        await own.close();
+      }
+    }
+  }
+  // The Accounts page: Show in both password fields, and two different passwords said before anything is sent.
+  const page = await contexts.signed.newPage();
+  await page.setViewport({ width: 1280, height: 800 });
+  await page.goto(`${A}/accounts`, { waitUntil: 'domcontentloaded' });
+  check('both password fields of Make an account have Show', (await page.$$('.account-form .pw-toggle:not([hidden])')).length === 2);
+  await page.type('.account-form input[name=name]', 'twotyped');
+  await page.type('.account-form input[name=password]', 'one-password');
+  await page.type('.account-form input[name=password2]', 'another-one');
+  await page.click('.account-form .btn-primary');
+  await pause(300);
+  const said = await textOf(page, '.form-says');
+  check('two different passwords are said before anything is sent', /not the same/.test(said) && new URL(page.url()).pathname === '/opendmtq/admin/accounts'
+    && await page.evaluate(() => document.activeElement.name) === 'password2', said);
+  await page.close();
+}
+
 async function portalFlows(contexts) {
   // A stranger: the sign-in page first, whatever page was asked for, with nothing of what is inside, and that page after
   // signing in. In a browser of its own: signing in here would sign in the other signed-out pages of this run.
@@ -358,7 +546,7 @@ async function portalFlows(contexts) {
   check('the language switch changes the page', await fresh.$eval('html', e => e.lang) === 'ko');
   await press(fresh, '.lang-switch a:not(.on)');
   check('and back', await fresh.$eval('html', e => e.lang) === 'en');
-  await fresh.type('input[name=user]', 'dmtq');
+  await typeId(fresh, 'input[name=user]', 'dmtq');
   await fresh.type('input[name=password]', PASSWORD);
   await press(fresh, '.signin-form button');
   check('signing in leads to the page asked for', new URL(fresh.url()).pathname === '/opendmtq/ranking.php', fresh.url());
@@ -488,7 +676,7 @@ async function portalFlows(contexts) {
   const login = await contexts.anon.newPage();
   await login.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
   await login.goto(`${P}/login.php?next=%2Fapk`, { waitUntil: 'domcontentloaded' });
-  await login.type('input[name=user]', 'dmtq');
+  await typeId(login, 'input[name=user]', 'dmtq');
   await login.type('input[name=password]', 'wrong');
   await Promise.all([login.waitForNavigation({ waitUntil: 'domcontentloaded' }), login.keyboard.press('Enter')]);
   // (The note for iPhones stands above the form, hidden elsewhere: the error is what says it.)
@@ -515,18 +703,23 @@ async function portalFlows(contexts) {
     JSON.stringify(faces[0][0]) === '["dmtq-text-2-latin.woff2"]' && JSON.stringify(faces[1][0]) === '["dmtq-text-2-hangul.woff2","dmtq-text-2-latin.woff2"]'
     && faces[1][1], JSON.stringify(faces));
 
-  // A field left empty: the page's own check says what is missing, in the page's language and the site's error box, and
+  // A field left empty: the page's own check says what is missing, in the page's language, right under that field, and
   // the field takes the focus (forms.js), where the browser's bubble said it in the browser's language. The form stays.
   for (const [lang, noId, noPassword] of [['en', 'Enter your ID.', 'Enter your password.'], ['ko', '아이디를 입력하세요.', '비밀번호를 입력하세요.']]) {
     const empty = await contexts.anon.newPage();
     await empty.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
     await empty.setCookie({ name: 'opendmtq_lang', value: lang, url: SITE });
     await empty.goto(`${P}/login.php`, { waitUntil: 'domcontentloaded' });
+    // No ID kept from this browser's earlier sign-ins: both fields empty.
+    await empty.evaluate(() => localStorage.clear());
+    await empty.reload({ waitUntil: 'domcontentloaded' });
     await empty.click('.signin-form button');
-    const first = [await textOf(empty, '.signin .error'), await empty.evaluate(() => document.activeElement.name)];
-    await empty.type('input[name=user]', 'dmtq');
+    // The words under the field they are about.
+    const under = name => empty.$eval(`.field:has(input[name=${name}]) .field-error`, e => e.textContent).catch(() => '');
+    const first = [await under('user'), await empty.evaluate(() => document.activeElement.name)];
+    await typeId(empty, 'input[name=user]', 'dmtq');
     await empty.click('.signin-form button');
-    const second = [await textOf(empty, '.signin .error'), await empty.evaluate(() => document.activeElement.name),
+    const second = [await under('password'), await empty.evaluate(() => document.activeElement.name),
       await empty.$eval('input[name=password]', e => e.getAttribute('aria-invalid'))];
     check(`a field left empty is said by the site in its own words (${lang})`, first[0] === noId && first[1] === 'user'
       && second[0] === noPassword && second[1] === 'password' && second[2] === 'true' && new URL(empty.url()).pathname === '/opendmtq/login.php',
@@ -1073,7 +1266,7 @@ async function adminFlows(contexts) {
   const login = await contexts.anon.newPage();
   await login.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
   await login.goto(`${A}/login`, { waitUntil: 'domcontentloaded' });
-  await login.type('input[name=name]', 'admin');
+  await typeId(login, 'input[name=name]', 'admin');
   await login.type('input[name=password]', 'wrong');
   await Promise.all([login.waitForNavigation({ waitUntil: 'domcontentloaded' }), login.keyboard.press('Enter')]);
   check('a wrong admin password says so', /\S/.test(await textOf(login, '.flash, .error')));
@@ -1202,7 +1395,7 @@ async function adminFlows(contexts) {
   const theirs = await contexts.browser.createBrowserContext();
   const friend = await theirs.newPage();
   await friend.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
-  await friend.type('input[name=user]', 'friend1');
+  await typeId(friend, 'input[name=user]', 'friend1');
   await friend.type('input[name=password]', made);
   await press(friend, '.signin-form button');
   check('the new account signs in to the site', new URL(friend.url()).pathname === '/opendmtq/' && await visible(friend, '.stage'), friend.url());
@@ -1430,7 +1623,7 @@ async function adminFlows(contexts) {
   // Signing out is no error, and says so in the colour of what went well. In a browser of its own: the rest stays signed in.
   const out = await contexts.anon.newPage();
   await out.goto(`${A}/login`, { waitUntil: 'domcontentloaded' });
-  await out.type('input[name=name]', 'admin');
+  await typeId(out, 'input[name=name]', 'admin');
   await out.type('input[name=password]', PASSWORD);
   await Promise.all([out.waitForNavigation({ waitUntil: 'domcontentloaded' }), out.keyboard.press('Enter')]);
   await press(out, '.auth-form button');
@@ -1512,6 +1705,8 @@ async function adminFlows(contexts) {
     await page.close();
     await sweep(contexts, DOWN, FEW_WIDTHS);
   } else if (stage === 'flows') {
+    await floatingLayers(contexts);
+    await signInForms(contexts);
     await portalFlows(contexts);
     await replayFlows(contexts);
     await adminFlows(contexts);

@@ -19,35 +19,112 @@
 document.addEventListener('submit', e => {
   const form = e.target;
   if (!form.noValidate) return;
+  // A field that must say what another says (a password typed again, data-same names the other): different, it breaks its
+  // rule, with its own words for that (data-same-bad).
+  for (const f of form.querySelectorAll('[data-same]')) {
+    const other = form.elements[f.dataset.same];
+    f.setCustomValidity(other && f.value !== other.value ? f.dataset.sameBad : '');
+  }
   // The first field that breaks its rule: empty, too short, not the pattern, out of range, a date typed in part.
   const wrong = [...form.elements].find(f => f.willValidate && !f.validity.valid);
   if (!wrong) return;
   e.preventDefault();
   // Nothing else hears of this press: no question opens, no button says it is busy.
   e.stopPropagation();
-  // One message per form, said again for the next field. On the sign-in, in place of the server's last one.
-  let says = form.previousElementSibling;
-  if (!says || !says.matches('.form-says, .signin .error, .signin .done')) {
-    says = document.createElement('p');
-    form.before(says);
+  // The field's words right under it on the sign-in (its fields stand alone, one under the other); elsewhere one message
+  // per form, just above it, said again for the next field (the forms there are rows of fields side by side, which a line
+  // under one of them would push out of line).
+  for (const f of form.querySelectorAll('[aria-invalid]')) unmark(f);
+  const inPlace = form.matches('.signin-form') && wrong.closest('.field');
+  let says;
+  if (inPlace) {
+    says = document.createElement('span');
+    says.className = 'field-error';
+    says.id = `${wrong.id || wrong.name}-error`;
+    wrong.closest('.field').append(says);
+    // The server's last word (a wrong password) was about the last try.
+    const last = form.previousElementSibling;
+    if (last && last.matches('.signin .error, .signin .done')) last.remove();
+  } else {
+    says = form.previousElementSibling;
+    if (!says || !says.matches('.form-says, .signin .error, .signin .done')) {
+      says = document.createElement('p');
+      form.before(says);
+    }
+    // The sign-in box's own error look, as its server message has; the message look of the other pages.
+    says.className = form.closest('.signin') ? 'form-says error' : 'form-says flash bad';
   }
-  // The sign-in box's own error look, as its server message has; the message look of the other pages.
-  says.className = form.closest('.signin') ? 'form-says error' : 'form-says flash bad';
   says.setAttribute('role', 'alert');
   // The rule's words; the browser's own only for a field that has none.
-  says.textContent = wrong.dataset.bad || wrong.validationMessage;
-  // The field itself, marked and in reach of the keyboard.
+  says.textContent = (wrong.validity.customError && wrong.validationMessage) || wrong.dataset.bad || wrong.validationMessage;
+  // The field itself, marked, named by its words, and in reach of the keyboard.
   wrong.setAttribute('aria-invalid', 'true');
+  if (says.id) wrong.setAttribute('aria-describedby', says.id);
   wrong.focus();
 }, true);
+// A field's mark gone, and its own words under it with it.
+function unmark(field) {
+  field.removeAttribute('aria-invalid');
+  const line = field.closest('.field') && field.closest('.field').querySelector('.field-error');
+  if (line) {
+    line.remove();
+    field.removeAttribute('aria-describedby');
+  }
+}
 // A field put right: its mark and its form's message go.
 document.addEventListener('input', e => {
   const field = e.target;
+  // A typed-again password is checked against the other again at the next press, not while it is typed.
+  if (field.form) for (const f of field.form.querySelectorAll('[data-same]')) if (f === field || f.dataset.same === field.name) f.setCustomValidity('');
   if (!field.form || field.getAttribute('aria-invalid') !== 'true' || !field.validity.valid) return;
-  field.removeAttribute('aria-invalid');
+  unmark(field);
   const says = field.form.previousElementSibling;
   if (says && says.classList.contains('form-says')) says.remove();
 });
+
+// A password field's Show (.pw-toggle, inside the field): the password as typed, until pressed again. The field keeps the
+// focus and its cursor, so typing goes on; a form that goes takes the password hidden again. The button's words and its
+// name for screen readers come from the page (data-show, data-hide, data-show-label, data-hide-label).
+for (const toggle of document.querySelectorAll('.pw-toggle')) {
+  const field = document.getElementById(toggle.getAttribute('aria-controls'));
+  if (!field) continue;
+  toggle.hidden = false;
+  const set = shown => {
+    field.type = shown ? 'text' : 'password';
+    toggle.classList.toggle('on', shown);
+    toggle.textContent = shown ? toggle.dataset.hide : toggle.dataset.show;
+    toggle.setAttribute('aria-label', shown ? toggle.dataset.hideLabel : toggle.dataset.showLabel);
+  };
+  // A press with the mouse leaves the focus in the field.
+  toggle.addEventListener('mousedown', e => e.preventDefault());
+  toggle.addEventListener('click', () => {
+    const at = [field.selectionStart, field.selectionEnd];
+    set(field.type === 'password');
+    if (document.activeElement !== toggle) {
+      field.focus();
+      try { field.setSelectionRange(at[0], at[1]); } catch (_) { /* a field that keeps no cursor */ }
+    }
+  });
+  if (field.form) field.form.addEventListener('submit', e => { if (!e.defaultPrevented) set(false); });
+}
+
+// The ID last used to sign in on this browser, back in a sign-in form marked data-remember: the focus then on the password.
+// Browser storage may be off (a private window): then nothing is kept and nothing breaks.
+for (const form of document.querySelectorAll('form[data-remember]')) {
+  const key = `opendmtq.id.${form.dataset.remember}`;
+  const id = form.querySelector('input[autocomplete=username]'), password = form.querySelector('input[type=password]');
+  if (!id) continue;
+  let kept = '';
+  try { kept = localStorage.getItem(key) || ''; } catch (_) { /* storage off */ }
+  if (!id.value && kept) id.value = kept;
+  // The first field left to fill takes the focus, on a computer only (a phone's keyboard would cover the page), and not over
+  // the field the server's answer chose (autofocus).
+  if (matchMedia('(pointer: fine)').matches && !form.querySelector('[autofocus]')) (id.value && password ? password : id).focus();
+  form.addEventListener('submit', e => {
+    if (e.defaultPrevented || !id.value.trim()) return;
+    try { localStorage.setItem(key, id.value.trim()); } catch (_) { /* storage off */ }
+  });
+}
 
 // Upload boxes: name the chosen or dropped file, refuse one over the size limit, and enable the form's button only when
 // there is something to send. The box says its limit (data-max) and its words for a file that is too big (data-too-big,
@@ -335,14 +412,57 @@ for (const search of document.querySelectorAll('input[type=search][data-rows]'))
     check();
     return form;
   };
+  // The panel floats over the page, not inside its card: a card is clipped to its cut corner and blurs what is behind it,
+  // so anything inside it that reaches past its edge is cut off or drawn under the next card, and the table's own scroll
+  // box cuts it too (a list of one or two players opened it below the card). So the panel goes on the page's top layer (a
+  // popover), placed by hand under its More, right-aligned to it, or above it when the window has no room below; on a
+  // phone across the whole row, as it opened in place before. Placed again as the page or the table scrolls, or the
+  // window changes size. A browser without popovers keeps the panel where it is.
+  const floats = 'showPopover' in HTMLElement.prototype;
+  const place = more => {
+    const box = more.querySelector('.row-more-in');
+    if (!floats || !box || !more.open) return;
+    if (!box.matches(':popover-open')) box.showPopover();
+    const at = more.querySelector('summary').getBoundingClientRect();
+    // On a phone the row's width, as it was; elsewhere the panel's own 300 px; never wider than the window allows.
+    const row = more.closest('tr').getBoundingClientRect();
+    const phone = matchMedia('(max-width: 700px)').matches;
+    const width = Math.min(phone ? row.width : 300, innerWidth - 16);
+    box.style.width = `${width}px`;
+    // Its right edge on More's (a phone: the row's left), and inside the window by 8 px on both sides.
+    const left = phone ? row.left : at.right - width;
+    box.style.left = `${Math.max(8, Math.min(left, innerWidth - width - 8))}px`;
+    // Below More, overlapping its foot a little as before; above it when the panel would pass the window's foot and fits
+    // above; otherwise as low as it fits.
+    const high = box.offsetHeight;
+    const below = at.bottom - 4, above = at.top + 4 - high;
+    const top = below + high <= innerHeight - 8 ? below : above >= 8 ? above : Math.max(8, innerHeight - 8 - high);
+    box.style.top = `${top}px`;
+  };
   // A details' toggle does not bubble: heard on its way down, once for every row.
   document.addEventListener('toggle', e => {
     const more = e.target;
-    if (!more.matches('.row-more') || !more.open) return;
+    if (!more.matches || !more.matches('.row-more')) return;
+    if (!more.open) {
+      // Closed: its panel leaves the top layer with it.
+      const box = more.querySelector('.row-more-in');
+      if (floats && box && box.matches(':popover-open')) box.hidePopover();
+      return;
+    }
     // Made once: closed and opened again, the row keeps what was typed in it, as a form of its own did.
-    if (!more.querySelector('.row-more-in')) more.append(panel(more));
+    if (!more.querySelector('.row-more-in')) {
+      const box = panel(more);
+      // Shown and hidden by the page itself (manual): a press elsewhere closes it through the details, below.
+      if (floats) box.popover = 'manual';
+      more.append(box);
+    }
     for (const other of document.querySelectorAll('.row-more[open]')) if (other !== more) other.open = false;
+    place(more);
   }, true);
+  // Kept beside its More while anything scrolls (the page, the table's own box) or the window changes.
+  const follow = () => { for (const open of document.querySelectorAll('.row-more[open]')) place(open); };
+  document.addEventListener('scroll', follow, { capture: true, passive: true });
+  addEventListener('resize', follow, { passive: true });
   document.addEventListener('pointerdown', e => {
     if (e.target.closest('.row-more') || document.getElementById('ask').open) return;
     for (const open of document.querySelectorAll('.row-more[open]')) open.open = false;

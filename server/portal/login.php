@@ -82,6 +82,7 @@ page_header(t('signin.title'), $from);
   </div>
   <section class="card signin">
     <h2><?= t($for_live ? 'live.signin' : ($for_install ? 'dl.signin' : 'signin.title')) ?></h2>
+    <p class="signin-lead"><?= t('signin.lead') ?></p>
     <?php // The game is for Android; signing in, and watching a broadcast, works on an iPhone as well. ?>
     <?php if ($app = in_app_browser()): ?>
       <?= open_in_browser($app, '/opendmtq/login.php?next=' . rawurlencode($next)) ?>
@@ -90,20 +91,34 @@ page_header(t('signin.title'), $from);
             // watch). Shown to an iPad that says it is a Mac by the note's own script. ?>
       <?= $for_install ? android_only() : '' ?>
       <div>
-      <?php if ($error): ?>
+      <?php $missing = in_array($error, ['signin.missing_id', 'signin.missing_password'], true) ? $error : ''; ?>
+      <?php // A field the server found empty says so under itself; anything else (a wrong password, too many tries) above
+            // the form, in the box. ?>
+      <?php if ($error && !$missing): ?>
         <?php // An error, in red: the yellow box is for notices (maintenance, the app being built). ?>
         <p class="error" role="alert"><?= t($error) ?></p>
       <?php endif; ?>
-      <?php // What a field left empty says comes from the site's own check (forms.js), in the page's language and the
-            // error box's look, not from the browser's bubbles (novalidate): each field's words in its data-missing. A
-            // wrong password takes a second to answer: the button shows that it is working meanwhile (forms.js too). ?>
-      <?php $missing = in_array($error, ['signin.missing_id', 'signin.missing_password'], true) ? $error : ''; ?>
-      <form method="post" action="login.php?next=<?= h(rawurlencode($next)) ?>" class="signin-form" novalidate>
+      <?php // Each field's words when it is left empty come from the site's own check (forms.js), in the page's language and
+            // look, under the field, not from the browser's bubbles (novalidate): each field's words in its data-missing. A
+            // wrong password takes a second to answer: the button shows that it is working meanwhile (forms.js too). The ID
+            // last used on this browser comes back in its field (data-remember, forms.js), and the focus then goes to the
+            // password. ?>
+      <form method="post" action="login.php?next=<?= h(rawurlencode($next)) ?>" class="signin-form" novalidate data-remember="site">
         <input type="hidden" name="next" value="<?= h($next) ?>">
         <?php // The ID is in Latin letters: the email keyboard (Latin, not Hangul), no capitals or corrections. The field the
               // server found empty is marked, and has the focus. ?>
-        <label class="field"><?= t('signin.id') ?> <input name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" lang="en" required data-missing="<?= h(tp('signin.missing_id')) ?>"<?= $missing === 'signin.missing_id' ? ' aria-invalid="true" autofocus' : '' ?> value="<?= h($_POST['user'] ?? '') ?>"></label>
-        <label class="field"><?= t('signin.password') ?> <input name="password" type="password" autocomplete="current-password" required data-missing="<?= h(tp('signin.missing_password')) ?>"<?= $missing === 'signin.missing_password' ? ' aria-invalid="true"' : '' ?><?= $error && $missing !== 'signin.missing_id' ? ' autofocus' : '' ?>></label>
+        <div class="field">
+          <label for="signin-user"><?= t('signin.id') ?></label>
+          <span class="slot"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.4-3.7 4.3-5.6 7.5-5.6s6.1 1.9 7.5 5.6"/></svg><input id="signin-user" name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" lang="en" required data-missing="<?= h(tp('signin.missing_id')) ?>"<?= $missing === 'signin.missing_id' ? ' aria-invalid="true" aria-describedby="signin-user-error" autofocus' : '' ?> value="<?= h($_POST['user'] ?? '') ?>"></span>
+          <?php if ($missing === 'signin.missing_id'): ?><span class="field-error" id="signin-user-error" role="alert"><?= t($missing) ?></span><?php endif; ?>
+        </div>
+        <?php // Show, in the field, lets the password be read as typed (forms.js; without scripts it stays hidden, as does the
+              // button). ?>
+        <div class="field">
+          <label for="signin-password"><?= t('signin.password') ?></label>
+          <span class="slot pw"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="1.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg><input id="signin-password" name="password" type="password" autocomplete="current-password" required data-missing="<?= h(tp('signin.missing_password')) ?>"<?= $missing === 'signin.missing_password' ? ' aria-invalid="true" aria-describedby="signin-password-error"' : '' ?><?= $error && $missing !== 'signin.missing_id' ? ' autofocus' : '' ?>><button type="button" class="pw-toggle" aria-controls="signin-password" aria-label="<?= h(tp('signin.show')) ?> <?= h(tp('signin.password')) ?>" data-show="<?= h(tp('signin.show')) ?>" data-hide="<?= h(tp('signin.hide')) ?>" data-show-label="<?= h(tp('signin.show')) ?> <?= h(tp('signin.password')) ?>" data-hide-label="<?= h(tp('signin.hide')) ?> <?= h(tp('signin.password')) ?>" hidden><?= t('signin.show') ?></button></span>
+          <?php if ($missing === 'signin.missing_password'): ?><span class="field-error" id="signin-password-error" role="alert"><?= t($missing) ?></span><?php endif; ?>
+        </div>
         <button class="button" type="submit"><?= t('signin.button') ?></button>
       </form>
       </div>

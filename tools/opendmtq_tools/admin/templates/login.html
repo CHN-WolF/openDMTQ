@@ -2,6 +2,7 @@
 {% block body %}
 <section class="card signin">
   <h2>{{ t('login.heading') }}</h2>
+  <p class="signin-lead">{{ t('login.lead') }}</p>
   {% if disabled %}
     <p class="warn">{{ t('login.off') }}</p>
   {% else %}
@@ -9,12 +10,20 @@
     {% for cat, msg in get_flashed_messages(with_categories=true) %}
       <p class="{{ 'done' if cat == 'ok' else 'error' }}" role="{{ 'status' if cat == 'ok' else 'alert' }}">{{ msg }}</p>
     {% endfor %}
-    {# Checked on the page (admin.js, novalidate): an empty field is said in the page's language and look, and sends nothing
-       that would count as a failed sign-in. #}
-    <form method="post" class="signin-form" novalidate>
+    {# Checked on the page (admin.js, novalidate): an empty field is said under itself in the page's language and look, and
+       sends nothing that would count as a failed sign-in. The ID last used on this browser comes back (data-remember,
+       admin.js), the focus then on the password. #}
+    <form method="post" class="signin-form" novalidate data-remember="admin">
       {# The ID in Latin letters: the keyboard that has them, no capitals or corrections. Back after a wrong password. #}
-      <label class="field">{{ t('login.id') }} <input name="name" value="{{ name or '' }}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" lang="en" required data-bad="{{ tp('login.need') }}"{% if not name %} autofocus{% endif %}></label>
-      <label class="field">{{ t('login.password') }} <input type="password" name="password"{% if name %} autofocus{% endif %} autocomplete="current-password" required data-bad="{{ tp('login.need') }}"></label>
+      <div class="field">
+        <label for="login-name">{{ t('login.id') }}</label>
+        <span class="slot"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.4-3.7 4.3-5.6 7.5-5.6s6.1 1.9 7.5 5.6"/></svg><input id="login-name" name="name" value="{{ name or '' }}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" lang="en" required data-bad="{{ tp('login.need_id') }}"></span>
+      </div>
+      {# Show, in the field, lets the password be read as typed (admin.js; hidden without scripts). #}
+      <div class="field">
+        <label for="login-password">{{ t('login.password') }}</label>
+        <span class="slot pw"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="1.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg><input id="login-password" type="password" name="password"{% if name %} autofocus{% endif %} autocomplete="current-password" required data-bad="{{ tp('login.need_password') }}"><button type="button" class="pw-toggle" aria-controls="login-password" aria-label="{{ t('login.show_password') }}" data-show="{{ t('login.show') }}" data-hide="{{ t('login.hide') }}" data-show-label="{{ t('login.show_password') }}" data-hide-label="{{ t('login.hide_password') }}" hidden>{{ t('login.show') }}</button></span>
+      </div>
       <button class="button" type="submit">{{ t('login.button') }}</button>
     </form>
   {% endif %}
