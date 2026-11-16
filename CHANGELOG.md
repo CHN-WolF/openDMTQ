@@ -26,9 +26,14 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 - One port for everything. The players' site, the admin pages (`/opendmtq/admin/`) and the API (`/opendmtq/api/v1/`)
   answer on the server's one port, `LISTEN_PORT`: 8791 on a new install, the first free port after it when it is taken,
-  on the Windows bundle, a host install, Docker Compose and the Helm chart alike. The admin pages have no port of their
-  own any more. A server set up before keeps its port, so the phones' app keeps its address. An exposed server's admin
-  pages stay on that same port for the server PC (`localhost`).
+  on the Windows bundle, a host install, Docker Compose and the Helm chart alike. An exposed server's admin pages stay on
+  that same port for the server PC (`localhost`).
+- A server updated from 0.10.0 ends with one port too. It keeps the port its phones' app calls (80 on most), so no phone
+  needs a new app; its admin pages, which had a port of their own (8791), answer on that one port, nothing answers on
+  their old one, and `ADMIN_PORT` leaves `.env` at the first start. The Helm chart's Service listens on the port in
+  `publicHost`. To move a server to another port, use `./opendmtq port <port>` (`OpenDMTQ.exe port <port>` on Windows) or
+  the admin pages' Server page: it sets `LISTEN_PORT`, the server answers there from its next start with the app built
+  again for the new address, and the site's download page tells players to install it over the old one.
 - The owner's ID and password from `.env` sign in to the players' site too. A sign-in to the admin pages outlives a
   restart of the server.
 - Sign-in and password forms: labels, Show inside the password field, what is missing said under the field, the ID kept
