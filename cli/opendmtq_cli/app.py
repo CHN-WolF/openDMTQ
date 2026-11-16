@@ -509,6 +509,43 @@ def cmd_host(args):
         print("\nPhones install the new app over the old one, which keeps each device's account.")
 
 
+def cmd_port(args):
+    """Show the server's one port, or move the server to another (LISTEN_PORT, and the port in PUBLIC_HOST): from the next
+    start, with the app built again for the new address, which the site's download page then tells players to install. A
+    port another program holds is refused, in words."""
+    values = env.load(ENV_FILE)
+    current = values.get("PUBLIC_HOST", "")
+    if env.check_host(current):
+        die("no address set up yet; run ./opendmtq setup")
+    now = env.listen_port(values)
+    if args.port is None:
+        print(f"port {now}: the game, the players' site (http://{current}/), the admin pages and the API")
+        return
+    if not 1 <= args.port <= 65535:
+        die("a port is a number from 1 to 65535")
+    if args.port == now:
+        ok(f"the server is on port {now} already")
+        return
+    # This copy's own edge holds the port it serves now; any other program's port is refused.
+    if system.port_busy(args.port) and not system.edge_holds(args.port):
+        die(f"port {args.port} is taken on this computer by another program; choose another")
+    host = env.split(current)[0]
+    new = env.join(host, args.port)
+    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(args.port)})
+    ok(f"the server moves to port {args.port} at its next start: http://{new}/")
+    # The rule for phones on WSL follows the port now: the next start needs it.
+    if env.is_wsl():
+        open_firewall(args.port, internet=not env.is_lan_only(new), replaces=now)
+    lines = ["./opendmtq restart (or up) starts it there and builds the app for the new address.",
+             "Players install the new app over the old one, which keeps each device's account; the site's download "
+             "page says so."]
+    if not env.is_lan_only(new):
+        lines.append(f"On the router(s), forward TCP {args.port} to this PC in place of {now}.")
+    print()
+    for line in lines:
+        print(line)
+
+
 def cmd_name(args):
     values = env.load(ENV_FILE)
     current = values.get("SERVER_NAME", "")
@@ -1142,6 +1179,9 @@ def main(argv=None):
     p = sub.add_parser("name", help="show or change the server's name in the app's title (rebuilds the APK)")
     p.add_argument("name", nargs="?", help='what goes in "TECHNIKA Q (name)"; empty: the address')
     p.set_defaults(fn=cmd_name, base=None)
+    p = sub.add_parser("port", help="show the server's one port, or move it to another (from the next start, with a new app)")
+    p.add_argument("port", nargs="?", type=int, help="the new port, 1 to 65535; one another program holds is refused")
+    p.set_defaults(fn=cmd_port)
     p = sub.add_parser("host", help="show or change the LAN address (rebuilds the APK)")
     p.add_argument("address", nargs="?")
     p.set_defaults(fn=cmd_host, base=None)

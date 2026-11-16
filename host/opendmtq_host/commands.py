@@ -243,6 +243,33 @@ def cmd_host(args):
     return 0
 
 
+def cmd_port(args):
+    """Show the server's one port, or move the server to another (LISTEN_PORT, and the port in PUBLIC_HOST): from the
+    next start, with the app built again for the new address, which the site's download page then tells players to
+    install. A port another program holds is refused, in words."""
+    from .settings import bindable
+    values = require_settings()
+    now = listen_port(values)
+    if args.port is None:
+        say(f"Port {now}: the game, the players' site ({site_url(values)}), the admin pages and the API")
+        return 0
+    if not 1 <= args.port <= 65535:
+        die("a port is a number from 1 to 65535")
+    if args.port == now:
+        ok(f"the server is on port {now} already")
+        return 0
+    if not bindable(args.port):
+        die(f"port {args.port} is taken on this computer by another program (or this user may not use it); choose another")
+    host, _ = env.split(values["PUBLIC_HOST"])
+    new = env.join(host, args.port)
+    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(args.port)})
+    ok(f"the server moves to port {args.port} at its next start: http://{new}/")
+    tell(("Close the server's window and start OpenDMTQ.exe again" if WINDOWS else f"{CLI} restart") + " to move it "
+         "now; the app is built again for the new address then. Players install the new app over the old one, which "
+         "keeps each device's account; the site's download page says so.")
+    return 0
+
+
 def cmd_check(args):
     """Walk the game's whole path against the running server (the same walk as ./opendmtq check)."""
     values = require_settings()

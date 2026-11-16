@@ -33,7 +33,7 @@ page_header(t('dl.title'), 'download', $start ? '1;url=/apk' : ($building ? '20'
   <?= masthead('DOWNLOAD') ?>
   <?php if ($moved): ?>
   <?php // Said before the download: whoever comes with an app for the old address needs this one. ?>
-  <p class="warn moved" role="status"><?= t('dl.moved', ['date' => date('Y-m-d', $moved['at']), 'to' => $moved['to'], 'from' => $moved['from']]) ?></p>
+  <p class="warn" id="moved" role="status"><?= t('dl.moved', ['date' => date('Y-m-d', $moved['at']), 'to' => $moved['to'], 'from' => $moved['from']]) ?></p>
   <?php endif; ?>
   <section class="card" id="install">
     <?php // The centrepiece: the button and the QR code side by side, then the steps across the whole box. ?>

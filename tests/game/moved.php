@@ -72,7 +72,7 @@ check('the check signs in to the site', $cookie !== '', implode(' / ', $http_res
 $page = (string)@file_get_contents("$base/opendmtq/download.php", false, stream_context_create(['http' => [
     'header' => "Cookie: $cookie; opendmtq_lang=en\r\n", 'ignore_errors' => true]]));
 check('the download page says the server moved, from where to where, and that phones need the new app',
-    str_contains($page, 'class="warn moved"') && str_contains($page, 'old.example.net:8790')
+    str_contains($page, 'id="moved"') && str_contains($page, 'old.example.net:8790')
     && str_contains($page, h_like(odq_host())) && str_contains($page, 'Phones need the app built for the new address'),
     substr(strip_tags($page), 0, 300));
 // The move goes again: the page, still signed in, says none. Then its own account goes: the rest of the run sees the
@@ -80,7 +80,7 @@ check('the download page says the server moved, from where to where, and that ph
 @unlink("$state/address-moved.json");
 $page = (string)@file_get_contents("$base/opendmtq/download.php", false, stream_context_create(['http' => [
     'header' => "Cookie: $cookie; opendmtq_lang=en\r\n", 'ignore_errors' => true]]));
-check('without a move, the page says none', str_contains($page, 'id="install"') && !str_contains($page, 'class="warn moved"'));
+check('without a move, the page says none', str_contains($page, 'id="install"') && !str_contains($page, 'id="moved"'));
 $db->exec("DELETE FROM SiteUser WHERE name = 'movedcheck'");
 $db->close();
 

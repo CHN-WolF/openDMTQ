@@ -7,8 +7,8 @@ import sys
 from .paths import CLI, WINDOWS
 from .output import die
 from .server import cmd_run
-from .commands import (cmd_apk, cmd_check, cmd_delete_data, cmd_host, cmd_import, cmd_repair, cmd_restart, cmd_runtime,
-                       cmd_service, cmd_start, cmd_status, cmd_stop, cmd_uninstall)
+from .commands import (cmd_apk, cmd_check, cmd_delete_data, cmd_host, cmd_import, cmd_port, cmd_repair, cmd_restart,
+                       cmd_runtime, cmd_service, cmd_start, cmd_status, cmd_stop, cmd_uninstall)
 from .setup import cmd_setup
 
 
@@ -39,6 +39,9 @@ def main(argv=None):
     r = sub.add_parser("runtime", help="get the newest runtime for phones without 32-bit support, then build the app")
     r.add_argument("--no-app", action="store_true", help="only the runtime: the server's next start builds the app")
     r.set_defaults(fn=cmd_runtime)
+    p = sub.add_parser("port", help="show the server's one port, or move it to another (from the next start, with a new app)")
+    p.add_argument("port", nargs="?", type=int, help="the new port, 1 to 65535; one another program holds is refused")
+    p.set_defaults(fn=cmd_port)
     h = sub.add_parser("host", help="show or change the address phones use")
     h.add_argument("address", nargs="?")
     h.set_defaults(fn=cmd_host)

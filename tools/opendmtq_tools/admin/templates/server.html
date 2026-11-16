@@ -31,6 +31,24 @@
 {{ commands.restart }}</pre>
   {% endif %}
 </section>
+{# The server's one port: what it carries, and a move to another, from the next start (a host install); elsewhere the
+   command that does it. #}
+<section class="card" id="port">
+  <h2>{{ t('port.title') }}</h2>
+  <p class="lead">{{ t('port.lead', port=port) }}</p>
+  {% if next_address %}<p class="setup-state"><span class="lamp wait"></span>{{ t('port.pending', address='http://' ~ next_address ~ '/') }}</p>{% endif %}
+  {% if can_run %}
+  {# Checked on the page (admin.js, novalidate), as the other forms: what is wrong said under the field. #}
+  <form method="post" action="{{ url_for('server_port') }}" class="form-row" novalidate>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="field grow">{{ t('port.new') }} <input class="input" name="port" type="number" min="1" max="65535" inputmode="numeric" required data-bad="{{ tp('port.bad') }}" placeholder="{{ port }}"></label>
+    <button class="btn" data-ask="{{ tp('port.confirm') }}" data-yes="{{ tp('port.move') }}">{{ t('port.move') }}</button>
+  </form>
+  {% elif commands.port %}
+  <p class="meta">{{ t('port.by_command_lead') }}</p>
+  <pre class="log cmd">{{ commands.port }}</pre>
+  {% endif %}
+</section>
 {# The repair: the page's one main button, as it changes nothing that is right. #}
 <section class="card" id="repair">
   <h2>{{ t('repair.title') }}</h2>

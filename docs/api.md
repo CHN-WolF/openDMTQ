@@ -593,6 +593,7 @@ The Server page: the server's state, stopping and restarting it, the repair, its
 | [`GET /server`](#get-server) | read | The server as the Server page shows it: how it is installed, its address, what this API can do with it there, and its data part by part. |
 | [`POST /server/stop`](#post-serverstop) | write | Stops the server, as the Server page's Stop the server does. |
 | [`POST /server/restart`](#post-serverrestart) | write | Restarts the server, as the Server page's Restart does. |
+| [`POST /server/port`](#post-serverport) | write | Moves the server to another port, as the Server page's Move to this port does. |
 | [`POST /server/repair`](#post-serverrepair) | write | Checks and repairs the server, as the Server page's Check and repair does. |
 | [`GET /server/data`](#get-serverdata) | read | The server's data, part by part, with how much each holds. |
 | [`POST /server/data/delete`](#post-serverdatadelete) | write | Deletes parts of the server's data, as the Server page's Delete does. |
@@ -625,6 +626,23 @@ Refusals:
 
 - `404 host_only`: Not a host install: ./opendmtq restart, or Kubernetes' rollout restart.
 - `500 restart_failed`: The restart could not be asked for (the message says why).
+
+#### `POST /server/port`
+
+Moves the server to another port, as the Server page's Move to this port does. A host install and the Windows bundle only. LISTEN_PORT and the port in PUBLIC_HOST in .env: the server answers there from its next start (POST /server/restart makes it now), when the app is built again for the new address and the site's download page tells players to install it over the old one.
+
+Body (JSON):
+
+- `port` (integer): The new port, 1 to 65535.
+
+Answer: `200` with [PortMoved](#portmoved).
+
+Refusals:
+
+- `400 bad_port`: Not a port from 1 to 65535.
+- `409 same_port`: The server is on that port already.
+- `409 port_taken`: Another program holds that port on this computer.
+- `409 by_command`: Docker Compose or Kubernetes: the command line moves the server (the message names the command).
 
 #### `POST /server/repair`
 
@@ -2042,7 +2060,9 @@ The server as the Server page shows it.
 - `version` (string, or null): Its version.
 - `started` (integer, or null): When the admin service started, with the server (Unix time).
 - `runs_itself` (boolean): True where this API can stop, restart and uninstall the server (a host install, the Windows bundle).
-- `commands` (object of string): Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall), on the server PC or the cluster.
+- `commands` (object of string): Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall, port), on the server PC or the cluster.
+- `port` (integer): Its one port: the game, the players' site, the admin pages and this API.
+- `next_address` (string, or null): The address it moves to at its next start, when it was moved (POST /server/port); null otherwise.
 - `data` (list of [DataPart](#datapart)): The server's data, part by part.
 
 #### DataPart
@@ -2058,6 +2078,14 @@ One part of the server's data.
 The server's data.
 
 - `items` (list of [DataPart](#datapart)): Every part, in the Server page's order.
+
+#### PortMoved
+
+A move to another port, from the server's next start.
+
+- `port` (integer): The new port.
+- `address` (string): The server's address from its next start: the players' site, with the admin pages and this API under it.
+- `from_next_start` (boolean): True: the server answers there from its next start, with the app built again for it.
 
 #### ServerRestarting
 

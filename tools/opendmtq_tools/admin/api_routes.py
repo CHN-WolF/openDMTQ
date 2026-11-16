@@ -298,13 +298,19 @@ SHAPES = {
         Field("version", "string", "Its version.", nullable=True),
         Field("started", "integer", "When the admin service started, with the server (Unix time).", nullable=True),
         Field("runs_itself", "boolean", "True where this API can stop, restart and uninstall the server (a host install, the Windows bundle)."),
-        Field("commands", "{string}", "Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall), on the server PC or the cluster."),
+        Field("commands", "{string}", "Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall, port), on the server PC or the cluster."),
+        Field("port", "integer", "Its one port: the game, the players' site, the admin pages and this API."),
+        Field("next_address", "string", "The address it moves to at its next start, when it was moved (POST /server/port); null otherwise.", nullable=True),
         Field("data", "[DataPart]", "The server's data, part by part.")]),
     "DataPart": Shape("One part of the server's data.", [
         Field("part", "string", "Which part.", enum=["database", "recordings", "songs", "apps", "backups", "logs", "game"]),
         Field("bytes", "integer", "How much it holds."),
         Field("can_delete", "boolean", "True when this API can delete it here (with Docker Compose the game files are the command line's).")]),
     "DataParts": Shape("The server's data.", [Field("items", "[DataPart]", "Every part, in the Server page's order.")]),
+    "PortMoved": Shape("A move to another port, from the server's next start.", [
+        Field("port", "integer", "The new port."),
+        Field("address", "string", "The server's address from its next start: the players' site, with the admin pages and this API under it."),
+        Field("from_next_start", "boolean", "True: the server answers there from its next start, with the app built again for it.")]),
     "ServerRestarting": Shape("A restart asked for.", [Field("restarting", "boolean", "True: every part stops and starts again within seconds, this API with it.")]),
     "Uninstalling": Shape("An uninstall asked for.", [
         Field("uninstalling", "boolean", "True: the server stops, then its program removes itself."),
@@ -802,6 +808,15 @@ ROUTES = [
           answer="ServerRestarting", status=202,
           errors=[(404, "host_only", "Not a host install: ./opendmtq restart, or Kubernetes' rollout restart."),
                   (500, "restart_failed", "The restart could not be asked for (the message says why).")]),
+    Route("POST", "/server/port", "write", "server_port", "Server", "Moves the server to another port, as the Server page's Move to this port does.",
+          "A host install and the Windows bundle only. LISTEN_PORT and the port in PUBLIC_HOST in .env: the server answers there from its "
+          "next start (POST /server/restart makes it now), when the app is built again for the new address and the site's download page "
+          "tells players to install it over the old one.",
+          body=[Field("port", "integer", "The new port, 1 to 65535.")], answer="PortMoved",
+          errors=[(400, "bad_port", "Not a port from 1 to 65535."),
+                  (409, "same_port", "The server is on that port already."),
+                  (409, "port_taken", "Another program holds that port on this computer."),
+                  (409, "by_command", "Docker Compose or Kubernetes: the command line moves the server (the message names the command).")]),
     Route("POST", "/server/repair", "write", "server_repair", "Server", "Checks and repairs the server, as the Server page's Check and repair does.",
           "Its folders, the database's integrity, the owner's sign-in for the players' site, the song list, the site's look kept here, "
           "the phone app (built again when it is missing or for another address) and the program's own files against the install's "

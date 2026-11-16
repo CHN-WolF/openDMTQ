@@ -578,7 +578,8 @@ def server_get(args):
     started = int(setup.STARTED.rsplit("-", 1)[1]) if "-" in setup.STARTED else None
     return {"install": lifecycle.install_kind(), "address": f"http://{core.PUBLIC_HOST}/",
             "version": os.environ.get("OPENDMTQ_VERSION") or None, "started": started,
-            "runs_itself": lifecycle.can_run_itself(), "commands": lifecycle.commands(), "data": lifecycle.data_parts()}
+            "runs_itself": lifecycle.can_run_itself(), "commands": lifecycle.commands(), "data": lifecycle.data_parts(),
+            "port": lifecycle.port_now(), "next_address": lifecycle.next_address()}
 
 
 @handler
@@ -587,6 +588,12 @@ def server_stop(args):
     server stops."""
     setup.stop_server()
     return {"stopping": True}, 202
+
+
+@handler
+def server_port(args):
+    """POST /server/port: the Server page's Move to this port (lifecycle.move_port), from the server's next start."""
+    return lifecycle.move_port(args["port"])
 
 
 @handler

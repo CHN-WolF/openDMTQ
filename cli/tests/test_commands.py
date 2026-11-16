@@ -334,6 +334,42 @@ class ExposeTest(unittest.TestCase):
             self.assertNotIn("172.28.1.5", sb.output())
 
 
+class PortCommandTest(unittest.TestCase):
+    """./opendmtq port: the server's one port shown, or moved from its next start (LISTEN_PORT and the port in
+    PUBLIC_HOST), with what then happens to the phones said; a port another program holds refused in words (API-43)."""
+
+    SET_UP = "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n"
+
+    def test_shown(self):
+        with Sandbox(self.SET_UP) as sb:
+            self.assertEqual(sb.call(app.cmd_port, port=None), 0)
+            self.assertIn("port 8791", sb.output())
+
+    def test_moved_from_the_next_start(self):
+        with Sandbox(self.SET_UP) as sb:
+            self.assertEqual(sb.call(app.cmd_port, port=8792), 0, sb.output())
+            e = sb.env()
+            self.assertEqual((e["PUBLIC_HOST"], e["LISTEN_PORT"]), ("192.168.0.10:8792", "8792"))
+            self.assertIn("at its next start: http://192.168.0.10:8792/", sb.output())
+            self.assertIn("Players install the new app over the old one", sb.output())
+            # Nothing restarted or built now: the next start does it.
+            self.assertEqual(sb.compose_calls, [])
+
+    def test_a_port_another_program_holds_is_refused(self):
+        with Sandbox(self.SET_UP) as sb:
+            sb.busy_ports = {8792}
+            self.assertEqual(sb.call(app.cmd_port, port=8792), 1)
+            self.assertIn("port 8792 is taken on this computer by another program", sb.output())
+            self.assertEqual(sb.env()["LISTEN_PORT"], "8791")
+
+    def test_the_one_it_is_on_and_no_port(self):
+        with Sandbox(self.SET_UP) as sb:
+            self.assertEqual(sb.call(app.cmd_port, port=8791), 0)
+            self.assertIn("on port 8791 already", sb.output())
+            self.assertEqual(sb.call(app.cmd_port, port=70000), 1)
+            self.assertEqual(sb.env()["LISTEN_PORT"], "8791")
+
+
 class FirewallTest(unittest.TestCase):
     def test_before_setup_opens_nothing(self):
         # Without an address the rule's scope is unknown; it must not default to "from anywhere".

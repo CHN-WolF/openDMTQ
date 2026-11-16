@@ -1,5 +1,6 @@
 """Tests for repository settings that a clone depends on."""
 
+import argparse
 import ast
 import glob
 import os
@@ -413,6 +414,28 @@ class HostPortsTest(unittest.TestCase):
             self.assertEqual(values, {"PUBLIC_HOST": "192.168.0.2", "LISTEN_PORT": "80", "ADMIN_PASSWORD": "x"})
             with open(path, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "# kept\nPUBLIC_HOST=192.168.0.2\nLISTEN_PORT=80\nADMIN_PASSWORD=x\n")
+
+    def test_a_move_to_another_port_and_one_another_program_holds(self):
+        # The host program's port command (OpenDMTQ.exe port, ./opendmtq port on a host install): from the next start.
+        from opendmtq_host import commands
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, ".env")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("PUBLIC_HOST=192.168.0.10\nLISTEN_PORT=80\nADMIN_PASSWORD=x\n")
+            said = []
+            with mock.patch.object(commands, "ENV_FILE", path), mock.patch.object(self.settings, "ENV_FILE", path), \
+                    mock.patch.object(commands, "say", said.append), mock.patch.object(commands, "tell", said.append), \
+                    mock.patch.object(commands, "ok", said.append):
+                with mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": False), \
+                        self.assertRaises(SystemExit):
+                    commands.cmd_port(argparse.Namespace(port=8791))
+                with open(path, encoding="utf-8") as f:
+                    self.assertIn("LISTEN_PORT=80\n", f.read())
+                with mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": True):
+                    self.assertEqual(commands.cmd_port(argparse.Namespace(port=8791)), 0)
+            with open(path, encoding="utf-8") as f:
+                self.assertEqual(f.read(), "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n")
+            self.assertTrue(any("at its next start: http://192.168.0.10:8791/" in line for line in said), said)
 
     def test_the_addresses_named_are_on_the_one_port(self):
         lan = {"PUBLIC_HOST": "192.168.0.10:8791", "LISTEN_PORT": "8791", "ADMIN_PORT": "18791"}

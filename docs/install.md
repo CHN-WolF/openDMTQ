@@ -128,6 +128,7 @@ Android phone or tablet, or the PC client on a Windows PC: [playing on a server]
 | Repair it | admin pages, **Server**, **Check and repair** | `./opendmtq repair`, or the same page | `./opendmtq repair` |
 | Delete its data | admin pages, **Server**, the parts ticked | `./opendmtq delete-data <part>...`, or the same page | `./opendmtq delete-data <part>...` |
 | Remove it | admin pages, **Server**, **Uninstall** (or `OpenDMTQ.exe uninstall`) | `./opendmtq uninstall`, or the same page | `./opendmtq uninstall` |
+| Move it to another port | admin pages, **Server**, **Move to this port** (or `OpenDMTQ.exe port <port>`) | `./opendmtq port <port>`, or the same page | `./opendmtq port <port>` |
 
 Everything else is on the admin pages: the app, songs, players, accounts, recordings and backups.
 
@@ -140,6 +141,16 @@ images built for it. `delete-data` without parts lists them with their size: `da
 
 An update keeps `data` and `.env`. Phones get a newer app on the site when the update brings one, and PCs update the
 launcher on its **Launcher** page ([the PC client](windows-player.md#the-launcher)).
+
+Everything is on the server's one port: the game, the players' site, the admin pages (`/opendmtq/admin/`) and the API
+(`/opendmtq/api/v1/`). A new install takes 8791. A server set up before 0.11.0 keeps the port its phones' app calls (80
+for most), and its admin pages, which had a port of their own (8791), are on that one port after the update: nothing
+answers on their old port, and `.env` no longer names it.
+
+To move a server to another port, use `port` (or the Server page): it sets `LISTEN_PORT` and the port in `PUBLIC_HOST`,
+and from the server's next start it answers there. The app is built again for the new address then, and the site's
+download page tells players, for a month, to install it over the old one (each phone keeps its account). A port another
+program holds is refused. Exposed to the internet, forward the new port on the router instead of the old one.
 
 ## Backups and a new computer
 

@@ -11,6 +11,7 @@ only the server's folders, which these pages have.
 import datetime
 import json
 import os
+import socket
 import time
 
 from flask import abort, flash, redirect, render_template, request, url_for
@@ -75,13 +76,15 @@ def commands():
     kind = install_kind()
     if kind == "docker":
         return {"stop": "./opendmtq down", "restart": "./opendmtq restart", "repair": "./opendmtq repair",
-                "delete_data": "./opendmtq delete-data", "uninstall": "./opendmtq uninstall"}
+                "delete_data": "./opendmtq delete-data", "uninstall": "./opendmtq uninstall", "port": "./opendmtq port <port>"}
     if kind == "kubernetes":
         release, ns = kube_names()
+        host, _ = setup.address_parts(core.PUBLIC_HOST)
         return {"stop": f"kubectl -n {ns} scale deploy -l app.kubernetes.io/instance={release} --replicas=0",
                 "restart": f"kubectl -n {ns} rollout restart deploy -l app.kubernetes.io/instance={release}",
                 "uninstall": f"helm uninstall {release} -n {ns}",
-                "delete_data": f"kubectl -n {ns} delete pvc -l app.kubernetes.io/instance={release}"}
+                "delete_data": f"kubectl -n {ns} delete pvc -l app.kubernetes.io/instance={release}",
+                "port": f"helm upgrade {release} <chart> -n {ns} --reuse-values --set publicHost={host}:<port>"}
     return {}
 
 
@@ -126,6 +129,63 @@ def uninstall_server(keep_data, confirm):
         raise Refused(400, "not_confirmed", t("server.type_to_confirm", word=tp("server.remove_word")))
     request_file("uninstall.request", json.dumps({"keep_data": bool(keep_data)}))
     changed("server:uninstall", "keep data" if keep_data else "everything")
+
+
+def port_now():
+    """The port the server serves now: the one in the address it started with."""
+    return setup.address_parts(core.PUBLIC_HOST)[1]
+
+
+def next_address():
+    """The address the server moves to at its next start, when .env says another than the one it serves (a port moved
+    on this page, or by the command line); None otherwise, and where these pages cannot read .env."""
+    if not (setup.HOST_INSTALL and setup.ENV_FILE):
+        return None
+    try:
+        with open(setup.ENV_FILE, encoding="utf-8-sig") as f:
+            for line in f.read().splitlines():
+                key, sep, value = line.partition("=")
+                if sep and key.strip().removeprefix("export ").strip() == "PUBLIC_HOST":
+                    value = value.strip().strip("'\"")
+                    return value if value and value != core.PUBLIC_HOST else None
+    except OSError:
+        pass
+    return None
+
+
+def port_free(port):
+    """True when no other program holds the port on this computer (on Windows, as only the program holding it may use
+    it then)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if os.name == "nt":
+            s.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_EXCLUSIVEADDRUSE", 0), 1)
+        try:
+            s.bind(("0.0.0.0", port))
+            return True
+        except OSError:
+            return False
+
+
+def move_port(raw):
+    """Moves the server to another port (a host install, the Windows bundle): LISTEN_PORT and the port in PUBLIC_HOST in
+    .env, from its next start, when the app is built again for the new address and the site's download page tells players
+    to install it. Refused: no such port, the one it is on, one another program holds, or an install where the command
+    line does it (Docker Compose, Kubernetes: the command to use). Returns {port, address, from_next_start}."""
+    if not (setup.HOST_INSTALL and setup.ENV_FILE):
+        raise Refused(409, "by_command", t("port.by_command", command=commands().get("port", "")))
+    text = str(raw if raw is not None else "").strip()
+    if not text.isdigit() or not 1 <= int(text) <= 65535:
+        raise Refused(400, "bad_port", t("port.bad"))
+    port = int(text)
+    if port == port_now() and next_address() is None:
+        raise Refused(409, "same_port", t("port.same", port=port), tone="ok")
+    if port != port_now() and not port_free(port):
+        raise Refused(409, "port_taken", t("port.taken", port=port))
+    host, _ = setup.address_parts(core.PUBLIC_HOST)
+    new = host if port == 80 else f"{host}:{port}"
+    setup.save_env({"PUBLIC_HOST": new, "LISTEN_PORT": str(port)})
+    changed("server:port", f"{core.PUBLIC_HOST} > {new}")
+    return {"port": port, "address": f"http://{new}/", "from_next_start": True}
 
 
 def layout():
@@ -237,6 +297,7 @@ def server_page():
                            removes=removes(), parts=parts, total=sum(p["bytes"] for p in parts),
                            since=datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M") if started else "",
                            version=os.environ.get("OPENDMTQ_VERSION") or "", root=repairing.install_root(),
+                           port=port_now(), next_address=next_address(),
                            kind_words=KIND_WORDS, command_leads=COMMAND_LEADS, part_words=PART_WORDS,
                            remove_leads=REMOVE_LEADS, remove_words=REMOVE_WORDS,
                            job=wanted or None, job_kind=job["kind"] if job else None)
@@ -254,6 +315,18 @@ def server_restart():
         return redirect(url_for("server_page"))
     return render_template("server_restart.html", instance=setup.STARTED, ping=url_for("setup_ping"),
                            back=url_for("server_page"))
+
+
+@app.route(BASE + "/server/port", methods=["POST"])
+def server_port():
+    """Move the server to another port from its next start (a host install): said on this page, and from then on above
+    the Restart that makes it now."""
+    try:
+        moved = move_port(request.form.get("port"))
+        flash(t("port.saved", address=moved["address"]), "ok")
+    except Refused as e:
+        flash(e.words, e.tone)
+    return redirect(url_for("server_page") + "#port")
 
 
 @app.route(BASE + "/server/repair", methods=["POST"])

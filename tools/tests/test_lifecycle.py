@@ -373,6 +373,74 @@ class ServerPageTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class PortMoveTest(unittest.TestCase):
+    """Moving the server to another port from the Server page and the API (API-43): .env's LISTEN_PORT and the port in
+    PUBLIC_HOST, from the next start; refused in words for a port another program holds, the one it is on, no port, and
+    where the command line does it (the command named)."""
+
+    def host(self, inst):
+        """A host install's pages, with its .env as a server set up on 8791 has it."""
+        env_file = inst.path(".env")
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=pw\n")
+        return mock.patch.multiple(admin.setup, HOST_INSTALL=True, RUN_DIR=inst.path("run"), ENV_FILE=env_file)
+
+    def token(self, inst):
+        """A token for the API, on a server's database (the tokens' table is in it)."""
+        server_with_data(inst.root)
+        with admin.app.test_request_context():
+            _, token = admin.tokens.make("test", "write", ("admin", True, None))
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_a_move_from_the_page_takes_effect_at_the_next_start(self):
+        with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", "192.168.0.10:8791"), \
+                mock.patch.object(admin.lifecycle, "port_free", lambda port: True):
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            self.assertIn("Port 8791 carries everything", page)
+            self.assertIn('action="/opendmtq/admin/server/port"', page)
+            with inst.client.session_transaction("/opendmtq/admin/") as s:
+                csrf = s["csrf"]
+            r = inst.client.post("/opendmtq/admin/server/port", data={"csrf": csrf, "port": "8792"})
+            self.assertEqual(r.status_code, 302)
+            with open(inst.path(".env"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), "PUBLIC_HOST=192.168.0.10:8792\nLISTEN_PORT=8792\nADMIN_PASSWORD=pw\n")
+            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            # Said, and kept in sight until the next start: where it will be.
+            self.assertIn("From the server's next start it answers here: http://192.168.0.10:8792/", page)
+            self.assertIn("From the next start: http://192.168.0.10:8792/", page)
+
+    def test_what_is_refused_is_said(self):
+        with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", "192.168.0.10:8791"):
+            headers = self.token(inst)
+            with mock.patch.object(admin.lifecycle, "port_free", lambda port: False):
+                taken = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8792}, headers=headers)
+            self.assertEqual((taken.status_code, taken.get_json()["error"]["code"]), (409, "port_taken"))
+            self.assertIn("Port 8792 is taken on this computer by another program", taken.get_json()["error"]["message"])
+            same = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8791}, headers=headers)
+            self.assertEqual(same.get_json()["error"]["code"], "same_port")
+            bad = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 70000}, headers=headers)
+            self.assertEqual((bad.status_code, bad.get_json()["error"]["code"]), (400, "bad_port"))
+            # Nothing written by any of them.
+            with open(inst.path(".env"), encoding="utf-8") as f:
+                self.assertIn("LISTEN_PORT=8791", f.read())
+            with mock.patch.object(admin.lifecycle, "port_free", lambda port: True):
+                moved = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8792}, headers=headers)
+            self.assertEqual(moved.get_json(), {"port": 8792, "address": "http://192.168.0.10:8792/", "from_next_start": True})
+            self.assertEqual(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["next_address"], "192.168.0.10:8792")
+
+    def test_in_containers_the_command_line_does_it(self):
+        with Install() as inst:
+            r = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8792}, headers=self.token(inst))
+            self.assertEqual((r.status_code, r.get_json()["error"]["code"]), (409, "by_command"))
+            self.assertIn("./opendmtq port <port>", r.get_json()["error"]["message"])
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            self.assertIn("./opendmtq port &lt;port&gt;", page)
+            self.assertNotIn('action="/opendmtq/admin/server/port"', page)
+
+
 class DeleteAndRepairTest(unittest.TestCase):
     """Deleting the data and the repair from the page and the API, as jobs (ADM-110, ADM-112, API-45, API-46)."""
 
