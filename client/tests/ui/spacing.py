@@ -95,6 +95,17 @@ def _whole(widget, origin):
     return (x + inset, y + inset, x + widget.winfo_width() - inset, y + widget.winfo_height() - inset)
 
 
+def _all(root):
+    """Every widget under `root`, without recursion."""
+    found, stack = [], [root]
+    while stack:
+        widget = stack.pop()
+        for child in widget.winfo_children():
+            found.append(child)
+            stack.append(child)
+    return found
+
+
 def _inside(child, parent):
     return any(p is parent for p in _ancestors(child))
 
@@ -200,6 +211,27 @@ def check(root, ui, name):
             gap = _gap(box_t, box_b)
             if rows and gap is not None and gap < ui.px(LEAST_TEXT_GAP):
                 problems.append("%s: the words %s touch %s (%d px apart)" % (name, _name(text), _name(b), gap))
+    # ---- a card's faint lines: never two in a row with nothing between them (a line a list adds under one the rows
+    # already draw).
+    from opendmtq_client import theme
+    lines = []
+    for widget in [f[0] for f in found] + [w for w in _all(root) if isinstance(w, tk.Frame)]:
+        try:
+            if (isinstance(widget, tk.Frame) and widget.winfo_ismapped() and widget.winfo_height() <= 2
+                    and str(widget.cget("bg")).lower() == theme.DIVIDER.lower()):
+                box = _shown_box(widget, origin)
+                if box is not None:
+                    lines.append((box, widget))
+        except tk.TclError:
+            continue
+    lines = sorted(set(lines), key=lambda item: (item[0][1], item[0][0]))
+    others = [f[2] for f in found if f[1] != "card"]
+    for (a, wa), (b, wb) in zip(lines, lines[1:]):
+        if not (a[0] < b[2] and b[0] < a[2]) or b[1] <= a[3]:
+            continue
+        between = [o for o in others if o[1] >= a[3] and o[3] <= b[1] and o[0] < a[2] and a[0] < o[2]]
+        if not between:
+            problems.append("%s: two faint lines in a row (%d px apart), nothing between them" % (name, b[1] - a[3]))
     # ---- what a card holds, inside its padding.
     for card, kind, card_box in found:
         if kind != "card":

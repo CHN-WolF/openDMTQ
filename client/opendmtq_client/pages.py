@@ -831,7 +831,7 @@ def lanes_card(app, parent):
     # The title's line as tall as it is with Reset keys on it, whether that is there or not: the switch stays where it
     # was, under the pointer that switched it.
     tk.Frame(card.head, bg=theme.PANEL, width=1, height=ui.px(widgets.Button.HEIGHT)).pack(side="right")
-    rows = widgets.RowList(card.body, ui, pady=0)
+    rows = widgets.RowList(card.body, ui)
 
     def switch(value):
         app.changed("keyboard", "on" if value else "off")
@@ -920,7 +920,7 @@ class LaneKeys:
         # A plain button, as Check again is on the PLAY page: the screen's lime action stays PLAY's.
         self.reset_button = widgets.Button(card.head, ui, w("controls.keys.reset"), self.reset)
         self.reset_button.pack(side="right")
-        widgets.divider(holder, ui)
+        # The line between the switch and the table is the card's rows' own (widgets.RowList).
         table = tk.Frame(holder, bg=theme.PANEL)
         table.pack(anchor="w", fill="x")
         self.table = table
@@ -1339,9 +1339,11 @@ def signin_panel(app, parent, rerender):
             side="left", padx=(ui.px(6), 0))
         widgets.Button(signed, ui, w("online.signout"), sign_out).pack(side="left", padx=(ui.px(16), 0))
         return
-    # Where these go: the server's name and address, in the card's first line.
-    widgets.label(parent, ui, w("online.signin.on", name=st.label(server)), font=ui.fonts.small, fg=theme.MUTED,
-                  wrap_margin=0).pack(fill="x", pady=(0, ui.px(FORM_FIELD_GAP)))
+    if app.guide is not None:
+        # In the guide, where these go: the server's name and address, in the card's first line (the Online page has the
+        # server's own card right above).
+        widgets.label(parent, ui, w("online.signin.on", name=st.label(server)), font=ui.fonts.small, fg=theme.MUTED,
+                      wrap_margin=0).pack(fill="x", pady=(0, ui.px(FORM_FIELD_GAP)))
     fields, said = {}, {}
     for i, (key, secret) in enumerate((("online.id", False), ("online.password", True))):
         form_label(parent, ui, w(key), top=FORM_FIELD_GAP if i else 0)
