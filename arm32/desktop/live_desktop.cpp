@@ -53,6 +53,7 @@ void desktop_live_paused(bool) {}
 #else
 
 #include "live_state.h"
+#include "live_notice.h"
 #include "mixer.h"
 
 #include <cstdlib>
@@ -82,7 +83,7 @@ void control_main() {
     const Nanos started = now_ns();
     Nanos next_poll = 0;
     bool was_on = false;
-    // The number of the last notice shown (live_net.h notice_of): each new one shows once, a repeat never.
+    // The number of the last notice shown (live_notice.h notice_of): each new one shows once, a repeat never.
     int last_notice = 0;
     // Asks in a row without an answer while on air, and whether the server was said to be gone (reach_notice).
     int misses = 0;
@@ -118,9 +119,13 @@ void control_main() {
             log("player: live: asking the server");
         }
         // The answer, checked (live_net.cpp parse_state). None: as things were.
-        const live::State state = g_link.ask_state(ids, lang.c_str());
-        // The server gone quiet while this PC broadcasts, and back: the player's own notice, once each way (live_net.cpp).
-        const live::Notice reach = live::reach_notice(state, was_on, misses, lost, lang == "ko");
+        // The answer, as Link::ask_state asks it, read as it reads it (live_net.cpp parse_state) and for its notice's
+        // number and kind too (live_notice.h).
+        const live::HttpResult answer = g_link.request("GET", "/live/state?ids=" + ids + "&lang=" + lang, "", nullptr, 0);
+        const live::State state = live::parse_state(answer);
+        const player::live_notice::Fields fields = player::live_notice::fields_of(answer.body);
+        // The server gone quiet while this PC broadcasts, and back: the player's own notice, once each way.
+        const player::live_notice::Notice reach = player::live_notice::reach_notice(state.answered, state.on, was_on, misses, lost, lang == "ko");
         if (reach.show) player::show_notice(reach.text, reach.live);
         if (!state.answered) continue;
         // The server's first answer, at the game's first screens: the render thread makes the conversion's program now,
@@ -147,14 +152,14 @@ void control_main() {
         if (was_on && !state.on) g_link.end_stream();
         g_on.store(state.on);
         was_on = state.on;
-        // Every notice the server hands out, on and off alike, each once (live_net.cpp notice_of). A PC that cannot
+        // Every notice the server hands out, on and off alike, each once (live_notice.h notice_of). A PC that cannot
         // encode sends nothing: the server's "you are live" would not be true here, and only that one is left out.
         const int shown_before = last_notice;
-        const live::Notice notice = live::notice_of(state, last_notice, g_gave_up.load());
+        const player::live_notice::Notice notice = player::live_notice::notice_of(state.answered, state.on, state.toast, fields, last_notice, g_gave_up.load());
         if (notice.show) {
             player::show_notice(notice.text, notice.live);
         } else if (!state.toast.empty()) {
-            log("player: live: the server's notice left out (%s): %s", state.toast_id > 0 && state.toast_id <= shown_before ? "shown already" : "this PC sends no broadcast",
+            log("player: live: the server's notice left out (%s): %s", fields.id > 0 && fields.id <= shown_before ? "shown already" : "this PC sends no broadcast",
                 state.toast.c_str());
         }
     }

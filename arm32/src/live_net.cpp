@@ -277,22 +277,16 @@ HttpResult Link::request(const char* method, const std::string& path, const std:
 // ---- reading the server's small JSON answer: flat, with known keys
 
 std::size_t json_value(const std::string& json, const char* key) {
-    // The key with its quotes: a value's own quotes are escaped, so a value holds this only as a whole string value of
-    // the same words, which no colon follows.
+    // The key with its quotes: a value's own quotes are escaped, so no value can hold this.
     const std::string quoted = std::string("\"") + key + "\"";
-    for (std::size_t from = 0;;) {
-        std::size_t at = json.find(quoted, from);
-        if (at == std::string::npos) return at;
-        from = at + quoted.size();
-        at = from;
-        // The white space JSON allows before the colon, then the colon: a key. Anything else: a value; the next one.
-        while (at < json.size() && (json[at] == ' ' || json[at] == '\t' || json[at] == '\n' || json[at] == '\r')) ++at;
-        if (at >= json.size() || json[at] != ':') continue;
-        ++at;
-        // The white space JSON allows before a value.
-        while (at < json.size() && (json[at] == ' ' || json[at] == '\t' || json[at] == '\n' || json[at] == '\r')) ++at;
-        return at < json.size() ? at : std::string::npos;
-    }
+    std::size_t at = json.find(quoted);
+    if (at == std::string::npos) return at;
+    at = json.find(':', at + quoted.size());
+    if (at == std::string::npos) return at;
+    ++at;
+    // The white space JSON allows before a value.
+    while (at < json.size() && (json[at] == ' ' || json[at] == '\t' || json[at] == '\n' || json[at] == '\r')) ++at;
+    return at < json.size() ? at : std::string::npos;
 }
 
 bool json_bool(const std::string& json, const char* key) {
@@ -456,52 +450,7 @@ State parse_state(const HttpResult& r) {
     s.bitrate = std::clamp(json_int(r.body, "bitrate", 2000000), 100000, 20000000);
     s.segment = std::clamp(json_int(r.body, "segment", 2), 1, 10);
     s.toast = json_string(r.body, "toast");
-    // The notice's number and kind (a newer server's): -1 and "" without them.
-    if (json_value(r.body, "toast_id") != std::string::npos) s.toast_id = json_int(r.body, "toast_id", 0);
-    s.toast_kind = json_string(r.body, "toast_kind");
     return s;
-}
-
-Notice notice_of(const State& s, int& last_id, bool gave_up) {
-    Notice n;
-    if (!s.answered || s.toast.empty()) return n;
-    // A numbered one shown already: a repeat, left out. Never by its words: on, off and on again read the same.
-    if (s.toast_id > 0 && s.toast_id <= last_id) return n;
-    if (s.toast_id > 0) last_id = s.toast_id;
-    // Its kind says whether it is the on notice; an older server's (no kind) is on while the answer is.
-    const bool on_notice = s.toast_kind.empty() ? s.on : s.toast_kind == "on";
-    // This computer cannot send: "you are on air" would not be true. Every other notice shows.
-    if (on_notice && gave_up) return n;
-    n.show = true;
-    n.text = s.toast;
-    n.live = on_notice;
-    return n;
-}
-
-Notice reach_notice(const State& s, bool was_on, int& misses, bool& lost, bool korean) {
-    Notice n;
-    if (!s.answered) {
-        // No answer: counted while on air, said once when the count reaches kLostAfter.
-        if (!was_on || lost) return n;
-        if (++misses < kLostAfter) return n;
-        lost = true;
-        n.show = true;
-        n.text = korean ? "\xeb\xb0\xa9\xec\x86\xa1\xec\x9d\xb4 \xeb\xa9\x88\xec\xb7\x84\xec\x96\xb4\xec\x9a\x94\n"
-                          "\xec\x84\x9c\xeb\xb2\x84\xea\xb0\x80 \xec\x9d\x91\xeb\x8b\xb5\xed\x95\x98\xec\xa7\x80 \xec\x95\x8a\xec\x95\x84\xec\x9a\x94"
-                        : "Your broadcast has stopped\nThe server is not answering";
-        return n;
-    }
-    misses = 0;
-    if (!lost) return n;
-    lost = false;
-    // Back: said only when the broadcast goes on (off air, the server's own notice says what it is).
-    if (!s.on) return n;
-    n.show = true;
-    n.live = true;
-    n.text = korean ? "\xeb\xb0\xa9\xec\x86\xa1\xec\x9d\x84 \xeb\x8b\xa4\xec\x8b\x9c \xec\x9d\xb4\xec\x96\xb4 \xea\xb0\x80\xec\x9a\x94\n"
-                      "\xec\x84\x9c\xeb\xb2\x84\xea\xb0\x80 \xeb\x8b\xa4\xec\x8b\x9c \xec\x9d\x91\xeb\x8b\xb5\xed\x95\xb4\xec\x9a\x94"
-                    : "Your broadcast is back on\nThe server answers again";
-    return n;
 }
 
 void add_id(std::string& ids, std::string_view id) {
