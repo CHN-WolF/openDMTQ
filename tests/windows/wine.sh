@@ -7,7 +7,8 @@
 # the game's client goes through the setup too and the phone app is built with the bundle's Java, Apktool and signer.
 #
 # Wine is not Windows. Four things differ, and the test changes only its own copy of the bundle for them:
-# - Wine (8.0 at least) lacks propsys' VariantToString, which Python's WMI module calls for platform details: it goes.
+# - Wine (8.0 at least) lacks propsys' VariantToString, which Python's WMI module calls for platform details: it goes,
+#   and so does its line in the bundle's list of its files (the repair would rightly call it missing).
 # - Wine prefers its own C runtime, whose version PHP refuses: Wine is told to take the bundle's copies.
 # - Under Wine, Python cannot start with its output sent to a file: the output goes through a pipe.
 # - PHP's opcache cannot share its memory between Apache's processes there; it is off by default anyway.
@@ -91,6 +92,7 @@ fi
 cp -r /bundle "/tmp/Open DMTQ"
 cd "/tmp/Open DMTQ"
 rm -f runtime/python/_wmi.pyd
+sed -i '/runtime\/python\/_wmi\.pyd$/d' app/MANIFEST.sha256 2>/dev/null || true
 export WINEDLLOVERRIDES="vcruntime140=n;vcruntime140_1=n"
 # Wine sets itself up on its first program, with a line or two about it: not part of what is checked.
 wine cmd /c ver >/dev/null 2>&1 || true
