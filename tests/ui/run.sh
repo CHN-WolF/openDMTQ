@@ -210,6 +210,8 @@ fi
 
 stage maint
 stage flows
+# Nothing said only under a mouse pointer, switches that change the page where it is, the forms' words under their fields.
+stage patterns
 
 # Broadcasts off again, as most servers have them, with the players, records and recordings in place: nothing of
 # broadcasts on the site, every page whole without them, and the owner's pages saying they are off.

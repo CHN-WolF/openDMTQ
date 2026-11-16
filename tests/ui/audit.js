@@ -9,6 +9,8 @@
 //   node audit.js flows    what people do: signing in, searching, the replay player, the owner's forms; every floating
 //                          layer (menus, tooltips, questions) opened and measured whole and on top
 //   node audit.js quiet    broadcasts off for the server with everything in place: nothing of them on the site
+//   node audit.js patterns nothing said only under a mouse pointer, switches that change the page in place, the owner's
+//                          forms saying what is wrong under the field
 // Exit status 1 when anything failed. Reads SITE, ADMIN (addresses), PASSWORD and OUT from the environment.
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -553,6 +555,249 @@ async function signInForms(contexts) {
   check('two different passwords are said before anything is sent', /not the same/.test(said) && new URL(page.url()).pathname === '/opendmtq/admin/accounts'
     && await page.evaluate(() => document.activeElement.name) === 'password2', said);
   await page.close();
+}
+
+// The pages the patterns below are looked for on: the site's and the owner's, with players, plays and recordings in place.
+const PATTERN_PAGES = [
+  ['home', `${P}/`], ['rankings', `${P}/ranking.php`], ['player', `${P}/player.php?id=1`], ['song', `${P}/song.php?id=1`],
+  ['songs', `${P}/songs.php`], ['live', `${P}/live.php`], ['download', `${P}/download.php`],
+  ['admin-status', `${A}/`], ['admin-players', `${A}/players`], ['admin-accounts', `${A}/accounts`],
+  ['admin-recordings', `${A}/recordings`], ['admin-songs', `${A}/songs`], ['admin-requests', `${A}/logs`],
+  ['admin-plays', `${A}/logs?tab=plays`], ['admin-changes', `${A}/logs?tab=changes`], ['admin-maintenance', `${A}/maintenance`],
+  ['admin-backups', `${A}/backups`], ['admin-app', `${A}/app`],
+];
+
+// P1: nothing said only under a mouse pointer. No title anywhere on the pages (a title shows to a mouse alone: a finger and
+// the keyboard never see it); every mark with words of its own (data-tip) is reached by the keyboard; and its words show,
+// whole and on top, when it has the focus (gone with Escape), when a finger presses it (gone with a second press, or a press
+// elsewhere), and under a mouse pointer (gone when the pointer leaves).
+async function hoverOnly(contexts) {
+  for (const [width, height] of [[360, 740], [1280, 800]]) {
+    const touch = width < 700;
+    const page = await contexts.signed.newPage();
+    await page.setViewport({ width, height, ...(touch ? { isMobile: true, hasTouch: true } : {}) });
+    const at = `${width}px`;
+    for (const [name, url] of PATTERN_PAGES) {
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await pause(400);
+      const found = await page.evaluate(() => ({
+        titled: [...document.querySelectorAll('body [title]')].filter(e => !e.closest('svg') && e.tagName !== 'IFRAME')
+          .map(e => `${e.tagName.toLowerCase()}${typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : ''}: ${e.getAttribute('title').slice(0, 30)}`),
+        unreached: [...document.querySelectorAll('[data-tip]')].filter(e => e.tabIndex < 0)
+          .map(e => `${e.tagName.toLowerCase()}${typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : ''}`),
+        tips: document.querySelectorAll('[data-tip]').length,
+      }));
+      const titled = [...new Set(found.titled)];
+      check(`nothing on ${name} is said only under a mouse pointer: no title, every mark's words reached by the keyboard (${at})`,
+        found.titled.length === 0 && found.unreached.length === 0,
+        `${found.titled.length} titles: ${titled.slice(0, 4).join(' ; ')} | ${found.unreached.length} marks out of the keyboard's reach: ${[...new Set(found.unreached)].slice(0, 3).join(' ; ')}`);
+      if (!found.tips) continue;
+      // The first mark and the last one on the page that a person can reach: drawn, a few pixels at least.
+      const marks = await page.$$eval('[data-tip]', all => all.map((e, i) => {
+        const r = e.getBoundingClientRect();
+        return r.width >= 4 && r.height >= 4 && getComputedStyle(e).visibility !== 'hidden' ? i : -1;
+      }).filter(i => i >= 0));
+      for (const index of [marks[0], marks[marks.length - 1]].filter((v, i, a) => v !== undefined && a.indexOf(v) === i)) {
+        const mark = (await page.$$('[data-tip]'))[index];
+        const words = await mark.evaluate(e => e.dataset.tip);
+        await mark.evaluate(e => e.scrollIntoView({ block: 'center', inline: 'nearest' }));
+        await pause(150);
+        const shown = async () => page.evaluate(w => {
+          const box = [...document.querySelectorAll('.chart-tip')].find(b => !b.hidden && getComputedStyle(b).display !== 'none');
+          return !!box && box.textContent === w;
+        }, words);
+        const where = `${name}, mark ${index + 1}, ${at}`;
+        // The keyboard: its focus shows the words, whole and on top; Escape takes them away.
+        await mark.focus();
+        await pause(150);
+        const focused = await shown();
+        const whole = await wholeOnTop(page, '.chart-tip:not([hidden])');
+        await page.keyboard.press('Escape');
+        await pause(150);
+        const escaped = !(await shown());
+        check(`a mark's words show on its keyboard focus, whole and on top, and go with Escape (${where})`, focused && whole.ok && escaped,
+          `${focused} ${whole.detail} ${escaped}`);
+        await page.evaluate(() => document.activeElement && document.activeElement.blur());
+        const box = await mark.boundingBox();
+        if (!box) continue;
+        const x = box.x + box.width / 2, y = box.y + box.height / 2;
+        if (touch) {
+          // A finger: a press shows them, a second press takes them away, and a press elsewhere too.
+          await page.touchscreen.tap(x, y);
+          await pause(200);
+          const tapped = await shown();
+          await page.touchscreen.tap(x, y);
+          await pause(200);
+          const again = !(await shown());
+          await page.touchscreen.tap(x, y);
+          await pause(200);
+          // Elsewhere: the page's heading, which does nothing when pressed.
+          const heading = await page.$eval('main h2, main h1:not(.page-title), .playerhead h2', h => { const r = h.getBoundingClientRect(); return [r.left + 4, r.top + r.height / 2]; }).catch(() => [8, 200]);
+          await page.touchscreen.tap(heading[0], Math.max(4, heading[1]));
+          await pause(200);
+          const away = !(await shown());
+          check(`a mark's words show when a finger presses it, and go with a second press or a press elsewhere (${where})`, tapped && again && away,
+            `${tapped} ${again} ${away}`);
+        } else {
+          // A mouse: over the mark they show, away from it they go.
+          await page.mouse.move(x, y);
+          await pause(150);
+          const over = await shown();
+          await page.mouse.move(2, height - 2);
+          await pause(150);
+          const left = !(await shown());
+          check(`a mark's words show under the mouse pointer and go when it leaves (${where})`, over && left, `${over} ${left}`);
+        }
+      }
+    }
+    await page.close();
+  }
+}
+
+// P7: a switch or a small change on the owner's pages changes the page where it is, without loading the whole page again
+// (which flashed it white and lost what was in view): the page's own state changes in place, the server's words come as the
+// pages' message at the foot of the screen, and the page itself is the same one (a mark set on it before is still there).
+// Without scripts the same buttons still work, by loading the page again.
+async function sameWay(page, press, changed, arg) {
+  // A mark on the page as it is, and no message left from before.
+  await page.evaluate(() => { window.odqSamePage = 'yes'; for (const m of document.querySelectorAll('.flash.float')) m.remove(); });
+  const navigated = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).then(() => 'loaded again', () => '');
+  await press();
+  const done = await Promise.race([navigated, page.waitForFunction(changed, { timeout: 8000 }, arg).then(() => 'changed', () => 'unchanged')]);
+  // The server's words, which come with the change.
+  await page.waitForSelector('.flash.float', { timeout: 5000 }).catch(() => {});
+  await pause(200);
+  const same = await page.evaluate(() => window.odqSamePage === 'yes').catch(() => false);
+  const said = await page.$eval('.flash.float', e => e.textContent.trim()).catch(() => '');
+  const now = await page.evaluate(changed, arg).catch(() => false);
+  return { ok: same && now && said !== '', detail: `${done}; same page ${same}; changed ${now}; said "${said.slice(0, 60)}"` };
+}
+
+async function inPlace(contexts) {
+  const page = await contexts.signed.newPage();
+  await page.setViewport({ width: 1280, height: 800 });
+  // The Players page: a player's switch on, then off again, each in place.
+  await page.goto(`${A}/players`, { waitUntil: 'domcontentloaded' });
+  const sw = 'button[form="player-switch"][formaction^="/opendmtq/admin/players/3?"]';
+  const stateOf = sel => document.querySelector(sel) && document.querySelector(sel).closest('tr').querySelector('.live-state').className;
+  const before = await page.evaluate(stateOf, sw);
+  const on = await sameWay(page, () => page.click(sw), ([sel, was]) => {
+    const b = document.querySelector(sel);
+    return !!b && b.closest('tr').querySelector('.live-state').className !== was;
+  }, [sw, before]);
+  check("a player's broadcast switch changes their row in place, with the server's words, without loading the page again", on.ok, on.detail);
+  const after = await page.evaluate(stateOf, sw);
+  const off = await sameWay(page, () => page.click(sw), ([sel, was]) => {
+    const b = document.querySelector(sel);
+    return !!b && b.closest('tr').querySelector('.live-state').className !== was;
+  }, [sw, after]);
+  check('and back off the same way', off.ok, off.detail);
+  // The Broadcasts page: the server's switch on and off again.
+  await page.goto(`${A}/recordings`, { waitUntil: 'domcontentloaded' });
+  const word = () => document.querySelector('#broadcasts .auto-line b').textContent;
+  const was = await page.evaluate(word);
+  const flip = () => page.click('#broadcasts button[name=action][value^="broadcasts-"]').then(async () => {
+    // Turning them off with someone on air asks first: yes.
+    if (await page.$('#ask[open]')) await page.click('#ask [value=yes]');
+  });
+  const server1 = await sameWay(page, flip, w => document.querySelector('#broadcasts .auto-line b').textContent !== w, was);
+  const was2 = await page.evaluate(word);
+  const server2 = await sameWay(page, flip, w => document.querySelector('#broadcasts .auto-line b').textContent !== w, was2);
+  check("the Broadcasts page's switch for the server changes the page in place, both ways", server1.ok && server2.ok, `${server1.detail} | ${server2.detail}`);
+  // What new players start with and the quality, saved in place.
+  const saved = await sameWay(page, () => page.click('#broadcasts form:has(input[name=action][value=settings]) button'), () => !!document.querySelector('.flash.float'));
+  check("the Broadcasts page's settings are saved in place", saved.ok, saved.detail);
+  // The Accounts page: an account switched off and on again.
+  await page.goto(`${A}/accounts`, { waitUntil: 'domcontentloaded' });
+  const stateText = () => document.querySelector('tr:has(input[value="manager"]) .account-state').textContent.trim();
+  const acc = await page.evaluate(stateText);
+  const accOff = await sameWay(page, () => page.click('tr:has(td.primary) form:has(input[value=off]):has(input[value="manager"]) button'),
+    w => { const c = document.querySelector('tr:has(input[value="manager"]) .account-state'); return !!c && c.textContent.trim() !== w; }, acc);
+  const acc2 = await page.evaluate(stateText);
+  const accOn = await sameWay(page, () => page.click('tr:has(td.primary) form:has(input[value=on]):has(input[value="manager"]) button'),
+    w => { const c = document.querySelector('tr:has(input[value="manager"]) .account-state'); return !!c && c.textContent.trim() !== w; }, acc2);
+  check('an account is switched off and on again in place', accOff.ok && accOn.ok, `${accOff.detail} | ${accOn.detail}`);
+  // The Songs page: a song hidden and shown again.
+  await page.goto(`${A}/songs`, { waitUntil: 'domcontentloaded' });
+  const hidden = () => !!document.querySelector('tr[data-n="2"] .mark.off');
+  const hide = await sameWay(page, () => page.click('tr[data-n="2"] form:has(input[name=action][value=hide]) button'), () => !!document.querySelector('tr[data-n="2"] .mark.off'));
+  const show = await sameWay(page, () => page.click('tr[data-n="2"] form:has(input[name=action][value=show]) button'), () => !document.querySelector('tr[data-n="2"] .mark.off'));
+  check('a song is hidden and shown again in place', hide.ok && show.ok && !(await page.evaluate(hidden)), `${hide.detail} | ${show.detail}`);
+  // The Maintenance page: on (it asks first), then off.
+  await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+  const maintWord = () => document.querySelector('.auto-line b').textContent;
+  const m1 = await page.evaluate(maintWord);
+  const mOn = await sameWay(page, async () => { await page.click('button[name=action][value=on]'); await page.waitForSelector('#ask[open]'); await page.click('#ask [value=yes]'); },
+    w => document.querySelector('.auto-line b').textContent !== w, m1);
+  const m2 = await page.evaluate(maintWord);
+  const mOff = await sameWay(page, () => page.click('button[name=action][value=off]'), w => document.querySelector('.auto-line b').textContent !== w, m2);
+  check('maintenance is turned on and off again in place', mOn.ok && mOff.ok, `${mOn.detail} | ${mOff.detail}`);
+  await page.screenshot({ path: path.join(OUT, 'shots', 'patterns-in-place-maintenance-1280.jpg'), type: 'jpeg', quality: 80 });
+  await page.close();
+  // Without scripts the switch still works: the page loads again with the change and the server's words.
+  const plain = await contexts.signed.newPage();
+  await plain.setJavaScriptEnabled(false);
+  await plain.setViewport({ width: 1280, height: 800 });
+  await plain.goto(`${A}/players`, { waitUntil: 'domcontentloaded' });
+  const plainBefore = await plain.$eval(sw, b => b.textContent.trim());
+  await Promise.all([plain.waitForNavigation({ waitUntil: 'domcontentloaded' }), plain.click(sw)]);
+  const plainAfter = await plain.$eval(sw, b => b.textContent.trim());
+  const plainSaid = await textOf(plain, '.flash');
+  await Promise.all([plain.waitForNavigation({ waitUntil: 'domcontentloaded' }), plain.click(sw)]);
+  check("without scripts a player's switch still works, by loading the page again", plainBefore !== plainAfter && /\S/.test(plainSaid), `${plainBefore} -> ${plainAfter}: ${plainSaid}`);
+  await plain.close();
+}
+
+// P9: the owner's other forms as the sign-in is: every field named by a label; a field that cannot go as it is said right
+// under it (not in a message at the top of the page), with the focus on it; the search boxes marked as what they are.
+async function formsLook(contexts) {
+  const FORMS = [
+    ['Make an account', `${A}/accounts`, '.account-form', 'input[name=name]', 'a', '.account-form button.btn-primary'],
+    ['Make token', `${A}/accounts`, '#tokens form', 'input[name=token_name]', '', '#tokens form button:not([type=button])'],
+    ["the setup's account", `${A}/setup?step=players`, 'form[action$="/setup/player"]', 'input[name=name]', '!', 'form[action$="/setup/player"] button'],
+    ["the recordings' limits", `${A}/recordings`, '.rec-limits', 'input[name=cap_gb]', '0', '.rec-limits button'],
+    ['Add song', `${A}/songs`, 'form.upload', 'input[name=package]', null, 'form.upload button.btn-primary'],
+  ];
+  for (const [width, height] of [[360, 740], [1280, 800]]) {
+    for (const lang of ['en', 'ko']) {
+      const page = await contexts.signed.newPage();
+      await page.setViewport({ width, height, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
+      await page.setCookie({ name: 'opendmtq_lang', value: lang, url: ADMIN });
+      const at = `${width}px, ${lang}`;
+      for (const [name, url, form, field, bad, send] of FORMS) {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        const named = await page.$$eval(`${form} :is(input, select, textarea):not([type=hidden])`, all => all.filter(f => {
+          const r = f.getBoundingClientRect();
+          return r.width > 0 && !(f.labels && f.labels.length) && !f.getAttribute('aria-label') && !f.getAttribute('aria-labelledby');
+        }).map(f => f.name));
+        if (bad !== null) await page.$eval(`${form} ${field}`, (f, v) => { f.value = v; }, bad);
+        await page.$eval(send, b => b.scrollIntoView({ block: 'center' }));
+        await page.click(send);
+        await pause(400);
+        const said = await page.evaluate((formSel, fieldSel) => {
+          const f = document.querySelector(`${formSel} ${fieldSel}`);
+          const ids = (f.getAttribute('aria-describedby') || '').split(' ').filter(Boolean);
+          const words = ids.map(id => document.getElementById(id)).find(Boolean);
+          if (!words) return { found: false };
+          // The field's own box: a file field is the drop box around it.
+          const own = (f.type === 'file' ? f.closest('.drop') : f).getBoundingClientRect(), w = words.getBoundingClientRect();
+          return { found: true, text: words.textContent.trim(), gap: Math.round(w.top - own.bottom), atTop: !!words.closest('main > .flash, .form-says.flash'),
+            focus: document.activeElement === f, invalid: f.getAttribute('aria-invalid') === 'true' };
+        }, form, field);
+        check(`${name}: every field named, and what is wrong said right under the field, the focus on it (${at})`,
+          named.length === 0 && said.found && said.text !== '' && said.gap >= 0 && said.gap <= 60 && !said.atTop && said.focus && said.invalid,
+          `${named.length ? 'unnamed: ' + named.join(',') + '; ' : ''}${JSON.stringify(said)}`);
+        if (name === 'Make an account') await page.screenshot({ path: path.join(OUT, 'shots', `patterns-form-account-${lang}-${width}.jpg`), type: 'jpeg', quality: 80 });
+      }
+      // The search boxes: each marked as one (its magnifier) and named for screen readers.
+      for (const [name, url, box] of [['players', `${A}/players`, '#player-search'], ['songs', `${A}/songs`, 'input.search'], ["the site's songs", `${P}/songs.php`, 'input[type=search]']]) {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        const look = await page.$eval(box, b => ({ icon: getComputedStyle(b).backgroundImage, named: !!(b.getAttribute('aria-label') || (b.labels && b.labels.length)) })).catch(() => null);
+        check(`the ${name} search box shows a magnifier and has a name (${at})`, !!look && /url\(/.test(look.icon) && look.named, JSON.stringify(look));
+      }
+      await page.close();
+    }
+  }
 }
 
 async function portalFlows(contexts) {
@@ -1735,6 +1980,10 @@ async function adminFlows(contexts) {
     await portalFlows(contexts);
     await replayFlows(contexts);
     await adminFlows(contexts);
+  } else if (stage === 'patterns') {
+    await hoverOnly(contexts);
+    await inPlace(contexts);
+    await formsLook(contexts);
   } else if (stage === 'quiet') {
     await broadcastsOff(contexts, true);
     await sweep(contexts, QUIET, ALL_WIDTHS);
