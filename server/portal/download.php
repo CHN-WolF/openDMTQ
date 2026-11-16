@@ -23,12 +23,18 @@ $ready = $apk && !$stale && !$failed && !$in_app;
 $start = dl_take_start() && $apk && !$stale && !$in_app && !on_ios();
 // The installer for Windows (the PC client), set up for this server as it is handed out, when the server has it.
 $win = windows_client();
+// The server moved to this address lately (another port, another PC): the phones' app calls the old one.
+$moved = odq_address_moved();
 
 // The download starts after a second, so the page that says so is on screen first. While the
 // builder is making the app (none yet, or one for the old address), check again on its own; only then.
 page_header(t('dl.title'), 'download', $start ? '1;url=/apk' : ($building ? '20' : ''));
 ?>
   <?= masthead('DOWNLOAD') ?>
+  <?php if ($moved): ?>
+  <?php // Said before the download: whoever comes with an app for the old address needs this one. ?>
+  <p class="warn moved" role="status"><?= t('dl.moved', ['date' => date('Y-m-d', $moved['at']), 'to' => $moved['to'], 'from' => $moved['from']]) ?></p>
+  <?php endif; ?>
   <section class="card" id="install">
     <?php // The centrepiece: the button and the QR code side by side, then the steps across the whole box. ?>
     <div class="install-head">

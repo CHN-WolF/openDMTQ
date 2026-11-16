@@ -140,3 +140,46 @@ function odq_served_file(string $path): ?string
     }
     return null;
 }
+
+/*
+ * A move of the server to another address (another port, another PC): the phones' app calls the old one, so players need
+ * the app built for the new one. Noted at each start (bin/setup-db.php): the address the last start served is kept in the
+ * state folder (address.json); when this start's differs, address-moved.json says from where, to where and when, and the
+ * site's download page says so for a month.
+ */
+const ODQ_MOVED_DAYS = 30;
+
+/* At a start: the address served now noted, and a move noted when the last start served another one. Returns the move,
+   or null. A first start, and the first start of a server from before this was noted, note no move. */
+function odq_note_address(?string $dir = null, ?string $now = null): ?array
+{
+    $dir = $dir ?? odq_state_dir();
+    $now = $now ?? odq_host();
+    $last = @json_decode((string)@file_get_contents("$dir/address.json"), true);
+    $moved = null;
+    if (is_array($last) && is_string($last['host'] ?? null) && $last['host'] !== '' && $last['host'] !== $now) {
+        $moved = ['from' => $last['host'], 'to' => $now, 'at' => time()];
+        // Whole before it is there: the site never reads half of it.
+        @file_put_contents("$dir/address-moved.json.new", json_encode($moved, JSON_UNESCAPED_SLASHES));
+        @rename("$dir/address-moved.json.new", "$dir/address-moved.json");
+    }
+    if (!is_array($last) || ($last['host'] ?? null) !== $now) {
+        @file_put_contents("$dir/address.json.new", json_encode(['host' => $now], JSON_UNESCAPED_SLASHES));
+        @rename("$dir/address.json.new", "$dir/address.json");
+    }
+    return $moved;
+}
+
+/* The last move of the server, while it is recent (ODQ_MOVED_DAYS) and to the address served now: ['from', 'to', 'at'],
+   or null. */
+function odq_address_moved(?string $dir = null, ?string $now = null): ?array
+{
+    $dir = $dir ?? odq_state_dir();
+    $now = $now ?? odq_host();
+    $m = @json_decode((string)@file_get_contents("$dir/address-moved.json"), true);
+    if (!is_array($m) || !is_string($m['from'] ?? null) || ($m['to'] ?? null) !== $now || !is_int($m['at'] ?? null)) {
+        return null;
+    }
+    return time() - $m['at'] < ODQ_MOVED_DAYS * 86400 ? $m : null;
+}
+

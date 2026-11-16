@@ -295,3 +295,11 @@ if ($broken) {
     echo "opendmtq: stored $fixed player name(s) that were not UTF-8 as UTF-8, $korean of them from CP949\n";
 }
 $db->close();
+
+// The address this start serves, and a move from the one the last start served (the site's download page then tells
+// players to install the app built for the new one).
+$moved = odq_note_address(dirname($path));
+if ($moved !== null) {
+    echo "opendmtq: the server moved from {$moved['from']} to {$moved['to']}; phones need the app built for the new address\n";
+}
+
