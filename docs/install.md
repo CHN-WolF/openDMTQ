@@ -33,8 +33,8 @@ file's name carries):
 ```powershell
 cd ~
 $v = (curl.exe -fsS -o NUL -w '%{redirect_url}' https://github.com/kanggu12/openDMTQ/releases/latest) -replace '.*/v'
-curl.exe -fLO "https://github.com/kanggu12/openDMTQ/releases/download/v$v/OpenDMTQ-Server-$v-windows-x64.zip"
-tar.exe -xf "OpenDMTQ-Server-$v-windows-x64.zip"
+curl.exe -fLO "https://github.com/kanggu12/openDMTQ/releases/download/v$v/opendmtq-server-$v-windows-x64.zip"
+tar.exe -xf "opendmtq-server-$v-windows-x64.zip"
 start .\OpenDMTQ\OpenDMTQ.exe
 ```
 
@@ -53,13 +53,13 @@ use and an account for each player, and builds the app.
 <details>
 <summary>Without PowerShell</summary>
 
-Download `OpenDMTQ-Server-<version>-windows-x64.zip` from [Releases](https://github.com/kanggu12/openDMTQ/releases/latest)
+Download `opendmtq-server-<version>-windows-x64.zip` from [Releases](https://github.com/kanggu12/openDMTQ/releases/latest)
 and unpack it outside OneDrive and Program Files, for example to `C:\OpenDMTQ`. Start `OpenDMTQ.exe`. If Windows says it
 protected your PC, click **More info**, then **Run anyway**: OpenDMTQ.exe is not signed by a publisher Windows knows.
 
-Each release has `OpenDMTQ-<version>-SHA256SUMS.txt`, the SHA-256 of every file in it. In PowerShell, compare
-`Get-FileHash OpenDMTQ-Server-<version>-windows-x64.zip` with its line; on Linux, run
-`sha256sum -c --ignore-missing OpenDMTQ-<version>-SHA256SUMS.txt` in the folder you downloaded to.
+Each release has `opendmtq-<version>-sha256sums.txt`, the SHA-256 of every file in it. In PowerShell, compare
+`Get-FileHash opendmtq-server-<version>-windows-x64.zip` with its line; on Linux, run
+`sha256sum -c --ignore-missing opendmtq-<version>-sha256sums.txt` in the folder you downloaded to.
 </details>
 
 ## Linux or macOS

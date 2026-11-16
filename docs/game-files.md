@@ -31,7 +31,7 @@ These do not work:
 | File | Why |
 |---|---|
 | The iPhone app (`.ipa`) | The game on the phones here is the Android app ([iPhones](#iphones)) |
-| An app OpenDMTQ built (`OpenDMTQ-Phone-App-<date>-android-<address>.apk`) | It is set to one server already. Import the client it was built from |
+| An app OpenDMTQ built (`opendmtq-phone-app-<date>-android-<address>.apk`) | It is set to one server already. Import the client it was built from |
 | Any other app | It is not the game |
 
 If the build cannot find a place it has to change in a client (a copy changed in more than its addresses), it stops

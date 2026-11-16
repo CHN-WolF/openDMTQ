@@ -44,9 +44,15 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - Words shown only under a mouse pointer (the keyboard mark's count, dates, the marks of charts and days) also come with
   a tap and with the keyboard.
 - The Broadcasts page, the Players page and the API say how the server's switch and each player's go together.
-- What the server hands out and keeps is named for what it is: `OpenDMTQ-PC-Client-<version>-windows-x64-Setup-<address>.exe`,
-  `OpenDMTQ-Phone-App-<date>-android-<address>.apk`, `OpenDMTQ-Server-Backup-<time>-<why>.tar.gz` (backups named before
-  still count), the players' and plays' files, the request log and recordings.
+- The release's files say what each is, for which system and architecture and which version, in lower case:
+  `opendmtq-pc-client-<version>-windows-x64-setup.exe` for players, `opendmtq-server-<version>-windows-x64.zip`,
+  `opendmtq-server-<version>-helm-chart.tgz`, `opendmtq-phone-runtime-<version>-android-arm64-armv7.zip`, the PC client's
+  update feed and package, and one `opendmtq-<version>-sha256sums.txt`; the notes open with which file is for whom. The
+  player alone, `RELEASES` and `assets.win.json` are no longer published, and installed PC clients update as before.
+- What the server hands out and keeps is named for what it is, in lower case too:
+  `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`, `opendmtq-phone-app-<date>-android-<address>.apk`,
+  `opendmtq-server-backup-<time>-<why>.tar.gz` (backups named before still count), the players' and plays' files, the
+  request log and recordings.
 
 ### Fixed
 

@@ -62,7 +62,7 @@ theirs: [playing on a server](play.md).
 Yes, with a host name and one forwarded port: [Playing from outside your home](internet.md).
 
 **Does it need the internet?**
-Only to get its programs onto the server. The server for Windows (`OpenDMTQ-Server-<version>-windows-x64.zip`) already has them all.
+Only to get its programs onto the server. The server for Windows (`opendmtq-server-<version>-windows-x64.zip`) already has them all.
 After that the setup, the app's build, the server and the game stay on your network. [Without internet](closed-network.md)
 says what to carry in for each way of running it, and why the macOS install cannot run without it.
 

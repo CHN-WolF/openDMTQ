@@ -79,8 +79,8 @@ With your own copy of the game's Android app, its client data and its song data 
 ```powershell
 cd ~
 $v = (curl.exe -fsS -o NUL -w '%{redirect_url}' https://github.com/kanggu12/openDMTQ/releases/latest) -replace '.*/v'
-curl.exe -fLO "https://github.com/kanggu12/openDMTQ/releases/download/v$v/OpenDMTQ-Server-$v-windows-x64.zip"
-tar.exe -xf "OpenDMTQ-Server-$v-windows-x64.zip"
+curl.exe -fLO "https://github.com/kanggu12/openDMTQ/releases/download/v$v/opendmtq-server-$v-windows-x64.zip"
+tar.exe -xf "opendmtq-server-$v-windows-x64.zip"
 start .\OpenDMTQ\OpenDMTQ.exe
 ```
 

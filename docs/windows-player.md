@@ -15,7 +15,7 @@ then plays against the server as it does on a phone.
 ## <a id="for-players"></a>Installing
 
 1. On the server's site, sign in and open **Download**. Under **On a computer (Windows)**, choose **Download the
-   installer (.exe)**. The file it gives, `OpenDMTQ-PC-Client-<version>-windows-x64-Setup-<address>.exe`, is set up for
+   installer (.exe)**. The file it gives, `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`, is set up for
    that server.
 2. Run it: its page says what goes where (the program in your user folder, shortcuts on the desktop and in the Start
    menu, no administrator rights, the server it plays on). Choose **Install**: the bar follows the files as they land,
@@ -27,7 +27,7 @@ then plays against the server as it does on a phone.
    question at the top; while **Next** waits, a line under the step says for what.
 
 The installer from the project's [releases](https://github.com/kanggu12/openDMTQ/releases/latest)
-(`OpenDMTQ-PC-Client-<version>-windows-x64-Setup.exe`) is the same program without a server: its first start asks for
+(`opendmtq-pc-client-<version>-windows-x64-setup.exe`) is the same program without a server: its first start asks for
 the server's address. One launcher keeps several servers, each with its own sign-in and app, and plays on the one
 chosen on the **Online** page.
 Run on a PC that has OpenDMTQ, the installer offers what to do with it: **Open OpenDMTQ**, **Repair** (every file of the
@@ -53,7 +53,7 @@ processor and, under WSL, on a graphics card.
 2. Download the installer from the server's site as above, and run it with Wine. The launcher opens as on Windows:
 
    ```sh
-   wine ~/Downloads/OpenDMTQ-PC-Client-*-windows-x64-Setup-*.exe
+   wine ~/Downloads/opendmtq-pc-client-*-windows-x64-setup-*.exe
    ```
 
 Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, and the Steam Deck.

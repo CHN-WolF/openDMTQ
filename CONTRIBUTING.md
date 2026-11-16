@@ -190,15 +190,16 @@ What a release publishes:
 | What | Where |
 | :--- | :--- |
 | The server and tools images | `ghcr.io/kanggu12/opendmtq-server` and `opendmtq-tools`, tagged `1.2.3` and `latest` |
-| The PC client's installer, for players | `OpenDMTQ-PC-Client-1.2.3-windows-x64-Setup.exe` |
-| The server for Windows | `OpenDMTQ-Server-1.2.3-windows-x64.zip` |
-| The Helm chart | `OpenDMTQ-Server-1.2.3-helm-chart.tgz`, and `oci://ghcr.io/kanggu12/charts/opendmtq` |
-| The runtime for newer phones, for the server's app builder | `OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip` |
-| The PC client's update feed and package, which installed clients update from | `releases.win.json` and `OpenDMTQ.Client-1.2.3-full.nupkg` (Velopack's names, which installed clients look for) |
-| The checksums of all of them | `OpenDMTQ-1.2.3-SHA256SUMS.txt` |
+| The PC client's installer, for players | `opendmtq-pc-client-1.2.3-windows-x64-setup.exe` |
+| The server for Windows | `opendmtq-server-1.2.3-windows-x64.zip` |
+| The Helm chart | `opendmtq-server-1.2.3-helm-chart.tgz`, and `oci://ghcr.io/kanggu12/charts/opendmtq` |
+| The runtime for newer phones, for the server's app builder | `opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip` |
+| The PC client's update feed and package, which installed clients update from | `releases.win.json` (Velopack's name, which installed clients look for) and `opendmtq.client-1.2.3-full.nupkg` (the feed names it) |
+| The checksums of all of them | `opendmtq-1.2.3-sha256sums.txt` |
 
-`.github/release_assets.py` gives the files these names and checks them before anything is pushed: exactly these, the
-version in each name, the programs for Windows built for x64, the update feed naming the package beside it. The
+`.github/release_assets.py` gives the files these names and checks them before anything is pushed: exactly these, in
+lower case, the version in each name, the programs for Windows built for x64, the update feed naming the package beside
+it, the package's own manifest the PC client's id. The
 release's notes open with which file is for whom (`.github/release_notes.py`).
 
 A release names itself by its number (`0.2.0`): the Windows bundle, the one-command install and the Helm chart. A copy
