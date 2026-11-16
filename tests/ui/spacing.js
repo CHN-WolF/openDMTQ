@@ -7,8 +7,9 @@
 //   off-scale     a gap between two panels other than the page's own gap (--gap), or a gap no stylesheet asked for
 //                 (the spaces between words that inline boxes keep, a stray line)
 // A box is what a person sees as one: something with a background of its own, a border all round, an outer shadow, a
-// picture, or a drawn control. Marks on an element: data-spacing-ok says why its room is as it is; decoration
-// (aria-hidden) does not count.
+// picture (a chart too: what has role="img" is one picture, its parts as close as the drawing needs), or a drawn control.
+// Less than NEAR pixels between two boxes, or between a box and its box's edge, reads as touching.
+// Marks on an element: data-spacing-ok says why its room is as it is; decoration (aria-hidden) does not count.
 window.spacingAudit = function spacingAudit() {
   const out = [];
   const say = (kind, el, detail) => out.push({ kind, at: describe(el), detail });
@@ -44,6 +45,11 @@ window.spacingAudit = function spacingAudit() {
   const MEDIA = 'img, video, canvas, svg, picture, iframe';
   const CONTROL = 'button, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea';
   const ALL = ['Top', 'Right', 'Bottom', 'Left'];
+  // Less room than this between two drawn outlines reads as none: the smallest gap the pages draw between two boxes is
+  // 6 px (chips in a row).
+  const NEAR = 4;
+  // Part of a picture: a chart (role="img") is drawn as one figure.
+  const inPicture = el => !!el.parentElement && !!el.parentElement.closest('[role="img"]');
   // What a person sees as a box, and which of its edges are drawn: null for what is not one.
   const boxCache = new Map();
   const boxOf = el => {
@@ -52,7 +58,7 @@ window.spacingAudit = function spacingAudit() {
     let found = null;
     const s = getComputedStyle(el);
     // Laid out as one box: a run of inline text is a line of text, whose marks are words, not boxes.
-    if (s.display !== 'inline' && s.display !== 'contents' && seen(el) && !decoration(el) && !(el.closest('svg') && !el.matches('svg'))) {
+    if (s.display !== 'inline' && s.display !== 'contents' && seen(el) && !decoration(el) && !(el.closest('svg') && !el.matches('svg')) && !inPicture(el)) {
       const bg = parse(s.backgroundColor);
       // A fill painted only inside the letters (the leading place's gradient) is the text's colour, not a box.
       const inLetters = s.webkitBackgroundClip === 'text' || s.backgroundClip === 'text';
@@ -60,7 +66,9 @@ window.spacingAudit = function spacingAudit() {
       const sides = borderSides(s);
       // A picture, also one a box paints as its background or holds with no words (a jacket's frame): it may run to its
       // box's edge.
-      if (el.matches(MEDIA) || (!inLetters && /url\(/.test(s.backgroundImage)) || (el.querySelector(MEDIA) && !el.textContent.trim() && !el.querySelector(CONTROL))) found = { kind: 'media', sides: ALL };
+      // (Not a button or a link that shows an icon: that is a control, a box only when it is drawn as one.)
+      if (el.matches(MEDIA) || el.matches('[role="img"]') || (!inLetters && /url\(/.test(s.backgroundImage))
+        || (el.querySelector(MEDIA) && !el.textContent.trim() && !el.querySelector(CONTROL) && !el.matches(`${CONTROL}, a`))) found = { kind: 'media', sides: ALL };
       else if (el.matches(CONTROL) && (filled || sides.length)) found = { kind: 'control', sides: filled ? ALL : sides };
       else if (filled || sides.length === 4 || outerShadow(s)) found = { kind: 'box', sides: ALL };
     }
@@ -134,7 +142,7 @@ window.spacingAudit = function spacingAudit() {
         const d = apart(a.r, b.r);
         // Facing each other across one axis: they share more than a few pixels along the other.
         const facesX = d.y < -2, facesY = d.x < -2;
-        if ((facesX && d.x < 1.5) || (facesY && d.y < 1.5)) {
+        if ((facesX && d.x < NEAR) || (facesY && d.y < NEAR)) {
           const room = facesX && facesY ? 'on top of each other' : `${round(facesX ? d.x : d.y)}px apart`;
           say('touching', a.el, `${pair(a.el, b.el)}: ${room}`);
         }
@@ -152,7 +160,7 @@ window.spacingAudit = function spacingAudit() {
     // What runs past a box that scrolls is reached by scrolling: not against its edge.
     const ps = getComputedStyle(b.parent);
     const scrolls = ['auto', 'scroll'].includes(ps.overflowX) || ['auto', 'scroll'].includes(ps.overflowY);
-    const against = Object.entries(gaps).filter(([side, g]) => g < 1.5 && !(scrolls && g < -1) && p.sides.includes(side));
+    const against = Object.entries(gaps).filter(([side, g]) => g < NEAR && !(scrolls && g < -1) && p.sides.includes(side));
     if (against.length) say('edge-touch', b.el, `in ${describe(b.parent)}: ${against.map(([side, g]) => `${side.toLowerCase()} ${round(g)}px`).join(', ')}`);
   }
 
@@ -163,7 +171,8 @@ window.spacingAudit = function spacingAudit() {
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     if (!n.nodeValue.trim()) continue;
     const el = n.parentElement;
-    if (!el || decoration(el) || !seen(el) || el.closest('svg')) continue;
+    // (A chart's own labels are part of its picture.)
+    if (!el || decoration(el) || !seen(el) || el.closest('svg, [role="img"]')) continue;
     // The words without the spaces around them: a space before the next box is room, not letters.
     const v = n.nodeValue, first = v.search(/\S/), last = v.length - v.match(/\s*$/)[0].length;
     range.setStart(n, first);
@@ -254,6 +263,9 @@ window.spacingAudit = function spacingAudit() {
     const children = [...parent.childNodes];
     const drawnIn = (room, a, b) => children.some(x => {
       if (x === a.el || x === b.el) return false;
+      // A spacer that takes the free room (flex-grow) between them: the room is shared out there on purpose.
+      if (x.nodeType === Node.ELEMENT_NODE && flex && px(getComputedStyle(x).flexGrow) > 0 && getComputedStyle(x).display !== 'none'
+        && [[a, b], [b, a]].some(([p, q]) => (p.el.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING) && (q.el.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_PRECEDING))) return true;
       let rects = [];
       if (x.nodeType === Node.TEXT_NODE && x.nodeValue.trim()) { range.selectNodeContents(x); rects = [...range.getClientRects()]; }
       else if (x.nodeType === Node.ELEMENT_NODE && seen(x)) rects = [x.getBoundingClientRect()];
