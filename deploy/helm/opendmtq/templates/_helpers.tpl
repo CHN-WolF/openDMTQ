@@ -108,18 +108,19 @@ no
 {{- end -}}
 
 {{/*
-The router Service's port, the server's one port: router.service.port when set; else the port the Service has now (an
-upgrade keeps it, so the phones' app keeps its address); else 8791, a new install's.
+The router Service's port, the server's one port: router.service.port when set; else the port in publicHost, the one the
+phones' app calls (80 when publicHost names none). Worked out from the values alone, so helm template, an upgrade and a
+GitOps tool all agree, and an install from before 0.11.0 (publicHost without a port) stays on 80 where its phones are.
 */}}
 {{- define "opendmtq.routerPort" -}}
 {{- if .Values.router.service.port -}}
 {{- .Values.router.service.port -}}
 {{- else -}}
-{{- $svc := lookup "v1" "Service" .Release.Namespace (include "opendmtq.fullname" .) -}}
-{{- if and $svc $svc.spec $svc.spec.ports -}}
-{{- (index $svc.spec.ports 0).port -}}
+{{- $last := regexFind ":[0-9]+$" (.Values.publicHost | toString) -}}
+{{- if $last -}}
+{{- trimPrefix ":" $last -}}
 {{- else -}}
-8791
+80
 {{- end -}}
 {{- end -}}
 {{- end -}}

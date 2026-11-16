@@ -127,8 +127,9 @@ grep -q 'Traceback\|error:' /tmp/first.log && tail -n 30 /tmp/first.log
 # A new install's one port is 8791: the players' site, the admin pages and the API on it (DEP-46), the admin service's own
 # port elsewhere on loopback, never shown.
 expect "a new install takes port 8791 (${first:-none})" test "${first:-}" = 8791
-inner=$(sed -n 's/^ADMIN_PORT=\([0-9]*\).*/\1/p' .env 2>/dev/null | tr -d '\r' || true)
-expect "the admin service's own port is another (${inner:-none})" sh -c "test -n '$inner' && test '$inner' != 8791"
+inner=$(tr -d '\r\n' < .host/run/admin.port 2>/dev/null || true)
+expect "the admin service's own port is another, chosen at the start and not in .env (${inner:-none})" \
+  sh -c "test -n '$inner' && test '$inner' != 8791 && ! grep -q '^ADMIN_PORT=' .env"
 expect "the window names the admin pages on that port" grep -q "/opendmtq/admin/" /tmp/first.log
 expect "and no other port" sh -c "! grep -q ':$inner' /tmp/first.log"
 expect "the admin pages answer on it" is 200 "http://127.0.0.1:${first:-1}/opendmtq/admin/login"
@@ -182,6 +183,10 @@ else
   exit 1
 fi
 expect "the admin pages answer on the server's one port" is 200 "http://127.0.0.1:$PORT/opendmtq/admin/login"
+# The settings above are a server set up before 0.11.0 (ADMIN_PORT beside the rest, Windows line ends): that line leaves
+# .env at the start, and nothing answers on the admin pages' old port (DEP-47).
+expect "an ADMIN_PORT from before 0.11.0 leaves .env at the start" sh -c "! grep -q '^ADMIN_PORT=' .env && grep -q '^ADMIN_PASSWORD=winetest' .env"
+expect "and nothing answers on the admin pages' old port" is 000 "http://127.0.0.1:$ADMIN/opendmtq/admin/login"
 expect "signed out, the site asks to sign in" is 302 "http://127.0.0.1:$PORT/opendmtq/index.php"
 
 # The setup pages, as the browser the window opened sees them: signed in by the one-time key it carries (the file the

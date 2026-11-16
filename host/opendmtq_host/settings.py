@@ -1,10 +1,11 @@
 """The settings in .env: read, written, and filled in on a first start."""
 
+import os
 import secrets
 import socket
 
 from opendmtq_cli import env
-from .paths import ADMIN_PORT, CLI, DEFAULT_PORT, ENV_FILE, WINDOWS
+from .paths import ADMIN_PORT, CLI, DEFAULT_PORT, ENV_FILE, RUN, WINDOWS
 from .output import die, ok
 
 
@@ -20,13 +21,43 @@ def listen_port(values):
     return env.split(values.get("PUBLIC_HOST", ""))[1] if values.get("PUBLIC_HOST") else 80
 
 
+# The settings of the admin pages' own port before 0.11.0: no longer read, and taken out of .env at the start.
+OLD_ADMIN_KEYS = ("ADMIN_PORT", "ADMIN_BIND")
+
+
 def admin_port(values):
-    """The admin service's own port, on loopback, behind Apache: never an address anybody opens. Never the server's own
-    port: an install from before 0.11.0 has 8791 here, which the server may since have been moved to by hand."""
-    port = int(values.get("ADMIN_PORT") or ADMIN_PORT)
-    if port != listen_port(values):
-        return port
-    return ADMIN_PORT if ADMIN_PORT != port else ADMIN_PORT + 1
+    """The admin service's own port, on loopback, behind Apache: never an address anybody opens, never the server's own
+    port, never one .env names. The one this run's start chose (choose_admin_port), else the first that would be."""
+    try:
+        with open(os.path.join(RUN, "admin.port"), encoding="ascii") as f:
+            chosen = int(f.read().strip())
+        if 1024 <= chosen <= 65535 and chosen != listen_port(values):
+            return chosen
+    except (OSError, ValueError):
+        pass
+    return next(p for p in range(ADMIN_PORT, ADMIN_PORT + 40) if p != listen_port(values))
+
+
+def choose_admin_port(values):
+    """At a start: the first port from ADMIN_PORT on that this program may listen on (on loopback) and that is not the
+    server's own, kept in the run folder for the parts that pass the admin pages on, and for the command line."""
+    port = next((p for p in range(ADMIN_PORT, ADMIN_PORT + 40) if p != listen_port(values) and bindable(p, "127.0.0.1")),
+                ADMIN_PORT)
+    os.makedirs(RUN, exist_ok=True)
+    with open(os.path.join(RUN, "admin.port.new"), "w", encoding="ascii") as f:
+        f.write(f"{port}\n")
+    os.replace(os.path.join(RUN, "admin.port.new"), os.path.join(RUN, "admin.port"))
+    return port
+
+
+def forget_old_admin_port():
+    """Takes the admin pages' own port of an install from before 0.11.0 out of .env (ADMIN_PORT, ADMIN_BIND): it is
+    read no more, and a line that says 8791 would only send someone looking for the admin pages to a port where nothing
+    answers. Returns the settings as they are now."""
+    values = settings()
+    if any(k in values for k in OLD_ADMIN_KEYS):
+        env.drop(ENV_FILE, OLD_ADMIN_KEYS)
+    return settings()
 
 
 def site_url(values):
@@ -92,18 +123,11 @@ def ensure_settings(host=None, quiet=False):
     # The owner's password for the admin pages, made once and kept.
     if not values.get("ADMIN_PASSWORD"):
         updates["ADMIN_PASSWORD"] = secrets.token_urlsafe(12)
-    # The admin service's own port on loopback, free on this machine and never the server's own (an install from
-    # before 0.11.0 has 8791 there, which a server moved to 8791 would then hold twice).
-    if not values.get("ADMIN_PORT") or int(values["ADMIN_PORT"]) == port:
-        updates["ADMIN_PORT"] = str(next((p for p in range(ADMIN_PORT, ADMIN_PORT + 20)
-                                          if p != port and bindable(p, "127.0.0.1")), ADMIN_PORT))
     if updates:
         env.save(ENV_FILE, updates)
         if not quiet:
             for k, v in updates.items():
-                # The admin service's own port is this program's business, not the owner's: not said.
-                if k != "ADMIN_PORT":
-                    ok(f"{k}={'(made, see below)' if k == 'ADMIN_PASSWORD' else v} written to .env")
+                ok(f"{k}={'(made, see below)' if k == 'ADMIN_PASSWORD' else v} written to .env")
     return settings()
 
 

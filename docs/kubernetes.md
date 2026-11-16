@@ -139,8 +139,8 @@ Requirements:
 - S3-compatible object storage for the database replica.
 - A LoadBalancer implementation (MetalLB, k3s servicelb, a cloud provider) or a node port, and an
   address phones can reach: an IPv4 address or a host name, on the router Service's port, the server's one port for the
-  game, the players' site, the admin pages and the API (8791 on a new install unless `router.service.port` says
-  otherwise; an upgrade keeps the port the Service has).
+  game, the players' site, the admin pages and the API. The Service listens on the port in `publicHost` (`:8791` on a
+  new install; 80 when it names none, as an install from before 0.11.0 does) unless `router.service.port` says otherwise.
 
 The claim `opendmtq-data` below, made and filled from the computer where `./opendmtq import [--songs] <folder>` made
 `data/`: a pod that runs as the chart's pods do (uid 33) holds the claim while `content/` and `apk/base/` go in, then
@@ -243,7 +243,7 @@ The main ones; see `values.yaml` for all.
 | `data.existingClaim` / `data.hostPath` | (one required) | Game files volume. |
 | `router.replicas` | 2 | |
 | `router.service.type` | LoadBalancer | Or NodePort (`router.service.nodePort`). |
-| `router.service.port` | (empty) | The server's one port. Empty: 8791 on a new install, the Service's own port on an upgrade. |
+| `router.service.port` | (empty) | The server's one port. Empty: the port in `publicHost`, the one the phones' app calls (80 when it names none). |
 | `assets.replicas` | 2 | Or `assets.autoscaling.enabled=true`. |
 | `api.failoverSeconds` | 20 | How long the api waits on an unreachable node. |
 | `litestream.enabled` | true | Off means the database is lost when the api pod is replaced. |

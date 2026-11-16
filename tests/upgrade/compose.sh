@@ -76,7 +76,8 @@ answers() {
 }
 
 # 1. The release's folder, as its zip unpacks, set up as two copies on one PC are: a port of its own and an admin port
-#    beside it (what ./opendmtq picked then), the stand-in game files imported.
+#    beside it (what ./opendmtq picked then; a server alone on its PC has 8791 there, which on this PC is the live
+#    server's, outside this test's ports), the stand-in game files imported.
 mkdir -p "$SRV"
 git -C "$ROOT" archive "$FROM" | tar -x -C "$SRV"
 printf 'COMPOSE_PROJECT_NAME=%s\nPUBLIC_HOST=%s\nLISTEN_PORT=%s\nADMIN_PORT=%s\nADMIN_PASSWORD=%s\n' \
@@ -109,6 +110,7 @@ expect "the players' site answers on it" answers "http://127.0.0.1:$PORT/opendmt
 expect "the admin pages answer on that same port (DEP-47)" answers "http://127.0.0.1:$PORT/opendmtq/admin/login"
 expect "and the API" sh -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:$PORT/opendmtq/api/v1/status)\" = 401 ]"
 expect "the old admin port is closed" test "$(code "http://127.0.0.1:$OLD_ADMIN/opendmtq/admin/login")" = 000
+expect "and .env no longer names it (ADMIN_PORT gone, the rest kept)" sh -c "! grep -q '^ADMIN_PORT=' '$SRV/.env' && grep -q '^ADMIN_PASSWORD=$PASSWORD' '$SRV/.env'"
 expect "up names the admin pages at the one address" grep -Eq "Admin pages +http://$HOST/opendmtq/admin/" "$WORK/up.log"
 expect "and never the old port" sh -c "! grep -q ':$OLD_ADMIN' '$WORK/up.log'"
 # From another computer, by the address phones use: sent to HTTPS while it works, as before.

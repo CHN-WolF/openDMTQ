@@ -33,7 +33,9 @@ code() { curl -s -o /dev/null -w '%{http_code}' -m 10 "$1"; }
 # is <status> <address>: the address answers with that status.
 is() { [ "$(code "$2")" = "$1" ]; }
 # A command as the user inside the computer, in their home folder.
-inside() { docker exec -u player -w /home/player "$NAME" bash -lc "$1"; }
+# The admin service's own port starts from $ADMIN here, within this test's ports: on the computer's own network the
+# usual one (18791) would be another program's to use.
+inside() { docker exec -u player -w /home/player -e OPENDMTQ_ADMIN_SERVICE_PORT="$ADMIN" "$NAME" bash -lc "$1"; }
 
 cleanup() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
@@ -94,7 +96,7 @@ if [ -f "$BUNDLE/bundle.json" ]; then
 fi
 # The settings setup would write, with this test's ports (a loopback address, which setup refuses for phones): the
 # server's one port, and the admin service's own beside it on loopback, as an install from before 0.11.0 has it.
-inside "printf 'PUBLIC_HOST=127.0.0.1:$PORT\nLISTEN_PORT=$PORT\nADMIN_PORT=$ADMIN\nADMIN_PASSWORD=hosttest\n' > OpenDMTQ/.env"
+inside "printf 'PUBLIC_HOST=127.0.0.1:$PORT\nLISTEN_PORT=$PORT\nADMIN_PASSWORD=hosttest\n' > OpenDMTQ/.env"
 
 # 3. setup starts the server and, with nothing imported, hands over to its pages: there is no browser here, so it
 #    prints their one-time link.

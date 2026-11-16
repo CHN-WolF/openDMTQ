@@ -21,7 +21,7 @@ Admin pages, ID {{ .Values.admin.user | default "admin" }}; the password:
   Not through the router (admin.onPublicPort; router.tls.secretName adds HTTPS).
 {{- end }}
   On the machine with kubectl:
-  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "opendmtq.fullname" . }}-api {{ include "opendmtq.routerPort" . }}:8000
-  then open http://localhost:{{ include "opendmtq.routerPort" . }}/opendmtq/admin/
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "opendmtq.fullname" . }}-api 8000:8000
+  then open http://localhost:8000/opendmtq/admin/
   The API is beside them, at /opendmtq/api/v1/, with a token made on the Accounts page (docs/api.md).
 {{- end }}

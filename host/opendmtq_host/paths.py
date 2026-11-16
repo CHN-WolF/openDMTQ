@@ -45,8 +45,11 @@ CLI = "OpenDMTQ.exe" if WINDOWS else "./opendmtq"
 DEFAULT_PORT = 8791
 
 # Where the admin service itself listens, on loopback only, for Apache to pass the admin pages on to: nobody opens this
-# one. Away from the server's own ports (an install from before 0.11.0 keeps the one its .env names, 8791 then).
-ADMIN_PORT = 18791
+# one. The first free port from here, never the server's own; chosen at every start and kept in the run folder
+# (admin.port), never in .env. An ADMIN_PORT an install from before 0.11.0 wrote there (8791) is taken out at the start: the
+# admin pages are on the server's one port, and nothing answers on their old one. A test on the computer's own network
+# names another first port with OPENDMTQ_ADMIN_SERVICE_PORT, to stay within its own.
+ADMIN_PORT = int(os.environ.get("OPENDMTQ_ADMIN_SERVICE_PORT") or 18791)
 
 # How long a start waits for the server's first answer before it says so. A test makes it short, to see that wait run
 # out on a server that is only slow.

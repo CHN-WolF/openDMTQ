@@ -389,10 +389,30 @@ class HostPortsTest(unittest.TestCase):
             self.assertEqual(self.settings.choose_port(), 8792)
 
     def test_the_admin_service_never_takes_the_servers_port(self):
-        # An install from before 0.11.0: the admin service on 8791, the server on 80. Moved to 8791 by hand later.
-        self.assertEqual(self.settings.admin_port({"PUBLIC_HOST": "192.168.0.10", "LISTEN_PORT": "80", "ADMIN_PORT": "8791"}), 8791)
-        moved = {"PUBLIC_HOST": "192.168.0.10:8791", "LISTEN_PORT": "8791", "ADMIN_PORT": "8791"}
-        self.assertNotEqual(self.settings.admin_port(moved), 8791)
+        # Its own port is chosen at the start and kept in the run folder, never read from .env: an install from before
+        # 0.11.0 has ADMIN_PORT=8791 there, where nothing answers any more (its admin pages are on the one port).
+        with tempfile.TemporaryDirectory() as run, mock.patch.object(self.settings, "RUN", run):
+            old = {"PUBLIC_HOST": "192.168.0.10", "LISTEN_PORT": "80", "ADMIN_PORT": "8791"}
+            self.assertEqual(self.settings.admin_port(old), 18791)
+            moved = {"PUBLIC_HOST": "192.168.0.10:18791", "LISTEN_PORT": "18791", "ADMIN_PORT": "8791"}
+            self.assertNotIn(self.settings.admin_port(moved), (18791, 8791))
+            # Taken by another program: the next free one, which every part then reads.
+            with mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": port != 18791):
+                self.assertEqual(self.settings.choose_admin_port(old), 18792)
+            self.assertEqual(self.settings.admin_port(old), 18792)
+
+    def test_an_old_admin_port_leaves_env(self):
+        # ADMIN_PORT and ADMIN_BIND of a server set up before 0.11.0 go at its first start; nothing else changes.
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, ".env")
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write("# kept\r\nPUBLIC_HOST=192.168.0.2\r\nLISTEN_PORT=80\r\nADMIN_PASSWORD=x\r\nADMIN_PORT=8791\r\n"
+                        "ADMIN_BIND=127.0.0.1\r\n")
+            with mock.patch.object(self.settings, "ENV_FILE", path):
+                values = self.settings.forget_old_admin_port()
+            self.assertEqual(values, {"PUBLIC_HOST": "192.168.0.2", "LISTEN_PORT": "80", "ADMIN_PASSWORD": "x"})
+            with open(path, encoding="utf-8") as f:
+                self.assertEqual(f.read(), "# kept\nPUBLIC_HOST=192.168.0.2\nLISTEN_PORT=80\nADMIN_PASSWORD=x\n")
 
     def test_the_addresses_named_are_on_the_one_port(self):
         lan = {"PUBLIC_HOST": "192.168.0.10:8791", "LISTEN_PORT": "8791", "ADMIN_PORT": "18791"}
@@ -400,6 +420,31 @@ class HostPortsTest(unittest.TestCase):
         self.assertEqual(self.settings.admin_url(lan), "http://192.168.0.10:8791/opendmtq/admin/")
         exposed = {"PUBLIC_HOST": "game.example.com:8790", "LISTEN_PORT": "8790", "ADMIN_PORT": "18791"}
         self.assertEqual(self.settings.admin_url(exposed), "http://localhost:8790/opendmtq/admin/")
+
+
+@unittest.skipUnless(shutil.which("helm"), "needs helm")
+class HelmPortTest(unittest.TestCase):
+    """The chart's one port (DEP-47): the router Service listens on the port in publicHost, the one the phones' app calls,
+    worked out from the values alone (helm template, an upgrade and a GitOps tool agree): an install from before 0.11.0,
+    whose publicHost names no port, stays on 80 where its phones are; a new one names 8791; router.service.port wins."""
+
+    def service_port(self, *sets):
+        chart = os.path.join(ROOT, "deploy", "helm", "opendmtq")
+        out = subprocess.run(["helm", "template", "t", chart, "-f", os.path.join(ROOT, "deploy", "kind", "values.yaml"),
+                              "--set", "router.service.port=null"] + [a for s in sets for a in ("--set", s)],
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        # The router's own Service: named as the release, no part after it.
+        for doc in out.stdout.split("\n---"):
+            if "kind: Service" in doc and re.search(r"^  name: t-opendmtq$", doc, re.M):
+                return int(re.search(r"^ +port: (\d+)$", doc, re.M).group(1))
+        self.fail("no router Service")
+
+    def test_the_service_takes_the_port_phones_call(self):
+        self.assertEqual(self.service_port("publicHost=192.168.1.10"), 80)
+        self.assertEqual(self.service_port("publicHost=192.168.1.10:8791"), 8791)
+        self.assertEqual(self.service_port("publicHost=game.example.com:8790"), 8790)
+        self.assertEqual(self.service_port("publicHost=192.168.1.10:8791", "router.service.port=9000"), 9000)
 
 
 class HostAdminConfTest(unittest.TestCase):
@@ -413,9 +458,12 @@ class HostAdminConfTest(unittest.TestCase):
         cls.apache = apache
 
     def test_on_a_local_network_address_the_pages_and_the_api_are_passed_on(self):
-        conf = self.apache.admin_conf({"PUBLIC_HOST": "192.168.0.10", "ADMIN_PORT": "8791"})
-        self.assertIn('ProxyPass "/opendmtq/admin" "http://127.0.0.1:8791/opendmtq/admin" timeout=900', conf)
-        self.assertIn('ProxyPass "/opendmtq/api" "http://127.0.0.1:8791/opendmtq/api" timeout=900', conf)
+        # The admin service's own port, as the start chose it (an ADMIN_PORT from before 0.11.0 is not read).
+        with mock.patch.object(self.apache, "admin_port", lambda values: 18791):
+            conf = self.apache.admin_conf({"PUBLIC_HOST": "192.168.0.10", "ADMIN_PORT": "8791"})
+        self.assertIn('ProxyPass "/opendmtq/admin" "http://127.0.0.1:18791/opendmtq/admin" timeout=900', conf)
+        self.assertIn('ProxyPass "/opendmtq/api" "http://127.0.0.1:18791/opendmtq/api" timeout=900', conf)
+        self.assertNotIn("8791/", conf.replace("18791/", ""))
         self.assertNotIn("Require all denied", conf)
 
     def test_on_an_internet_address_or_kept_off_the_port_the_server_pc_only(self):

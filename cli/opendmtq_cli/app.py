@@ -251,8 +251,15 @@ def open_firewall(port, internet, replaces=None):
 
 # ----------------------------------------------------------------------------- commands
 
+# The admin pages' own port before 0.11.0 (compose published them on 127.0.0.1:8791): no longer read, taken out of .env.
+OLD_ADMIN_KEYS = ("ADMIN_PORT", "ADMIN_BIND")
+
+
 def cmd_up(args):
     host = require_host()
+    # A server set up before 0.11.0: its admin pages are on the server's one port now, and nothing answers on their old
+    # one; the lines that named it go, so that nobody looks for them there.
+    env.drop(ENV_FILE, OLD_ADMIN_KEYS)
     # The wordmark with this copy's version, once (setup shows it first and comes here after).
     look.banner(system.code_version())
     if not have_game_data():

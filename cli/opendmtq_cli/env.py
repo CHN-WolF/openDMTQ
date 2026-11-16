@@ -69,6 +69,20 @@ def save(path, updates):
     write_private(path, "\n".join(lines) + "\n")
 
 
+def drop(path, keys):
+    """Takes these settings out of .env (every line that sets one of them), keeping every other line as it is. For the
+    settings a version no longer reads, whose lines would only mislead whoever opens the file."""
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        return
+    kept = [line for line in lines
+            if not ("=" in line and line.split("=", 1)[0].strip().removeprefix("export ").strip() in keys)]
+    if kept != lines:
+        write_private(path, "\n".join(kept) + "\n")
+
+
 # A setting as a person may type it in an editor: spaces around "=", "export" in front.
 _LOOSE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 

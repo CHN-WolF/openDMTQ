@@ -19,7 +19,8 @@ from opendmtq_cli import env, look
 from .paths import ADMIN_WAIT, APP, CLI, DATA, LOGS, PYTHON, ROOT, RUN, START_WAIT, WINDOWS
 from .output import die, say, warn
 from .programs import programs
-from .settings import admin_port, admin_url, listen_port, require_settings, settings, site_url
+from .settings import (admin_port, admin_url, choose_admin_port, forget_old_admin_port, listen_port, require_settings,
+                       settings, site_url)
 from .folders import php_command, server_env, tool, tools_env
 from .apache import write_configs
 
@@ -302,6 +303,8 @@ class Server:
     def prepare(self):
         """What a start does before the server runs (server/entrypoint.sh in the image): the database, the song list,
         the live view's folders, the download sign-in key, Apache's configuration."""
+        # The admin service's own port for this run, on loopback, before anything is written that names it.
+        choose_admin_port(self.values)
         senv = server_env(self.values, self.found)
         db = os.path.join(DATA, "state", "dmtq.db3")
         # Apache's configuration first: on Windows it brings the php.ini the database's setup needs.
@@ -504,6 +507,8 @@ def cmd_run(args, values=None, found=None):
     found = found or programs()
     values = values or require_settings()
     check_folder()
+    # An install from before 0.11.0: its admin pages' own port out of .env (they are on the server's one port now).
+    values = forget_old_admin_port()
     if running_pid() and running_pid() != os.getpid():
         die("OpenDMTQ is already running in another window: use that one, or close it first" if WINDOWS else
             f"the server already runs ({CLI} stop stops it)")

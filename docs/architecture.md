@@ -486,7 +486,9 @@ A host install (`host/install.sh`, then `./opendmtq setup`) and the Windows bund
   logs, one door on `LISTEN_PORT` with `server/apache/site.conf`, and the admin pages behind it. The folder variables
   point into `data/`.
 - Apache runs with the system's PHP module (Homebrew's on macOS, the bundle's on Windows); the admin pages run on
-  waitress on a loopback port of its own (`ADMIN_PORT`, which this program picks and nobody opens); the database keeper, the song list and the app builder are the same as in the
+  waitress on a loopback port of its own, which this program picks at every start (18791 or the next free one, never
+  the server's own) and keeps in `.host/run/admin.port`, and which nobody opens (an `ADMIN_PORT` an earlier version wrote
+  to `.env` is taken out at the start); the database keeper, the song list and the app builder are the same as in the
   image. If a program stops by itself, it is started again.
 - There is no edge, so no HTTPS: the admin pages and their API are on the server's one port from anywhere for a local
   network address, and for an internet one from the server PC only, at `http://localhost:<port>/opendmtq/admin/`.
