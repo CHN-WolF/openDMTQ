@@ -543,9 +543,11 @@ def song_remove(args):
 # ------------------------------------------------------------------------------ the notice, and stopping
 
 def notice():
-    """The maintenance notice as the game reads it."""
+    """The maintenance notice as the game reads it, with the number and the time of its last change (songs.py
+    maintenance_stamp())."""
     on, message = songs.maintenance()
-    return {"on": on, "message": message}
+    stamp = songs.maintenance_stamp() or {}
+    return {"on": on, "message": message, "change": stamp.get("id", 0), "changed_at": stamp.get("at")}
 
 
 @handler

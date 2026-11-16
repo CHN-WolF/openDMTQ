@@ -26,6 +26,21 @@ const TOASTS = [
              'held' => "Your broadcast is switched off\nIt stays off when broadcasts come back on for this server"],
 ];
 
+// The maintenance notice's changes, told to the players in the game too, between songs: the game itself looks for a notice
+// only as it starts, so a player already in it would hear of none. Turned on, a new message while on (with the message, or
+// the line below when the owner gave none), and ended.
+const MAINT_TOASTS = [
+    'ko' => ['maint_on' => "점검 중이에요\n%s", 'maint_changed' => "점검 안내가 바뀌었어요\n%s",
+             'maint_off' => "점검이 끝났어요\n평소처럼 플레이할 수 있어요"],
+    'en' => ['maint_on' => "Under maintenance\n%s", 'maint_changed' => "Maintenance notice updated\n%s",
+             'maint_off' => "Maintenance is over\nThe server is open as usual"],
+];
+// The line under the title of a notice turned on without a message of the owner's own (DEFAULT_NOTICE, lib.php).
+const MAINT_PLAIN = ['ko' => '점검이 끝나면 여기서 다시 알려 드려요', 'en' => 'You will hear here when it is over'];
+const MAINT_DEFAULT = 'The server is under maintenance. Please try again later.';
+// An end older than this is no news to a player who comes into the game after it: nothing said then.
+const MAINT_FRESH = 1800;
+
 // Broadcasts on or off for the whole server: while off, nobody is on, whatever their own switch says.
 $enabled = live_enabled();
 // What the stream should be, for the phone's encoder, by the owner's quality; the same whether on or off. Then what the
@@ -65,6 +80,42 @@ function live_take_toast(array $row): array
     return [sprintf(TOASTS[$lang][$row['toast']], server_name()), (int)$row['toast_id'], (string)$row['toast']];
 }
 
+/*
+ * Hands out the newest change of the maintenance notice once to this player, as [words, number, kind]: marked in the same
+ * write as the player's notice number goes up, so two polls that cross hand it out once. Waits while the player is in a
+ * song, as the player's own notices do. A player with no row of the live view yet gets one (switch off, untouched).
+ */
+function live_take_maintenance(array $row): array
+{
+    $m = live_maintenance();
+    if ($m === null || (int)$row['maint_seen'] >= (int)$m['id'] || live_in_song($row)) {
+        return ['', 0, ''];
+    }
+    // An end long past is no news: nothing said, nothing marked.
+    if ($m['kind'] === 'off' && time() - (int)($m['at'] ?? 0) > MAINT_FRESH) {
+        return ['', 0, ''];
+    }
+    $rw = live_db(true);
+    $q = $rw ? @$rw->prepare("INSERT INTO LiveSwitch (guid, live, toast_id, maint_seen) VALUES (:g, 0, 1, :m)
+                              ON CONFLICT (guid) DO UPDATE SET toast_id = LiveSwitch.toast_id + 1, maint_seen = excluded.maint_seen
+                              WHERE LiveSwitch.maint_seen < excluded.maint_seen") : false;
+    if (!$q) {
+        return ['', 0, ''];
+    }
+    $q->bindValue(':g', (int)$row['guid'], SQLITE3_INTEGER);
+    $q->bindValue(':m', (int)$m['id'], SQLITE3_INTEGER);
+    if (!@$q->execute() || $rw->changes() !== 1) {
+        return ['', 0, ''];
+    }
+    $number = (int)@$rw->querySingle('SELECT toast_id FROM LiveSwitch WHERE guid = ' . (int)$row['guid']);
+    $lang = ($_GET['lang'] ?? '') === 'ko' ? 'ko' : 'en';
+    $kind = 'maint_' . $m['kind'];
+    // The owner's message on one line under the title; the plain line when they wrote none.
+    $message = trim(preg_replace('/\s+/u', ' ', (string)($m['message'] ?? '')) ?? '');
+    $message = $message === '' || $message === MAINT_DEFAULT ? MAINT_PLAIN[$lang] : $message;
+    return [sprintf(MAINT_TOASTS[$lang][$kind], $message), $number, $kind];
+}
+
 $db = live_db();
 $row = $db ? live_player($db, live_ids((string)($_GET['ids'] ?? ''))) : null;
 // New players start switched on when the owner says so (the Broadcasts page, or LIVE_DEFAULT=on before the owner chose),
@@ -97,8 +148,11 @@ if ($row) {
         $reply['on'] = true;
         $reply['token'] = $row['token'];
     }
-    // The notice waiting for this player, if any, once.
+    // The notice waiting for this player, if any, once; with none, the maintenance notice's newest change, once.
     [$reply['toast'], $reply['toast_id'], $reply['toast_kind']] = live_take_toast($row);
+    if ($reply['toast'] === '') {
+        [$reply['toast'], $reply['toast_id'], $reply['toast_kind']] = live_take_maintenance($row);
+    }
 }
 // Leftovers of stopped streams go now and then; phones poll even when nobody watches.
 live_sweep();

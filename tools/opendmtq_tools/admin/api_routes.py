@@ -286,7 +286,10 @@ SHAPES = {
         Field("hidden", "boolean", "True when it is hidden now.")]),
     "Notice": Shape("The in-game maintenance notice.", [
         Field("on", "boolean", "True while it is on: players see it and cannot start the game."),
-        Field("message", "string", "What it says (empty: the usual words).")]),
+        Field("message", "string", "What it says (empty: the usual words)."),
+        Field("change", "integer", "The number of its last change (turned on, a new message, ended), higher with each one; 0 before the "
+              "first. The game's notice page is asked for under it, and players in the game are told of each change once."),
+        Field("changed_at", "integer", "When that change was made (Unix time); null before the first.", nullable=True)]),
     "Stopping": Shape("A stop asked for.", [Field("stopping", "boolean", "True: the server stops within a few seconds, these pages and the API with it.")]),
     # The Server page.
     "ServerState": Shape("The server as the Server page shows it.", [
@@ -777,16 +780,14 @@ ROUTES = [
     Route("GET", "/maintenance", "read", "maintenance_get", "Maintenance", "The in-game maintenance notice: on or off, and what it says.",
           answer="Notice"),
     Route("PUT", "/maintenance", "write", "maintenance_set", "Maintenance", "Turns the notice on, or changes what it says while it is on.",
-          "Players then see it when the game starts, and cannot play; the site shows it too.",
+          "Players then see it when the game starts, and cannot play; the site shows it too. A player already in the game is told "
+          "between songs, and told again with each new message.",
           body=[Field("message", "string", "What it says, 200 characters at most (a line break is one). Empty or left out: the usual words.",
                       optional=True)], answer="Notice",
           errors=[(400, "message_too_long", "The message is longer than 200 characters.")]),
-    Route("DELETE", "/maintenance", "write", "maintenance_clear", "Maintenance", "Turns the notice off.", answer="Notice"),
-    # The Server page (lifecycle.py): the state, stop and restart (setup.stop_server, lifecycle.restart_server), the repair,
-    # the data, the uninstall.
-    Route("GET", "/server", "read", "server_get", "Server", "The server as the Server page shows it: how it is installed, its address, "
-          "what this API can do with it there, and its data part by part.", answer="ServerState"),
-    Route("POST", "/server/stop", "write", "server_stop", "Server", "Stops the server, as the Server page's Stop the server does.",
+    Route("DELETE", "/maintenance", "write", "maintenance_clear", "Maintenance", "Turns the notice off.",
+          "Players in the game are told between songs that it is over.", answer="Notice"),
+    Route("POST", "/server/stop", "write", "server_stop", "Maintenance", "Stops the server, as the Maintenance page's Stop the server does.",
           "A host install and the Windows bundle only. Every part stops, these pages and the API too: the answer comes first.",
           answer="Stopping", status=202,
           errors=[(404, "host_only", "Not a host install: stop it with ./opendmtq down or Kubernetes."),

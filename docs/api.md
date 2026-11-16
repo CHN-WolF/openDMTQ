@@ -566,7 +566,7 @@ Answer: `200` with [Notice](#notice).
 
 #### `PUT /maintenance`
 
-Turns the notice on, or changes what it says while it is on. Players then see it when the game starts, and cannot play; the site shows it too.
+Turns the notice on, or changes what it says while it is on. Players then see it when the game starts, and cannot play; the site shows it too. A player already in the game is told between songs, and told again with each new message.
 
 Body (JSON):
 
@@ -580,7 +580,7 @@ Refusals:
 
 #### `DELETE /maintenance`
 
-Turns the notice off.
+Turns the notice off. Players in the game are told between songs that it is over.
 
 Answer: `200` with [Notice](#notice).
 
@@ -2024,6 +2024,8 @@ The in-game maintenance notice.
 
 - `on` (boolean): True while it is on: players see it and cannot start the game.
 - `message` (string): What it says (empty: the usual words).
+- `change` (integer): The number of its last change (turned on, a new message, ended), higher with each one; 0 before the first. The game's notice page is asked for under it, and players in the game are told of each change once.
+- `changed_at` (integer, or null): When that change was made (Unix time); null before the first.
 
 #### Stopping
 

@@ -1013,6 +1013,79 @@ check("the portal serves the pinned video player", hashlib.sha384(script).hexdig
 check("the admin's own port brings the same file", request(admin, ADMIN + HLS)[2] == script)
 check("the live page names no other site for it", b"cdnjs" not in request(portal, SITE + "/opendmtq/live.php")[2])
 
+# ---- the maintenance notice: every change of it is news, for the game's own check and for a player already in the game.
+
+
+def maintenance_post(**fields):
+    """The Maintenance page's form, with that page's token."""
+    page = admin_page("/opendmtq/admin/maintenance")
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    request(admin, ADMIN + "/opendmtq/admin/maintenance", urllib.parse.urlencode({"csrf": csrf, **fields}).encode())
+
+
+def inspection():
+    """The game's maintenance check as it gets it: (its value, its Cache-Control)."""
+    _, headers, body = request(plain, SITE + "/inspection/status.json")
+    return json.loads(body)["value"], headers.get("Cache-Control", "")
+
+
+def notice_page(url):
+    """The notice page the check points at, as the game's web view gets it: (its words, its Cache-Control)."""
+    _, headers, body = request(plain, SITE + urllib.parse.urlsplit(url).path + "?" + urllib.parse.urlsplit(url).query)
+    return unescape(body.decode()), headers.get("Cache-Control", "")
+
+
+def version_of(url):
+    """The number in a notice page's address (?v=), 0 without one."""
+    found = re.search(r"[?&]v=(\d+)", url)
+    return int(found.group(1)) if found else 0
+
+
+# Nothing waiting for the player first: their own notices come before the maintenance notice's.
+state()
+state()
+# GAME-70: turned on, the check says so, under an address of its own, and neither the check nor the page is kept by a cache.
+maintenance_post(action="on", message="Back at nine.")
+first, cache = inspection()
+words, page_cache = notice_page(first["noti_url"])
+check("maintenance on: the game's check says so, with the notice page under a number of its own",
+      first["open_yn"] == "Y" and version_of(first["noti_url"]) > 0 and "Back at nine." in words, first)
+check("and neither the check nor the notice page is kept by a cache", cache == "no-store" and page_cache == "no-store", (cache, page_cache))
+# GAME-73: a player already in the game hears of it, once, between songs.
+s = state()
+check("a player in the game is told that maintenance began, with the owner's message",
+      s.get("toast_kind") == "maint_on" and s["toast"] == "Under maintenance\nBack at nine." and s.get("toast_id", 0) > 0, s)
+check("once", state()["toast"] == "")
+# GAME-71: a new message while on: a new address for the page, the new words there, and the player told again.
+maintenance_post(action="on", message="Back at ten.")
+second, _ = inspection()
+words, _ = notice_page(second["noti_url"])
+check("a new message: the notice page under a new number, with the new words",
+      version_of(second["noti_url"]) > version_of(first["noti_url"]) and "Back at ten." in words, (first, second))
+call("game.getPreviewPlayInfo", [guid, 1])
+check("GAME-74: the news waits while the player is in a song", state()["toast"] == "")
+call("game.savePlayResult", [guid, 1, [0, 0] + [0] * 10 + [50], 50, 0, [0, 0, 0], [0, 0, 0], "smoke"])
+s2 = state("ko")
+check("and comes after it: the new message, numbered higher, in the phone's language",
+      s2.get("toast_kind") == "maint_changed" and s2["toast"] == "점검 안내가 바뀌었어요\nBack at ten."
+      and s2.get("toast_id", 0) > s.get("toast_id", 0), s2)
+# GAME-72: ended: the check says so, and the player hears that it is over.
+maintenance_post(action="off")
+ended, _ = inspection()
+s3 = state()
+check("maintenance ended: the check says so, and the player is told it is over",
+      ended["open_yn"] == "N" and s3.get("toast_kind") == "maint_off" and s3["toast"] == "Maintenance is over\nThe server is open as usual"
+      and s3.get("toast_id", 0) > s2.get("toast_id", 0), (ended, s3))
+# Turned on again, without a message of the owner's: all of it again, numbered higher, in the words for no message.
+maintenance_post(action="on", message="")
+again, _ = inspection()
+s4 = state()
+check("on again: a new number for the page, and the player told again",
+      version_of(again["noti_url"]) > version_of(second["noti_url"]) and s4.get("toast_kind") == "maint_on"
+      and s4["toast"] == "Under maintenance\nYou will hear here when it is over" and s4.get("toast_id", 0) > s3.get("toast_id", 0), (again, s4))
+maintenance_post(action="off")
+check("and off again: told again", state().get("toast_kind") == "maint_off")
+
 # A player left on for what run.sh tests from inside the server.
 last_udid = f"live-smoke3-{random.randrange(10**9):09d}"
 last_guid = new_player(last_udid)

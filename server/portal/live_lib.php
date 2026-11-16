@@ -183,7 +183,23 @@ function live_ids(string $raw): array
 }
 
 /*
- * The player these device ids belong to: ['guid', 'live', 'token', 'toast', 'toast_id', 'playing', 'play_at'],
+ * The last change of the in-game maintenance notice, as the admin pages write it with every change (custom/maintenance.json,
+ * songs.py maintenance_stamp()): ['id', 'kind' (on, changed or off), 'on', 'message', 'at'], or null before the first one.
+ * Read once per request.
+ */
+function live_maintenance(): ?array
+{
+    static $stamp = false;
+    if ($stamp === false) {
+        $raw = @file_get_contents(odq_custom_dir() . '/maintenance.json');
+        $data = $raw === false ? null : json_decode($raw, true);
+        $stamp = is_array($data) && is_int($data['id'] ?? null) && in_array($data['kind'] ?? '', ['on', 'changed', 'off'], true) ? $data : null;
+    }
+    return $stamp;
+}
+
+/*
+ * The player these device ids belong to: ['guid', 'live', 'token', 'toast', 'toast_id', 'maint_seen', 'playing', 'play_at'],
  * or null when no account has any of them. A phone can match several rows: a second phone's row
  * shares its player's guid, and old ids may have made old accounts. A player the owner shows live
  * (or who still has a line to read) comes first, so a forgotten old account never hides that; then
@@ -200,7 +216,7 @@ function live_player(SQLite3 $db, array $ids): ?array
         $marks[] = ":id$i";
     }
     $q = @$db->prepare("SELECT CAST(m.guid AS INTEGER) AS guid, COALESCE(l.live, 0) AS live, l.token,
-                               COALESCE(l.toast, '') AS toast, COALESCE(l.toast_id, 0) AS toast_id,
+                               COALESCE(l.toast, '') AS toast, COALESCE(l.toast_id, 0) AS toast_id, COALESCE(l.maint_seen, 0) AS maint_seen,
                                COALESCE(l.playing, 0) AS playing, l.play_at,
                                l.pattern_id
                           FROM Member m LEFT JOIN LiveSwitch l ON l.guid = CAST(m.guid AS INTEGER)

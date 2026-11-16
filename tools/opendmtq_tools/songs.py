@@ -40,6 +40,7 @@ import re
 import shutil
 import sys
 import threading
+import time
 import zipfile
 import zlib
 
@@ -1133,16 +1134,57 @@ def _thumbnail(src, dest):
     os.replace(dest + ".tmp", dest)
 
 
+# Each change of the maintenance notice, numbered (custom/maintenance.json, outside the overlay so that it outlives a
+# notice turned off): {"id", "kind", "on", "message", "at"}. kind is what changed: "on" (turned on), "changed" (a new
+# message while on) or "off" (ended). id grows with every change, past the clock's seconds too, so that a number never
+# comes back after a restore or a moved clock: the game's notice page is asked for under it (noti_url's ?v=, which no
+# cache has seen), and /live/state hands each change to each player in the game once (server/game/live/state.php).
+MAINTENANCE_STAMP = "maintenance.json"
+
+
+def maintenance_stamp():
+    """The last change of the maintenance notice as maintenance.json has it, or None before the first one."""
+    try:
+        with open(os.path.join(CUSTOM, MAINTENANCE_STAMP), encoding="utf-8") as f:
+            stamp = json.load(f)
+        return stamp if isinstance(stamp, dict) and isinstance(stamp.get("id"), int) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _stamp_maintenance(on, message):
+    """The stamp for the notice as it is about to be (on with message, or off): a new number when that differs from the
+    last change, the same stamp when it does not (the admin service writing the notice again at its start, for a new
+    address). Returns the stamp in force."""
+    last = maintenance_stamp()
+    was_on = bool(last and last.get("on"))
+    if last and was_on == on and (not on or last.get("message") == message):
+        return last
+    # No stamp yet with a notice already on (a server from before the stamp): that notice counts as the one changed now.
+    kind = "off" if not on else ("changed" if was_on else "on")
+    stamp = {"id": max((last or {}).get("id", 0) + 1, int(time.time())), "kind": kind, "on": on,
+             "message": message if on else "", "at": int(time.time())}
+    _write_json(os.path.join(CUSTOM, MAINTENANCE_STAMP), stamp)
+    return stamp
+
+
 @_serialized
 def set_maintenance(on, message, host):
-    """Turn the in-game maintenance notice on or off (served from the overlay)."""
+    """Turn the in-game maintenance notice on or off (served from the overlay), with a new number for each change
+    (_stamp_maintenance)."""
     folder = os.path.join(CUSTOM, "web", "inspection")
     if not on:
         shutil.rmtree(folder, ignore_errors=True)
+        # Ended: a change as well, which players in the game hear of.
+        if os.path.isdir(CUSTOM):
+            _stamp_maintenance(False, "")
         return
     os.makedirs(folder, exist_ok=True)
+    stamp = _stamp_maintenance(True, (message or "").strip() or DEFAULT_MAINTENANCE)
+    # The notice page under this change's number: a phone's web view that kept the page of an earlier notice asks for a
+    # new address, never for the one it has.
     status = {"value": {"open_yn": "Y", "disable_apps": [], "non_kill_apps": [],
-                        "noti_url": f"http://{host}/inspection/noti.html"},
+                        "noti_url": f"http://{host}/inspection/noti.html?v={stamp['id']}"},
               "result_code": "000", "resulr_msg": "API_OK"}
     _write_json(os.path.join(folder, "status.json"), status)
     page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
@@ -1164,9 +1206,13 @@ def maintenance():
     return True, html.unescape(m.group(1).replace("<br>", "\n")) if m else ""
 
 
+# The words of a notice turned on without any (the portal's DEFAULT_NOTICE, lib.php, reads them back as "no message").
+DEFAULT_MAINTENANCE = "The server is under maintenance. Please try again later."
+
+
 def _html(text):
     import html
-    return html.escape(text or "The server is under maintenance. Please try again later.")
+    return html.escape(text or DEFAULT_MAINTENANCE)
 
 
 def main(argv=None):

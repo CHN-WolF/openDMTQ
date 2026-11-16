@@ -1810,6 +1810,23 @@ class MaintenanceMessageTest(unittest.TestCase):
             admin.song_pages.set_notice(False, "")
             self.assertIn("Back at nine.\nSorry!</textarea>", inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True))
 
+    def test_every_change_of_the_notice_has_a_number_of_its_own(self):
+        # GAME-75: on, a new message, the same message again, off, on again: a new number with each change and none with a
+        # notice written again unchanged (the admin service's start), and the notice page's address carries it.
+        with Install() as inst:
+            seen = []
+            for on, message, kind in ((True, "Back at nine.", "on"), (True, "Back at ten.", "changed"), (True, "Back at ten.", "changed"),
+                                      (False, "", "off"), (True, "", "on")):
+                admin.song_pages.set_notice(on, message)
+                stamp = admin.songs.maintenance_stamp()
+                self.assertEqual(stamp["kind"], kind)
+                seen.append(stamp["id"])
+            # The same message again changed nothing; every other change went up.
+            self.assertEqual(seen[2], seen[1])
+            self.assertEqual(seen[:2] + seen[3:], sorted(set(seen)))
+            with open(inst.path("custom/web/inspection/status.json"), encoding="utf-8") as f:
+                self.assertTrue(json.load(f)["value"]["noti_url"].endswith(f"/inspection/noti.html?v={seen[-1]}"))
+
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class PlayerMessageTest(unittest.TestCase):

@@ -455,7 +455,10 @@ def CASES():
         C("song_remove", "DELETE", "/songs/999", 404, "song_not_found", setup=no_rebuild),
         C("maintenance_get", "GET", "/maintenance", 200),
         C("maintenance_set", "PUT", "/maintenance", 200, json={"message": "Back at nine."},
-          check=lambda t, inst, r: t.assertEqual(r.get_json(), {"on": True, "message": "Back at nine."})),
+          check=lambda t, inst, r: t.assertEqual({k: r.get_json()[k] for k in ("on", "message")}, {"on": True, "message": "Back at nine."})),
+        # API-41: each change has a number of its own, and the time it was made (before: neither).
+        C("maintenance_set", "PUT", "/maintenance", 200, json={"message": "Back at ten."},
+          check=lambda t, inst, r: t.assertTrue(r.get_json()["change"] > 0 and r.get_json()["changed_at"] > 0)),
         C("maintenance_set", "PUT", "/maintenance", 400, "bad_field", json={"message": 5}),
         # One limit, the page's: 200 characters, a line break one of them; over it, refused in the page's words.
         C("maintenance_set", "PUT", "/maintenance", 200, json={"message": "x" * 95 + "\r\n" * 10 + "x" * 95},

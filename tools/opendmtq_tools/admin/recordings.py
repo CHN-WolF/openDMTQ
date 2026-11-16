@@ -17,11 +17,13 @@ from .core import Refused, app, BASE, changed, db, t
 
 # The live view: the owner's switch per player, the phone's upload key, the notice waiting to be shown (a key of TOASTS in
 # server/game/live/state.php, which words it) with its number (higher for each new notice, so that the player can tell a
-# new one from one it showed) and whether the player is in a song. The server makes this table at start
+# new one from one it showed), the last change of the maintenance notice they were told of, and whether the player is in a
+# song. The server makes this table at start
 # (server/game/bin/setup-db.php, the same statement); a database restored from before it needs it here too (live_table).
 LIVE_TABLE = """CREATE TABLE IF NOT EXISTS LiveSwitch (guid INTEGER PRIMARY KEY, live INTEGER NOT NULL DEFAULT 0,
                    token TEXT, toast TEXT, changed_at INTEGER, playing INTEGER NOT NULL DEFAULT 0,
-                   pattern_id INTEGER, play_at INTEGER, toast_id INTEGER NOT NULL DEFAULT 0)"""
+                   pattern_id INTEGER, play_at INTEGER, toast_id INTEGER NOT NULL DEFAULT 0,
+                   maint_seen INTEGER NOT NULL DEFAULT 0)"""
 
 # The notices, by what changed for a player (server/game/live/state.php words them): their own switch flipped while
 # broadcasts are on for the server ("on", "off"), or while they are off ("wait", "held"); the server's switch turned on
@@ -33,8 +35,12 @@ def live_table(con):
     """The live view's table as it is now: made when there is none, and the notice's number added to one made before it (a
     database restored from an older backup, before the server's next start adds it too)."""
     con.execute(LIVE_TABLE)
-    if "toast_id" not in {r[1] for r in con.execute("PRAGMA table_info(LiveSwitch)")}:
+    have = {r[1] for r in con.execute("PRAGMA table_info(LiveSwitch)")}
+    if "toast_id" not in have:
         con.execute("ALTER TABLE LiveSwitch ADD COLUMN toast_id INTEGER NOT NULL DEFAULT 0")
+    # The last change of the maintenance notice the player was told of in the game (server/game/live/state.php).
+    if "maint_seen" not in have:
+        con.execute("ALTER TABLE LiveSwitch ADD COLUMN maint_seen INTEGER NOT NULL DEFAULT 0")
 
 # Recordings of live broadcasts, and the limits the server keeps them to (LIVE_REC_* in
 # server/portal/live_lib.php, which closes them and enforces the limits; this file lists, hides and
