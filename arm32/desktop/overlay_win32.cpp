@@ -1666,6 +1666,10 @@ constexpr UINT_PTR kBarTimer = 2;
 constexpr UINT64 kBarStayMs = 600, kBarTouchStayMs = 4000, kBarRevealMs = 3000, kBarLookMs = 100;
 // Shown by a finger: the pointer Windows parks where the finger was is no mouse on the bar, until the mouse moves.
 bool g_bar_by_touch = false;
+// A press pulling the bar down (pull_to): the bar's place is the press's, not its way's, until it is let go
+// (pull_end), and then it settles from there.
+bool g_pull = false;
+float g_pull_place = 0;
 // The chip the mouse's button (or a finger) went down on: it acts only when let go on the same chip, and looks pressed
 // while it is held there.
 int g_bar_pressed = kNone;
@@ -1770,7 +1774,8 @@ void hide_bar() {
     hide(g_bar);
     // Put away at once in the middle of a way (the window minimised): the trace says so.
     if (!g_bar_way_over) trace_cut(now_ns());
-    // Up, at rest: the next time it comes, from the top edge again.
+    // Up, at rest: the next time it comes, from the top edge again; a pull under way is over.
+    g_pull = false;
     g_slide.rest(0);
     g_bar_place = 0;
     g_bar_on_way = false;
@@ -1938,6 +1943,36 @@ bool animations() {
 void bar_frame() {
     if (!g_bar.window) return;
     const UINT64 now = GetTickCount64();
+    if (g_pull) {
+        // Pulled: the bar where the press has it, once its picture is there; the question ends the pull.
+        if (asking()) {
+            g_pull = false;
+        } else {
+            if (!g_bar_wanted) {
+                // Wanted from now on: the frame behind it read, and its glass waited for.
+                g_bar_wanted = true;
+                g_bar.wanted = now;
+                glass_wish();
+            }
+            order_bar();
+            View v = view_now();
+            v.top_room = 0;
+            if (g_bar.key != bar_key(v) || !ready(g_bar)) {
+                // Its picture is not there yet: a look again soon, the press's place taken then.
+                SetTimer(g_bar.window, kBarTimer, 15, nullptr);
+                return;
+            }
+            // At rest where the press is: no way of its own while it is held.
+            g_slide.rest(g_pull_place);
+            g_bar_on_way = false;
+            bar_step();
+            // Held there: its stay starts when it is let go.
+            g_bar_since = now;
+            g_bar_stay = kBarStayMs;
+            KillTimer(g_bar.window, kBarTimer);
+            return;
+        }
+    }
     if (pointer_on_bar()) {
         // On it: its time starts again, and it stays down for kBarStayMs after the pointer leaves.
         g_bar_since = now;
@@ -3326,6 +3361,58 @@ void show_bar() {
     // A finger has no pointer that stays on the bar: whole for a few seconds, then fading.
     g_bar_by_touch = true;
     reveal(kBarTouchStayMs, "a finger from the top edge");
+}
+
+Zone press_zone(int x, int y) { return zone_at(x, y, area_h(), g_handle.up, on_handle(x, y)); }
+
+void open_bar(bool by_touch, const char* why) {
+    if (!g_bar.window || asking()) return;
+    if (by_touch) {
+        // A finger has no pointer that stays on the bar: whole for a few seconds, then up.
+        g_bar_by_touch = true;
+        reveal(kBarTouchStayMs, why);
+    } else {
+        // The mouse: down while the pointer is on it, and a moment after it leaves.
+        g_bar_by_touch = false;
+        reveal(kBarStayMs, why);
+    }
+}
+
+void pull_to(float place, bool by_touch) {
+    if (!g_bar.window || asking()) return;
+    if (!g_pull) {
+        // The pull's start: the bar wanted from now on (the frame behind it read), its picture asked for.
+        g_pull = true;
+        if (!g_bar.up) g_bar_why = by_touch ? "a finger pulled it down" : "the mouse pulled it down";
+        rest_cancel();
+    }
+    g_bar_by_touch = by_touch;
+    g_pull_place = place;
+    bar_frame();
+}
+
+void pull_end(bool open, bool by_touch) {
+    if (!g_pull) return;
+    g_pull = false;
+    const UINT64 now = GetTickCount64();
+    g_bar_by_touch = by_touch;
+    if (open) {
+        // Down from where the pull left it: a finger's few seconds, or while the mouse's pointer stays on it.
+        g_bar_since = now;
+        g_bar_stay = by_touch ? kBarTouchStayMs : kBarStayMs;
+    } else {
+        // Back up from where the pull left it, whatever the pointer does meanwhile (it is on the bar's part in sight).
+        g_bar_since = 0;
+        g_bar_stay = 0;
+        g_bar_reveal_until = 0;
+        g_bar_by_touch = true;
+    }
+    if (g_hooks.log) {
+        char line[96];
+        std::snprintf(line, sizeof line, "player: the bar let go at %.0f %% out: %s", static_cast<double>(g_pull_place) * 100.0, open ? "down" : "back up");
+        g_hooks.log(line);
+    }
+    bar_frame();
 }
 
 bool asking() { return g_ask.window && g_asking; }

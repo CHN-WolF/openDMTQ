@@ -14,6 +14,7 @@
 // a value it cannot read keeping the default), the lane a key plays, a press, its repeats and every key let go, when
 // the lane keys play at all, and which request of the game's saves a play. Prints ALL CHECKS PASSED when every check
 // held.
+#include "bar_gesture.h"
 #include "frame_rate.h"
 #include "keyboard_play.h"
 #include "overlay_motion.h"
@@ -918,6 +919,140 @@ void refresh_meter_checks() {
     }
 }
 
+// A press on the overlay's handle or the game's top edge, as made-up presses take it through bar_gesture.h: what brings
+// the bar (a tap on the handle, a long press, a pull down that the bar follows and settles from), what stays the game's
+// (a tap at the edge beside the handle, a press moved across or up, anything while a song is played and the game busy),
+// and that the game gets every press the bar does not take, from where and when it came down.
+void bar_gesture_checks() {
+    using namespace player::overlay;
+    const GestureSizes at720 = gesture_sizes(720);
+    check(at720.slop == 10 && at720.bar == 74, "at 720 lines: a slop of 10 and a bar of 74");
+    const GestureSizes at1080 = gesture_sizes(1080);
+    check(at1080.slop == 15 && at1080.bar == 111, "at 1080 lines: a slop of 15 and a bar of 111");
+    check(gesture_sizes(360).slop == 6, "a slop of 6 at least");
+    const std::int64_t ms = 1000000;
+    // A tap on the handle: held, then the bar's.
+    {
+        BarGesture g;
+        check(g.down(640, 12, 0, Zone::kHandle, true, at720) == Act::kNone && g.held(), "a press on the handle is held from the game");
+        check(g.move(643, 15, 30 * ms) == Act::kNone, "a move within the slop says nothing yet");
+        check(g.up(643, 15, 80 * ms) == Act::kOpen && !g.active(), "a tap on the handle brings the bar, and the game hears nothing of it");
+    }
+    // A tap at the top edge beside the handle: the game's after all, from where and when it came down.
+    {
+        BarGesture g;
+        check(g.down(200, 3, 5 * ms, Zone::kEdge, true, at720) == Act::kNone, "a press at the top edge is held");
+        check(g.up(201, 4, 90 * ms) == Act::kGame && g.x0() == 200 && g.y0() == 3 && g.t0() == 5 * ms,
+              "a tap at the top edge is the game's, from where and when it came down");
+    }
+    // A long press on the handle and at the edge: the bar, and the rest of the press is no one else's.
+    for (const Zone zone : {Zone::kHandle, Zone::kEdge}) {
+        BarGesture g;
+        g.down(640, 8, 0, zone, true, at720);
+        check(g.tick(300 * ms) == Act::kNone, "held 300 ms: not yet a long press");
+        check(g.tick(460 * ms) == Act::kOpen && g.bars(), zone == Zone::kHandle ? "held 460 ms on the handle: the bar" : "held 460 ms at the edge: the bar");
+        check(g.move(640, 60, 500 * ms) == Act::kNone && g.up(640, 60, 600 * ms) == Act::kNone, "after a long press its moves and release are the bar's");
+    }
+    // A pull down from the edge: the bar follows, its foot at the press; let go far enough down, it settles down.
+    {
+        BarGesture g;
+        g.down(640, 2, 0, Zone::kEdge, true, at720);
+        check(g.move(640, 9, 40 * ms) == Act::kNone, "7 down: within the slop");
+        check(g.move(642, 20, 80 * ms) == Act::kPull && std::fabs(g.place() - 20.0f / 74.0f) < 0.001f, "20 down: the bar follows, its foot at the press");
+        check(g.move(642, 40, 200 * ms) == Act::kPull && std::fabs(g.place() - 40.0f / 74.0f) < 0.001f, "40 down: more of the bar");
+        g.move(642, 50, 400 * ms);
+        check(g.up(642, 50, 500 * ms) == Act::kSettleOpen, "let go at 50 of 74, slowly: the bar settles down");
+    }
+    // Not far enough, slowly: back up.
+    {
+        BarGesture g;
+        g.down(640, 2, 0, Zone::kHandle, true, at720);
+        g.move(640, 20, 100 * ms);
+        g.move(640, 30, 300 * ms);
+        check(g.up(640, 30, 500 * ms) == Act::kSettleClosed, "let go at 30 of 74, slowly: the bar goes back up");
+    }
+    // A flick down from the handle: a short way, quickly, and the bar settles down.
+    {
+        BarGesture g;
+        g.down(640, 10, 0, Zone::kHandle, true, at720);
+        g.move(640, 22, 20 * ms);
+        g.move(640, 34, 40 * ms);
+        check(g.up(640, 34, 50 * ms) == Act::kSettleOpen, "a flick down to 34 of 74 in 50 ms: the bar settles down");
+    }
+    // Pulled most of the way, then flicked back up: up.
+    {
+        BarGesture g;
+        g.down(640, 2, 0, Zone::kEdge, true, at720);
+        g.move(640, 30, 100 * ms);
+        g.move(640, 70, 300 * ms);
+        g.move(640, 60, 330 * ms);
+        g.move(640, 45, 360 * ms);
+        check(g.up(640, 42, 370 * ms) == Act::kSettleClosed, "pulled to 70, flicked back up to 42: the bar goes back up");
+    }
+    // Pulled past the bar's foot: whole, no more.
+    {
+        BarGesture g;
+        g.down(640, 2, 0, Zone::kEdge, true, at720);
+        g.move(640, 300, 100 * ms);
+        check(g.place() == 1.0f, "pulled past the bar's height: the bar whole, no more");
+    }
+    // Moved across or up: the game's after all, from where it came down, and so are its moves after.
+    {
+        BarGesture g;
+        g.down(300, 5, 0, Zone::kEdge, true, at720);
+        check(g.move(320, 8, 30 * ms) == Act::kGame && g.x0() == 300 && g.y0() == 5, "moved 20 across: the game's, from where it came down");
+        check(g.move(400, 30, 60 * ms) == Act::kGame && g.up(400, 30, 90 * ms) == Act::kGame, "and its moves and release after");
+    }
+    {
+        BarGesture g;
+        g.down(640, 17, 0, Zone::kHandle, true, at720);
+        check(g.move(640, 4, 30 * ms) == Act::kGame, "moved 13 up: the game's");
+    }
+    // Another finger while one is held: the held one is the game's; a pull settles where it is.
+    {
+        BarGesture g;
+        g.down(640, 5, 0, Zone::kHandle, true, at720);
+        check(g.other_press() == Act::kGame, "another finger while one is held: the held one is the game's after all");
+        BarGesture h;
+        h.down(640, 5, 0, Zone::kEdge, true, at720);
+        h.move(640, 60, 50 * ms);
+        check(h.other_press() == Act::kSettleOpen, "another finger during a pull at 60 of 74: the bar settles down");
+        BarGesture c;
+        c.down(640, 5, 0, Zone::kEdge, true, at720);
+        c.move(640, 60, 50 * ms);
+        check(c.cancel() == Act::kSettleClosed && !c.active(), "a pull taken away by the system: the bar goes back up");
+    }
+    // The zones: the handle while shown, the top 18 rows at 720 lines (8 at least), the game below.
+    check(zone_at(640, 10, 720, true, true) == Zone::kHandle, "on the handle while it is shown: the handle");
+    check(zone_at(640, 10, 720, false, true) == Zone::kEdge, "where the handle is, while it is hidden: the edge");
+    check(zone_at(100, 0, 720, true, false) == Zone::kEdge && zone_at(100, 17, 720, true, false) == Zone::kEdge, "rows 0 to 17 at 720 lines: the edge");
+    check(zone_at(100, 18, 720, true, false) == Zone::kGame, "row 18 at 720 lines: the game");
+    check(zone_at(100, 26, 1080, true, false) == Zone::kEdge && zone_at(100, 27, 1080, true, false) == Zone::kGame, "rows 0 to 26 at 1080 lines: the edge");
+    check(zone_at(100, 7, 270, true, false) == Zone::kEdge && zone_at(100, 8, 270, true, false) == Zone::kGame, "8 rows at least");
+    // When the bar may come: never with another press down or the question up; in the menus at once; in a song (or
+    // not knowing) only with the game quiet.
+    check(bar_may_come(true, false, 0, false), "in the menus, the game just pressed: the bar may come");
+    check(!bar_may_come(true, false, 1, false) && bar_may_come(true, false, 1, true), "in a song: only with the game quiet");
+    check(!bar_may_come(true, false, -1, false) && bar_may_come(true, false, -1, true), "not knowing whether a song is played: only with the game quiet");
+    check(!bar_may_come(false, false, 0, true) && !bar_may_come(true, true, 0, true), "another press down, or the question up: never");
+    // A song's taps all over the top of the game while it is played: every one is the game's at once, none held.
+    {
+        int held = 0, given = 0;
+        unsigned seed = 7;
+        for (int i = 0; i < 400; ++i) {
+            seed = seed * 1103515245u + 12345u;
+            const int x = static_cast<int>((seed >> 8) % 1280), y = static_cast<int>((seed >> 4) % 80);
+            const bool on = std::abs(x - 640) < 40 && y < 23;
+            BarGesture g;
+            const Act a = g.down(x, y, i * 30 * ms, zone_at(x, y, 720, true, on), bar_may_come(true, false, 1, false), at720);
+            if (a == Act::kGame) ++given;
+            if (g.held()) ++held;
+            g.up(x, y, i * 30 * ms + 40 * ms);
+        }
+        check(given == 400 && held == 0, "400 taps at the top of a song being played: all 400 the game's at once, none held");
+    }
+}
+
 int main() {
     // A file of its own beside the program's current folder.
     const std::string path = "settingstest.txt";
@@ -1076,6 +1211,8 @@ int main() {
     keyboard_play_checks();
     // The display's refreshes as the refresh thread follows them.
     refresh_meter_checks();
+    // A press on the handle or the top edge: the bar's or the game's.
+    bar_gesture_checks();
     if (g_failed) {
         std::printf("%d of %d checks FAILED\n", g_failed, g_checks);
         return 1;

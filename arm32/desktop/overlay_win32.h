@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "bar_gesture.h"
 #include "frame_rate.h"
 
 namespace player::overlay {
@@ -54,6 +55,16 @@ void game_pressed(bool down);
 bool game_quiet();
 // A finger drawn down from the game's top edge: the bar shows for a few seconds.
 void show_bar();
+// Where a press at (x, y) of the game's window comes down: on the handle (while it is shown), at the top edge, or on
+// the game (bar_gesture.h).
+Zone press_zone(int x, int y);
+// The bar down for a press the window read as the bar's (a tap or click on the handle, a long press): a finger's for a
+// few seconds, the mouse's while the pointer stays on it. `why` for the log.
+void open_bar(bool by_touch, const char* why);
+// A press pulling the bar down: its share out (bar_gesture.h's place), its foot at the press, until pull_end.
+void pull_to(float place, bool by_touch);
+// The pull let go: the bar settles down (`open`) or back up, from where it is.
+void pull_end(bool open, bool by_touch);
 // Whether the question before quitting is up (the game is held still and the keys are the question's meanwhile).
 bool asking();
 // The question before quitting (the bar's X, the window's own close): Keep playing first, so that Enter at once goes on.

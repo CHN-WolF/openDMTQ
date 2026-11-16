@@ -131,9 +131,21 @@ long long steady_ns() { return std::chrono::duration_cast<std::chrono::nanosecon
 // Esc is the phone's Back key, sent when it comes up: whether it went down over the game, and whether the question took
 // it (Esc answering Keep playing is no Back key when it comes up).
 bool g_esc_down = false, g_esc_held = false;
-// A finger that came down on the game's top edge: drawn down, it shows the overlay's bar instead of reaching the game;
-// lifted where it was, it is a tap after all. Its pointer id (0: none) and where it started, in the game's window.
-UINT32 g_edge_finger = 0;
+// A press on the overlay's handle or the game's top edge, the bar's or the game's (bar_gesture.h): a finger's (by its
+// pointer id) or the mouse's (kMousePress), where and when it came down (the game's window's pixels, the touch screen's
+// own time for a finger), held from the game until it says which.
+overlay::BarGesture g_gesture;
+constexpr UINT32 kMousePress = 0xFFFFFFFF;
+UINT32 g_gesture_id = 0;
+POINT g_gesture_from{};
+std::int64_t g_gesture_time = 0;
+// When it came down on the steady clock the gesture reads by (its long press, a flick's speed).
+std::int64_t g_gesture_t0 = 0;
+// The long press's timer on the game's window: a press held still this long on the handle or the edge brings the bar.
+constexpr UINT_PTR kLongPressTimer = 11;
+// A check's finger (PLAYER_KEYS tap= and swipe=), posted to the game's window: wParam its phase (0 down, 1 up, 2 move)
+// and id, lParam its place in the game's window. It takes the same way as a touch screen's.
+constexpr UINT kTestFinger = WM_APP + 3;
 // The touch screen's fingers and the pens on the game now, by their ids: with the mouse's button, whether anything is
 // down on the game, which the overlay hears of with each press and release (no bar from the top while one is).
 std::set<UINT32> g_contacts;
@@ -151,9 +163,6 @@ void key_place(WPARAM vk, LPARAM l, unsigned& scan, bool& extended) {
     scan = place & 0xff;
     extended = (place & 0xff00) == 0xe000 || (place & 0xff00) == 0xe100;
 }
-POINT g_edge_from{};
-// When it came down, for the tap's own time if it is one.
-std::int64_t g_edge_time = 0;
 
 // The shapes the game lays itself out for: a tablet's 4:3 to a long phone's 21:9. Beyond them its screens fall apart
 // (a portrait shape squeezes its whole layout into the middle).
@@ -740,7 +749,11 @@ void ime_cancel(HWND h) {
 // and the keyboard do: click=x,y presses and lifts the mouse's first button at x,y of the game's pixels on the game's
 // area; text=... types into whichever window has the keyboard then (the text field while the game asks for text), a
 // key at a time, \uXXXX for a character cmd's own set would not carry and \b for Backspace; ime=... the same, each
-// character composed and finished by the input method of the text field. Nothing goes through Windows' own input, and
+// character composed and finished by the input method of the text field. The overlay's bar by touch and by holding
+// (bar_gesture.h) through the same ways as a touch screen's fingers and the mouse: tap=x,y[/hold_ms] a finger down and
+// up at x,y of the game's pixels (a long press with a long hold); swipe=x0,y0,x1,y1[/ms] a finger down at the first
+// place, moved to the second over the time in steps of 8 ms, then up there; drag=x0,y0,x1,y1[/ms] the same with the
+// mouse's first button; click=x,y/hold_ms holds the button. Nothing goes through Windows' own input, and
 // the keys reach the window while the game is held still (the planned taps follow the game's frames, which stop then).
 // Keys by their place on the keyboard, as keyboard play takes them (keyboard_play.h's names, A to Z, 0 to 9, Space,
 // Semicolon and the rest, or a scan code as 0x21): key=NAME[/hold_ms] down then up, keydown=NAME and keyup=NAME only
@@ -764,7 +777,7 @@ void plan_keys() {
     }
     // What a press is: a key, a click, text, the window's close, the overlay's bar as a finger brings it, or a key by its
     // place (down and up, down only, up only).
-    enum class Kind { key, click, text, ime, close, bar, place, place_down, place_up };
+    enum class Kind { key, click, text, ime, close, bar, place, place_down, place_up, tap, swipe, drag };
     struct Press {
         double at;
         Kind kind;
@@ -775,6 +788,8 @@ void plan_keys() {
         float x, y;
         std::wstring text;
         unsigned scan;
+        // A swipe's or a drag's end, in the game's pixels.
+        float x1 = 0, y1 = 0;
     };
     std::vector<Press> presses;
     // The keys at songs' times, for keyboard play to send.
@@ -836,6 +851,25 @@ void plan_keys() {
         } else if (key == "bar") {
             // The overlay's bar, as a finger drawn down from the game's top edge brings it: down for its 4 s, then up.
             presses.push_back({at, Kind::bar, 0, false, hold, key, 0, 0, {}, 0});
+        } else if (key.rfind("tap=", 0) == 0) {
+            // A finger's tap at x,y in the game's pixels, held its hold (a long press with a long one), through the same
+            // way as a touch screen's fingers.
+            float x = 0, y = 0;
+            if (std::sscanf(key.c_str() + 4, "%f,%f", &x, &y) == 2) presses.push_back({at, Kind::tap, 0, false, hold, key, x, y, {}, 0});
+            else jvm::log("player: PLAYER_KEYS: no tap in \"%s\"", key.c_str());
+        } else if (key.rfind("swipe=", 0) == 0 || key.rfind("drag=", 0) == 0) {
+            // A finger (swipe) or the mouse's button (drag) from x0,y0 to x1,y1 in the game's pixels over its hold in
+            // milliseconds, a move each 8 ms, then let go there.
+            const bool by_finger = key[0] == 's';
+            float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+            if (std::sscanf(key.c_str() + (by_finger ? 6 : 5), "%f,%f,%f,%f", &x0, &y0, &x1, &y1) == 4) {
+                Press press{at, by_finger ? Kind::swipe : Kind::drag, 0, false, hold, key, x0, y0, {}, 0};
+                press.x1 = x1;
+                press.y1 = y1;
+                presses.push_back(press);
+            } else {
+                jvm::log("player: PLAYER_KEYS: no way in \"%s\"", key.c_str());
+            }
         } else if (key.rfind("click=", 0) == 0) {
             // x,y in the game's pixels, as PLAYER_TAPS takes them.
             float x = 0, y = 0;
@@ -889,6 +923,37 @@ void plan_keys() {
                 PostMessageW(g_window, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(cx, cy));
                 std::this_thread::sleep_for(std::chrono::milliseconds(k.hold));
                 PostMessageW(g_window, WM_LBUTTONUP, 0, MAKELPARAM(cx, cy));
+                continue;
+            }
+            if (k.kind == Kind::tap || k.kind == Kind::swipe || k.kind == Kind::drag) {
+                // The game's pixels on the window's own, as a touch screen or the mouse would give them there.
+                const auto wx = [](float x) { return g_area_w > 0 ? static_cast<int>(std::lround(x * static_cast<float>(g_area_w) / static_cast<float>(app().width))) : static_cast<int>(x); };
+                const auto wy = [](float y) { return g_area_h > 0 ? static_cast<int>(std::lround(y * static_cast<float>(g_area_h) / static_cast<float>(app().height))) : static_cast<int>(y); };
+                // A check's finger has an id of its own, past any touch screen's.
+                constexpr WPARAM kId = 0x7001;
+                const bool by_finger = k.kind != Kind::drag;
+                const auto send = [by_finger](int phase, int x, int y) {
+                    if (by_finger) {
+                        PostMessageW(g_window, kTestFinger, (static_cast<WPARAM>(phase) << 24) | kId, MAKELPARAM(x, y));
+                    } else {
+                        PostMessageW(g_window, phase == 0 ? WM_LBUTTONDOWN : phase == 1 ? WM_LBUTTONUP : WM_MOUSEMOVE, phase == 1 ? 0 : MK_LBUTTON, MAKELPARAM(x, y));
+                    }
+                };
+                jvm::log("player: %.1f s: %s", k.at, k.name.c_str());
+                send(0, wx(k.x), wy(k.y));
+                if (k.kind == Kind::tap) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(k.hold));
+                    send(1, wx(k.x), wy(k.y));
+                    continue;
+                }
+                // The way in steps of 8 ms, the last at its end.
+                const int steps = std::max(1, k.hold / 8);
+                for (int i = 1; i <= steps; ++i) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(8));
+                    const float f = static_cast<float>(i) / static_cast<float>(steps);
+                    send(2, wx(k.x + (k.x1 - k.x) * f), wy(k.y + (k.y1 - k.y) * f));
+                }
+                send(1, wx(k.x1), wy(k.y1));
                 continue;
             }
             if (k.kind == Kind::place || k.kind == Kind::place_down || k.kind == Kind::place_up) {
@@ -1292,6 +1357,119 @@ LRESULT CALLBACK frame_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     return DefWindowProcW(h, msg, w, l);
 }
 
+// Whether a press now may be the overlay's bar's (bar_gesture.h): nothing else down on the game before it, no question
+// up, and in a song only with the game quiet. Asked before the press itself is counted as the game's.
+bool bar_may_now() {
+    const bool alone = g_contacts.empty() && !g_pressed && !keyplay_any_down();
+    return overlay::bar_may_come(alone, overlay::asking(), keyplay_song_state(), overlay::game_quiet());
+}
+
+// What the bar does for a press's event: follows it, comes down, settles down or back up.
+void gesture_act(overlay::Act act, bool by_touch, const char* why) {
+    switch (act) {
+    case overlay::Act::kPull:
+        overlay::pull_to(g_gesture.place(), by_touch);
+        break;
+    case overlay::Act::kOpen:
+        overlay::open_bar(by_touch, why);
+        break;
+    case overlay::Act::kSettleOpen:
+    case overlay::Act::kSettleClosed:
+        overlay::pull_end(act == overlay::Act::kSettleOpen, by_touch);
+        break;
+    default:
+        break;
+    }
+}
+
+// Whether the held press has been handed to the game (once it is the game's after all).
+bool g_gesture_given = false;
+
+// The held press handed to the game: its press from where and when it came down (the touch screen's own time for a
+// finger), before whatever of it comes next. `why` for a check's trace, with how long it was held.
+void gesture_to_game(const char* why) {
+    if (g_gesture_given) return;
+    g_gesture_given = true;
+    const POINT p = g_gesture_from;
+    if (g_gesture_id == kMousePress) touch(0, game_x(p.x), game_y(p.y));
+    else finger(static_cast<int>(g_gesture_id), 0, game_x(p.x), game_y(p.y), g_gesture_time);
+    if (trace_input()) {
+        jvm::log("player: input: a press at %ld,%ld %s handed to the game after %.0f ms (%s)", static_cast<long>(p.x), static_cast<long>(p.y),
+                 g_gesture.zone() == overlay::Zone::kHandle ? "on the handle" : "at the top edge", static_cast<double>(now_ns() - g_gesture_t0) / 1e6, why);
+    }
+}
+
+// A press that may be the bar's begins: held from the game, its long press timed. False when it is the game's at once.
+bool gesture_begin(UINT32 id, POINT p, std::int64_t contact, bool may, bool by_touch) {
+    const std::int64_t t = now_ns();
+    const overlay::Zone zone = overlay::press_zone(p.x, p.y);
+    if (g_gesture.down(p.x, p.y, t, zone, may, overlay::gesture_sizes(g_area_h)) != overlay::Act::kNone) {
+        // The game's: nothing is held, and the gesture is over at once.
+        g_gesture.cancel();
+        return false;
+    }
+    g_gesture_id = id;
+    g_gesture_from = p;
+    g_gesture_time = contact;
+    g_gesture_t0 = t;
+    g_gesture_given = false;
+    SetTimer(g_window, kLongPressTimer, static_cast<UINT>(overlay::kLongPressNs / 1000000 + 10), nullptr);
+    if (trace_input()) {
+        jvm::log("player: input: a %s at %ld,%ld held (%s)", by_touch ? "finger" : "press of the mouse", static_cast<long>(p.x), static_cast<long>(p.y),
+                 zone == overlay::Zone::kHandle ? "on the handle" : "at the top edge");
+    }
+    return true;
+}
+
+// The gesture's press over: its timer stopped.
+void gesture_over() {
+    KillTimer(g_window, kLongPressTimer);
+    g_gesture_id = 0;
+}
+
+// A finger on the game (a touch screen's, a pen's, a check's): down (0), up (1) or moved (2) at `p` of the game's window,
+// at the touch screen's time `contact`. Each one is a finger of the game's, except a press the overlay's bar takes
+// (bar_gesture.h).
+void on_finger(int phase, UINT32 id, POINT p, std::int64_t contact) {
+    // Whether the bar may have this press: asked before it counts as down on the game.
+    const bool may = phase == 0 && bar_may_now();
+    if (phase == 0) {
+        g_contacts.insert(id);
+        overlay::game_pressed(true);
+    } else if (phase == 1) {
+        g_contacts.erase(id);
+        // Still down: the mouse's finger, another, or a lane key of keyboard play.
+        overlay::game_pressed(anything_down());
+    }
+    // Another finger while one is held at the edge or pulls the bar: that one is the game's after all (from where and
+    // when it came down), or the bar settles where it is.
+    if (phase == 0 && g_gesture.active() && id != g_gesture_id) {
+        const bool touch_press = g_gesture_id != kMousePress;
+        const overlay::Act act = g_gesture.other_press();
+        if (act == overlay::Act::kGame) gesture_to_game("another finger came down");
+        else gesture_act(act, touch_press, nullptr);
+    }
+    if (phase == 0 && !g_gesture.active() && gesture_begin(id, p, contact, may, true)) return;
+    if (g_gesture.active() && id == g_gesture_id) {
+        const std::int64_t t = now_ns();
+        const overlay::Act act = phase == 2 ? g_gesture.move(p.x, p.y, t) : g_gesture.up(p.x, p.y, t);
+        if (phase == 1) gesture_over();
+        if (act != overlay::Act::kGame) {
+            // The bar's, or still held.
+            gesture_act(act, true, phase == 1 ? "a tap on the handle" : nullptr);
+            return;
+        }
+        // The game's after all: what was held first, then this.
+        gesture_to_game(phase == 1 ? "a tap" : "moved across or up");
+    }
+    // A check's trace: each finger's press and release as the game gets it (its moves would flood the log).
+    if (trace_input() && phase != 2) {
+        jvm::log("player: input: a finger %s on the game at %ld,%ld (the game's %.0f,%.0f)", phase == 0 ? "down" : "up", static_cast<long>(p.x),
+                 static_cast<long>(p.y), static_cast<double>(game_x(p.x)), static_cast<double>(game_y(p.y)));
+    }
+    finger(static_cast<int>(id), phase == 0 ? 0 : phase == 1 ? 1 : 2, game_x(p.x), game_y(p.y), contact);
+}
+
 // Fingers, the pen and the mouse on the game's window.
 LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     switch (msg) {
@@ -1302,8 +1480,11 @@ LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
             return TRUE;
         }
         break;
-    case WM_LBUTTONDOWN:
+    case WM_LBUTTONDOWN: {
         // The mouse's first button is a finger: pressed, moved while pressed, lifted; held even outside the window.
+        const POINT p{static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l))};
+        // Whether the bar may have this press: asked before it counts as down on the game.
+        const bool may = bar_may_now();
         SetCapture(h);
         g_pressed = true;
         // A press on the game: the overlay's bar waits for the game to be quiet.
@@ -1311,26 +1492,58 @@ LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         SetCursor(overlay::cursor(true));
         g_last_touch = false;
         if (trace_input()) {
-            jvm::log("player: input: the mouse's button down on the game at %d,%d (the game's %.0f,%.0f)", static_cast<short>(LOWORD(l)),
-                     static_cast<short>(HIWORD(l)), static_cast<double>(game_x(static_cast<short>(LOWORD(l)))), static_cast<double>(game_y(static_cast<short>(HIWORD(l)))));
+            jvm::log("player: input: the mouse's button down on the game at %ld,%ld (the game's %.0f,%.0f)", static_cast<long>(p.x), static_cast<long>(p.y),
+                     static_cast<double>(game_x(p.x)), static_cast<double>(game_y(p.y)));
         }
-        touch(0, game_x(static_cast<short>(LOWORD(l))), game_y(static_cast<short>(HIWORD(l))));
+        // A finger held at the edge or pulling the bar: it is the game's after all, or the bar settles where it is.
+        if (g_gesture.active() && g_gesture_id != kMousePress) {
+            const overlay::Act act = g_gesture.other_press();
+            if (act == overlay::Act::kGame) gesture_to_game("the mouse's button came down");
+            else gesture_act(act, true, nullptr);
+        }
+        // On the handle or the top edge: held from the game until it says whether it is the bar's.
+        if (!g_gesture.active() && gesture_begin(kMousePress, p, now_ns(), may, false)) return 0;
+        touch(0, game_x(p.x), game_y(p.y));
         return 0;
-    case WM_MOUSEMOVE:
+    }
+    case WM_MOUSEMOVE: {
+        const POINT p{static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l))};
         // The mouse moving over the game: resting at its very top edge or on the overlay's handle, the bar comes down (a
         // touch's moves are pointer messages, and their copies as mouse moves are marked).
-        if ((GetMessageExtraInfo() & 0xFFFFFF00) != 0xFF515700) overlay::pointer_moved(static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l)), g_pressed);
-        if (g_pressed) touch(2, game_x(static_cast<short>(LOWORD(l))), game_y(static_cast<short>(HIWORD(l))));
+        if ((GetMessageExtraInfo() & 0xFFFFFF00) != 0xFF515700) overlay::pointer_moved(p.x, p.y, g_pressed);
+        if (!g_pressed) return 0;
+        if (g_gesture.active() && g_gesture_id == kMousePress) {
+            // A press held at the edge: drawn down, the bar follows it; across or up, it is the game's from now on.
+            const overlay::Act act = g_gesture.move(p.x, p.y, now_ns());
+            if (act != overlay::Act::kGame) {
+                gesture_act(act, false, nullptr);
+                return 0;
+            }
+            gesture_to_game("moved across or up");
+        }
+        touch(2, game_x(p.x), game_y(p.y));
         return 0;
+    }
     case WM_LBUTTONUP:
         if (g_pressed) {
+            const POINT p{static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l))};
             g_pressed = false;
             // Still down: another finger, a pen, or a lane key of keyboard play.
             overlay::game_pressed(anything_down());
             SetCursor(overlay::cursor(false));
             ReleaseCapture();
-            if (trace_input()) jvm::log("player: input: the mouse's button up on the game at %d,%d", static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l)));
-            touch(1, game_x(static_cast<short>(LOWORD(l))), game_y(static_cast<short>(HIWORD(l))));
+            if (trace_input()) jvm::log("player: input: the mouse's button up on the game at %ld,%ld", static_cast<long>(p.x), static_cast<long>(p.y));
+            if (g_gesture.active() && g_gesture_id == kMousePress) {
+                // Let go: a click on the handle, a long press or a pull are the bar's; a click at the edge is the game's.
+                const overlay::Act act = g_gesture.up(p.x, p.y, now_ns());
+                gesture_over();
+                if (act != overlay::Act::kGame) {
+                    gesture_act(act, false, "a click on the handle");
+                    return 0;
+                }
+                gesture_to_game("a click");
+            }
+            touch(1, game_x(p.x), game_y(p.y));
         }
         return 0;
     case WM_CAPTURECHANGED:
@@ -1339,9 +1552,25 @@ LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
             g_pressed = false;
             // Still down: another finger, a pen, or a lane key of keyboard play.
             overlay::game_pressed(anything_down());
+            if (g_gesture.active() && g_gesture_id == kMousePress) {
+                // Held or pulling: forgotten (the game never had it), the bar back up from a pull.
+                const bool given = g_gesture_given;
+                gesture_act(g_gesture.cancel(), false, nullptr);
+                gesture_over();
+                if (!given) return 0;
+            }
             touch(3, 0, 0);
         }
         return 0;
+    case WM_TIMER:
+        if (w == kLongPressTimer) {
+            KillTimer(h, kLongPressTimer);
+            // Held still on the handle or the edge long enough: the bar comes, and the rest of the press is its own.
+            const overlay::Act act = g_gesture.tick(now_ns());
+            gesture_act(act, g_gesture_id != kMousePress, "a long press");
+            return 0;
+        }
+        break;
     case WM_POINTERDOWN:
     case WM_POINTERUPDATE:
     case WM_POINTERUP: {
@@ -1355,49 +1584,25 @@ LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         // Screen pixels, into the window's, then the game's.
         POINT p{static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l))};
         ScreenToClient(h, &p);
-        // A finger that comes down on the top edge waits: drawn down, it shows the bar; lifted, it is a tap. Only when it is
-        // alone on the game and the game has had no press for a moment: a finger playing at the top of a song plays.
-        const bool edge_alone = g_contacts.empty() && !g_pressed && overlay::game_quiet();
-        if (msg == WM_POINTERDOWN) {
-            g_contacts.insert(id);
-            overlay::game_pressed(true);
-        } else if (msg == WM_POINTERUP) {
-            g_contacts.erase(id);
-            // Still down: the mouse's finger, another, or a lane key of keyboard play.
-            overlay::game_pressed(anything_down());
-        }
-        if (msg == WM_POINTERDOWN && g_edge_finger && id != g_edge_finger) {
-            // Another finger while one waits at the edge: that one plays after all, from where and when it came down.
-            const UINT32 waiting = g_edge_finger;
-            g_edge_finger = 0;
-            finger(static_cast<int>(waiting), 0, game_x(g_edge_from.x), game_y(g_edge_from.y), g_edge_time);
-        }
-        if (msg == WM_POINTERDOWN && !g_edge_finger && edge_alone && p.y < std::max(8, g_area_h / 40)) {
-            g_edge_finger = id;
-            g_edge_from = p;
-            g_edge_time = contact_time(id);
-            return 0;
-        }
-        if (id == g_edge_finger) {
-            if (msg == WM_POINTERUPDATE && p.y - g_edge_from.y > g_area_h / 12) {
-                g_edge_finger = 0;
-                overlay::show_bar();
-            } else if (msg == WM_POINTERUP) {
-                g_edge_finger = 0;
-                finger(static_cast<int>(id), 0, game_x(g_edge_from.x), game_y(g_edge_from.y), g_edge_time);
-                finger(static_cast<int>(id), 1, game_x(p.x), game_y(p.y), contact_time(id));
-            }
-            return 0;
-        }
-        finger(static_cast<int>(id), msg == WM_POINTERDOWN ? 0 : msg == WM_POINTERUP ? 1 : 2, game_x(p.x), game_y(p.y), contact_time(id));
+        on_finger(msg == WM_POINTERDOWN ? 0 : msg == WM_POINTERUP ? 1 : 2, id, p, contact_time(id));
+        return 0;
+    }
+    case kTestFinger: {
+        // A check's finger: the same way as a touch screen's, at the time it is taken.
+        const POINT p{static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l))};
+        on_finger(static_cast<int>(w >> 24), static_cast<UINT32>(w & 0xFFFFFF), p, now_ns());
         return 0;
     }
     case WM_POINTERCAPTURECHANGED:
         // The finger gone from the game either way.
         if (g_contacts.erase(GET_POINTERID_WPARAM(w))) overlay::game_pressed(anything_down());
-        if (GET_POINTERID_WPARAM(w) == g_edge_finger) {
-            g_edge_finger = 0;
-            return 0;
+        if (g_gesture.active() && GET_POINTERID_WPARAM(w) == g_gesture_id) {
+            // Held or pulling: forgotten (the game never had it), the bar back up from a pull. Handed over already: the
+            // game's gesture is cancelled below as any.
+            const bool given = g_gesture_given;
+            gesture_act(g_gesture.cancel(), true, nullptr);
+            gesture_over();
+            if (!given) return 0;
         }
         // The system took the fingers away (a gesture of its own): the game's gesture is cancelled.
         finger(static_cast<int>(GET_POINTERID_WPARAM(w)), 3, 0, 0);

@@ -726,6 +726,14 @@ void keyplay_song_keys(std::vector<SongKey> keys) {
     g_song_keys = std::move(keys);
 }
 
+int keyplay_song_state() {
+    // Only the hook knows: without it, not known.
+    if (g_hook.load(std::memory_order_acquire) != kIn) return -1;
+    // Playing, and its last frame recent (a song left without a word from the game is not played any more).
+    const bool playing = g_playing.load(std::memory_order_acquire) && steady_ms() - g_frame_ms.load(std::memory_order_acquire) < 500;
+    return playing ? 1 : 0;
+}
+
 void keyplay_mark_save(const std::string& method, const std::string& body, std::vector<std::pair<std::string, std::string>>& headers) {
     // Only the request that saves a play, and only for a play a lane key pressed.
     if (!keys::saves_play(method, body)) return;
