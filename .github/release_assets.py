@@ -24,28 +24,36 @@ from pathlib import Path
 REPO = "https://github.com/kanggu12/openDMTQ"
 REGISTRY = "ghcr.io/kanggu12"
 
-# The PC client's update feed: Velopack's names, which the installed launchers look for (Velopack's GitHub source reads
-# the asset releases.<channel>.json of each recent release, channel "win", then downloads the asset its FileName names).
-# They cannot change without leaving every installed launcher without updates: the package id OpenDMTQ.Client is the
-# install folder's name too, and Velopack names the package <id>-<version>-full.nupkg in the install folder as well.
+# The PC client's update feed: Velopack's name, which the installed launchers look for. Velopack's GitHub source (its
+# sources/github.rs and sources/mod.rs, 1.2.161, the version 0.10.0's launchers carry) reads the asset
+# releases.<channel>.json of each of the ten newest releases, channel "win", so that name stays as it is.
 FEED = "releases.win.json"
-PACKAGE = "OpenDMTQ.Client-{version}-full.nupkg"
+# The update package, under a name of the release's own. The feed says it (FileName), and nothing else reads it: the
+# GitHub source finds the asset of that name ignoring case, the download goes to the install folder's packages\ under
+# it and is checked by its SHA-256 and size, Update.exe applies the file it is given and takes the program's id and
+# version from the package's own manifest, and Velopack finds a package on the disk by *-full.nupkg and that manifest.
+# The id inside stays OpenDMTQ.Client, the install folder's name (client/packaging/windows/build.sh's --packId).
+PACKAGE = "opendmtq.client-{version}-full.nupkg"
+# The package as vpk names it, from that id: what layout() takes and renames.
+BUILT_PACKAGE = "OpenDMTQ.Client-{version}-full.nupkg"
+# The id the package's manifest must carry: an installed launcher takes another id's package for another program.
+PACKAGE_ID = "OpenDMTQ.Client"
 
 # Every file of a release, in the order the notes list them: (key, name, who it is for, what it runs on). A person
-# downloads one of the first three; programs read the others, and the notes say so.
+# downloads one of the first three; programs read the others, and the notes say so. Every name in lower case.
 FILES = (
-    ("client", "OpenDMTQ-PC-Client-{version}-windows-x64-Setup.exe", "Players on a PC: the PC client's installer",
+    ("client", "opendmtq-pc-client-{version}-windows-x64-setup.exe", "Players on a PC: the PC client's installer",
      "Windows 10 and 11, x64; Linux with Wine"),
-    ("server-windows", "OpenDMTQ-Server-{version}-windows-x64.zip", "Server owners on Windows: the whole server",
+    ("server-windows", "opendmtq-server-{version}-windows-x64.zip", "Server owners on Windows: the whole server",
      "Windows 10 and 11, x64"),
-    ("chart", "OpenDMTQ-Server-{version}-helm-chart.tgz", "Server owners on Kubernetes: the Helm chart",
+    ("chart", "opendmtq-server-{version}-helm-chart.tgz", "Server owners on Kubernetes: the Helm chart",
      "Kubernetes, with the images below"),
-    ("runtime", "OpenDMTQ-Phone-Runtime-{version}-android-arm64-armv7.zip",
+    ("runtime", "opendmtq-phone-runtime-{version}-android-arm64-armv7.zip",
      "the server's app builder adds it to the phone app, for phones that run only 64-bit apps; a server fetches it "
      "itself, and one without internet takes it by hand", "Android"),
     ("feed", FEED, "installed PC clients update themselves from these two", "Windows"),
     ("package", PACKAGE, "", "Windows"),
-    ("sums", "OpenDMTQ-{version}-SHA256SUMS.txt", "the SHA-256 of every file here", ""),
+    ("sums", "opendmtq-{version}-sha256sums.txt", "the SHA-256 of every file here", ""),
 )
 # The ones a person downloads: the table at the top of the notes.
 FOR_PEOPLE = ("client", "server-windows", "chart")
@@ -96,6 +104,10 @@ def check(version, folder):
         problems.append(f"{name} is missing")
     for name in sorted(set(have) - set(want.values())):
         problems.append(f"{name} is not one of the release's files")
+    # Every name in lower case: one way of writing them, whatever the version says.
+    for name in have:
+        if name != name.lower():
+            problems.append(f"{name} is not all lower case")
     if problems:
         return problems
     # The installer: a Windows program for x64.
@@ -139,6 +151,13 @@ def check(version, folder):
         problems.append(f"{want['feed']} does not name {want['package']} alone: {assets}")
     elif assets[0].get("Size") != package.stat().st_size or str(assets[0].get("SHA256", "")).lower() != sha256(package):
         problems.append(f"{want['feed']} gives {want['package']} another size or hash")
+    # The package's own manifest: the program's id, this version and Windows on x64, whatever the file is called.
+    with zipfile.ZipFile(package) as z:
+        nuspec = [n for n in z.namelist() if n.endswith(".nuspec") and "/" not in n]
+        manifest = z.read(nuspec[0]).decode("utf-8", "replace") if nuspec else ""
+    for line in (f"<id>{PACKAGE_ID}</id>", f"<version>{version}</version>", "<rid>win-x64</rid>"):
+        if line not in manifest:
+            problems.append(f"{want['package']}'s manifest has no {line}")
     # The checksums: every other file, as sha256sum writes them.
     sums = (folder / want["sums"]).read_text(encoding="utf-8").splitlines()
     expected = [f"{sha256(folder / n)}  {n}" for k, n in want.items() if k != "sums"]
@@ -157,16 +176,26 @@ def layout(version, out, runtime, client, windows, chart):
     client = Path(client)
     # From each build's own output: the installer and Velopack's feed and package (client/packaging/windows/build.sh's
     # releases folder), the Windows server bundle (host/windows/build.sh), the chart (helm package), the runtime.
+    built = BUILT_PACKAGE.format(version=version)
     sources = {
         "client": client / "OpenDMTQ-Setup.exe",
         "server-windows": Path(windows),
         "chart": Path(chart),
         "runtime": Path(runtime),
-        "feed": client / FEED,
-        "package": client / want["package"],
+        "package": client / built,
     }
     for key, source in sources.items():
         shutil.copyfile(source, out / want[key])
+    # The feed as vpk wrote it, naming the package by the release's name instead: the same bytes, size and hashes.
+    raw = (client / FEED).read_bytes()
+    bom = raw.startswith(b"\xef\xbb\xbf")
+    feed = json.loads(raw.decode("utf-8-sig"))
+    for asset in feed.get("Assets") or []:
+        if str(asset.get("FileName", "")).lower() == built.lower():
+            asset["FileName"] = want["package"]
+    # Written as vpk writes it: compact, and with the byte-order mark when vpk's had one.
+    text = json.dumps(feed, separators=(",", ":"))
+    (out / want["feed"]).write_bytes((b"\xef\xbb\xbf" if bom else b"") + text.encode("utf-8"))
     # One file of checksums for all, in the order the notes list the files.
     lines = [f"{sha256(out / want[k])}  {want[k]}" for k in want if k != "sums"]
     (out / want["sums"]).write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -94,7 +94,7 @@ class AddTest(unittest.TestCase):
 
     # The release the stand-in server calls the latest, and where it keeps the zip.
     LATEST = "1.2.3"
-    RELEASE_URL = "https://github.com/kanggu12/openDMTQ/releases/download/v1.2.3/OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip"
+    RELEASE_URL = "https://github.com/kanggu12/openDMTQ/releases/download/v1.2.3/opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip"
 
     def urlopen(self, url, timeout=None):
         """The release's server: which release is the latest (a HEAD request, answered by a redirect to its tag), then

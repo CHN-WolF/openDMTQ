@@ -65,8 +65,11 @@ def made_release(folder, version=V, machine=assets.X64):
     with zipfile.ZipFile(path["runtime"], "w") as z:
         for member in ("bundle.json", "arm64-v8a/libarm32.so", "armeabi-v7a/libopendmtq.so"):
             z.writestr(member, member)
-    with open(path["package"], "wb") as f:
-        f.write(b"PK the package")
+    # The package: a zip with its manifest at the top, as vpk makes it.
+    with zipfile.ZipFile(path["package"], "w") as z:
+        z.writestr("OpenDMTQ.Client.nuspec", f"<package><metadata><id>OpenDMTQ.Client</id><version>{version}</version>"
+                                             "<rid>win-x64</rid></metadata></package>")
+        z.writestr("lib/app/OpenDMTQ.exe", program())
     feed = {"Assets": [{"PackageId": "OpenDMTQ.Client", "Version": version, "Type": "Full", "FileName": names["package"],
                         "SHA256": assets.sha256(path["package"]).upper(), "Size": os.path.getsize(path["package"])}]}
     # vpk writes its feed with a byte-order mark: read as it comes.
@@ -78,16 +81,20 @@ def made_release(folder, version=V, machine=assets.X64):
 
 
 class NamesTest(unittest.TestCase):
-    """DEP-50: one scheme, saying what each file is, for which system and architecture, and which version."""
+    """DEP-50: one scheme, saying what each file is, for which system and architecture, and which version, all in lower
+    case."""
 
     def test_each_name_says_its_version_and_what_it_runs_on(self):
         names = assets.names(V)
-        self.assertEqual(names["client"], "OpenDMTQ-PC-Client-1.2.3-windows-x64-Setup.exe")
-        self.assertEqual(names["server-windows"], "OpenDMTQ-Server-1.2.3-windows-x64.zip")
-        self.assertEqual(names["chart"], "OpenDMTQ-Server-1.2.3-helm-chart.tgz")
-        self.assertEqual(names["runtime"], "OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip")
-        self.assertEqual(names["sums"], "OpenDMTQ-1.2.3-SHA256SUMS.txt")
+        self.assertEqual(names["client"], "opendmtq-pc-client-1.2.3-windows-x64-setup.exe")
+        self.assertEqual(names["server-windows"], "opendmtq-server-1.2.3-windows-x64.zip")
+        self.assertEqual(names["chart"], "opendmtq-server-1.2.3-helm-chart.tgz")
+        self.assertEqual(names["runtime"], "opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip")
+        self.assertEqual(names["package"], "opendmtq.client-1.2.3-full.nupkg")
+        self.assertEqual(names["sums"], "opendmtq-1.2.3-sha256sums.txt")
         for key, name in names.items():
+            # One way of writing them: no capital letter anywhere.
+            self.assertEqual(name, name.lower(), key)
             # The feed's name is Velopack's, fixed by the launchers already installed; every other has the version.
             if key != "feed":
                 self.assertIn(V, name, key)
@@ -95,11 +102,15 @@ class NamesTest(unittest.TestCase):
         # installer's .version, Velopack's RELEASES and assets.win.json) is gone.
         self.assertEqual(len(names), 7)
 
-    def test_the_update_feed_keeps_the_names_installed_launchers_look_for(self):
-        # Velopack's GitHub source reads releases.<channel>.json, channel win, and the package its FileName gives; the
-        # package id is the install folder's name and the package's in it (client/opendmtq_client/repair.py).
+    def test_the_update_feed_keeps_the_name_installed_launchers_look_for(self):
+        # Velopack's GitHub source reads releases.<channel>.json, channel win, and the package its FileName gives, under
+        # any name; the package id inside is the install folder's name (client/opendmtq_client/installed.py).
         self.assertEqual(assets.names(V)["feed"], "releases.win.json")
-        self.assertEqual(assets.names(V)["package"], "OpenDMTQ.Client-1.2.3-full.nupkg")
+        self.assertEqual(assets.PACKAGE_ID, "OpenDMTQ.Client")
+        self.assertEqual(assets.BUILT_PACKAGE.format(version=V), "OpenDMTQ.Client-1.2.3-full.nupkg")
+        # The launcher's repair finds the installed package in any case: the installer's as the id is written, an
+        # update's as the release names it.
+        self.assertIn("n.lower() == want", read("client", "opendmtq_client", "repair.py"))
         build = read("client", "packaging", "windows", "build.sh")
         self.assertIn("--packId OpenDMTQ.Client ", build)
         self.assertNotIn("--channel", build)
@@ -124,12 +135,17 @@ class NamesTest(unittest.TestCase):
                     "`opendmtq-arm32-runtime.zip`", "RELEASES`", "assets.win.json", "releases/latest/download/"):
             for guide, body in text.items():
                 self.assertNotIn(old, body, f"{guide} names {old}")
+        # The release's names of 0.11.0's first builds, in capitals, which no release has.
+        for old in ("OpenDMTQ-PC-Client", "OpenDMTQ-Server-", "OpenDMTQ-Phone-", "SHA256SUMS", "OpenDMTQ.Client-<",
+                    "OpenDMTQ.Client-1"):
+            for guide, body in text.items():
+                self.assertNotIn(old, body, f"{guide} names {old}")
         # The quick start downloads the server for Windows by the latest release's number, which its name carries.
         for guide in ("README.md", "docs/install.md"):
-            self.assertIn('OpenDMTQ-Server-$v-windows-x64.zip"', text[guide])
+            self.assertIn('opendmtq-server-$v-windows-x64.zip"', text[guide])
             self.assertIn("-replace '.*/v'", text[guide])
-        self.assertIn("OpenDMTQ-PC-Client-<version>-windows-x64-Setup.exe", text["docs/windows-player.md"])
-        self.assertIn("OpenDMTQ-<version>-SHA256SUMS.txt", text["docs/install.md"])
+        self.assertIn("opendmtq-pc-client-<version>-windows-x64-setup.exe", text["docs/windows-player.md"])
+        self.assertIn("opendmtq-<version>-sha256sums.txt", text["docs/install.md"])
 
 
 class CheckTest(unittest.TestCase):
@@ -149,14 +165,14 @@ class CheckTest(unittest.TestCase):
         os.remove(path["runtime"])
         open(os.path.join(self.folder, "RELEASES"), "w").close()
         problems = assets.check(V, self.folder)
-        self.assertIn("OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip is missing", problems)
+        self.assertIn("opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip is missing", problems)
         self.assertIn("RELEASES is not one of the release's files", problems)
 
     def test_programs_for_another_machine_are_said(self):
         # 32-bit x86 (IMAGE_FILE_MACHINE_I386): a name that says x64 must hold x64.
         made_release(self.folder, machine=0x14C)
         problems = assets.check(V, self.folder)
-        self.assertTrue(any("Setup.exe is not a Windows program for x64" in p for p in problems), problems)
+        self.assertTrue(any("setup.exe is not a Windows program for x64" in p for p in problems), problems)
         self.assertTrue(any("OpenDMTQ/OpenDMTQ.exe is not a Windows program for x64" in p for p in problems), problems)
 
     def test_another_version_inside_is_said(self):
@@ -174,22 +190,50 @@ class CheckTest(unittest.TestCase):
         with open(path["package"], "ab") as f:
             f.write(b" changed after the feed was written")
         problems = assets.check(V, self.folder)
-        self.assertIn("releases.win.json gives OpenDMTQ.Client-1.2.3-full.nupkg another size or hash", problems)
+        self.assertIn("releases.win.json gives opendmtq.client-1.2.3-full.nupkg another size or hash", problems)
+
+    def test_a_name_with_a_capital_letter_is_said(self):
+        path = made_release(self.folder)
+        # The same file under the name as vpk writes it: one too many, and not in lower case.
+        os.rename(path["package"], os.path.join(self.folder, "OpenDMTQ.Client-1.2.3-full.nupkg"))
+        problems = assets.check(V, self.folder)
+        self.assertIn("opendmtq.client-1.2.3-full.nupkg is missing", problems)
+        self.assertIn("OpenDMTQ.Client-1.2.3-full.nupkg is not all lower case", problems)
+
+    def test_a_package_of_another_program_or_machine_is_said(self):
+        path = made_release(self.folder)
+        with zipfile.ZipFile(path["package"], "w") as z:
+            z.writestr("Other.App.nuspec", "<package><metadata><id>Other.App</id><version>1.2.3</version>"
+                                           "<rid>win-arm64</rid></metadata></package>")
+        problems = assets.check(V, self.folder)
+        self.assertIn("opendmtq.client-1.2.3-full.nupkg's manifest has no <id>OpenDMTQ.Client</id>", problems)
+        self.assertIn("opendmtq.client-1.2.3-full.nupkg's manifest has no <rid>win-x64</rid>", problems)
 
     def test_layout_names_the_built_files_and_checks_them(self):
-        # The builds' own outputs, under the names they are built with.
+        # The builds' own outputs, under the names they are built with: the installer as PyInstaller makes it, the
+        # package and the feed as vpk writes them (the package named after the program's id, the feed naming it so).
         built = os.path.join(self.folder, "built")
         client = os.path.join(built, "client")
         os.makedirs(client)
         path = made_release(built)
         os.rename(path["client"], os.path.join(client, "OpenDMTQ-Setup.exe"))
-        for key in ("feed", "package"):
-            os.rename(path[key], os.path.join(client, os.path.basename(path[key])))
+        os.rename(path["package"], os.path.join(client, "OpenDMTQ.Client-1.2.3-full.nupkg"))
+        with open(path["feed"], encoding="utf-8-sig") as f:
+            feed = json.load(f)
+        feed["Assets"][0]["FileName"] = "OpenDMTQ.Client-1.2.3-full.nupkg"
+        with open(os.path.join(client, "releases.win.json"), "w", encoding="utf-8") as f:
+            json.dump(feed, f)
         # What vpk also writes, which the release leaves out.
         open(os.path.join(client, "RELEASES"), "w").close()
         out = os.path.join(self.folder, "release")
         self.assertEqual(assets.layout(V, out, path["runtime"], client, path["server-windows"], path["chart"]), [])
         self.assertEqual(sorted(os.listdir(out)), sorted(assets.names(V).values()))
+        # The feed names the package by the release's name, with the same hashes and size: the bytes did not change.
+        with open(os.path.join(out, "releases.win.json"), encoding="utf-8") as f:
+            laid = json.load(f)["Assets"][0]
+        self.assertEqual(laid["FileName"], "opendmtq.client-1.2.3-full.nupkg")
+        self.assertEqual({k: v for k, v in laid.items() if k != "FileName"},
+                         {k: v for k, v in feed["Assets"][0].items() if k != "FileName"})
 
 
 class NotesTest(unittest.TestCase):

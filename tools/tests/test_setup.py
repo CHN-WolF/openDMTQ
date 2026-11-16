@@ -1190,7 +1190,7 @@ class AppStepTest(unittest.TestCase):
             inst.sign_in()
             page = inst.page(BASE + "/setup?step=app")
             self.assertIn("could not fetch it: no network", page)
-            self.assertIn("OpenDMTQ-Phone-Runtime zip in data/apk", page)
+            self.assertIn("opendmtq-phone-runtime zip in data/apk", page)
 
     def test_a_build_already_running_is_followed_not_started_again(self):
         with HostInstall() as inst, mock.patch.object(admin.jobs, "running_build", lambda: {"id": "b0"}):

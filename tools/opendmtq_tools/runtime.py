@@ -7,7 +7,7 @@ and it comes to data/apk/arm32 from the first of:
 
   * the copy that came with this program, beside this file: the Windows bundle and a release's tools image have one, the one
     tested with them. One of another version replaces what is in place: a new bundle or image brings its runtime along;
-  * a copy put in data/apk by hand, as downloaded from a release (OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip) or
+  * a copy put in data/apk by hand, as downloaded from a release (opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip) or
     under this program's own name: how a host install without internet gets it (docs/closed-network.md). It is taken, and
     goes once it is in place: left there, it would hold back every later runtime;
   * the project's latest release, when no runtime is in place, or when asked to look (--refresh: `opendmtq runtime`, and the
@@ -40,7 +40,7 @@ ZIP_NAME = "opendmtq-arm32-runtime.zip"
 # them), so a download first asks which release is the latest.
 RELEASES = "https://github.com/kanggu12/openDMTQ/releases"
 # The zip's name in a release, as a person also downloads it into data/apk.
-RELEASE_NAME = "OpenDMTQ-Phone-Runtime-{version}-android-arm64-armv7.zip"
+RELEASE_NAME = "opendmtq-phone-runtime-{version}-android-arm64-armv7.zip"
 # A file of that name, whatever its version, for one put in data/apk by hand.
 RELEASE_GLOB = RELEASE_NAME.format(version="*")
 # The copy a Windows bundle or a release's tools image comes with, beside this file.

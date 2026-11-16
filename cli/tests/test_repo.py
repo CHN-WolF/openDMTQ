@@ -558,14 +558,14 @@ class ClosedNetworkGuideTest(unittest.TestCase):
             self.assertIn(f"{repository}:{tag}", guide)
         # The runtime's and the installer's files, under the names a release gives them, which runtime.py,
         # windows_client.py and host/install.sh look for.
-        self.assertIn('RELEASE_NAME = "OpenDMTQ-Phone-Runtime-{version}-android-arm64-armv7.zip"',
+        self.assertIn('RELEASE_NAME = "opendmtq-phone-runtime-{version}-android-arm64-armv7.zip"',
                       self.read("tools", "opendmtq_tools", "runtime.py"))
-        self.assertIn("`OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip`", guide)
-        self.assertIn("'OpenDMTQ-Phone-Runtime-*-android-arm64-armv7.zip'", install)
-        self.assertIn('RELEASE_NAME = "OpenDMTQ-PC-Client-{version}-windows-x64-Setup.exe"',
+        self.assertIn("`opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip`", guide)
+        self.assertIn("'opendmtq-phone-runtime-*-android-arm64-armv7.zip'", install)
+        self.assertIn('RELEASE_NAME = "opendmtq-pc-client-{version}-windows-x64-setup.exe"',
                       self.read("tools", "opendmtq_tools", "windows_client.py"))
-        self.assertIn("`OpenDMTQ-PC-Client-1.2.3-windows-x64-Setup.exe`", guide)
-        self.assertIn("'OpenDMTQ-PC-Client-*-windows-x64-Setup.exe'", install)
+        self.assertIn("`opendmtq-pc-client-1.2.3-windows-x64-setup.exe`", guide)
+        self.assertIn("'opendmtq-pc-client-*-windows-x64-setup.exe'", install)
 
 
 class LicenseTest(unittest.TestCase):

@@ -125,9 +125,9 @@ jobs:
           host/windows/build.sh _work/windows
           cp _work/windows/OpenDMTQ-windows.zip dist/
 
-      # The release's files under their names (what each is, for which system and architecture, which version), with
-      # their checksums, checked (.github/release_assets.py): the chart packaged for it here, pushed below. Before
-      # anything is pushed too, so that a file missing or built for another machine publishes nothing.
+      # The release's files under their names, all in lower case (what each is, for which system and architecture, which
+      # version), with their checksums, checked (.github/release_assets.py): the chart packaged for it here, pushed
+      # below. Before anything is pushed too, so that a file missing or built for another machine publishes nothing.
       - name: The release's files
         env:
           VERSION: ${{ steps.names.outputs.version }}

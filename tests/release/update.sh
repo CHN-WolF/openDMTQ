@@ -33,8 +33,13 @@ fail() { echo "FAIL $*"; fails=$((fails + 1)); }
 
 OLD_VERSION=$(cat "$OLD/OpenDMTQ-Setup.exe.version" 2>/dev/null || true)
 NEW_VERSION=$(sed -n 's/.*"Version":"\([^"]*\)".*/\1/p' "$NEW/releases.win.json")
+# The package by the name the new feed gives it (the release's, in lower case).
+PACKAGE=$(sed -n 's/.*"FileName":"\([^"]*\)".*/\1/p' "$NEW/releases.win.json")
 [ -n "$OLD_VERSION" ] && [ -n "$NEW_VERSION" ] || { echo "no versions in $OLD and $NEW" >&2; exit 1; }
-echo "from $OLD_VERSION to $NEW_VERSION"
+echo "from $OLD_VERSION to $NEW_VERSION, the package as $PACKAGE"
+# The release's name for it, in lower case (.github/release_assets.py): vpk's own name has the id's capitals.
+[ "$PACKAGE" = "$(printf '%s' "$PACKAGE" | tr '[:upper:]' '[:lower:]')" ] && pass "the new feed names its package in lower case" \
+  || fail "the new feed names its package with capitals ($PACKAGE)"
 
 # ---- the stand-in: both releases as tag folders, the old one as published (its own names), the new one as laid out
 rm -rf "$OUT" && mkdir -p "$OUT/rel/v$OLD_VERSION" "$OUT/rel/v$NEW_VERSION"
@@ -92,6 +97,14 @@ PY
   sleep 5
   wine "$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe" --version > /out/$WAY-version.log 2>&1
   tr -d "\r" < /out/$WAY-version.log | tail -n 3
+  # The packages the update left, by name: the release'"'"'s, as its feed names it.
+  echo "packages: $(ls "$LOCAL/OpenDMTQ.Client/packages" | tr "\n" " ")"
+  # Repair from that package: a file of the program gone, put back from it (the launcher finds the package in any case).
+  wineserver -k 2>/dev/null
+  rm -f "$LOCAL/OpenDMTQ.Client/current/licenses/NOTICES.txt"
+  wine "$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe" --repair > /out/$WAY-repair.log 2>&1
+  tr -d "\r" < /out/$WAY-repair.log | tail -n 3
+  [ -f "$LOCAL/OpenDMTQ.Client/current/licenses/NOTICES.txt" ] && echo "repaired: NOTICES.txt back" || echo "not repaired"
   cp "$LOCAL"/velopack/*.log /out/ 2>/dev/null
   wineserver -k 2>/dev/null
   chmod -R a+rwX /out' > "$OUT/$1.log" 2>&1
@@ -106,10 +119,14 @@ for way in github launcher; do
   grep -q "^updated $NEW_VERSION$" "$OUT/$way.log" && pass "$way: updated to $NEW_VERSION" || fail "$way: not updated"
   grep -q "$NEW_VERSION" "$OUT/$way-version.log" && pass "$way: the new launcher runs and says $NEW_VERSION" \
     || fail "$way: the new launcher does not say $NEW_VERSION"
-  # What was asked for: the feed by its name and the package by the name the feed gives.
+  # What was asked for: the feed by its name and the package by the name the feed gives, in lower case exactly.
   grep -E "releases.win.json|nupkg|/releases" "$OUT/requests.log" | sed 's/?.*//' | sort | uniq -c | sed "s/^/  $way asked: /"
-  grep -q "OpenDMTQ.Client-$NEW_VERSION-full.nupkg" "$OUT/requests.log" && pass "$way: the package came by the feed's name" \
-    || fail "$way: the package was not downloaded"
+  grep -q "/$PACKAGE\( \|?\|$\)" "$OUT/requests.log" && pass "$way: the package came by the feed's name ($PACKAGE)" \
+    || fail "$way: the package was not downloaded by the feed's name ($PACKAGE)"
+  grep -q "^packages: .*$PACKAGE" "$OUT/$way.log" && pass "$way: the update keeps the package under that name" \
+    || fail "$way: the update did not keep $PACKAGE"
+  grep -q "^repaired: NOTICES.txt back$" "$OUT/$way.log" && pass "$way: repair puts a file back from the updated package" \
+    || fail "$way: repair did not put the file back"
   cp "$OUT/requests.log" "$OUT/$way-requests.log"
 done
 

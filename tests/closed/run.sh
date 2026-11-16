@@ -244,7 +244,7 @@ host_way() {
   curl -fsSL -o "$KIT/kit/7zip.tar.xz" "$SEVENZIP_LINUX_X64_URL"
   release_source "$KIT/kit/opendmtq-source.tar.gz"
   # Under the name a release gives it, as a person downloads it (.github/release_assets.py).
-  cp "$KIT/$ZIP" "$KIT/kit/OpenDMTQ-Phone-Runtime-1.0.0-android-arm64-armv7.zip"
+  cp "$KIT/$ZIP" "$KIT/kit/opendmtq-phone-runtime-1.0.0-android-arm64-armv7.zip"
   cp -r "$KIT/DMTQ" "$KIT/kit/DMTQ"
 
   # The computer on the closed network: the system and a user who may use sudo; the same image as the host install's test.
