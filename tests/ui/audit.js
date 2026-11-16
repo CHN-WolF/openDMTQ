@@ -370,6 +370,16 @@ function quickTimers() {
   window.keptOpen = true;
 }
 const keptOpen = page => page.evaluate(() => window.keptOpen === true).catch(() => false);
+// A page left open in a window of its own (a context of its own, signed in): the browser keeps only the front tab of a
+// window in sight, and a page out of sight rightly asks nothing (it catches up when it is looked at again).
+async function openAlone(contexts, url) {
+  const context = await contexts.browser.createBrowserContext();
+  await signIn(context);
+  const page = await context.newPage();
+  await page.evaluateOnNewDocument(quickTimers);
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  return page;
+}
 // Until the page says so (test, run in the page with arg), for ms at most: whether it came.
 async function until(page, test, arg, ms = 90000) {
   const end = Date.now() + ms;
@@ -2071,12 +2081,8 @@ async function adminFlows(contexts) {
     // sentence under the bar come, change or go, without the page being opened anew. Before: they stayed as drawn.
     const owner = await contexts.signed.newPage();
     const open = [];
-    for (const url of [`${P}/`, `${P}/live.php`]) {
-      const page = await contexts.signed.newPage();
-      await page.evaluateOnNewDocument(quickTimers);
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
-      open.push(page);
-    }
+    for (const url of [`${P}/`, `${P}/live.php`]) open.push(await openAlone(contexts, url));
+    check('the pages left open are in sight, as a page someone looks at', (await Promise.all(open.map(p => p.evaluate(() => document.visibilityState)))).every(v => v === 'visible'));
     const maintenance = async (action, message) => {
       await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
       if (message !== undefined) await owner.$eval('textarea', (e, m) => { e.value = m; }, message);
@@ -2104,7 +2110,7 @@ async function adminFlows(contexts) {
       await maintenance('off');
       await all(null, `round ${round}: maintenance ended, the word and the sentence go by themselves`);
     }
-    for (const page of open) await page.close();
+    for (const page of open) await page.browserContext().close();
     await owner.close();
   } else if (stage === 'away') {
     // ADM-117, ADM-118: the Players page and the status page left open while the game server stops and starts again, twice
@@ -2120,12 +2126,7 @@ async function adminFlows(contexts) {
       return false;
     };
     const open = [];
-    for (const url of [`${A}/players`, `${A}/`]) {
-      const page = await contexts.signed.newPage();
-      await page.evaluateOnNewDocument(quickTimers);
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
-      open.push(page);
-    }
+    for (const url of [`${A}/players`, `${A}/`]) open.push(await openAlone(contexts, url));
     const down = () => !!document.querySelector('.bar-end > .state.down') && !!document.querySelector('#server-alert > .site-alert.down');
     const up = () => !document.querySelector('.bar-end > .state') && !document.querySelector('#server-alert > .site-alert');
     for (const round of [1, 2]) {
@@ -2141,7 +2142,7 @@ async function adminFlows(contexts) {
       check(`round ${round}: the game server back, the word and the sentence go by themselves`, back.every(Boolean), back.join(' '));
       flag(`away-seen-up-${round}`);
     }
-    for (const page of open) await page.close();
+    for (const page of open) await page.browserContext().close();
   } else if (stage === 'quiet') {
     await broadcastsOff(contexts, true);
     await sweep(contexts, QUIET, ALL_WIDTHS);

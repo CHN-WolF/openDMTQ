@@ -314,7 +314,7 @@
       if (signedIn && list.length) takePictures(list, root);
     };
     draw(cards);
-    setInterval(() => {
+    const look = () => {
       if (document.hidden) return;
       fetch('/opendmtq/?live=1').then(r => {
         if (r.ok) siteState(r);
@@ -325,7 +325,10 @@
         }
         return r.ok ? r.json() : Promise.reject();
       }).then(draw).catch(() => {});
-    }, 15000);
+    };
+    setInterval(look, 15000);
+    // A tab out of sight asks nothing; looked at again, it catches up at once (as the live page does).
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) look(); });
   }
 
   window.liveThumbs = { home, render, takePictures, headerCount, airTime, since, siteState };

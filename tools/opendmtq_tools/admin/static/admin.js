@@ -742,7 +742,7 @@ function serverState(page) {
 // point every five minutes in the resources' charts. The things to look at first, the bar's word and the sentence above the
 // page with them.
 if (document.getElementById('tiles')) {
-  setInterval(async () => {
+  const lookAgain = async () => {
     if (document.hidden) return;
     try {
       const page = new DOMParser().parseFromString(await (await fetch(location.href, { headers: { 'X-Requested-With': 'fetch' } })).text(), 'text/html');
@@ -754,19 +754,25 @@ if (document.getElementById('tiles')) {
       if (attention) document.getElementById('attention').replaceChildren(...attention.childNodes);
       serverState(page);
     } catch (_) { /* The next look. */ }
-  }, 30000);
+  };
+  setInterval(lookAgain, 30000);
+  // A tab out of sight asks nothing; looked at again, it catches up at once.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) lookAgain(); });
 } else if (document.querySelector('.auth-form') && document.getElementById('server-alert')) {
   // Every other page signed in looks at the frame alone, as often: the bar's word and the sentence come and go with the
   // game server while the page stays open. Asked for this page (for=), whose own rules say which sentence it shows.
   const look = new URL('look', document.querySelector('.bar .logo').href);
   look.searchParams.set('for', document.body.dataset.page || '');
-  setInterval(async () => {
+  const lookAgain = async () => {
     if (document.hidden) return;
     try {
       const r = await fetch(look, { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' });
       if (r.ok) serverState(new DOMParser().parseFromString(await r.text(), 'text/html'));
     } catch (_) { /* The admin service itself away a moment: the next look. */ }
-  }, 30000);
+  };
+  setInterval(lookAgain, 30000);
+  // A tab out of sight asks nothing; looked at again, it catches up at once.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) lookAgain(); });
 }
 
 // The Logs page's requests: new ones come in by themselves while Keep updating is ticked, and a tap on an address filters
