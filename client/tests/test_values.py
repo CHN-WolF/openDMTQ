@@ -243,6 +243,11 @@ class Values(unittest.TestCase):
         """Each key the launcher writes, and each fixed value it offers, is one the player's reader takes."""
         with open(SETTINGS_CPP, encoding="utf-8") as f:
             source = f.read()
+        # The equaliser's names are read by the player's sound mixer (eq_from_name), where its branch has one.
+        sound_mix = os.path.join(os.path.dirname(SETTINGS_CPP), "sound_mix.h")
+        if os.path.isfile(sound_mix):
+            with open(sound_mix, encoding="utf-8") as f:
+                source += f.read()
         # Every key, keyboard play's four too: the player's reader takes each by its name (settings.cpp, key == "...").
         # A reader that left one out would log it and play without it, so none is let off.
         # The sound's keys of 0.11.0 (the in-game menu's volumes and equaliser) come with the player's own branch: until
