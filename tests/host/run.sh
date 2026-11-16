@@ -343,5 +343,112 @@ else
   pass "PHP said nothing in the server's log"
 fi
 
+# 13. The Server page and its command lines: restart, repair, the data, uninstall. Last, as the uninstall takes the folder.
+admin=$(mktemp)
+# signed_in: the owner signs in again (a restart ends the pages' sessions).
+signed_in() {
+  web "$admin" -o /dev/null "$A/login"
+  web "$admin" -o /dev/null -d "name=admin&password=hosttest" "$A/login"
+}
+# job_ends <redirect>: how a job the Server page started ended: followed to its end when the page did not wait for it,
+# else what the page then says (a message of the bad kind: failed, shown).
+job_ends() {
+  local job said
+  job=$(job_of <<<"$1")
+  if [ -n "$job" ]; then
+    follow "$job" | tail -n 1
+    return
+  fi
+  said=$(web "$admin" "$A/server")
+  if grep -q 'class="flash bad"' <<<"$said"; then
+    grep -o '<p class="flash bad"[^>]*>[^<]*' <<<"$said" | sed 's/<[^>]*>//' >&2
+    echo failed
+  else
+    echo done
+  fi
+}
+# has_actions: the Server page in $page has each of the forms a host install has.
+has_actions() {
+  local a
+  for a in restart stop repair data uninstall; do
+    grep -q "action=\"/opendmtq/admin/server/$a\"" <<<"$page" || return 1
+  done
+}
+signed_in
+page=$(web "$admin" "$A/server")
+expect "the Server page has Restart, Stop the server, the repair, the data and Uninstall (ADM-113)" has_actions
+expect "and names the one address on the server's port" grep -q "http://127.0.0.1:$PORT/opendmtq/admin/" <<<"$page"
+expect "the install wrote the list of the program's files" inside "test -s OpenDMTQ/.host/manifest.sha256"
+# Restart: the server's program starts every part again, and these pages answer as another process.
+before=$(web "$admin" "$A/setup/ping")
+answer=$(web "$admin" -o /dev/null -w '%{http_code}' --data-urlencode "csrf=$(token <<<"$page")" "$A/server/restart")
+expect "Restart on the Server page is asked for ($answer)" test "$answer" = 200
+restarted=no
+for _ in $(seq 90); do
+  now=$(curl -s -m 3 "$A/setup/ping" || true)
+  if [ -n "$now" ] && [ "$now" != "$before" ]; then restarted=yes; break; fi
+  sleep 1
+done
+expect "and the server starts again" test "$restarted" = yes
+expect "and answers" is 200 "http://127.0.0.1:$PORT/opendmtq/health.php"
+# Repair: a program file gone, one changed, a data folder and the owner's sign-in for the site gone. The release's code is
+# the test's own copy (as for the install), which the server's programs get from the start's environment.
+inside "opendmtq stop" >/dev/null || true
+inside "OPENDMTQ_TARBALL=file:///tmp/release.tar.gz opendmtq start" >/dev/null || true
+inside "rm OpenDMTQ/server/portal/robots.txt && echo changed >> OpenDMTQ/docs/faq.md && rm -rf OpenDMTQ/data/backups OpenDMTQ/data/state/owner.pass"
+signed_in
+went=$(web "$admin" -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf=$(web "$admin" "$A/server" | token)" "$A/server/repair")
+state=$(job_ends "$went")
+expect "Check and repair on the Server page ends ($state) (SRV-47)" test "$state" = done
+expect "the program file that was gone is back" inside "test -s OpenDMTQ/server/portal/robots.txt"
+expect "the one that was changed is as the release has it" inside "! grep -q '^changed$' OpenDMTQ/docs/faq.md"
+expect "the data folder is there again" inside "test -d OpenDMTQ/data/backups"
+expect "and the owner's sign-in for the site" inside "test -s OpenDMTQ/data/state/owner.pass"
+# The same from the command line.
+inside "rm OpenDMTQ/server/portal/robots.txt"
+expect "opendmtq repair puts a program file back too" inside "OPENDMTQ_TARBALL=file:///tmp/release.tar.gz opendmtq repair > /tmp/repair.log 2>&1 && test -s OpenDMTQ/server/portal/robots.txt"
+inside "tail -n 4 /tmp/repair.log" || true
+for _ in $(seq 60); do is 200 "http://127.0.0.1:$PORT/opendmtq/health.php" && break; sleep 1; done
+# The data: an old backup and the logs, a backup made first and kept.
+inside "mkdir -p OpenDMTQ/data/backups && echo old > OpenDMTQ/data/backups/opendmtq-20200101-000000-manual.tar.gz"
+signed_in
+went=$(web "$admin" -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf=$(web "$admin" "$A/server" | token)" -d part=backups -d part=logs \
+  -d backup=yes -d confirm=delete "$A/server/data")
+state=$(job_ends "$went")
+expect "deleting the backups and the logs on the Server page ends ($state) (ADM-113)" test "$state" = done
+expect "the old backup is gone" inside "test ! -e OpenDMTQ/data/backups/opendmtq-20200101-000000-manual.tar.gz"
+expect "the backup made first stays" inside "ls OpenDMTQ/data/backups | grep -q before-delete"
+expect "the programs' log was emptied" inside "test \$(stat -c %s OpenDMTQ/data/state/logs/programs.log) -lt 4096"
+went=$(web "$admin" -o /dev/null -w '%{http_code}' --data-urlencode "csrf=$(web "$admin" "$A/server" | token)" -d part=logs -d confirm=yes "$A/server/data")
+expect "without the word typed nothing is deleted ($went)" test "$went" = 302
+expect "opendmtq delete-data lists the parts with their size" inside "opendmtq delete-data | grep -q '^recordings'"
+expect "opendmtq delete-data recordings --yes deletes them, a backup first" inside "opendmtq delete-data recordings --yes | grep -q 'deleted: recordings'"
+# Uninstall from the Server page, keeping the data: the program stops every part, then removes everything else.
+link=$(inside "command -v opendmtq" || true)
+went=$(web "$admin" -o /tmp/$NAME-uninstall.html -w '%{http_code}' --data-urlencode "csrf=$(web "$admin" "$A/server" | token)" \
+  -d keep=yes -d confirm=uninstall "$A/server/uninstall")
+expect "Uninstall on the Server page is asked for ($went) (DEP-48)" test "$went" = 200
+expect "and its page follows the stop" grep -q 'id="stop-wait"' /tmp/$NAME-uninstall.html
+for _ in $(seq 60); do
+  inside "test ! -e OpenDMTQ/opendmtq" && break
+  sleep 1
+done
+expect "nothing answers afterwards" is 000 "http://127.0.0.1:$PORT/opendmtq/health.php"
+expect "the folder keeps only the data and .env" test "$(inside "ls -A OpenDMTQ | tr '\n' ' '")" = ".env data "
+expect "the command on the PATH is gone (${link:-none})" inside "test -n '$link' && test ! -e '$link'"
+# Installed again over the data: the same server, which the command line then removes whole.
+if timeout 600 docker exec -u player -w /home/player "$NAME" bash -lc \
+    "cat /tmp/host/get.sh | OPENDMTQ_TARBALL=file:///tmp/release.tar.gz OPENDMTQ_DIR=\$HOME/OpenDMTQ OPENDMTQ_NO_SETUP=1 sh" \
+    > /tmp/$NAME-again.log 2>&1 && inside "opendmtq start" >/dev/null 2>&1; then
+  pass "installed again over the data kept, the server starts"
+else
+  tail -n 20 /tmp/$NAME-again.log
+  fail "installed again over the data kept, the server starts"
+fi
+expect "with its players' accounts still there" inside "python3 -c \"import sqlite3, sys; sys.exit(0 if sqlite3.connect('OpenDMTQ/data/state/dmtq.db3').execute('SELECT COUNT(*) FROM SiteUser').fetchone()[0] else 1)\""
+expect "opendmtq uninstall --yes removes it whole" inside "opendmtq uninstall --yes > /tmp/uninstall.log 2>&1; test ! -e OpenDMTQ"
+inside "tail -n 5 /tmp/uninstall.log" || true
+rm -f "$admin"
+
 echo "$([ $failures = 0 ] && echo PASS || echo FAIL) the host install on $DISTRO: $failures failure(s)"
 exit $((failures > 0))
