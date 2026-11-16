@@ -202,8 +202,21 @@ def para(text, stream=None):
     if not is_terminal(stream):
         return [text]
     room = min(width(stream), 110) - len(INDENT) - 1
-    return textwrap.wrap(text, room, initial_indent=INDENT, subsequent_indent=INDENT, break_on_hyphens=False,
-                         break_long_words=False) or [""]
+
+    def wrapped(columns):
+        # The text in lines of at most this many columns, URLs and paths never cut.
+        return textwrap.wrap(text, columns, initial_indent=INDENT, subsequent_indent=INDENT, break_on_hyphens=False,
+                             break_long_words=False) or [""]
+    lines = wrapped(room)
+    # A word or two alone on the last line reads as a mistake: a little narrower brings more of the sentence down to it,
+    # as long as that adds no line.
+    for narrower in range(room - 4, max(room - 40, 30), -4):
+        if len(lines) < 2 or len(lines[-1].strip()) >= 16:
+            break
+        tried = wrapped(narrower)
+        if len(tried) == len(lines):
+            lines = tried
+    return lines
 
 
 def address_block(site, admin, user, password=None, where=None, stream=None, title="Addresses"):

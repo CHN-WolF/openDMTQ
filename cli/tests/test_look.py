@@ -120,6 +120,20 @@ class LookTest(unittest.TestCase):
         finally:
             close(tty)
 
+    def test_sentences_wrap_on_the_left_edge_without_a_lone_last_word(self):
+        tty = terminal()
+        try:
+            text = ("The QR code for phones is on the site's home page: open http://192.168.1.10:8791/ in a browser and "
+                    "sign in.")
+            with mock.patch.object(look, "width", lambda stream=None: 120):
+                lines = look.para(text, tty)
+            # Every line on the common left edge, the words all there, and the last line more than a word or two.
+            self.assertTrue(all(line.startswith(look.INDENT) and not line.startswith(look.INDENT + " ") for line in lines))
+            self.assertEqual(" ".join(line.strip() for line in lines), text)
+            self.assertGreaterEqual(len(lines[-1].strip()), 16, lines)
+        finally:
+            close(tty)
+
     def test_the_wordmark_once_per_run(self):
         out = io.StringIO()
         with mock.patch.object(look, "_shown", []):
