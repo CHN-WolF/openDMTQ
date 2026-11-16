@@ -52,10 +52,16 @@ document.addEventListener('submit', e => {
       form.classList.add('says-in-grid');
       holder.after(says);
     } else if (row) {
-      // Fields side by side in a row that wraps: a line of its own under the row.
+      // Fields side by side in a row that wraps: a line of its own right after the field's line (the last of the form's
+      // parts that stand on it, whose feet are in line with the field's), so a row wrapped on a phone keeps it under the field.
       says.classList.add('field-error-row');
       form.classList.add('says-in-row');
-      holder.after(says);
+      const foot = holder.getBoundingClientRect().bottom;
+      let last = holder;
+      for (const part of [...form.children].filter(c => c.getClientRects().length && (holder.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING))) {
+        if (Math.abs(part.getBoundingClientRect().bottom - foot) < 2) last = part;
+      }
+      last.after(says);
     } else if (holder.matches('.field')) {
       // One under the other: in the field, under its box.
       holder.append(says);
@@ -823,6 +829,21 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
   })();
 })();
 
+// The server's words on what was just done, as a band under the bar when the page changed in place or came back further
+// down (where the words at the page's top are out of sight): part of the bar, across it, over the page for a few seconds
+// with nothing under it moving; its words where the page's text starts. A press takes it away (its cross says so), and it
+// goes by itself, a good one sooner.
+function band(said) {
+  const words = document.createElement('span');
+  words.className = 'wrap';
+  words.append(...said.childNodes);
+  said.append(words);
+  said.classList.add('float');
+  said.addEventListener('click', () => said.remove());
+  document.querySelector('.bar').append(said);
+  setTimeout(() => said.remove(), said.classList.contains('ok') ? 5000 : 15000);
+}
+
 // A switch or a small change (a form marked data-inplace) changes the page where it is: sent in the background, the page as
 // the server now has it is read, and the parts of this page that show what changed (marked data-region, each by its id)
 // are put in place of their old selves; a part the page no longer has (a player deleted) goes. The server's words on
@@ -835,14 +856,7 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
   // itself, a good one sooner.
   const say = doc => {
     for (const old of document.querySelectorAll('.flash[data-said]')) old.remove();
-    const main = document.querySelector('main');
-    for (const m of doc.querySelectorAll('.flash[data-said]')) {
-      const said = document.importNode(m, true);
-      said.classList.add('float');
-      said.addEventListener('click', () => said.remove());
-      main.prepend(said);
-      setTimeout(() => said.remove(), said.classList.contains('ok') ? 5000 : 15000);
-    }
+    for (const m of doc.querySelectorAll('.flash[data-said]')) band(document.importNode(m, true));
   };
   // The parts that changed, put in place; the focus kept on the same control of a part that was replaced.
   const swap = doc => {
@@ -947,14 +961,10 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
   const search = document.querySelector('input[type=search]');
   if (search && back.q) { search.value = back.q; search.dispatchEvent(new Event('input')); }
   scrollTo(0, back.y);
-  // Further down the page, the message about what was done comes to the screen's foot: it would be out of sight at the
+  // Further down the page, the message about what was done comes as a band under the bar: it would be out of sight at the
   // top. A good one leaves by itself.
   if (scrollY > 0) {
-    for (const m of document.querySelectorAll('.flash[data-said]')) {
-      m.classList.add('float');
-      // It lies over the page: a click takes it away, and it leaves by itself, a good one sooner.
-      m.addEventListener('click', () => m.remove());
-      setTimeout(() => m.remove(), m.classList.contains('ok') ? 5000 : 15000);
-    }
+    // The band under the bar, as a change made in place says it.
+    for (const m of document.querySelectorAll('main .flash[data-said]')) band(m);
   }
 })();

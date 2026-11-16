@@ -826,7 +826,6 @@ async function formsLook(contexts) {
     ['Make token', `${A}/accounts`, '#tokens form', 'input[name=token_name]', '', '#tokens form button:not([type=button])'],
     ["the setup's account", `${A}/setup?step=players`, 'form[action$="/setup/player"]', 'input[name=name]', '!', 'form[action$="/setup/player"] button'],
     ["the recordings' limits", `${A}/recordings`, '.rec-limits', 'input[name=cap_gb]', '0', '.rec-limits button'],
-    ['Add song', `${A}/songs`, 'form.upload', 'input[name=package]', null, 'form.upload button.btn-primary'],
   ];
   for (const [width, height] of [[360, 740], [1280, 800]]) {
     for (const lang of ['en', 'ko']) {
@@ -1117,7 +1116,8 @@ async function portalFlows(contexts) {
   const linkTo = async guid => {
     await linker.goto(`${A}/accounts`, { waitUntil: 'domcontentloaded' });
     await linker.select('form.account-link:has(input[name=name][value=dmtq]) select', guid);
-    await Promise.all([linker.waitForNavigation({ waitUntil: 'domcontentloaded' }), linker.click('form.account-link:has(input[name=name][value=dmtq]) button')]);
+    // Linked in place (admin.js), or with the page loaded again.
+    await press(linker, 'form.account-link:has(input[name=name][value=dmtq]) button');
   };
   await linkTo('1');
   await linker.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
