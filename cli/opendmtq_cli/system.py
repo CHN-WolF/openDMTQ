@@ -10,6 +10,7 @@ import sys
 from . import look
 from .env import load as load_env
 from .env import save as save_env
+from .env import tidy as tidy_env
 
 # Repository root (two levels above this file), or the folder the host program names: the Windows bundle keeps its
 # settings and data/ beside its programs (host/opendmtq_host sets it).
@@ -305,6 +306,9 @@ def compose(*args, extra_env=None, check=True, capture=False):
     """Run `docker compose <args>` in the repository."""
     require_docker()
     ensure_own_project()
+    # Compose reads .env itself: in the one form it reads as this program does, whatever an editor left (Notepad's byte
+    # order mark, Windows line ends, spaces around "=").
+    tidy_env(ENV_FILE)
     cmd = ["docker", "compose", *args]
     r = subprocess.run(cmd, cwd=ROOT, env=compose_env(extra_env), text=True,
                        capture_output=capture)

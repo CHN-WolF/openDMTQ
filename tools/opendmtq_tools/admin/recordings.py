@@ -623,7 +623,7 @@ def recording_download(guid, rid):
                     yield chunk
 
     return app.response_class(body(), mimetype="video/mp2t", headers={
-        "Content-Length": str(length), "Content-Disposition": f'attachment; filename="opendmtq-player{guid}-{stamp}.ts"'})
+        "Content-Length": str(length), "Content-Disposition": f'attachment; filename="OpenDMTQ-Recording-player{guid}-{stamp}.ts"'})
 
 
 @app.route(BASE + "/recordings/<int:guid>/<int:rid>/<name>")

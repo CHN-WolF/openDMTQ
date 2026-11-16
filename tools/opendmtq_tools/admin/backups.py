@@ -4,6 +4,7 @@
 import datetime
 import hashlib
 import os
+import re
 import sqlite3
 import tarfile
 import tempfile
@@ -96,15 +97,28 @@ def backup_files():
         return []
 
 
+# What a backup's name starts with: what it is, in the release's files' order (OpenDMTQ-Server-Backup-20261117-120000-
+# manual.tar.gz). Those made before 0.11.0 start with "opendmtq-": both are this server's backups.
+BACKUP_PREFIX = "OpenDMTQ-Server-Backup-"
+
+
+def made_backups(names):
+    """The backups among names that this server made (not one brought in by hand, which stays until deleted by hand),
+    oldest first by the time in their names, whichever way they are named."""
+    made = [n for n in names if n.lower().startswith("opendmtq-") and n.endswith(".tar.gz") and not n.endswith("-uploaded.tar.gz")]
+    # By the stamp, not the whole name: the new names sort before the old ones letter by letter.
+    return sorted(made, key=lambda n: (re.search(r"\d{8}-\d{6}", n) or re.search("", n)).group(0) or n)
+
+
 def new_backup_path(reason):
     """A name no archive has yet: two in one second must not overwrite each other (a restore's safety copy, the
     very archive it is restoring)."""
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(core.BACKUPS, f"opendmtq-{stamp}-{reason}.tar.gz")
+    path = os.path.join(core.BACKUPS, f"{BACKUP_PREFIX}{stamp}-{reason}.tar.gz")
     n = 1
     while os.path.exists(path):
         n += 1
-        path = os.path.join(core.BACKUPS, f"opendmtq-{stamp}-{reason}-{n}.tar.gz")
+        path = os.path.join(core.BACKUPS, f"{BACKUP_PREFIX}{stamp}-{reason}-{n}.tar.gz")
     return path
 
 
@@ -153,7 +167,7 @@ def make_backup(reason, protect=None):
     # The disk's picture on the status page counts again.
     status._disk_cache.clear()
     # One brought here by hand stays until it is deleted by hand: nothing else would make it again.
-    files = sorted(f for f in os.listdir(core.BACKUPS) if f.startswith("opendmtq-") and f.endswith(".tar.gz") and not f.endswith("-uploaded.tar.gz"))
+    files = made_backups(os.listdir(core.BACKUPS))
     for old in files[:-KEEP_BACKUPS]:
         if old != protect:
             os.remove(os.path.join(core.BACKUPS, old))

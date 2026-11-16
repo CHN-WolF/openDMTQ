@@ -938,6 +938,18 @@ class AddressTest(unittest.TestCase):
             with open(path, encoding="utf-8") as f:
                 self.assertEqual(f.read(), "A=1\n# note\nPUBLIC_HOST=10.0.0.5\nNEW=x\n")
 
+    def test_the_settings_file_as_notepad_saves_it(self):
+        # A byte order mark in front of the first key, Windows line ends, spaces around "=": the address is changed in
+        # place, never written a second time beside the old one (DEP-43).
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, ".env")
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write("\ufeffPUBLIC_HOST = old\r\nADMIN_PASSWORD=x\r\n")
+            with mock.patch.object(setup, "ENV_FILE", path):
+                setup.save_env({"PUBLIC_HOST": "10.0.0.5"})
+            with open(path, encoding="utf-8") as f:
+                self.assertEqual(f.read(), "PUBLIC_HOST=10.0.0.5\nADMIN_PASSWORD=x\n")
+
     @unittest.skipUnless(hasattr(os, "fchmod"), "a system with file modes")
     def test_the_settings_and_the_one_time_sign_in_are_the_owners_alone(self):
         # .env holds the passwords, the one-time sign-in opens these pages: other users of the PC must not read them.

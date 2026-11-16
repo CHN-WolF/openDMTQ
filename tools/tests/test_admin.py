@@ -144,6 +144,89 @@ class OwnerOnSiteTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class SessionsOverRestartTest(unittest.TestCase):
+    """A sign-in outlives a restart of the server (its cookie's key and the open sign-ins are kept beside the database);
+    signing out still ends one for good (ADM-106)."""
+
+    def restart(self):
+        """What a restart leaves: the process's memory gone, what is kept on disk read again."""
+        admin.auth._sessions.clear()
+        admin.auth._sessions_load()
+
+    def test_a_sign_in_outlives_a_restart(self):
+        with Install() as inst:
+            inst.sign_in()
+            self.restart()
+            r = inst.client.get("/opendmtq/admin/", follow_redirects=False)
+            self.assertEqual(r.status_code, 200, r.headers.get("Location"))
+            # Kept by this user alone: it is as good as a signed-in browser.
+            if os.name == "posix":
+                self.assertEqual(os.stat(inst.path("state/admin-sessions.json")).st_mode & 0o077, 0)
+
+    def test_signing_out_ends_it_for_good(self):
+        with Install() as inst:
+            inst.sign_in()
+            # The cookie's own path: these pages' address.
+            with inst.client.session_transaction("/opendmtq/admin/") as kept:
+                sid, csrf = kept["sid"], kept["csrf"]
+            inst.client.post("/opendmtq/admin/logout", data={"csrf": csrf})
+            self.restart()
+            self.assertNotIn(sid, admin.auth._sessions)
+            r = inst.client.get("/opendmtq/admin/", follow_redirects=False)
+            self.assertEqual(r.status_code, 302)
+
+    def test_one_run_out_is_not_brought_back(self):
+        with Install() as inst:
+            inst.sign_in()
+            with open(inst.path("state/admin-sessions.json"), "w", encoding="utf-8") as f:
+                json.dump({"old": time.time() - 1}, f)
+            self.restart()
+            self.assertEqual(admin.auth._sessions, {})
+
+    def test_the_cookies_key_is_kept(self):
+        with Install() as inst:
+            first = admin.core.session_key()
+            self.assertEqual(admin.core.session_key(), first)
+            self.assertEqual(len(first), 32)
+            if os.name == "posix":
+                self.assertEqual(os.stat(inst.path("state/admin-session.key")).st_mode & 0o077, 0)
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class NamesTest(unittest.TestCase):
+    """What the server hands out and keeps is named for what it is, in the release's files' order (API-41): the phone
+    app, backups, the players' and plays' files, the request log, a recording. Backups named before 0.11.0 still count,
+    and the newest are kept whichever way they are named."""
+
+    def test_the_phone_app(self):
+        from opendmtq_tools import patch_apk
+        self.assertEqual(patch_apk.app_file_name("192.168.1.10:8791", "2026.11.17"),
+                         "OpenDMTQ-Phone-App-2026.11.17-android-192.168.1.10-8791.apk")
+
+    def test_a_backup(self):
+        with Install():
+            self.assertRegex(os.path.basename(admin.backups.new_backup_path("manual")),
+                             r"^OpenDMTQ-Server-Backup-\d{8}-\d{6}-manual\.tar\.gz$")
+
+    def test_the_newest_are_kept_whichever_way_they_are_named(self):
+        old = ["opendmtq-20261101-120000-manual.tar.gz", "opendmtq-20261116-120000-daily.tar.gz"]
+        new = ["OpenDMTQ-Server-Backup-20261110-120000-manual.tar.gz", "OpenDMTQ-Server-Backup-20261117-120000-daily.tar.gz"]
+        by_hand = ["opendmtq-20261117-130000-uploaded.tar.gz", "notes.txt"]
+        self.assertEqual(admin.backups.made_backups(old + new + by_hand),
+                         ["opendmtq-20261101-120000-manual.tar.gz", "OpenDMTQ-Server-Backup-20261110-120000-manual.tar.gz",
+                          "opendmtq-20261116-120000-daily.tar.gz", "OpenDMTQ-Server-Backup-20261117-120000-daily.tar.gz"])
+
+    def test_the_players_file(self):
+        with Install() as inst:
+            # A server's database with its players, as the safety checks make one.
+            SafetyTest.database(self, inst)
+            inst.sign_in()
+            r = inst.client.get("/opendmtq/admin/players?csv=1")
+            self.assertEqual(r.status_code, 200)
+            self.assertRegex(r.headers["Content-Disposition"], r'filename="OpenDMTQ-Server-Players-\d{8}\.csv"')
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class LogsPageTest(unittest.TestCase):
     def page(self, files):
         """The logs page over these files: name to (text, age in seconds)."""
@@ -360,8 +443,9 @@ class AppPageTest(unittest.TestCase):
             r = inst.client.get("/opendmtq/admin/app/windows")
             self.assertEqual((r.status_code, r.mimetype), (200, "application/vnd.microsoft.portable-executable"))
             self.assertTrue(r.data.startswith(b"MZ!") and r.data.endswith(b"OPENDMTQ-PRESET1"))
-            # Under a name that says which server it is for, and as long as it is.
-            self.assertIn("OpenDMTQ-Setup-", r.headers["Content-Disposition"])
+            # Under a name that says what it is and which server it is for, and as long as it is.
+            self.assertIn('filename="OpenDMTQ-PC-Client-', r.headers["Content-Disposition"])
+            self.assertIn("-windows-x64-Setup-", r.headers["Content-Disposition"])
             self.assertEqual(int(r.headers["Content-Length"]), len(r.data))
             # A broken download goes on where it stopped here too, as through the API (one function: apps.send_download).
             part = inst.client.get("/opendmtq/admin/app/windows", headers={"Range": "bytes=1-2", "If-Range": r.headers["ETag"]})
@@ -894,7 +978,7 @@ class RecordingsTest(unittest.TestCase):
             r = inst.client.get("/opendmtq/admin/recordings/7/1800000000/download")
             self.assertEqual(r.get_data(), b"aabbb")
             self.assertEqual(r.headers["Content-Length"], "5")
-            self.assertIn("opendmtq-player7-", r.headers["Content-Disposition"])
+            self.assertIn("OpenDMTQ-Recording-player7-", r.headers["Content-Disposition"])
 
     def test_only_media_comes_out_and_only_signed_in(self):
         with Install() as inst:
@@ -2470,7 +2554,7 @@ class PlaysTabTest(unittest.TestCase):
             r = inst.client.get("/opendmtq/admin/logs?tab=plays&csv=1&player=7")
             self.assertEqual(r.mimetype, "text/csv")
             # The file's name says what it holds.
-            self.assertIn("opendmtq-plays-player7.csv", r.headers["Content-Disposition"])
+            self.assertIn("OpenDMTQ-Server-Plays-player7.csv", r.headers["Content-Disposition"])
             text = r.get_data(as_text=True)
             # The mark that tells a spreadsheet on Windows this is UTF-8.
             self.assertTrue(text.startswith("﻿"))
@@ -2892,12 +2976,12 @@ class PageJobsTest(unittest.TestCase):
             r = inst.client.post("/opendmtq/admin/backups", data={"csrf": page_token(inst), "action": "create"})
             self.assertEqual(r.headers["Location"], "/opendmtq/admin/backups")
             page = inst.client.get("/opendmtq/admin/backups").get_data(as_text=True)
-            self.assertRegex(page, r'class="flash ok" role="status">Backup <code>opendmtq-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
+            self.assertRegex(page, r'class="flash ok" role="status">Backup <code>OpenDMTQ-Server-Backup-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
             job = admin.jobs.listing()[0]
             self.assertEqual((job["kind"], job["state"]), ("backup", "done"))
             # The API's view of it holds nothing of the page's own (its words with their markup, its signal).
             self.assertEqual(json.loads(json.dumps(admin.jobs.view(job)))["log"], [job["log"][0]])
-            self.assertTrue(job["log"][0].startswith("Backup opendmtq-"), job["log"])
+            self.assertTrue(job["log"][0].startswith("Backup OpenDMTQ-Server-Backup-"), job["log"])
             # Noted by the admin who pressed it, though the job noted it after the request.
             notes = admin.insights.audit_read(inst.path("state"))
             self.assertEqual((notes[0]["what"], notes[0]["who"]), ("backups_page:create", "admin"))

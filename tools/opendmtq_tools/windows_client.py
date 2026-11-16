@@ -313,7 +313,11 @@ def preset(url, name, ca=""):
     return data + struct.pack("<I", len(data)) + MAGIC
 
 
-def download_name(host):
-    """The file name the installer is handed out under: the server's address in it, as the app's own name has it
-    (OpenDMTQ-Setup-example.com-8080.exe)."""
-    return "OpenDMTQ-Setup-" + re.sub(r"[^A-Za-z0-9.-]", "-", host) + ".exe"
+def download_name(host, version=""):
+    """The file name the installer is handed out under: what it is, its version, the system, and the server it is set up
+    for, in the release's files' order (OpenDMTQ-PC-Client-0.11.0-windows-x64-Setup-example.com-8080.exe; without a
+    version when the copy here does not say one)."""
+    # A version as a release names one (digits, letters, dots, + and -), or none, as the site's windows_download_name().
+    version = version if re.fullmatch(r"[0-9][0-9A-Za-z.+-]*", version or "") else ""
+    return ("OpenDMTQ-PC-Client-" + (f"{version}-" if version else "") + "windows-x64-Setup-"
+            + re.sub(r"[^A-Za-z0-9.-]", "-", host) + ".exe")

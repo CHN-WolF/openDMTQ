@@ -41,7 +41,20 @@ class CreateTest(unittest.TestCase):
             sb.write("data/state/dmtq.db3", b"db")
             sb.write("data/custom/ids.json", "{}")
             self.assertEqual(sb.call(app.cmd_backup), 0, sb.output())
-            self.assertRegex(sb.output(), r"backup data/backups/opendmtq-\d{8}-\d{6}-manual\.tar\.gz")
+            # Named for what it is, in the release's files' order (API-41).
+            self.assertRegex(sb.output(), r"backup data/backups/OpenDMTQ-Server-Backup-\d{8}-\d{6}-manual\.tar\.gz")
+
+    def test_the_newest_are_kept_whichever_way_they_are_named(self):
+        # Thirty named before 0.11.0, then one named now: the oldest old one goes, never the new one, though the new
+        # names sort before the old ones letter by letter.
+        with Sandbox() as sb:
+            sb.write("data/state/dmtq.db3", b"db")
+            names = thirty(sb)
+            path = backup.create("manual")
+            kept = sb.backups()
+            self.assertIn(os.path.basename(path), kept)
+            self.assertNotIn(names[0], kept)
+            self.assertIn(names[1], kept)
 
     def test_a_disk_that_fills_up_leaves_no_half_archive(self):
         # Under the final name it would be listed as the newest backup and push a good one out.

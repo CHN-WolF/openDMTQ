@@ -3,6 +3,7 @@ accounts' passwords, the CSRF token on every form and the throttle on failed sig
 
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
@@ -73,17 +74,78 @@ def client_ip():
         return sent
     return request.remote_addr or "?"
 
-# Sign-ins that are still valid (an id in each session cookie): signing out ends one for good, which
-# a signed cookie alone cannot do. In memory, as the service runs one process; a restart signs
-# everyone out.
-_sessions = set()
+# Sign-ins that are still valid (an id in each session cookie, with when it runs out): signing out ends one for good,
+# which a signed cookie alone cannot do. Kept beside the database too (admin-sessions.json, readable by this user only),
+# so that a restart of the server, a stop and a start, or the setup's own restart signs nobody out.
+_sessions = {}
 _sessions_lock = threading.Lock()
+
+
+def _sessions_file():
+    """Where the valid sign-ins are kept: beside the database."""
+    return os.path.join(os.path.dirname(core.DB), "admin-sessions.json")
+
+
+def _sessions_load():
+    """The sign-ins kept by the last run, those not run out yet. Called with the lock held, or before any request."""
+    _sessions.clear()
+    try:
+        with open(_sessions_file(), encoding="utf-8") as f:
+            kept = json.load(f)
+    except (OSError, ValueError):
+        return
+    now = time.time()
+    if isinstance(kept, dict):
+        _sessions.update({sid: until for sid, until in kept.items()
+                          if isinstance(sid, str) and isinstance(until, (int, float)) and until > now})
+
+
+def _sessions_save():
+    """Writes the valid sign-ins, the ones run out left behind. Called with the lock held. Quietly does nothing when the
+    folder cannot be written: the sign-ins then last as long as this run, as they did before."""
+    now = time.time()
+    for sid in [sid for sid, until in _sessions.items() if until <= now]:
+        del _sessions[sid]
+    path = _sessions_file()
+    try:
+        fd = os.open(path + ".new", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(_sessions, f)
+        os.replace(path + ".new", path)
+    except OSError:
+        pass
+
+
+def session_begin():
+    """A new sign-in's id, kept as valid for as long as the session cookie lasts."""
+    sid = secrets.token_urlsafe(24)
+    with _sessions_lock:
+        _sessions[sid] = time.time() + core.app.permanent_session_lifetime.total_seconds()
+        _sessions_save()
+    return sid
+
+
+def session_end(sid):
+    """Ends a sign-in for good (signing out)."""
+    with _sessions_lock:
+        if _sessions.pop(sid, None) is not None:
+            _sessions_save()
+
+
+def _session_valid(sid):
+    """True while the sign-in sid has not been ended and has not run out. Called with the lock held."""
+    until = _sessions.get(sid)
+    return until is not None and until > time.time()
+
+
+# The sign-ins the last run left, at start.
+_sessions_load()
 
 
 def signed_in():
     sid = session.get("sid")
     with _sessions_lock:
-        if not (session.get("ok") and sid in _sessions):
+        if not (session.get("ok") and _session_valid(sid)):
             return False
     # The owner's account lives in .env and lasts as long as the session. Any other admin's ends with their account,
     # their admin rights or their password, at the next page they open.
@@ -97,7 +159,7 @@ def _account_ended():
     """The session itself is still good, but the account it is for is not (disabled, deleted, a new password, a restore)."""
     sid = session.get("sid")
     with _sessions_lock:
-        return bool(session.get("ok") and sid in _sessions and session.get("stamp") != "owner")
+        return bool(session.get("ok") and _session_valid(sid) and session.get("stamp") != "owner")
 
 
 def _prune(now):
@@ -366,9 +428,7 @@ def login():
         elif who:
             session.clear()
             session.permanent = True
-            sid = secrets.token_urlsafe(24)
-            with _sessions_lock:
-                _sessions.add(sid)
+            sid = session_begin()
             session.update(ok=True, sid=sid, csrf=secrets.token_urlsafe(24), who=who[0], stamp=who[1])
             # When an account last came in, for the list of accounts (the owner's is not in it).
             if who[1] != "owner":
@@ -391,8 +451,7 @@ def login():
 @app.route(BASE + "/logout", methods=["POST"])
 def logout():
     # The cookie may have been copied: this sign-in no longer counts anywhere.
-    with _sessions_lock:
-        _sessions.discard(session.get("sid"))
+    session_end(session.get("sid"))
     session.clear()
     changed("logout:", client_ip())
     flash(t("login.signed_out"), "ok")

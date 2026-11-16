@@ -25,6 +25,47 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(env.parse("PUBLIC_HOST = '10.0.0.7' "), {"PUBLIC_HOST": "10.0.0.7"})
 
 
+class NotepadTest(unittest.TestCase):
+    """.env as Notepad may leave it: a byte order mark in front, Windows line ends, spaces around "=", quotes. Read the same
+    by this program, by the admin pages' setup and, once tidied, by Docker Compose (DEP-43)."""
+
+    EDITED = '\ufeffPUBLIC_HOST = "192.168.0.5:8791"\r\nADMIN_PASSWORD=abc-DEF_123\r\n# note\r\nexport TZ = Asia/Seoul\r\n'
+
+    def write(self, d):
+        path = os.path.join(d, ".env")
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(self.EDITED)
+        return path
+
+    def test_read_as_written(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(env.load(self.write(d)),
+                             {"PUBLIC_HOST": "192.168.0.5:8791", "ADMIN_PASSWORD": "abc-DEF_123", "TZ": "Asia/Seoul"})
+
+    def test_a_save_keeps_one_key_per_line(self):
+        # The first key behind the mark is the same key: updated in place, not added a second time.
+        with tempfile.TemporaryDirectory() as d:
+            path = self.write(d)
+            env.save(path, {"PUBLIC_HOST": "192.168.0.6:8791"})
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            self.assertEqual(text.count("PUBLIC_HOST"), 1)
+            self.assertFalse(text.startswith("\ufeff"))
+            self.assertEqual(env.load(path)["PUBLIC_HOST"], "192.168.0.6:8791")
+
+    def test_tidied_for_compose_with_the_same_values(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self.write(d)
+            before = env.load(path)
+            self.assertTrue(env.tidy(path))
+            with open(path, "rb") as f:
+                raw = f.read()
+            self.assertEqual(raw, b'PUBLIC_HOST="192.168.0.5:8791"\nADMIN_PASSWORD=abc-DEF_123\n# note\nTZ=Asia/Seoul\n')
+            self.assertEqual(env.load(path), before)
+            # Already in its one form: left alone.
+            self.assertFalse(env.tidy(path))
+
+
 class SaveTest(unittest.TestCase):
     def test_updates_in_place_and_keeps_comments(self):
         with tempfile.TemporaryDirectory() as d:

@@ -676,13 +676,15 @@ def address_parts(address):
 def save_env(updates):
     """Set keys in .env, keeping every other line as it is (as cli/opendmtq_cli/env.save does)."""
     try:
-        with open(ENV_FILE, encoding="utf-8") as f:
+        # Without a byte order mark in front (Notepad's), which would join the first line's key; written back without it.
+        with open(ENV_FILE, encoding="utf-8-sig") as f:
             lines = f.read().splitlines()
     except FileNotFoundError:
         lines = []
     done = set()
     for i, line in enumerate(lines):
-        key = line.split("=", 1)[0].strip()
+        # The key as compose and the command line read it: spaces and "export" around it do not make it another.
+        key = line.split("=", 1)[0].strip().removeprefix("export ").strip()
         if key in updates and "=" in line:
             lines[i] = f"{key}={updates[key]}"
             done.add(key)
@@ -731,9 +733,7 @@ def sign_in_owner():
     """Sign this browser in as the owner, as the sign-in page does."""
     session.clear()
     session.permanent = True
-    sid = secrets.token_urlsafe(24)
-    with auth._sessions_lock:
-        auth._sessions.add(sid)
+    sid = auth.session_begin()
     session.update(ok=True, sid=sid, csrf=secrets.token_urlsafe(24), who=core.ADMIN_USER, stamp="owner")
 
 

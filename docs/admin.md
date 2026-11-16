@@ -108,10 +108,11 @@ connection's own, never a header the client sent. Forms carry a CSRF token, and 
 SameSite=Lax, and Secure when it comes over HTTPS. No page can show these pages in a frame (`X-Frame-Options: DENY`),
 a browser takes each file as the type it is sent as (`X-Content-Type-Options: nosniff`), and a link to another site
 carries no address of these pages (`Referrer-Policy: same-origin`); the API's answers carry the same. Signing out ends
-that sign-in on the server too, so a copied cookie stops working; restarting the admin pages signs everyone out. Until
-a visitor has signed in, the pages read at most 16 KB of any request. On the PC's own address the password travels
-without TLS, but only within this PC (unless `ADMIN_BIND` opens that address to the network). On a host install the
-address on the local network has no TLS either. To change the password, edit `.env`, then restart the server.
+that sign-in on the server too, so a copied cookie stops working. A sign-in lasts 12 hours and outlives a restart of
+the server: the cookie's key and the open sign-ins are kept beside the database (`data/state/admin-session.key` and
+`admin-sessions.json`, readable by the server's user only). Until a visitor has signed in, the pages read at most 16 KB
+of any request. At `localhost` on the server PC the password travels without TLS, but only within this PC. On a host
+install the address on the local network has no TLS either. To change the password, edit `.env`, then restart the server.
 
 | Page | What it does |
 | :--- | :--- |

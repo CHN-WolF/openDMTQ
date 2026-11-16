@@ -15,6 +15,8 @@ _NAME = re.compile(r"(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(
 def parse(text):
     """KEY=value pairs from .env text, the way docker compose reads them."""
     values = {}
+    # Notepad may save the file with a byte order mark in front: not part of the first line's key.
+    text = text.lstrip("\ufeff")
     for raw in text.splitlines():
         # Files saved by Windows editors carry CR; compose ignores it, so must we.
         line = raw.strip().rstrip("\r")
@@ -38,9 +40,9 @@ def parse(text):
 
 
 def load(path):
-    """Values from .env, or {} when it does not exist yet."""
+    """Values from .env, or {} when it does not exist yet. A byte order mark in front (Notepad's) is not read as text."""
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:
             return parse(f.read())
     except FileNotFoundError:
         return {}
@@ -49,7 +51,8 @@ def load(path):
 def save(path, updates):
     """Set keys in .env, keeping every other line (and comments) as they are."""
     try:
-        with open(path, encoding="utf-8") as f:
+        # Without a byte order mark in front (Notepad's): the file is written back without it.
+        with open(path, encoding="utf-8-sig") as f:
             lines = f.read().splitlines()
     except FileNotFoundError:
         lines = ["# OpenDMTQ settings. Written by ./opendmtq; safe to edit by hand."]
@@ -64,6 +67,32 @@ def save(path, updates):
             lines.append(f"{key}={value}")
     # The passwords live here: readable by its owner only.
     write_private(path, "\n".join(lines) + "\n")
+
+
+# A setting as a person may type it in an editor: spaces around "=", "export" in front.
+_LOOSE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
+
+
+def tidy(path):
+    """Writes .env back in the one form every reader takes alike, when an editor left it otherwise: no byte order mark,
+    no Windows line ends, no spaces around "=". The values stay as they are (quotes too). True when it was rewritten.
+    Docker Compose reads the file itself, and some of its versions read such a line differently from this program."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        return False
+    text = raw.decode("utf-8", "replace").lstrip("\ufeff")
+    lines = []
+    for line in text.splitlines():
+        m = _LOOSE.match(line)
+        # Comments and blank lines as they are; a setting in its one form.
+        lines.append(f"{m.group(1)}={m.group(2)}" if m and not line.lstrip().startswith("#") else line.rstrip("\r"))
+    tidied = "\n".join(lines) + "\n"
+    if tidied.encode("utf-8") == raw:
+        return False
+    write_private(path, tidied)
+    return True
 
 
 def write_private(path, text):

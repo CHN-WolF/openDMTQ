@@ -108,7 +108,8 @@ def players_csv(rows, activity):
         last = datetime.datetime.fromtimestamp(a["last"]).strftime("%Y-%m-%d %H:%M") if a["last"] else ""
         out.write(f'{p["id"]},{csv_text(p["nickname"])},{p["charts"]},{p["total"]},{a["recent"]},{last}\n')
     r = app.response_class(out.getvalue(), mimetype="text/csv; charset=utf-8")
-    r.headers["Content-Disposition"] = 'attachment; filename="opendmtq-players.csv"'
+    # What it is, and the day it was taken, in the release's files' order.
+    r.headers["Content-Disposition"] = f'attachment; filename="OpenDMTQ-Server-Players-{datetime.date.today():%Y%m%d}.csv"'
     return r
 
 

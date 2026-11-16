@@ -918,6 +918,11 @@ def prune_builds(out_dir, keep=10):
                 os.remove(os.path.join(out_dir, old + ".json"))
 
 
+def app_file_name(host, stamp):
+    """The phone app's file name: what it is, its build (the day's stamp), the system, and the server it is for."""
+    return f"OpenDMTQ-Phone-App-{stamp}-android-{re.sub(r'[^A-Za-z0-9.-]', '-', host)}.apk"
+
+
 def build_lock(out_dir):
     """Hold this while building. The builder, the admin pages and ./opendmtq apk can each start a
     build, and two at once would race for a new signing key and write the same file. An flock on a
@@ -1032,9 +1037,10 @@ def build(args, host, out_dir):
         if len(signed) != 1:
             raise SystemExit(f"signer produced {signed}")
 
-        # Name says what it is, for which server, and when.
-        # ":" (a port) is not allowed in file names on Windows and confuses Android's downloads.
-        name = f"OpenDMTQ-{host.replace(':', '-')}-v{args.stamp}.apk"
+        # Name says what it is, which build, for which system and which server, in the release's files' order
+        # (OpenDMTQ-Phone-App-2026.11.17-android-192.168.1.10-8791.apk). ":" (a port) is not allowed in file names on
+        # Windows and confuses Android's downloads.
+        name = app_file_name(host, args.stamp)
         os.makedirs(out_dir, exist_ok=True)
         dest = os.path.join(out_dir, name)
         # Swapped in whole: the same name may be the app the portal offers right now.

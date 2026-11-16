@@ -374,7 +374,7 @@ class HostPlayersLineTest(unittest.TestCase):
 
 class HostPortsTest(unittest.TestCase):
     """A host install's ports (host/opendmtq_host/settings.py): one for the server, the admin service's own elsewhere on
-    loopback, never the same (DEP-48)."""
+    loopback, never the same (DEP-44)."""
 
     @classmethod
     def setUpClass(cls):

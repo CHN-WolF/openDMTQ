@@ -334,7 +334,7 @@ def windows_download():
         f = open(path, "rb")
     except OSError:
         abort(404)
-    name = windows_client.download_name(core.PUBLIC_HOST)
+    name = windows_client.download_name(core.PUBLIC_HOST, str(made.get("version") or ""))
     # Its tag covers the installer and the end on it: going on is right only while both are what the part came from.
     return send_download(f, "application/vnd.microsoft.portable-executable", name,
                          download_tag(made, os.fstat(f.fileno()), tail), tail)

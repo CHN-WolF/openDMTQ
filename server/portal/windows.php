@@ -25,4 +25,4 @@ if (!$f) {
 $tail = windows_preset();
 // A Windows program, under a file name that says which server it is for: the installer and its end as one file, whole or
 // the part a broken download asks for to go on, while it is still this installer with this end (its tag covers both).
-send_download($f, 'application/vnd.microsoft.portable-executable', windows_download_name(), download_tag($w, fstat($f), $tail), $tail);
+send_download($f, 'application/vnd.microsoft.portable-executable', windows_download_name((string)($w['version'] ?? '')), download_tag($w, fstat($f), $tail), $tail);

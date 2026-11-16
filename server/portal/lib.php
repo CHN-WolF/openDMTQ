@@ -217,10 +217,13 @@ function windows_preset_for(string $url, string $name, string $ca = ''): string
     return $json . pack('V', strlen($json)) . 'OPENDMTQ-PRESET1';
 }
 
-/* The file name the installer is handed out under, with the server's address in it as the app's own name has it. */
-function windows_download_name(): string
+/* The file name the installer is handed out under: what it is, its version (windows.json's, $version), the system, and the
+   server it is set up for, in the release's files' order, as windows_client.py's download_name() makes it. */
+function windows_download_name(string $version = ''): string
 {
-    return 'OpenDMTQ-Setup-' . preg_replace('/[^A-Za-z0-9.-]/', '-', public_host()) . '.exe';
+    // A version as a release names one (digits, letters, dots, + and -), or none.
+    $version = preg_match('/^[0-9][0-9A-Za-z.+-]*$/', $version) ? $version . '-' : '';
+    return 'OpenDMTQ-PC-Client-' . $version . 'windows-x64-Setup-' . preg_replace('/[^A-Za-z0-9.-]/', '-', public_host()) . '.exe';
 }
 
 /* A download's ETag, a strong one, as a broken download needs to go on (send_download()): the SHA-256 its manifest gives

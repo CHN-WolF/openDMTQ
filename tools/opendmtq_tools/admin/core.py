@@ -167,8 +167,33 @@ try:
 except OSError:
     pass
 
-# Sessions last until the service restarts; a new secret each start signs everyone out.
-app.secret_key = secrets.token_bytes(32)
+def session_key():
+    """The key that signs the session cookie, kept beside the database (admin-session.key, readable by this user only),
+    so that a restart of the server signs nobody out. Made once; a new one only when it is gone. Where the folder cannot
+    be written, one for this run alone."""
+    path = os.path.join(os.path.dirname(DB), "admin-session.key")
+    try:
+        with open(path, encoding="ascii") as f:
+            kept = f.read().strip()
+        # 64 hexadecimal digits: anything else (half written, edited) is made again.
+        if len(kept) == 64:
+            return bytes.fromhex(kept)
+    except (OSError, ValueError):
+        pass
+    key = secrets.token_bytes(32)
+    try:
+        # A new file beside it, readable by this user only, then moved over: never half a key.
+        fd = os.open(path + ".new", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="ascii") as f:
+            f.write(key.hex() + "\n")
+        os.replace(path + ".new", path)
+    except OSError:
+        pass
+    return key
+
+
+# Sessions outlive a restart of the service (the key above, and the sign-ins in auth.py); signing out ends one for good.
+app.secret_key = session_key()
 
 # Lax, not Strict: a link from the public site (plain HTTP, to these pages over HTTPS, which browsers
 # count as another site) must arrive signed in. Every POST carries the CSRF token all the same.

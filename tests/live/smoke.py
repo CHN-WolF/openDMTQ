@@ -704,7 +704,7 @@ other = new_since(before)
 # Download: one file, the segments in order.
 status, headers, body = request(admin, f"{ADMIN}/opendmtq/admin/recordings/{newest}/download")
 check("the download is the segments in order", status == 200 and body == segment(0, 188 * 500) + segment(1, 188 * 500), (status, len(body)))
-check("with a sensible name and type", re.fullmatch(r'attachment; filename="opendmtq-player\d+-\d{8}-\d{4}\.ts"', headers["Content-Disposition"]) is not None and headers["Content-Type"].startswith("video/mp2t"), headers["Content-Disposition"])
+check("with a sensible name and type", re.fullmatch(r'attachment; filename="OpenDMTQ-Recording-player\d+-\d{8}-\d{4}\.ts"', headers["Content-Disposition"]) is not None and headers["Content-Type"].startswith("video/mp2t"), headers["Content-Disposition"])
 check("watching in the admin page", '/opendmtq/admin/recordings/' + newest + '/index.m3u8' in admin_page("/opendmtq/admin/recordings?watch=" + newest).replace("\\/", "/"))
 check("the admin's own gate serves it", request(admin, f"{ADMIN}/opendmtq/admin/recordings/{newest}/index.m3u8")[0] == 200)
 
@@ -745,7 +745,7 @@ check("delete selected", "Recordings deleted: 1." in rec_post(action="delete", s
 html = admin_page("/opendmtq/admin/backups")
 rec_keep = recorded()
 request(admin, ADMIN + "/opendmtq/admin/backups", urllib.parse.urlencode({"csrf": re.search(r'name="csrf" value="([^"]+)"', html).group(1), "action": "create"}).encode())
-name = re.search(r"/opendmtq/admin/backups/(opendmtq-[\w-]+\.tar\.gz)/download", admin_page("/opendmtq/admin/backups")).group(1)
+name = re.search(r"/opendmtq/admin/backups/((?:opendmtq|OpenDMTQ-Server-Backup)-[\w-]+\.tar\.gz)/download", admin_page("/opendmtq/admin/backups")).group(1)
 archive = request(admin, f"{ADMIN}/opendmtq/admin/backups/{name}/download")[2]
 with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
     inside = tar.getnames()
