@@ -150,7 +150,8 @@ of a line is checked before any is applied, so one the launcher does not take ch
 | The lane keys, while a song is played | [Keyboard play](#keyboard-play): each lane of the song a key, F J in 2 LINE, D F J in 3 LINE and D F J K in 4 LINE from the top lane, each press where the game judges the lane's next note |
 | The keyboard | Text where the game asks for it, the text it opens with taken as selected: the first key types over it, Backspace clears it, an arrow keeps it (Enter ends it, Esc cancels it); Hangul too |
 | The touch keyboard | Comes up when a touch opens the game's text, and types into it |
-| The pointer resting at the game's top edge, or on the handle at its top centre | The bar: minimise, full screen, and the X that quits after asking |
+| The pointer resting at the game's top edge, or on the handle at its top centre | The bar: Sound, minimise, full screen, and the X that quits after asking |
+| A tap on the handle, a long press on it or at the top edge, or a press drawn down from there (a finger, a pen or the mouse) | The bar, following the press as it is pulled and settling down or back up when let go |
 | Alt+F4 | Nothing: the bar's X quits |
 | Alt alone, F10 | Nothing (no menu mode that would hold the next key) |
 
@@ -159,20 +160,24 @@ of a line is checked before any is applied, so one the launcher does not take ch
 </p>
 
 - **The bar**: a PC has no phone's buttons around the game, so a bar of frosted glass comes down across the top of the
-  game when the pointer rests a moment at the game's very top edge or on the handle, with its button up, or when a
-  finger is drawn down from that edge on a touch screen, in either case only once the game has had no click, touch or
-  held note for a second and a half: a click or a held note at the top of a song plays the song and never brings the
-  bar, nor does a pointer on its way to the window's title bar. It also comes down by itself for 3 seconds when the
+  game when the pointer rests a moment at the game's very top edge or on the handle with its button up; when the handle
+  is tapped by a finger or clicked; after a long press (half a second) on the handle or at the top edge, by a finger or
+  the mouse; or when a press is drawn down from there. A press drawn down pulls the bar out with its foot at the press
+  and, let go, the bar settles down when it is out at least half way or was flicked down, and goes back up otherwise.
+  The press that brings the bar never reaches the game; a tap at the top edge beside the handle, or a press there that
+  moves across or up, is the game's after all, from where and when it came down. In a song none of this happens unless
+  the game has had no click, touch or held note for a second and a half: every tap at the top of a song plays the song
+  at once, and a pointer on its way to the window's title bar brings nothing. It also comes down by itself for 3 seconds when the
   game's picture first shows (not during its black start) and after each switch between a window and full screen, so
   that a player sees where it is. It slides down out of the game's top edge, its foot first, and back up into it, in
   about a fifth of a second each way and in step with the display's refreshes, never over the window's title bar; with
   Windows' animation effects switched off it comes and goes at once. It stays while the pointer is on it and goes up
   soon after the pointer leaves, so it never sits on the game's own controls at the top while they are used; a pointer
   that comes back while it goes up turns it back from where it is. On its left is the OpenDMTQ wordmark as the
-  launcher's menu column draws it; on its right are three buttons in the launcher's own shape and depth (two corners cut,
-  raised, sunk while held): **minimise** and **full screen** (or back to a window) as secondary buttons, quiet metal
-  with a lighter plate under the pointer, and the **X** that quits as the main button, in the launcher's lime from the
-  start so that it is seen at once. A button acts only when let go where it was pressed, as the bar stood when it was
+  launcher's header draws it; on its right are four buttons in the launcher's own shape and depth (two corners cut,
+  raised, sunk while held): **Sound** (a speaker and the word), **minimise** and **full screen** (or back to a window) as
+  secondary buttons, quiet metal with a lighter plate under the pointer, and the **X** that quits as the main button, in
+  the launcher's lime from the start so that it is seen at once. A finger works every button as the mouse does. A button acts only when let go where it was pressed, as the bar stood when it was
   pressed: one pressed while the bar is still sliding down acts too. Minimise holds the game still, and the taskbar
   brings it back with the bar up (nothing of what was over the game comes back that is not wanted there then). The
   broadcast notice and an FPS counter in a top corner move down with the bar's foot and back up with it. It is tall
@@ -187,6 +192,15 @@ of a line is checked before any is applied, so one the launcher does not take ch
   in a game of any other size or shape), so neither covers any of the game's words or buttons on any screen. It shows
   once the game's picture is up, and goes while the bar is down, while a notice or the question is up and while the
   game holds still.
+- **The sound panel**: the bar's Sound button opens a card of glass under the bar at the game's right side: **Master**,
+  **Music** and **Effects** as sliders of 0 to 100 %, then the **Equaliser**'s presets (Flat, Bass, Vocal, Treble,
+  Custom) and its three bands, **Low** (120 Hz), **Mid** (1 kHz) and **High** (6 kHz), as sliders of -12 to +12 dB.
+  A slider follows the mouse or a finger from wherever its row is pressed, and every change is heard at once; moving a
+  band makes the equaliser Custom from the preset's bands. What it changes is written to the PC's settings when the
+  slider is let go, only the keys changed, so the launcher shows it next time. The bar stays down while the panel is
+  open; the Sound button again, a press on the game, minimising or the question close it. A broadcast notice shown
+  meanwhile stands beside it, and an FPS counter it would cover hides until it closes. The panel keeps within the game
+  at every window size and scale. [The sound](#the-sound) says what each control changes.
 - **Quitting**: the X asks first, in a glass card over the game dimmed and blurred behind it: **Keep playing** as the
   launcher's main button, or **Quit the game** as its secondary, red under the pointer; so a click by mistake does not
   end a song. Its buttons too act only when let go where they were pressed; Left, Right and Tab move the choice (marked
@@ -244,19 +258,20 @@ off, says why in its log, and the game plays by touch as before.
 - **Full screen or a window.** Full screen is a borderless window over the whole display, at the display's own pixels
   whatever its scaling. A window opens at three quarters of the display's height at 16:9, or at the size chosen. The
   game fills the window while its shape is between 4:3 and 21:9; a window of another shape, such as a display turned
-  upright, has black around the game. Moved to a display with other scaling, the game draws at the new size.
+  upright, has black around the game. Moved to a display with other scaling, the game draws at the new size. A window
+  resized, or switched to full screen and back, has the game lay its screens out again for the new shape, as a start
+  at that size does (the game takes its surface's size only as it starts; the player tells it the new one).
 - **VSync on** (the default): each frame goes out on a refresh of the display the window is on, 60 Hz, 144 Hz, 240 Hz or
   another. A PC that is really behind, more than a quarter of its frames a refresh late through three checks of 2
   seconds in a row, takes every second refresh (120 frames a second on a 240 Hz display), then every third. It tries the
   faster rate again 5 seconds later, goes straight back when the try falls short, and waits twice as long before the
   next try, a minute at most. Some late frames, as the page before a song shows while the song loads (up to a tenth of
-  them), and a pause of a tenth of a second or more, keep the display's rate.
-- **The frame limit:** the display's rate (the default), a number, or none. The page offers every rate up to the
-  highest any connected display runs at: each display's highest rate among its modes at its current size, never only
-  the rate it is in now, as Windows 11's dynamic refresh rate runs a 120, 165 or 180 Hz laptop or tablet panel at 60 Hz
-  while the desktop is still and says 60 (0.10.0 read that and offered nothing above 60 with VSync on). The line under
-  the display's rows names the rate the main display runs a game at, and the others'. The launcher's log says each
-  display's rate now, its highest and whether its rate is dynamic, at each start. With VSync on, a limit that is a whole
+  them), and a pause of a tenth of a second or more, keep the display's rate. A laptop's or tablet's panel set to
+  Windows 11's dynamic refresh rate ("Dynamic" in its advanced display settings: 60 Hz, or 120, 160, 165, 180 Hz and
+  so on) runs at 60 Hz for every program that does not ask for more: the player asks Windows for the panel's boost while
+  its window is shown, sees the panel's real refreshes (DXGI's v-blank virtualization off), and follows the rate they
+  come at, measured each second, so the game runs at the panel's full rate rather than 60.
+- **The frame limit:** the display's rate (the default), a number, or none. With VSync on, a limit that is a whole
   fraction of the display's rate, or within 10 % above one, keeps every frame the same length (60 or 120 on a 240 Hz
   display); another limit is held by the clock, with each frame still on a refresh (144 on a 240 Hz display).
 - **VSync off:** frames go out as soon as they are drawn, evenly at the limit, which may be above the display's rate, or
@@ -278,18 +293,25 @@ off, says why in its log, and the game plays by touch as before.
   lighter for the graphics card, and softer. The share keeps the window's shape exactly where its size has fine enough
   steps (1920x1080 is 120 steps of 16x9): 67 % of 1920x1080 is 1280x720, so the game lays itself out as it does at full
   size, its parts where they belong.
-- **The upscaler**, below 100 %: how the smaller picture reaches the window's size. **NVIDIA NIS** (Image Scaling, the
-  default) enlarges in one pass with its edge-adaptive filter, with no sharpening added (the SDK's default of 50 % drew
-  rims around the game's text and lines): of the three it comes nearest to the native picture. **AMD FSR 1**
-  (FidelityFX Super Resolution 1) enlarges it with its edge-adaptive filter (EASU) and sharpens the result (RCAS, at
-  AMD's sample's 0.25 stops). **Bilinear** is the plain stretch of the window's surface, the softest. NIS and FSR 1 are
-  spatial: they need only the finished picture, each in well under a millisecond a frame. At 100 % no upscaler is
-  used, and the row is not shown. A launcher before 0.11 kept Bilinear without being asked: it reads as NIS unless
-  Bilinear was chosen.
+- **The upscaler**, below 100 %: how the smaller picture reaches the window's size. **Bilinear** (the default) is the
+  plain stretch of the window's surface. **AMD FSR 1** (FidelityFX Super Resolution 1) enlarges it with its
+  edge-adaptive filter (EASU) and sharpens the result (RCAS, at AMD's sample's 0.25 stops). **NVIDIA NIS** (Image
+  Scaling) enlarges in one pass with its edge-adaptive filter, with no sharpening added: the SDK's default of 50 % drew
+  rims around the game's text and lines. Both are spatial: they need only the
+  finished picture. At 100 % no upscaler is used, and the row is not shown. Measured against 100 % on the game's words
+  in a 1280x720 window: bilinear keeps 0.93 of their sharpness at 85 %, 0.90 at 75 %, 0.81 at 50 %; FSR 1 and NIS keep
+  them as sharp (1.02 to 1.07) and nearer to 100 %, NIS a little nearer, FSR 1 a little crisper. Each costs under
+  0.1 ms of an RTX 4090 a frame. They are for a graphics card that cannot keep the display's rate at 100 %: lighter
+  for it, at the price of some sharpness with bilinear and much less with FSR 1 or NIS.
 - **Anti-aliasing** smooths the jagged edges of the game's shapes. **CMAA 2** (Intel's Conservative Morphological
   Anti-Aliasing 2) smooths them over the finished picture and keeps text and thin lines sharp; it runs on compute shaders
   (OpenGL ES 3.1), and where the graphics card has none the player uses SMAA instead and says so in its log. **SMAA**
-  (SMAA 1x, High preset) smooths them with three light passes over the finished picture. With an upscaler,
+  (SMAA 1x, Ultra preset) smooths them with three light passes over the finished picture. The game's pictures are
+  filtered images, soft at their own edges already, so either changes little: measured on the same frames of its music
+  list, the frame as the game drew it against the frame shown, CMAA 2 changes a fifth to a third of the strong edges
+  (1 to 5 % of the pixels), and SMAA 9 % of the pixels, three tenths of the edges, its words as they were; the
+  difference shows on the diagonal edges of the game's frames, arrows and cards. On an RTX 4090 at 1280x720 CMAA 2
+  takes 0.1 ms of the graphics card a frame in the menus (0.3 to 1.5 ms over a song's video), SMAA under 0.1 ms. With an upscaler,
   anti-aliasing comes first, at the size the game draws at. MSAA, which 0.9 offered, is gone: it left the game's picture
   as it was, and a setting of `msaa2`, `msaa4` or `msaa8` reads as CMAA 2. Temporal methods (DLSS, FSR 2 and 3, TAA, DLAA) need what a closed game does not hand
   over (its motion vectors and depth), and frame generation adds delay: none of them is offered.
@@ -308,20 +330,31 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
   has it); other programs are silent meanwhile, and the sound is shared when Windows does not allow it.
 - **The buffer:** low (Windows' low-latency mode, where the device has a shorter period than its standard one), normal,
   or safe for a busy PC.
-- **The volumes:** the master, everything the game plays, 0 to 100 (Windows' own volume still applies); the music (the
-  songs and the game's background music) and the effects (key sounds, judgements and the menus' sounds), each a share
-  of the master.
-- **The equaliser:** three bands on the game's whole sound, low, mid and high, each from -12 to 12 dB: **Flat**, a preset
-  (**Bass**, **Vocal**, **Treble**), or **Custom** once a band is moved. The game's in-game menu has the same volumes and
-  equaliser: what is set there is written back into the settings file, and the launcher shows it when its window comes
-  to the front again.
+- **Master**, the volume of the game, 0 to 100. Windows' own volume still applies.
+- **Music** and **Effects**, each a share of the master, 0 to 100: the music is a song's background, the game's menu
+  music and a song's preview; the effects are the sounds of the notes the player plays, and the menus' and the
+  judgement's sounds. In a song the player tells them apart by its tracks: each of a song's tracks plays either in the
+  background or under the player's notes, and its volume takes the music's or the effects' share. Outside songs the
+  game's streamed sounds are its music and the rest its effects.
+- **The equaliser** on the game's whole sound: Flat (no filter), Bass (+6 dB at the low end), Vocal (+4 dB in the middle,
+  -2 at the low end, +1 at the top), Treble (+6 dB at the top), or Custom, its three bands as chosen: a low shelf at
+  120 Hz, a peak at 1 kHz an octave and a half wide and a high shelf at 6 kHz, each -12 to +12 dB. A raised band takes
+  the same off the whole first, so the sound never clips where it was full; it costs about a microsecond of the mixer's
+  5 ms periods.
+
+The launcher's sound settings and the game's sound panel set the same settings: a change in either is the other's next
+time it looks.
 
 ## Broadcasting
 
 While broadcasts are on for the server and its owner shows a player live, the player broadcasts from the PC as a phone
 does, with Windows' own video and sound encoders, at the quality the owner chose ([live broadcasts](live.md#from-a-pc)). A glass card slides down at the top of the game
-when a broadcast starts and ends, with a red LIVE tag like the game's own tags while it is on (once it is over, its
-title says so alone), and says where it can be watched.
+every time the broadcast's switches change, the player's own or the server's: on air, off air, switched on while the
+server's broadcasts are off and the like, as the server words it, each once. The player asks the server every 5
+seconds, so a switch flipped in the admin pages shows within that. On air it wears a red LIVE tag like the game's own
+tags; once over, its title says so alone, and it says where the broadcast can be watched. When the server stops
+answering while the PC broadcasts (three asks in a row, 15 seconds), the card says the broadcast has stopped, and when
+the server answers again on air, that it is back.
 
 ## What it needs, and what it keeps
 
