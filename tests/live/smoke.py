@@ -1084,7 +1084,7 @@ check("on again: a new number for the page, and the player told again",
       version_of(again["noti_url"]) > version_of(second["noti_url"]) and s4.get("toast_kind") == "maint_on"
       and s4["toast"] == "Under maintenance\nYou will hear here when it is over" and s4.get("toast_id", 0) > s3.get("toast_id", 0), (again, s4))
 maintenance_post(action="off")
-check("and off again: told again", state().get("toast_kind") == "maint_off")
+check("maintenance off again: told again", state().get("toast_kind") == "maint_off")
 
 # A player left on for what run.sh tests from inside the server.
 last_udid = f"live-smoke3-{random.randrange(10**9):09d}"
