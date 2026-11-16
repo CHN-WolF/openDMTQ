@@ -346,16 +346,36 @@ const noFindings = async (page, name) => {
   check(`${name}: nothing wrong with the layout`, items.length === 0, items.slice(0, 6).map(f => `${f.kind} ${f.at} ${f.detail}`.slice(0, 140)).join(' ; '));
 };
 
-// A form on the page, sent by pressing its button, the page coming back afterwards.
+// What a press does, done: the page loaded again, or a change made in place (admin.js counts those, window.odqChanges).
+// Thirty seconds at most.
+async function settle(page, act) {
+  const before = await page.evaluate(() => window.odqChanges || 0).catch(() => 0);
+  const loaded = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 });
+  const changed = page.waitForFunction(n => (window.odqChanges || 0) > n, { timeout: 30000, polling: 100 }, before);
+  // The one that does not happen ends in an error later, which nobody waits for.
+  loaded.catch(() => {});
+  changed.catch(() => {});
+  const never = p => p.catch(() => new Promise(() => {}));
+  let timer;
+  const late = new Promise((_, fail) => { timer = setTimeout(() => fail(new Error('the press neither loaded a page nor changed this one')), 30000); });
+  await act();
+  try {
+    await Promise.race([never(loaded), never(changed), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A form on the page, sent by pressing its button: the page coming back afterwards, or changed in place.
 async function press(page, selector) {
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click(selector)]);
+  await settle(page, () => page.click(selector));
 }
 
 // A press that asks first: the question is the site's own, not the browser's, and its Continue goes on.
 async function pressAndConfirm(page, selector) {
   await page.click(selector);
   await page.waitForSelector('#ask[open]');
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#ask [value=yes]')]);
+  await settle(page, () => page.click('#ask [value=yes]'));
 }
 
 // A floating layer (a row's menu, a tooltip, a question) whole and on top: points over all of it, five by five just
@@ -599,6 +619,7 @@ async function hoverOnly(contexts) {
       }).filter(i => i >= 0));
       for (const index of [marks[0], marks[marks.length - 1]].filter((v, i, a) => v !== undefined && a.indexOf(v) === i)) {
         const mark = (await page.$$('[data-tip]'))[index];
+        if (!mark) continue;
         const words = await mark.evaluate(e => e.dataset.tip);
         await mark.evaluate(e => e.scrollIntoView({ block: 'center', inline: 'nearest' }));
         await pause(150);
@@ -631,9 +652,17 @@ async function hoverOnly(contexts) {
           const again = !(await shown());
           await page.touchscreen.tap(x, y);
           await pause(200);
-          // Elsewhere: the page's heading, which does nothing when pressed.
-          const heading = await page.$eval('main h2, main h1:not(.page-title), .playerhead h2', h => { const r = h.getBoundingClientRect(); return [r.left + 4, r.top + r.height / 2]; }).catch(() => [8, 200]);
-          await page.touchscreen.tap(heading[0], Math.max(4, heading[1]));
+          // Elsewhere: the nearest point of the screen where a press does nothing (no link, button, field or mark there).
+          const elsewhere = await page.evaluate(() => {
+            for (let y = 80; y < innerHeight - 80; y += 12) {
+              for (let x = 6; x < innerWidth - 6; x += 12) {
+                const hit = document.elementFromPoint(x, y);
+                if (hit && !hit.closest('a, button, input, select, textarea, summary, label, [data-tip], [tabindex], video, .nav, .tabbar')) return [x, y];
+              }
+            }
+            return null;
+          });
+          if (elsewhere) await page.touchscreen.tap(elsewhere[0], elsewhere[1]);
           await pause(200);
           const away = !(await shown());
           check(`a mark's words show when a finger presses it, and go with a second press or a press elsewhere (${where})`, tapped && again && away,
