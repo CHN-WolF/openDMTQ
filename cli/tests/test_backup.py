@@ -41,7 +41,7 @@ class CreateTest(unittest.TestCase):
             sb.write("data/state/dmtq.db3", b"db")
             sb.write("data/custom/ids.json", "{}")
             self.assertEqual(sb.call(app.cmd_backup), 0, sb.output())
-            # Named for what it is, in the release's files' order (API-41).
+            # Named for what it is, in the release's files' order (API-42).
             self.assertRegex(sb.output(), r"backup data/backups/OpenDMTQ-Server-Backup-\d{8}-\d{6}-manual\.tar\.gz")
 
     def test_the_newest_are_kept_whichever_way_they_are_named(self):

@@ -341,7 +341,7 @@ class PresetTest(unittest.TestCase):
                 self.assertEqual(windows_client.own_ca(), CA)
 
     def test_the_download_name_says_the_server(self):
-        # In the release's files' order: what it is, its version, the system, then the server it is set up for (API-41).
+        # In the release's files' order: what it is, its version, the system, then the server it is set up for (API-42).
         # Without a version the copy here names, none; anything else in its place is left out.
         self.assertEqual(windows_client.download_name("example.com:8790", "0.11.0"),
                          "OpenDMTQ-PC-Client-0.11.0-windows-x64-Setup-example.com-8790.exe")

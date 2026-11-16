@@ -194,7 +194,7 @@ class SessionsOverRestartTest(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class NamesTest(unittest.TestCase):
-    """What the server hands out and keeps is named for what it is, in the release's files' order (API-41): the phone
+    """What the server hands out and keeps is named for what it is, in the release's files' order (API-42): the phone
     app, backups, the players' and plays' files, the request log, a recording. Backups named before 0.11.0 still count,
     and the newest are kept whichever way they are named."""
 
