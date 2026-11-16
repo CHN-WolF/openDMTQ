@@ -5,7 +5,7 @@ file to set the launcher up for this server. Players then sign in from the launc
 
 The installer comes from the first of: the copy beside this code (a release's tools image and the Windows bundle have
 one); one in data/apk (put there by hand or by a host install's kit, for a server without internet, or fetched there
-before; one put there as downloaded from a release, OpenDMTQ-PC-Client-1.2.3-windows-x64-Setup.exe, takes this
+before; one put there as downloaded from a release, opendmtq-pc-client-1.2.3-windows-x64-setup.exe, takes this
 program's name with its version beside it); the project's latest release, fetched into data/apk when there is none, as
 the runtime for newer phones is (runtime.py). A copy in data/apk a week old gives way to the latest release's, and
 stays when that cannot be had. A fetch that fails is not tried again for a day: a server without internet would wait
@@ -35,7 +35,7 @@ VERSION_NAME = SETUP_NAME + ".version"
 MANIFEST = "windows.json"
 # The installer's name in a release, as a person also downloads it into data/apk (.github/release_assets.py names it), and
 # the releases it is fetched from, for a server that has none.
-RELEASE_NAME = "OpenDMTQ-PC-Client-{version}-windows-x64-Setup.exe"
+RELEASE_NAME = "opendmtq-pc-client-{version}-windows-x64-setup.exe"
 RELEASES = runtime.RELEASES
 # In data/apk: why the last fetch failed. The file's own time says when, and so when the next one may be tried.
 FAILED = "client-windows-error.txt"
@@ -129,8 +129,8 @@ def adopt(apk_dir, placed):
     if not found:
         return
     newest = max(found, key=runtime.numbers_in)
-    # The version from the name: ...-PC-Client-1.2.3-windows-x64-Setup.exe.
-    version = re.search(r"-PC-Client-([0-9][0-9A-Za-z.+]*)-windows-", os.path.basename(newest))
+    # The version from the name: ...-pc-client-1.2.3-windows-x64-setup.exe.
+    version = re.search(r"-pc-client-([0-9][0-9a-z.+]*)-windows-", os.path.basename(newest))
     if whole(newest):
         os.replace(newest, placed)
         with open(placed + ".version", "w", encoding="utf-8") as f:
@@ -315,9 +315,11 @@ def preset(url, name, ca=""):
 
 def download_name(host, version=""):
     """The file name the installer is handed out under: what it is, its version, the system, and the server it is set up
-    for, in the release's files' order (OpenDMTQ-PC-Client-0.11.0-windows-x64-Setup-example.com-8080.exe; without a
-    version when the copy here does not say one)."""
+    for, in the release's files' order and all in lower case: opendmtq-pc-client-0.11.0-windows-x64-setup-example.com-8080.exe,
+    without a version when the copy here does not say one."""
     # A version as a release names one (digits, letters, dots, + and -), or none, as the site's windows_download_name().
     version = version if re.fullmatch(r"[0-9][0-9A-Za-z.+-]*", version or "") else ""
-    return ("OpenDMTQ-PC-Client-" + (f"{version}-" if version else "") + "windows-x64-Setup-"
+    name = ("opendmtq-pc-client-" + (f"{version}-" if version else "") + "windows-x64-setup-"
             + re.sub(r"[^A-Za-z0-9.-]", "-", host) + ".exe")
+    # Lower case throughout, an address written in capitals too (a name on the network reads the same either way).
+    return name.lower()

@@ -1006,7 +1006,7 @@ async function portalFlows(contexts) {
     return [r.status, r.headers.get('content-type'), r.headers.get('content-disposition'), new TextDecoder().decode(body.slice(-300))];
   });
   check('and /windows hands a signed-in visitor the installer set up for this server',
-    setup[0] === 200 && /portable-executable/.test(setup[1] || '') && /OpenDMTQ-PC-Client-[0-9A-Za-z.+-]*-?windows-x64-Setup-/.test(setup[2] || '') &&
+    setup[0] === 200 && /portable-executable/.test(setup[1] || '') && /filename="opendmtq-pc-client-[0-9a-z.+-]*-?windows-x64-setup-[0-9a-z.-]+\.exe"/.test(setup[2] || '') &&
     setup[3].endsWith('OPENDMTQ-PRESET1') && setup[3].includes(`"url":"${SITE}"`), JSON.stringify(setup.slice(0, 3)));
   // A broken download goes on where it stopped, the app's (a hundred megabytes and more on a phone's network) and the
   // installer's alike (apk.php, windows.php): the headers that say so, a part as asked (the last 200 bytes, which for the

@@ -93,7 +93,7 @@ expect "and the game files" grep -q '^game' "$WORK/list.log"
 expect "the log of changes has the owner's sign-in" test -s "$SRV/data/state/changes.log"
 cli delete-data logs recordings --yes > "$WORK/delete.log" 2>&1 || true
 sed 's/^/    /' "$WORK/delete.log"
-expect "delete-data logs recordings --yes makes a backup first" grep -q 'backup data/backups/OpenDMTQ-Server-Backup-.*-before-delete' "$WORK/delete.log"
+expect "delete-data logs recordings --yes makes a backup first" grep -q 'backup data/backups/opendmtq-server-backup-.*-before-delete' "$WORK/delete.log"
 expect "and deletes them" grep -q 'deleted: logs, recordings' "$WORK/delete.log"
 expect "the backup is kept" sh -c "ls '$SRV/data/backups' | grep -q before-delete"
 expect "the log of changes is empty now" test ! -s "$SRV/data/state/changes.log"

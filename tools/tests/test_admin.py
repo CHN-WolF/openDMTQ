@@ -194,33 +194,56 @@ class SessionsOverRestartTest(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class NamesTest(unittest.TestCase):
-    """What the server hands out and keeps is named for what it is, in the release's files' order (API-42): the phone
-    app, backups, the players' and plays' files, the request log, a recording. Backups named before 0.11.0 still count,
-    and the newest are kept whichever way they are named."""
+    """What the server hands out and keeps is named for what it is, in the release's files' order and in lower case
+    (API-42, DEP-57): the phone app, backups, the players' and plays' files, the request log, a recording. Backups named
+    before 0.11.0, and in capitals by its first builds, still count, and the newest are kept whichever way they are
+    named; builds of the app named before are listed and pruned with the new ones."""
 
     def test_the_phone_app(self):
         from opendmtq_tools import patch_apk
         self.assertEqual(patch_apk.app_file_name("192.168.1.10:8791", "2026.11.17"),
-                         "OpenDMTQ-Phone-App-2026.11.17-android-192.168.1.10-8791.apk")
+                         "opendmtq-phone-app-2026.11.17-android-192.168.1.10-8791.apk")
+        # An address written in capitals: the name in lower case all the same.
+        self.assertEqual(patch_apk.app_file_name("MyServer.Example.com:8791", "2026.11.17"),
+                         "opendmtq-phone-app-2026.11.17-android-myserver.example.com-8791.apk")
+
+    def test_builds_named_before_are_listed_and_pruned_with_the_new_ones(self):
+        from opendmtq_tools import patch_apk
+        with Install() as inst:
+            out = inst.path("apk/out")
+            os.makedirs(out, exist_ok=True)
+            # One named as 0.10.0 named them, one as 0.11.0's first builds did, one as now: oldest to newest.
+            names = ["OpenDMTQ-192.168.1.10-8791-v2026.11.01.apk", "OpenDMTQ-Phone-App-2026.11.10-android-192.168.1.10-8791.apk",
+                     "opendmtq-phone-app-2026.11.17-android-192.168.1.10-8791.apk"]
+            for i, name in enumerate(names):
+                with open(os.path.join(out, name), "wb") as f:
+                    f.write(b"PK")
+                os.utime(os.path.join(out, name), (1_700_000_000 + i, 1_700_000_000 + i))
+            self.assertEqual(sorted(b["file"] for b in admin.apps.builds()), sorted(names))
+            # Two kept: the oldest goes, whichever way it is named.
+            patch_apk.prune_builds(out, keep=2)
+            self.assertEqual(sorted(os.listdir(out)), sorted(names[1:]))
 
     def test_a_backup(self):
         with Install():
             self.assertRegex(os.path.basename(admin.backups.new_backup_path("manual")),
-                             r"^OpenDMTQ-Server-Backup-\d{8}-\d{6}-manual\.tar\.gz$")
+                             r"^opendmtq-server-backup-\d{8}-\d{6}-manual\.tar\.gz$")
 
     def test_the_newest_are_kept_whichever_way_they_are_named(self):
         old = ["opendmtq-20261101-120000-manual.tar.gz", "opendmtq-20261116-120000-daily.tar.gz"]
-        new = ["OpenDMTQ-Server-Backup-20261110-120000-manual.tar.gz", "OpenDMTQ-Server-Backup-20261117-120000-daily.tar.gz"]
+        capitals = ["OpenDMTQ-Server-Backup-20261105-120000-manual.tar.gz"]
+        new = ["opendmtq-server-backup-20261110-120000-manual.tar.gz", "opendmtq-server-backup-20261117-120000-daily.tar.gz"]
         by_hand = ["opendmtq-20261117-130000-uploaded.tar.gz", "notes.txt"]
-        self.assertEqual(admin.backups.made_backups(old + new + by_hand),
-                         ["opendmtq-20261101-120000-manual.tar.gz", "OpenDMTQ-Server-Backup-20261110-120000-manual.tar.gz",
-                          "opendmtq-20261116-120000-daily.tar.gz", "OpenDMTQ-Server-Backup-20261117-120000-daily.tar.gz"])
+        self.assertEqual(admin.backups.made_backups(old + capitals + new + by_hand),
+                         ["opendmtq-20261101-120000-manual.tar.gz", "OpenDMTQ-Server-Backup-20261105-120000-manual.tar.gz",
+                          "opendmtq-server-backup-20261110-120000-manual.tar.gz", "opendmtq-20261116-120000-daily.tar.gz",
+                          "opendmtq-server-backup-20261117-120000-daily.tar.gz"])
 
     def test_the_daily_ones_kept_are_the_newest_whichever_way_they_are_named(self):
         # Seven daily backups named before 0.11.0 and one named since, as the daily backup prunes them (by_stamp): the
         # oldest old one is first to go, the new one last.
         old = [f"opendmtq-202611{d:02d}-030000-auto.tar.gz" for d in range(1, 8)]
-        new = "OpenDMTQ-Server-Backup-20261117-030000-auto.tar.gz"
+        new = "opendmtq-server-backup-20261117-030000-auto.tar.gz"
         ordered = admin.backups.by_stamp(old + [new])
         self.assertEqual((ordered[0], ordered[-1]), (old[0], new))
 
@@ -231,7 +254,7 @@ class NamesTest(unittest.TestCase):
             inst.sign_in()
             r = inst.client.get("/opendmtq/admin/players?csv=1")
             self.assertEqual(r.status_code, 200)
-            self.assertRegex(r.headers["Content-Disposition"], r'filename="OpenDMTQ-Server-Players-\d{8}\.csv"')
+            self.assertRegex(r.headers["Content-Disposition"], r'filename="opendmtq-server-players-\d{8}\.csv"')
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
@@ -452,8 +475,8 @@ class AppPageTest(unittest.TestCase):
             self.assertEqual((r.status_code, r.mimetype), (200, "application/vnd.microsoft.portable-executable"))
             self.assertTrue(r.data.startswith(b"MZ!") and r.data.endswith(b"OPENDMTQ-PRESET1"))
             # Under a name that says what it is and which server it is for, and as long as it is.
-            self.assertIn('filename="OpenDMTQ-PC-Client-', r.headers["Content-Disposition"])
-            self.assertIn("-windows-x64-Setup-", r.headers["Content-Disposition"])
+            self.assertIn('filename="opendmtq-pc-client-', r.headers["Content-Disposition"])
+            self.assertIn("-windows-x64-setup-", r.headers["Content-Disposition"])
             self.assertEqual(int(r.headers["Content-Length"]), len(r.data))
             # A broken download goes on where it stopped here too, as through the API (one function: apps.send_download).
             part = inst.client.get("/opendmtq/admin/app/windows", headers={"Range": "bytes=1-2", "If-Range": r.headers["ETag"]})
@@ -986,7 +1009,7 @@ class RecordingsTest(unittest.TestCase):
             r = inst.client.get("/opendmtq/admin/recordings/7/1800000000/download")
             self.assertEqual(r.get_data(), b"aabbb")
             self.assertEqual(r.headers["Content-Length"], "5")
-            self.assertIn("OpenDMTQ-Recording-player7-", r.headers["Content-Disposition"])
+            self.assertIn("opendmtq-recording-player7-", r.headers["Content-Disposition"])
 
     def test_only_media_comes_out_and_only_signed_in(self):
         with Install() as inst:
@@ -2620,7 +2643,7 @@ class PlaysTabTest(unittest.TestCase):
             r = inst.client.get("/opendmtq/admin/logs?tab=plays&csv=1&player=7")
             self.assertEqual(r.mimetype, "text/csv")
             # The file's name says what it holds.
-            self.assertIn("OpenDMTQ-Server-Plays-player7.csv", r.headers["Content-Disposition"])
+            self.assertIn("opendmtq-server-plays-player7.csv", r.headers["Content-Disposition"])
             text = r.get_data(as_text=True)
             # The mark that tells a spreadsheet on Windows this is UTF-8.
             self.assertTrue(text.startswith("﻿"))
@@ -3042,12 +3065,12 @@ class PageJobsTest(unittest.TestCase):
             r = inst.client.post("/opendmtq/admin/backups", data={"csrf": page_token(inst), "action": "create"})
             self.assertEqual(r.headers["Location"], "/opendmtq/admin/backups")
             page = inst.client.get("/opendmtq/admin/backups").get_data(as_text=True)
-            self.assertRegex(page, r'class="flash ok" role="status" data-said>Backup <code>OpenDMTQ-Server-Backup-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
+            self.assertRegex(page, r'class="flash ok" role="status" data-said>Backup <code>opendmtq-server-backup-\d{8}-\d{6}-admin\.tar\.gz</code> created\.')
             job = admin.jobs.listing()[0]
             self.assertEqual((job["kind"], job["state"]), ("backup", "done"))
             # The API's view of it holds nothing of the page's own (its words with their markup, its signal).
             self.assertEqual(json.loads(json.dumps(admin.jobs.view(job)))["log"], [job["log"][0]])
-            self.assertTrue(job["log"][0].startswith("Backup OpenDMTQ-Server-Backup-"), job["log"])
+            self.assertTrue(job["log"][0].startswith("Backup opendmtq-server-backup-"), job["log"])
             # Noted by the admin who pressed it, though the job noted it after the request.
             notes = admin.insights.audit_read(inst.path("state"))
             self.assertEqual((notes[0]["what"], notes[0]["who"]), ("backups_page:create", "admin"))

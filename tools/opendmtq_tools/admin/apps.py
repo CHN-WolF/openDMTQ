@@ -31,7 +31,8 @@ def builds():
     current = latest.get("file")
     items = []
     for f in os.listdir(out_dir) if os.path.isdir(out_dir) else []:
-        if f.startswith("OpenDMTQ-") and f.endswith(".apk"):
+        # Builds named in lower case since 0.11.0, and as before ("OpenDMTQ-"): one prefix, whatever its case.
+        if f.lower().startswith("opendmtq-") and f.endswith(".apk"):
             meta = {}
             try:
                 with open(os.path.join(out_dir, f + ".json"), encoding="utf-8") as m:

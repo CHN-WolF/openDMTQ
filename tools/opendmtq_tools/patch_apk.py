@@ -761,7 +761,8 @@ def signed_builds(out_dir):
         return []
     found = []
     for name in names:
-        if name != "latest.json" and not (name.startswith("OpenDMTQ-") and name.endswith(".apk.json")):
+        # Builds named in lower case since 0.11.0, and as before ("OpenDMTQ-"): one prefix, whatever its case.
+        if name != "latest.json" and not (name.lower().startswith("opendmtq-") and name.endswith(".apk.json")):
             continue
         try:
             with open(os.path.join(out_dir, name), encoding="utf-8") as f:
@@ -909,7 +910,8 @@ def prune_builds(out_dir, keep=10):
             offered = json.load(f).get("file")
     except (OSError, ValueError, AttributeError):
         offered = None
-    builds = sorted((f for f in os.listdir(out_dir) if f.startswith("OpenDMTQ-") and f.endswith(".apk")),
+    # Builds named in lower case since 0.11.0, and as before ("OpenDMTQ-"): the older ones go first all the same.
+    builds = sorted((f for f in os.listdir(out_dir) if f.lower().startswith("opendmtq-") and f.endswith(".apk")),
                     key=lambda f: os.path.getmtime(os.path.join(out_dir, f)))
     for old in builds[:-keep]:
         if old != offered:
@@ -919,8 +921,9 @@ def prune_builds(out_dir, keep=10):
 
 
 def app_file_name(host, stamp):
-    """The phone app's file name: what it is, its build (the day's stamp), the system, and the server it is for."""
-    return f"OpenDMTQ-Phone-App-{stamp}-android-{re.sub(r'[^A-Za-z0-9.-]', '-', host)}.apk"
+    """The phone app's file name: what it is, its build (the day's stamp), the system, and the server it is for, in lower
+    case, an address written in capitals too (a name on the network reads the same either way)."""
+    return f"opendmtq-phone-app-{stamp}-android-{re.sub(r'[^A-Za-z0-9.-]', '-', host)}.apk".lower()
 
 
 def build_lock(out_dir):
@@ -1038,7 +1041,7 @@ def build(args, host, out_dir):
             raise SystemExit(f"signer produced {signed}")
 
         # Name says what it is, which build, for which system and which server, in the release's files' order
-        # (OpenDMTQ-Phone-App-2026.11.17-android-192.168.1.10-8791.apk). ":" (a port) is not allowed in file names on
+        # (opendmtq-phone-app-2026.11.17-android-192.168.1.10-8791.apk). ":" (a port) is not allowed in file names on
         # Windows and confuses Android's downloads.
         name = app_file_name(host, args.stamp)
         os.makedirs(out_dir, exist_ok=True)

@@ -69,7 +69,7 @@ class Route:
 # The parts of a path, by their name: their type and what they are.
 PARAMS = {
     "job": ("string", "A job's id, as the answer that started it gives it."),
-    "file": ("string", "A build's file name, as the list of builds gives it (OpenDMTQ-<address>-v<date>.apk)."),
+    "file": ("string", "A build's file name, as the list of builds gives it (opendmtq-phone-app-<date>-android-<address>.apk)."),
     "song": ("integer", "A song's id."),
     "player": ("integer", "A player's number (the game's player id, which the site's player.php?id= takes too)."),
     "account": ("string", "An account's ID, in any letter case."),

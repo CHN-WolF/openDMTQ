@@ -33,8 +33,8 @@ KEPT_TABLES = ("BoardStamp", "ApiToken")
 BACKED_UP = ("songs", "hidden.json", "ids.json")
 
 # What a backup's name starts with, as the admin pages' and the command line's backups are named (admin/backups.py
-# BACKUP_PREFIX): what it is, then when it was made and why.
-BACKUP_PREFIX = "OpenDMTQ-Server-Backup-"
+# BACKUP_PREFIX): what it is, then when it was made and why, all in lower case.
+BACKUP_PREFIX = "opendmtq-server-backup-"
 
 
 class Layout:

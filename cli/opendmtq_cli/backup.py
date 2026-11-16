@@ -93,8 +93,8 @@ def create(reason="manual", protect=None):
     os.makedirs(BACKUPS, exist_ok=True)
     os.chmod(BACKUPS, 0o700)
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    # What it is, in the release's files' order, as the admin pages name theirs.
-    archive = os.path.join(BACKUPS, f"OpenDMTQ-Server-Backup-{stamp}-{reason}.tar.gz")
+    # What it is, in the release's files' order and in lower case, as the admin pages name theirs.
+    archive = os.path.join(BACKUPS, f"opendmtq-server-backup-{stamp}-{reason}.tar.gz")
     with tempfile.TemporaryDirectory() as tmp:
         db_copy = os.path.join(tmp, "dmtq.db3")
         _snapshot_db(db_copy)
@@ -141,8 +141,9 @@ def prune(protect=None):
     """Keep the newest KEEP backups, and protect (a path) whatever its age."""
     keep = os.path.abspath(protect) if protect else None
     # One brought in by hand on the admin page stays until it is deleted by hand: nothing else would make it again.
-    # Named before 0.11.0 ("opendmtq-") or since: oldest first by the time in the name, which the two ways of naming
-    # share (the new names sort before the old ones letter by letter).
+    # Named before 0.11.0 ("opendmtq-"), since ("opendmtq-server-backup-") or as 0.11.0's first builds did
+    # ("OpenDMTQ-Server-Backup-"): oldest first by the time in the name, which every way of naming shares (letter by
+    # letter the ways sort apart from each other).
     files = sorted((f for f in os.listdir(BACKUPS) if f.lower().startswith("opendmtq-") and f.endswith(".tar.gz")
                     and not f.endswith("-uploaded.tar.gz")),
                    key=lambda f: (re.search(r"\d{8}-\d{6}", f).group(0) if re.search(r"\d{8}-\d{6}", f) else f))

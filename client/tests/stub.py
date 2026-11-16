@@ -32,7 +32,7 @@ class Site:
         self.old = False               # an OpenDMTQ from before the PC client: no client.php, its health page only
 
     def describe(self):
-        return {"file": "OpenDMTQ-127.0.0.1-8080-v2026.11.09.apk", "sha256": hashlib.sha256(self.app).hexdigest(),
+        return {"file": "opendmtq-phone-app-2026.11.09-android-127.0.0.1-8080.apk", "sha256": hashlib.sha256(self.app).hexdigest(),
                 "size": len(self.app), "built_at": "2026-11-09T01:02:03", "label": "TECHNIKA Q (127.0.0.1:8080)",
                 "package": "app.example.stand.in", "address": "127.0.0.1:8080"}
 

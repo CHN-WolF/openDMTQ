@@ -27,7 +27,8 @@ def unpacked(folder, name):
 class MatchesTest(unittest.TestCase):
     def test_the_server_files_and_any_client_beside_them(self):
         with tempfile.TemporaryDirectory() as d:
-            touch(d, "dmtq-files.rar", "game.apk", "photos.zip", "OpenDMTQ-10.0.0.5-v2026.11.01.apk", "OpenDMTQ-windows.zip")
+            touch(d, "dmtq-files.rar", "game.apk", "photos.zip", "OpenDMTQ-10.0.0.5-v2026.11.01.apk", "OpenDMTQ-windows.zip",
+                  "opendmtq-phone-app-2026.11.17-android-10.0.0.5-8791.apk", "opendmtq-server-0.11.0-windows-x64.zip")
             unpacked(d, "unpacked")
             # Not this server's own app, and not an archive with nothing of the game's in its name.
             self.assertEqual(discover.matches(d), ["game.apk", "dmtq-files.rar", "unpacked"])

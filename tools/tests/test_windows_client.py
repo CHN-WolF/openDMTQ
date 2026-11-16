@@ -64,7 +64,7 @@ def release(download, version):
 def release_url(version):
     """Where the release `version` keeps its installer, as .github/release_assets.py names it."""
     return (f"https://github.com/kanggu12/openDMTQ/releases/download/v{version}/"
-            f"OpenDMTQ-PC-Client-{version}-windows-x64-Setup.exe")
+            f"opendmtq-pc-client-{version}-windows-x64-setup.exe")
 
 
 class Place:
@@ -341,12 +341,15 @@ class PresetTest(unittest.TestCase):
                 self.assertEqual(windows_client.own_ca(), CA)
 
     def test_the_download_name_says_the_server(self):
-        # In the release's files' order: what it is, its version, the system, then the server it is set up for (API-42).
-        # Without a version the copy here names, none; anything else in its place is left out.
+        # In the release's files' order and in lower case: what it is, its version, the system, then the server it is set
+        # up for (API-42, DEP-57). Without a version the copy here names, none; anything else in its place is left out.
         self.assertEqual(windows_client.download_name("example.com:8790", "0.11.0"),
-                         "OpenDMTQ-PC-Client-0.11.0-windows-x64-Setup-example.com-8790.exe")
-        self.assertEqual(windows_client.download_name("192.168.0.10:8080"), "OpenDMTQ-PC-Client-windows-x64-Setup-192.168.0.10-8080.exe")
-        self.assertEqual(windows_client.download_name("192.168.0.10", "../x"), "OpenDMTQ-PC-Client-windows-x64-Setup-192.168.0.10.exe")
+                         "opendmtq-pc-client-0.11.0-windows-x64-setup-example.com-8790.exe")
+        self.assertEqual(windows_client.download_name("192.168.0.10:8080"), "opendmtq-pc-client-windows-x64-setup-192.168.0.10-8080.exe")
+        self.assertEqual(windows_client.download_name("192.168.0.10", "../x"), "opendmtq-pc-client-windows-x64-setup-192.168.0.10.exe")
+        # An address, or a version, written in capitals: lower case all the same.
+        self.assertEqual(windows_client.download_name("MyServer.Example.com:8790", "0.11.0-RC1"),
+                         "opendmtq-pc-client-0.11.0-rc1-windows-x64-setup-myserver.example.com-8790.exe")
 
 
 if __name__ == "__main__":

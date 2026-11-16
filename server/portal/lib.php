@@ -218,12 +218,14 @@ function windows_preset_for(string $url, string $name, string $ca = ''): string
 }
 
 /* The file name the installer is handed out under: what it is, its version (windows.json's, $version), the system, and the
-   server it is set up for, in the release's files' order, as windows_client.py's download_name() makes it. */
+   server it is set up for, in the release's files' order and all in lower case, as windows_client.py's download_name()
+   makes it. */
 function windows_download_name(string $version = ''): string
 {
     // A version as a release names one (digits, letters, dots, + and -), or none.
     $version = preg_match('/^[0-9][0-9A-Za-z.+-]*$/', $version) ? $version . '-' : '';
-    return 'OpenDMTQ-PC-Client-' . $version . 'windows-x64-Setup-' . preg_replace('/[^A-Za-z0-9.-]/', '-', public_host()) . '.exe';
+    // Lower case throughout, an address written in capitals too (a name on the network reads the same either way).
+    return strtolower('opendmtq-pc-client-' . $version . 'windows-x64-setup-' . preg_replace('/[^A-Za-z0-9.-]/', '-', public_host()) . '.exe');
 }
 
 /* A download's ETag, a strong one, as a broken download needs to go on (send_download()): the SHA-256 its manifest gives

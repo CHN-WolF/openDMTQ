@@ -97,9 +97,10 @@ def backup_files():
         return []
 
 
-# What a backup's name starts with: what it is, in the release's files' order (OpenDMTQ-Server-Backup-20261117-120000-
-# manual.tar.gz). Those made before 0.11.0 start with "opendmtq-": both are this server's backups.
-BACKUP_PREFIX = "OpenDMTQ-Server-Backup-"
+# What a backup's name starts with: what it is, in the release's files' order and in lower case
+# (opendmtq-server-backup-20261117-120000-manual.tar.gz). Those made before 0.11.0 start with "opendmtq-", and 0.11.0's
+# first builds wrote "OpenDMTQ-Server-Backup-": all are this server's backups.
+BACKUP_PREFIX = "opendmtq-server-backup-"
 
 
 def made_backups(names):

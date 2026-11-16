@@ -338,7 +338,7 @@ def plays_found(con, wanted, limit=-1, offset=0):
                "judgement": r["judgement"], "new": r["is_record"], "keyboard": core.by_keys(r), "when": r["played_at"]}
 
 
-def plays_csv(found, name="OpenDMTQ-Server-Plays.csv"):
+def plays_csv(found, name="opendmtq-server-plays.csv"):
     """The plays asked for as a file, all of them and not one page, in the page's order, for a spreadsheet."""
     out = io.StringIO()
     # The mark that tells a spreadsheet on Windows this is UTF-8, as in the players' file.
@@ -369,8 +369,8 @@ def plays_file(con, wanted, strict=False):
     people = plays_players(con)
     if not strict and wanted["player"] not in {guid for guid, _ in people}:
         wanted["player"] = None
-    # What it is first, in the release's files' order: OpenDMTQ-Server-Plays-player7-2026-11-01-2026-11-17.csv.
-    parts = ["OpenDMTQ-Server-Plays"] + ([f"player{wanted['player']}"] if wanted["player"] is not None else []) \
+    # What it is first, in the release's files' order and in lower case: opendmtq-server-plays-player7-2026-11-01-2026-11-17.csv.
+    parts = ["opendmtq-server-plays"] + ([f"player{wanted['player']}"] if wanted["player"] is not None else []) \
         + [d.date().isoformat() for d in (wanted["from"], wanted["to"]) if d]
     return plays_csv(plays_found(con, wanted), "-".join(parts) + ".csv")
 
@@ -454,6 +454,6 @@ def logs_download():
             except OSError:
                 continue
     r = app.response_class(stream(), mimetype="text/plain; charset=utf-8")
-    # What it is, and the day it was taken.
-    r.headers["Content-Disposition"] = f'attachment; filename="OpenDMTQ-Server-Access-Log-{datetime.date.today():%Y%m%d}.log"'
+    # What it is, and the day it was taken, in lower case.
+    r.headers["Content-Disposition"] = f'attachment; filename="opendmtq-server-access-log-{datetime.date.today():%Y%m%d}.log"'
     return r

@@ -391,7 +391,7 @@ One build.
 
 Parameters:
 
-- `file` (path, string): A build's file name, as the list of builds gives it (OpenDMTQ-&lt;address&gt;-v&lt;date&gt;.apk).
+- `file` (path, string): A build's file name, as the list of builds gives it (opendmtq-phone-app-&lt;date&gt;-android-&lt;address&gt;.apk).
 
 Answer: `200` with [BuildAnswer](#buildanswer).
 
@@ -405,7 +405,7 @@ One build's APK.
 
 Parameters:
 
-- `file` (path, string): A build's file name, as the list of builds gives it (OpenDMTQ-&lt;address&gt;-v&lt;date&gt;.apk).
+- `file` (path, string): A build's file name, as the list of builds gives it (opendmtq-phone-app-&lt;date&gt;-android-&lt;address&gt;.apk).
 
 Answer: `200` with the file itself (`application/vnd.android.package-archive`).
 
@@ -419,7 +419,7 @@ Deletes a build.
 
 Parameters:
 
-- `file` (path, string): A build's file name, as the list of builds gives it (OpenDMTQ-&lt;address&gt;-v&lt;date&gt;.apk).
+- `file` (path, string): A build's file name, as the list of builds gives it (opendmtq-phone-app-&lt;date&gt;-android-&lt;address&gt;.apk).
 
 Answer: `200` with [Deleted](#deleted).
 

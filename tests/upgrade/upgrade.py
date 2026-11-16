@@ -303,7 +303,7 @@ def before():
     # one; then what the API answers, the backup in its list.
     kept["reads"] = {str(guid): reads(guid, puid), str(other): reads(other, other_puid)}
     form(admin, "/opendmtq/admin/backups", action="create")
-    name = re.search(r"/opendmtq/admin/backups/((?:opendmtq|OpenDMTQ-Server-Backup)-[\w-]+\.tar\.gz)/download", page(admin, "/opendmtq/admin/backups"))
+    name = re.search(r"/opendmtq/admin/backups/(opendmtq-[\w-]+\.tar\.gz)/download", page(admin, "/opendmtq/admin/backups"))
     check("before: the Backups page makes a backup", name is not None)
     kept["backup"] = name.group(1) if name else ""
     kept["routes"] = routes()

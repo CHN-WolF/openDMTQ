@@ -41,12 +41,12 @@ class CreateTest(unittest.TestCase):
             sb.write("data/state/dmtq.db3", b"db")
             sb.write("data/custom/ids.json", "{}")
             self.assertEqual(sb.call(app.cmd_backup), 0, sb.output())
-            # Named for what it is, in the release's files' order (API-42).
-            self.assertRegex(sb.output(), r"backup data/backups/OpenDMTQ-Server-Backup-\d{8}-\d{6}-manual\.tar\.gz")
+            # Named for what it is, in the release's files' order and in lower case (API-42, DEP-57).
+            self.assertRegex(sb.output(), r"backup data/backups/opendmtq-server-backup-\d{8}-\d{6}-manual\.tar\.gz")
 
     def test_the_newest_are_kept_whichever_way_they_are_named(self):
-        # Thirty named before 0.11.0, then one named now: the oldest old one goes, never the new one, though the new
-        # names sort before the old ones letter by letter.
+        # Thirty named before 0.11.0, then one named now: the oldest old one goes, never the new one, whatever the
+        # names' order letter by letter.
         with Sandbox() as sb:
             sb.write("data/state/dmtq.db3", b"db")
             names = thirty(sb)
@@ -55,6 +55,19 @@ class CreateTest(unittest.TestCase):
             self.assertIn(os.path.basename(path), kept)
             self.assertNotIn(names[0], kept)
             self.assertIn(names[1], kept)
+
+    def test_one_named_in_capitals_by_0_11_0s_first_builds_counts_by_its_time(self):
+        # Thirty named before 0.11.0, the newest of them in capitals as 0.11.0's first builds named them, then one now:
+        # the oldest goes, the one in capitals stays as one of the newest.
+        with Sandbox() as sb:
+            sb.write("data/state/dmtq.db3", b"db")
+            names = thirty(sb)
+            capitals = sb.archive("data/backups/OpenDMTQ-Server-Backup-20260201-120000-manual.tar.gz", {"dmtq.db3": b"c"})
+            backup.create("manual")
+            kept = sb.backups()
+            self.assertIn(capitals, kept)
+            self.assertNotIn(names[0], kept)
+            self.assertNotIn(names[1], kept)
 
     def test_a_disk_that_fills_up_leaves_no_half_archive(self):
         # Under the final name it would be listed as the newest backup and push a good one out.
