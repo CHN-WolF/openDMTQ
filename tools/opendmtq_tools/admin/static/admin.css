@@ -319,8 +319,9 @@ table.players td.primary { font-weight: 600; overflow-wrap: anywhere; }
   table.data td { align-items: baseline; }
   table.players td.live-cell > .live-row { justify-self: stretch; justify-content: space-between; flex-wrap: wrap; row-gap: 8px; }
   /* The switch and Watch at their words' widths beside the state, or under it when the three do not fit: never squeezed
-     into their padding (on air, Turn off and Watch did not fit beside it on a phone). */
-  table.players .live-row .btns { grid-auto-columns: max-content; }
+     into their padding (on air, Turn off and Watch did not fit beside it on a phone). At the row's right end either way,
+     where every other row has its switch. */
+  table.players .live-row .btns { grid-auto-columns: max-content; margin-left: auto; }
 }
 /* A player's broadcast: how it is, in a word with its light, and the switch beside it. */
 .live-row { display: flex; align-items: center; gap: 10px; }
