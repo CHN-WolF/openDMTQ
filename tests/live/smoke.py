@@ -150,6 +150,10 @@ def live_now_tile():
 # Off by default.
 s = state()
 check("off by default: no token, no notice", s["on"] is False and "token" not in s and s["toast"] == "", s)
+# LIVE-46: the reply says the player's own switch and the server's beside whether they are on air, and the notice's number
+# and kind (before: only "on" and the words).
+check("the reply has both switches and the notice's number and kind",
+      (s["switch"], s["broadcasts"], s["toast_id"], s["toast_kind"]) == (False, False, 0, ""), s)
 check("the encoder settings are always there", (s["fps"], s["height"], s["bitrate"], s["segment"]) == (30, 720, 2000000, 2), s)
 check("unknown ids are simply off", json.loads(request(plain, SITE + "/live/state?ids=nobody")[2])["on"] is False)
 check("upload refused while off", upload("0" * 32, 0) == 403)
@@ -169,9 +173,15 @@ def broadcasts_post(**fields):
 check("broadcasts off for the server at first", "Broadcasts are off" in admin_page("/opendmtq/admin/recordings"))
 switch("live-on")
 s = state("ko")
-check("off for the server: a player switched on gets no key and no notice", s["on"] is False and "token" not in s and s["toast"] == "", s)
-check("and the players page holds the switch for then", "Switched on" in admin_page("/opendmtq/admin/players"))
+# LIVE-47: switched on while the server's are off: no key, and a notice that it starts once they are on (before: none).
+check("off for the server: a player switched on gets no key, and is told it waits for the server",
+      s["on"] is False and "token" not in s and s["switch"] is True and s["toast_kind"] == "wait"
+      and s["toast"] == "방송을 켜 두었어요\n이 서버의 방송이 켜지면 시작해요" and s["toast_id"] > 0, s)
+check("and the players page holds the switch for then", "On · server off" in admin_page("/opendmtq/admin/players"))
 switch("live-off")
+s = state()
+check("switched off again while the server's are off: told it stays off",
+      s["toast_kind"] == "held" and s["toast"] == "Your broadcast is switched off\nIt stays off when broadcasts come back on for this server", s)
 # The stream's quality, as the phones are asked for it: a named one, then the default again.
 broadcasts_post(action="settings", new_players="off", quality="smooth")
 s = state()
@@ -217,12 +227,22 @@ time.sleep(11)
 call("game.getUserAsset", [guid])
 check("a later menu request does", state()["toast"].startswith("Broadcasting your play\nWatch it now or later under LIVE on "))
 
-# Flipping back before the phone read the notice leaves nothing to say.
+# LIVE-48: flipping back before the phone read the notice leaves the newest change's notice, with a higher number (before:
+# nothing, so a player switched off and on again never heard of it).
+first = state()
 switch("live-off")
 switch("live-on")
 s = state()
 token = s["token"]
-check("a notice taken back is not shown", s["toast"] == "", s)
+check("off and on again before the phone looked: told it is on, with a new number",
+      s["toast_kind"] == "on" and s["toast"].startswith("Broadcasting your play\n") and s["toast_id"] > first["toast_id"], s)
+switch("live-off")
+off = state()
+switch("live-on")
+on = state()
+check("every change after that a notice of its own, numbered higher each time",
+      (off["toast_kind"], on["toast_kind"]) == ("off", "on") and on["toast_id"] > off["toast_id"] > s["toast_id"], (off, on))
+token = on["token"]
 
 # Refused uploads.
 check("wrong token", upload("f" * 32, 0) == 403)
@@ -793,9 +813,17 @@ s = state()
 check("the player on air is told it ended, and that broadcasts are off for now",
       s["on"] is False and s["toast"] == "Your broadcast has ended\nBroadcasts are off on this server", s)
 check("that notice only once", state()["toast"] == "")
-switch("live-off")
+# LIVE-49: broadcasts back on with the player's switch on: told it is on again (before: told only the first time).
 broadcasts_post(action="broadcasts-on")
-check("and nothing waits once broadcasts are on again", state()["toast"] == "")
+s = state()
+check("broadcasts on again with the switch on: told again", s["on"] is True and s["toast_kind"] == "on", s)
+broadcasts_post(action="broadcasts-off")
+s = state()
+check("and off again: told again", s["on"] is False and s["toast_kind"] == "end", s)
+switch("live-off")
+check("switched off while the server's are off: told it stays off", state()["toast_kind"] == "held")
+broadcasts_post(action="broadcasts-on")
+check("and nothing more once broadcasts are on again: nothing changed for a player switched off", state()["toast"] == "")
 rec_post(action="delete-player " + str(guid))
 
 

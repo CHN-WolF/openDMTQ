@@ -260,7 +260,8 @@ async function sweep(contexts, pages, widths, langs = ['en', 'ko']) {
           (found[key] = found[key] || []).push(`${lang}${width}`);
         }
         // Pictures for people to look through: the default language on phone and laptop, the other on a phone.
-        if ((lang === 'en' && (width === 360 || width === 1280)) || (lang === 'ko' && width === 360)) {
+        // SHOTS_ALL=1: both languages at the phone's width and the desktop's, for a look at a page in each.
+        if ((process.env.SHOTS_ALL && (width === 360 || width === 1280)) || (lang === 'en' && (width === 360 || width === 1280)) || (lang === 'ko' && width === 360)) {
           await page.screenshot({ path: path.join(OUT, 'shots', `${stage}-${name}-${lang}-${width}.jpg`), type: 'jpeg', quality: 72, fullPage: true }).catch(() => {});
         }
         views++;
