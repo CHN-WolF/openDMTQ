@@ -78,6 +78,9 @@ const FULL = [
   ['admin-recordings', `${A}/recordings`],
   ['admin-backups', `${A}/backups`],
   ['admin-maintenance', `${A}/maintenance`],
+  // The Server page as a host install has it (these pages' service runs as one): restart and stop, the port, the
+  // repair, the data and uninstall.
+  ['admin-server', `${A}/server`],
   ['admin-requests', `${A}/logs`],
   ['admin-plays', `${A}/logs?tab=plays`],
   // Narrowed, by the player with one of the longest names: the form holds what was picked, and has a way back.

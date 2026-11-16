@@ -298,6 +298,7 @@ def server_page():
                            since=datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M") if started else "",
                            version=os.environ.get("OPENDMTQ_VERSION") or "", root=repairing.install_root(),
                            port=port_now(), next_address=next_address(),
+                           can_move_port=bool(setup.HOST_INSTALL and setup.ENV_FILE),
                            kind_words=KIND_WORDS, command_leads=COMMAND_LEADS, part_words=PART_WORDS,
                            remove_leads=REMOVE_LEADS, remove_words=REMOVE_WORDS,
                            job=wanted or None, job_kind=job["kind"] if job else None)
