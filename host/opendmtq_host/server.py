@@ -15,7 +15,7 @@ import time
 import urllib.error
 import urllib.request
 
-from opendmtq_cli import env
+from opendmtq_cli import env, look
 from .paths import ADMIN_WAIT, APP, CLI, DATA, LOGS, PYTHON, ROOT, RUN, START_WAIT, WINDOWS
 from .output import die, say, warn
 from .programs import programs
@@ -442,7 +442,10 @@ def setup_logging(to_file):
                                                        backupCount=2, encoding="utf-8")
     else:
         handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", "%Y-%m-%d %H:%M:%S"))
+    # In a terminal (the Windows window) the time alone in grey and a state word for warnings; plain lines with the
+    # date in the log file and in a pipe.
+    handler.setFormatter(look.ConsoleFormatter(sys.stdout) if not to_file else
+                         logging.Formatter("%(asctime)s %(message)s", "%Y-%m-%d %H:%M:%S"))
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
 
 

@@ -5,7 +5,7 @@ import os
 import shutil
 
 from .paths import BUNDLE, LOCAL, MAC, RUN
-from .output import die, say
+from .output import die, look, say
 
 
 def brew_prefix():
@@ -96,7 +96,7 @@ def programs():
     missing = [NEEDED[k] for k in NEEDED if not found.get(k)]
     if missing:
         for m in missing:
-            say(f"  missing  {m}")
+            say(f"{look.INDENT}{look.paint('missing', 'bad')}  {m}")
         die("run host/install.sh to install what is missing" if not BUNDLE else
             "the bundle is incomplete: unpack the whole zip again")
     return found

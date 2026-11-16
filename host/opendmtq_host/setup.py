@@ -6,12 +6,12 @@ import os
 import sys
 import time
 
-from opendmtq_cli import discover
+from opendmtq_cli import discover, look
 from .paths import DATA, ROOT, WINDOWS
-from .output import die, ok, say, warn
+from .output import die, ok, say, tell, warn
 from .programs import programs
-from .settings import admin_url, ensure_settings, settings, site_url
-from .folders import make_folders
+from .settings import admin_port, ensure_settings, settings
+from .folders import make_folders, version
 from .server import cmd_run, open_setup
 from .commands import app_manifest, build_status, cmd_import, cmd_start, show_address
 
@@ -79,9 +79,7 @@ def have_base_apk():
 
 def cmd_setup(args):
     """First run, or again at any time: settings, files, server, app. Only what is missing is done."""
-    say("OpenDMTQ setup")
-    found = programs()
-    ok("Apache, PHP, Java and 7-Zip are there")
+    found = opening()
     make_folders()
     values = ensure_settings(args.host)
     # Files named on the command line are imported here; otherwise the setup pages find them (or let the owner pick
@@ -117,6 +115,15 @@ def cmd_setup(args):
     return 0
 
 
+def opening():
+    """The start of the setup, the first thing the window shows: the wordmark with the version, then the programs it
+    found. Returns them."""
+    look.banner(version())
+    found = programs()
+    ok("Apache, PHP, Java and 7-Zip are there")
+    return found
+
+
 def setup_finished(values):
     """True when the setup pages have nothing left to do: the game's files, a client, an account and the app for the
     address (tools/opendmtq_tools/admin/setup.py says the same of each)."""
@@ -138,20 +145,21 @@ def setup_finished(values):
 def summary(values):
     """Where everything is, once the server runs."""
     say("")
-    say(f"Server       {site_url(values)}")
-    say(f"Admin pages  {admin_url(values)}")
-    say(f"             user {values.get('ADMIN_USER') or 'admin'}, password {values.get('ADMIN_PASSWORD')}")
-    say(f"             (kept in the file .env in {ROOT}" + ("; Notepad opens it)" if WINDOWS else ")"))
+    # The addresses and the owner's sign-in in one block, the password with where it is kept.
+    for line in look.address_block(f"http://{values['PUBLIC_HOST']}/", f"http://localhost:{admin_port(values)}/opendmtq/admin/",
+                                   values.get("ADMIN_USER") or "admin", values.get("ADMIN_PASSWORD"),
+                                   f"kept in .env in {ROOT}" + ("; Notepad opens it" if WINDOWS else "")):
+        say(line)
     say("")
-    say("Players need an account: make one for each on the admin pages, under Accounts.")
+    tell("Players need an account: make one for each on the admin pages, under Accounts.")
     show_address(values)
     if WINDOWS:
-        say(f"The QR code for phones is on the site's home page: open http://{values['PUBLIC_HOST']}/ in a browser and "
+        tell(f"The QR code for phones is on the site's home page: open http://{values['PUBLIC_HOST']}/ in a browser and "
             "sign in.")
         say("")
-        say("Leave this window open while people play. To stop the server, close it, or press Stop the server on the "
+        tell("Leave this window open while people play. To stop the server, close it, or press Stop the server on the "
             "admin pages, under Maintenance.")
         # Phones and the PC client reach the server alike: a public network keeps both out.
-        say("Windows may ask whether Apache may use the network: allow it on private networks. If your Wi-Fi is set "
+        tell("Windows may ask whether Apache may use the network: allow it on private networks. If your Wi-Fi is set "
             "as a public network, phones and other PCs cannot connect: in Settings, Network & internet, choose Private "
             "for it.")

@@ -9,12 +9,12 @@ import sys
 import time
 from xml.sax.saxutils import escape
 
-from opendmtq_cli import checks, env
+from opendmtq_cli import checks, env, look
 from .paths import HERE, CLI, DATA, ENV_FILE, LOGS, MAC, ROOT, START_WAIT, WINDOWS
-from .output import die, ok, say
+from .output import die, ok, say, tell
 from .programs import programs
-from .settings import admin_url, listen_port, require_settings, settings, site_url
-from .folders import make_folders, tool
+from .settings import admin_port, listen_port, require_settings, settings
+from .folders import make_folders, tool, version
 from .server import health, running_pid, wait_healthy
 
 
@@ -102,22 +102,25 @@ def cmd_status(args):
         say(f"Not set up yet: run {CLI} setup.")
         return 1
     h = health(values)
-    say(f"Address      {site_url(values)}")
+    look.banner(version())
     user = values.get("ADMIN_USER") or "admin"
-    say(f"Admin pages  {admin_url(values)}  (user {user}, password ADMIN_PASSWORD in .env)")
-    say(f"Server       {'running' if h is not None else 'not running'}")
+    # Label and value lines in one column; a state word in its colour (running, missing).
+    lines = [("Address", f"http://{values['PUBLIC_HOST']}/"),
+             ("Admin pages", f"http://localhost:{admin_port(values)}/opendmtq/admin/  (ID {user})"),
+             ("Server", ("running", "ok") if h is not None else ("not running", "warn"))]
     if h is not None:
-        say(f"Client data  {'yes' if h.get('game_data') else f'missing: {CLI} import <folder>'}")
-        say(f"Songs        {h.get('songs', 0)}")
-        say(f"Players      {h.get('players', 0)}")
+        lines += [("Client data", ("yes", "ok") if h.get("game_data") else (f"missing: {CLI} import <folder>", "warn")),
+                  ("Songs", str(h.get("songs", 0))), ("Players", str(h.get("players", 0)))]
     m = app_manifest()
     b = build_status()
     if not m and not glob.glob(os.path.join(DATA, "apk", "base", "*.apk")):
         # No game client to build from yet: the import brings it, and the app is built then. The builder's last end
         # without one is that wait, not a failure (the window's line at a start says the same: server.builder_outcome).
-        say("Phone app    waits for the game files: built once they are imported")
-        return 0
-    say(f"Phone app    {m['file'] if m else 'not built yet'}" + (f" ({b.get('state')})" if b.get("state") else ""))
+        lines.append(("Phone app", "waits for the game files: built once they are imported"))
+    else:
+        lines.append(("Phone app", f"{m['file'] if m else 'not built yet'}" + (f" ({b.get('state')})" if b.get("state") else "")))
+    for line in look.rows(lines):
+        say(line)
     return 0
 
 
@@ -197,12 +200,13 @@ def show_address(values):
     url = f"http://{values['PUBLIC_HOST']}/"
     lan = env.is_lan_only(values["PUBLIC_HOST"])
     where = "on the same Wi-Fi" if lan else "from anywhere"
-    say(f"\nOn a phone {where}, open {url}, sign in, and tap Download app (.apk).")
+    say("")
+    tell(f"On a phone {where}, open {url}, sign in, and tap Download app (.apk).")
     # The same site offers the PC client for Windows once the builder has put its installer beside the app (the Windows
     # bundle brings one; other installs fetch it): said with the button's own words, as the Download page shows them.
     if installer_offered():
         pc_where = "on the same network" if lan else "from anywhere"
-        say(f"On a Windows PC {pc_where}, open the same address, sign in, and choose Download the installer (.exe): it "
+        tell(f"On a Windows PC {pc_where}, open the same address, sign in, and choose Download the installer (.exe): it "
             "installs the PC client, set up for this server.")
     # The Windows console draws the QR code's blocks twice as wide in some fonts: the site shows it there instead.
     if not WINDOWS:
