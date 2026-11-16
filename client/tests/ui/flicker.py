@@ -46,7 +46,7 @@ FRAMES_ALLOWED, FRAMES_MS = 1, 17
 MOVING_FRAMES, MOVING_MS = 2, 50
 # For an answer that makes one card of a page again with other content (signed out: the sign-in form in place of the
 # account), that card alone: its frames while it is laid out, never the page's other cards made again.
-CARD_FRAMES, CARD_MS = 6, 150
+CARD_FRAMES, CARD_MS = 8, 250
 # Where a frame between is saved as a picture for each change that has one (--frames), or None.
 FRAMES_OUT = None
 

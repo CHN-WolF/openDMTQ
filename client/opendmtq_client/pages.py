@@ -74,8 +74,13 @@ class Sections:
         return holder
 
     def _make(self, item):
-        """The card made (again) in its holder; the holder shown in its place while it holds something."""
+        """The card made (again) in its holder; the holder shown in its place while it holds something. A card on show is
+        made anew in a holder of its own laid over it, then put in its place: the old card stays on the screen until the
+        new one is drawn whole, never a gap where it was."""
         holder = item["holder"]
+        if holder.winfo_children() and holder.winfo_ismapped():
+            self._swap(item)
+            return
         for child in holder.winfo_children():
             child.destroy()
         item["build"](holder)
@@ -100,6 +105,41 @@ class Sections:
             item["gap"] = None
         self._gaps()
 
+    def _swap(self, item):
+        """The card on show made anew over it, laid out and drawn there, then put in its place (_make)."""
+        self._put(self._over(item))
+
+    def _over(self, item):
+        """The new card for `item` made in a holder of its own laid over the old one (as wide as it, as tall as it asks),
+        so that it is laid out and drawn while the old one is still under it. Returns (item, the new holder)."""
+        old = item["holder"]
+        fresh = tk.Frame(self.parent, bg=self.parent.cget("bg"))
+        fresh.place(in_=old, x=0, y=0, relwidth=1.0)
+        item["build"](fresh)
+        for child in fresh.pack_slaves():
+            child.pack_configure(pady=0)
+        return item, fresh
+
+    def _put(self, made, laid=False):
+        """The new holder in the old one's place, with its packing, and the old one gone: one change of the page's
+        layout. `laid`: the new one was laid out already (refresh lays out all of them at once)."""
+        item, fresh = made
+        old = item["holder"]
+        if not laid:
+            fresh.update_idletasks()
+        info = old.pack_info()
+        fresh.place_forget()
+        info.pop("in", None)
+        fresh.pack(before=old, **info)
+        old.destroy()
+        item["holder"] = fresh
+        item["made"] = item["key"]()
+        if not fresh.winfo_children():
+            # The card went (nothing to show now): its place goes too.
+            fresh.pack_forget()
+            item["gap"] = None
+        self._gaps()
+
     def _gaps(self):
         """The cards' gap above each shown card but the first."""
         first = True
@@ -114,14 +154,24 @@ class Sections:
             first = False
 
     def refresh(self):
-        """Each card whose key changed made again in its place; True when any was."""
+        """Each card whose key changed made again in its place; True when any was. The cards on show that change are
+        made over their old ones first, all of them laid out and drawn together, then all put in place at once: one
+        change of the page's layout whatever the number of cards."""
         changed = False
+        over = []
         for item in self.items:
             if not item["holder"].winfo_exists():
                 return changed
             if item["key"]() != item["made"]:
-                self._make(item)
                 changed = True
+                if item["holder"].winfo_children() and item["holder"].winfo_ismapped():
+                    over.append(self._over(item))
+                else:
+                    self._make(item)
+        if over:
+            self.parent.update_idletasks()
+            for made in over:
+                self._put(made, laid=True)
         if changed and self.after is not None:
             # What the page does once a card of it is made again (its names' column fitted to the new rows).
             self.after()
