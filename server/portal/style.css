@@ -828,6 +828,8 @@ td.actions { width: 1%; text-align: right; }
 .btns form { display: contents; }
 .inline-form { display: flex; gap: 6px; align-items: center; margin: 0; }
 .inline-form .input { flex: 1 1 140px; min-width: 0; }
+/* The field gives way, its button never: squeezed, a button's words ran into its padding (Rename in a player's More). */
+.inline-form .btn { flex: none; }
 /* Phones: each row becomes a block. Number and name on the first line, other values as labelled lines, buttons in
    equal columns at the bottom. */
 @media (max-width: 700px) {
