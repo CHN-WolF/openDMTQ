@@ -942,29 +942,50 @@ void bar_gesture_checks() {
     // A tap on the handle: held, then the bar's.
     {
         BarGesture g;
-        check(g.down(640, 12, 0, Zone::kHandle, true, at720) == Act::kNone && g.held(), "a press on the handle is held from the game");
+        check(g.down(640, 12, 0, Zone::kHandle, true, at720, true) == Act::kNone && g.held(), "a press on the handle is held from the game");
         check(g.move(643, 15, 30 * ms) == Act::kNone, "a move within the slop says nothing yet");
         check(g.up(643, 15, 80 * ms) == Act::kOpen && !g.active(), "a tap on the handle brings the bar, and the game hears nothing of it");
     }
     // A tap at the top edge beside the handle: the game's after all, from where and when it came down.
     {
         BarGesture g;
-        check(g.down(200, 3, 5 * ms, Zone::kEdge, true, at720) == Act::kNone, "a press at the top edge is held");
+        check(g.down(200, 3, 5 * ms, Zone::kEdge, true, at720, true) == Act::kNone, "a press at the top edge is held");
         check(g.up(201, 4, 90 * ms) == Act::kGame && g.x0() == 200 && g.y0() == 3 && g.t0() == 5 * ms,
               "a tap at the top edge is the game's, from where and when it came down");
     }
     // A long press on the handle and at the edge: the bar, and the rest of the press is no one else's.
     for (const Zone zone : {Zone::kHandle, Zone::kEdge}) {
         BarGesture g;
-        g.down(640, 8, 0, zone, true, at720);
+        g.down(640, 8, 0, zone, true, at720, true);
         check(g.tick(300 * ms) == Act::kNone, "held 300 ms: not yet a long press");
         check(g.tick(460 * ms) == Act::kOpen && g.bars(), zone == Zone::kHandle ? "held 460 ms on the handle: the bar" : "held 460 ms at the edge: the bar");
         check(g.move(640, 60, 500 * ms) == Act::kNone && g.up(640, 60, 600 * ms) == Act::kNone, "after a long press its moves and release are the bar's");
     }
+    // The mouse: its click on the handle and its press held still there are the game's, from where they came down (the
+    // pointer resting on the handle brings the bar); drawn down, however long it was held first, it pulls the bar.
+    {
+        BarGesture g;
+        check(g.down(640, 12, 0, Zone::kHandle, true, at720, false) == Act::kNone && g.held(), "the mouse's press on the handle is held from the game");
+        check(g.up(641, 12, 90 * ms) == Act::kGame && g.x0() == 640 && g.y0() == 12, "the mouse's click on the handle is the game's, from where it came down");
+    }
+    {
+        BarGesture g;
+        g.down(640, 12, 0, Zone::kHandle, true, at720, false);
+        check(g.tick(1000 * ms) == Act::kNone && g.held(), "the mouse held still on the handle for a second: no bar, still held");
+        check(g.up(640, 12, 1000 * ms) == Act::kGame, "the mouse held still on the handle, then let go: the game's click");
+    }
+    {
+        BarGesture g;
+        g.down(640, 3, 0, Zone::kEdge, true, at720, false);
+        g.tick(600 * ms);
+        check(g.move(640, 30, 700 * ms) == Act::kPull, "the mouse held still at the edge for 600 ms, then drawn down: the bar follows");
+        g.move(640, 60, 900 * ms);
+        check(g.up(640, 60, 1000 * ms) == Act::kSettleOpen, "the mouse's pull let go at 60 of 74: the bar settles down");
+    }
     // A pull down from the edge: the bar follows, its foot at the press; let go far enough down, it settles down.
     {
         BarGesture g;
-        g.down(640, 2, 0, Zone::kEdge, true, at720);
+        g.down(640, 2, 0, Zone::kEdge, true, at720, true);
         check(g.move(640, 9, 40 * ms) == Act::kNone, "7 down: within the slop");
         check(g.move(642, 20, 80 * ms) == Act::kPull && std::fabs(g.place() - 20.0f / 74.0f) < 0.001f, "20 down: the bar follows, its foot at the press");
         check(g.move(642, 40, 200 * ms) == Act::kPull && std::fabs(g.place() - 40.0f / 74.0f) < 0.001f, "40 down: more of the bar");
@@ -974,7 +995,7 @@ void bar_gesture_checks() {
     // Not far enough, slowly: back up.
     {
         BarGesture g;
-        g.down(640, 2, 0, Zone::kHandle, true, at720);
+        g.down(640, 2, 0, Zone::kHandle, true, at720, true);
         g.move(640, 20, 100 * ms);
         g.move(640, 30, 300 * ms);
         check(g.up(640, 30, 500 * ms) == Act::kSettleClosed, "let go at 30 of 74, slowly: the bar goes back up");
@@ -982,7 +1003,7 @@ void bar_gesture_checks() {
     // A flick down from the handle: a short way, quickly, and the bar settles down.
     {
         BarGesture g;
-        g.down(640, 10, 0, Zone::kHandle, true, at720);
+        g.down(640, 10, 0, Zone::kHandle, true, at720, true);
         g.move(640, 22, 20 * ms);
         g.move(640, 34, 40 * ms);
         check(g.up(640, 34, 50 * ms) == Act::kSettleOpen, "a flick down to 34 of 74 in 50 ms: the bar settles down");
@@ -990,7 +1011,7 @@ void bar_gesture_checks() {
     // Pulled most of the way, then flicked back up: up.
     {
         BarGesture g;
-        g.down(640, 2, 0, Zone::kEdge, true, at720);
+        g.down(640, 2, 0, Zone::kEdge, true, at720, true);
         g.move(640, 30, 100 * ms);
         g.move(640, 70, 300 * ms);
         g.move(640, 60, 330 * ms);
@@ -1000,33 +1021,33 @@ void bar_gesture_checks() {
     // Pulled past the bar's foot: whole, no more.
     {
         BarGesture g;
-        g.down(640, 2, 0, Zone::kEdge, true, at720);
+        g.down(640, 2, 0, Zone::kEdge, true, at720, true);
         g.move(640, 300, 100 * ms);
         check(g.place() == 1.0f, "pulled past the bar's height: the bar whole, no more");
     }
     // Moved across or up: the game's after all, from where it came down, and so are its moves after.
     {
         BarGesture g;
-        g.down(300, 5, 0, Zone::kEdge, true, at720);
+        g.down(300, 5, 0, Zone::kEdge, true, at720, true);
         check(g.move(320, 8, 30 * ms) == Act::kGame && g.x0() == 300 && g.y0() == 5, "moved 20 across: the game's, from where it came down");
         check(g.move(400, 30, 60 * ms) == Act::kGame && g.up(400, 30, 90 * ms) == Act::kGame, "and its moves and release after");
     }
     {
         BarGesture g;
-        g.down(640, 17, 0, Zone::kHandle, true, at720);
+        g.down(640, 17, 0, Zone::kHandle, true, at720, true);
         check(g.move(640, 4, 30 * ms) == Act::kGame, "moved 13 up: the game's");
     }
     // Another finger while one is held: the held one is the game's; a pull settles where it is.
     {
         BarGesture g;
-        g.down(640, 5, 0, Zone::kHandle, true, at720);
+        g.down(640, 5, 0, Zone::kHandle, true, at720, true);
         check(g.other_press() == Act::kGame, "another finger while one is held: the held one is the game's after all");
         BarGesture h;
-        h.down(640, 5, 0, Zone::kEdge, true, at720);
+        h.down(640, 5, 0, Zone::kEdge, true, at720, true);
         h.move(640, 60, 50 * ms);
         check(h.other_press() == Act::kSettleOpen, "another finger during a pull at 60 of 74: the bar settles down");
         BarGesture c;
-        c.down(640, 5, 0, Zone::kEdge, true, at720);
+        c.down(640, 5, 0, Zone::kEdge, true, at720, true);
         c.move(640, 60, 50 * ms);
         check(c.cancel() == Act::kSettleClosed && !c.active(), "a pull taken away by the system: the bar goes back up");
     }
@@ -1052,7 +1073,7 @@ void bar_gesture_checks() {
             const int x = static_cast<int>((seed >> 8) % 1280), y = static_cast<int>((seed >> 4) % 80);
             const bool on = std::abs(x - 640) < 40 && y < 23;
             BarGesture g;
-            const Act a = g.down(x, y, i * 30 * ms, zone_at(x, y, 720, true, on), bar_may_come(true, false, 1, false), at720);
+            const Act a = g.down(x, y, i * 30 * ms, zone_at(x, y, 720, true, on), bar_may_come(true, false, 1, false), at720, true);
             if (a == Act::kGame) ++given;
             if (g.held()) ++held;
             g.up(x, y, i * 30 * ms + 40 * ms);

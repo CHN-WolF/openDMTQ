@@ -6,9 +6,12 @@
 // A press that may be the bar's is held from the game until it says what it is:
 // - drawn down past a small slop (more down than across): the bar follows it, its foot at the press, and when it is let
 //   go the bar settles down (pulled at least half way, or flicked down) or back up (less, or flicked back up);
-// - held still for a long press: the bar comes down;
-// - let go at once without moving: on the handle, a tap that brings the bar; at the top edge beside it, the game's tap
-//   after all, handed to it from where and when it came down;
+// - a finger's (a touch screen's, a pen's) held still for a long press: the bar comes down;
+// - a finger's let go at once without moving: on the handle, a tap that brings the bar; at the top edge beside it, the
+//   game's tap after all, handed to it from where and when it came down;
+// - the mouse's let go without being drawn down, however long it was held: the game's click after all, from where it
+//   came down (the mouse brings the bar by the pointer resting on the handle or at the edge, or by drawing it down; its
+//   click on the handle's place and a press held still there stay the game's, as the PC client's end to end holds);
 // - moved across or up past the slop, or another finger coming down: the game's after all, from where and when it came
 //   down, and its moves from then on.
 // A press the game may have (anywhere else, the bar may not come now: another finger down, the question up, a song
@@ -61,10 +64,13 @@ constexpr std::int64_t kFlickNs = 80000000;
 
 class BarGesture {
 public:
-    // A press at (x, y) of the game's area at `t`, in `zone`; `may`: the bar may come now. kNone while it is held, kGame
-    // when the game has it at once.
-    Act down(int x, int y, std::int64_t t, Zone zone, bool may, const GestureSizes& sizes) {
+    // A press at (x, y) of the game's area at `t`, in `zone`; `may`: the bar may come now; `finger`: a finger's or a
+    // pen's (its tap on the handle and its long press are the bar's), else the mouse's (only its pull is). kNone while it
+    // is held, kGame when the game has it at once.
+    Act down(int x, int y, std::int64_t t, Zone zone, bool may, const GestureSizes& sizes, bool finger) {
         sizes_ = sizes;
+        // Kept for the release and the timer: what a press held still is.
+        finger_ = finger;
         if (!may || zone == Zone::kGame) {
             state_ = State::kGame;
             return Act::kGame;
@@ -123,9 +129,10 @@ public:
         case State::kGame:
             return Act::kGame;
         case State::kHeld:
-            // Let go where it came down (a move within the slop): a tap. On the handle the bar's, else the game's.
+            // Let go where it came down (a move within the slop): a finger's tap on the handle is the bar's; a tap
+            // beside it, and the mouse's click however long it was held, the game's.
             (void)x;
-            return zone_ == Zone::kHandle ? Act::kOpen : Act::kGame;
+            return zone_ == Zone::kHandle && finger_ ? Act::kOpen : Act::kGame;
         case State::kPulling: {
             remember(y, t);
             place_ = place_at(y);
@@ -139,9 +146,10 @@ public:
         return Act::kNone;
     }
 
-    // The long press's timer, at `t`: held still long enough, the bar comes (the rest of the press is the bar's too).
+    // The long press's timer, at `t`: a finger held still long enough, the bar comes (the rest of the press is the bar's
+    // too). The mouse's press has no long press: held still, it waits to be drawn down or let go.
     Act tick(std::int64_t t) {
-        if (state_ != State::kHeld || t - t0_ < kLongPressNs) return Act::kNone;
+        if (state_ != State::kHeld || !finger_ || t - t0_ < kLongPressNs) return Act::kNone;
         state_ = State::kTaken;
         return Act::kOpen;
     }
@@ -215,6 +223,8 @@ private:
     }
     static constexpr int kSamples = 8;
     State state_ = State::kIdle;
+    // A finger's or a pen's press (true), or the mouse's.
+    bool finger_ = true;
     Zone zone_ = Zone::kGame;
     GestureSizes sizes_;
     int x0_ = 0, y0_ = 0;

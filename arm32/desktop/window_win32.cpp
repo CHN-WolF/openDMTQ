@@ -1485,7 +1485,7 @@ void gesture_to_game(const char* why) {
 bool gesture_begin(UINT32 id, POINT p, std::int64_t contact, bool may, bool by_touch) {
     const std::int64_t t = now_ns();
     const overlay::Zone zone = overlay::press_zone(p.x, p.y);
-    if (g_gesture.down(p.x, p.y, t, zone, may, overlay::gesture_sizes(g_area_h)) != overlay::Act::kNone) {
+    if (g_gesture.down(p.x, p.y, t, zone, may, overlay::gesture_sizes(g_area_h), by_touch) != overlay::Act::kNone) {
         // The game's: nothing is held, and the gesture is over at once.
         g_gesture.cancel();
         return false;
@@ -1495,7 +1495,8 @@ bool gesture_begin(UINT32 id, POINT p, std::int64_t contact, bool may, bool by_t
     g_gesture_time = contact;
     g_gesture_t0 = t;
     g_gesture_given = false;
-    SetTimer(g_window, kLongPressTimer, static_cast<UINT>(overlay::kLongPressNs / 1000000 + 10), nullptr);
+    // A finger's long press is timed; the mouse's press has none (bar_gesture.h).
+    if (by_touch) SetTimer(g_window, kLongPressTimer, static_cast<UINT>(overlay::kLongPressNs / 1000000 + 10), nullptr);
     if (trace_input()) {
         jvm::log("player: input: a %s at %ld,%ld held (%s)", by_touch ? "finger" : "press of the mouse", static_cast<long>(p.x), static_cast<long>(p.y),
                  zone == overlay::Zone::kHandle ? "on the handle" : "at the top edge");
@@ -1616,11 +1617,12 @@ LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
             ReleaseCapture();
             if (trace_input()) jvm::log("player: input: the mouse's button up on the game at %ld,%ld", static_cast<long>(p.x), static_cast<long>(p.y));
             if (g_gesture.active() && g_gesture_id == kMousePress) {
-                // Let go: a click on the handle, a long press or a pull are the bar's; a click at the edge is the game's.
+                // Let go: after a pull the bar settles; a click, on the handle or beside it and however long it was held,
+                // is the game's from where it came down.
                 const overlay::Act act = g_gesture.up(p.x, p.y, now_ns());
                 gesture_over();
                 if (act != overlay::Act::kGame) {
-                    gesture_act(act, false, "a click on the handle");
+                    gesture_act(act, false, nullptr);
                     return 0;
                 }
                 gesture_to_game("a click");

@@ -151,7 +151,7 @@ of a line is checked before any is applied, so one the launcher does not take ch
 | The keyboard | Text where the game asks for it, the text it opens with taken as selected: the first key types over it, Backspace clears it, an arrow keeps it (Enter ends it, Esc cancels it); Hangul too |
 | The touch keyboard | Comes up when a touch opens the game's text, and types into it |
 | The pointer resting at the game's top edge, or on the handle at its top centre | The bar: Sound, minimise, full screen, and the X that quits after asking |
-| A tap on the handle, a long press on it or at the top edge, or a press drawn down from there (a finger, a pen or the mouse) | The bar, following the press as it is pulled and settling down or back up when let go |
+| A finger's or a pen's tap on the handle or long press on it or at the top edge; a press drawn down from there by a finger, a pen or the mouse | The bar, following the press as it is pulled and settling down or back up when let go |
 | Alt+F4 | Nothing: the bar's X quits |
 | Alt alone, F10 | Nothing (no menu mode that would hold the next key) |
 
@@ -160,12 +160,13 @@ of a line is checked before any is applied, so one the launcher does not take ch
 </p>
 
 - **The bar**: a PC has no phone's buttons around the game, so a bar of frosted glass comes down across the top of the
-  game when the pointer rests a moment at the game's very top edge or on the handle with its button up; when the handle
-  is tapped by a finger or clicked; after a long press (half a second) on the handle or at the top edge, by a finger or
-  the mouse; or when a press is drawn down from there. A press drawn down pulls the bar out with its foot at the press
-  and, let go, the bar settles down when it is out at least half way or was flicked down, and goes back up otherwise.
-  The press that brings the bar never reaches the game; a tap at the top edge beside the handle, or a press there that
-  moves across or up, is the game's after all, from where and when it came down. In a song none of this happens unless
+  game when the pointer rests a moment at the game's very top edge or on the handle with its button up; when a finger
+  or a pen taps the handle, or holds still on it or at the top edge for half a second; or when a press of a finger, a
+  pen or the mouse is drawn down from there. A press drawn down pulls the bar out with its foot at the press and, let
+  go, the bar settles down when it is out at least half way or was flicked down, and goes back up otherwise. The press
+  that brings the bar never reaches the game; a tap at the top edge beside the handle, a click of the mouse there or on
+  the handle however long it is held, and a press that moves across or up are the game's after all, from where and
+  when they came down. In a song none of this happens unless
   the game has had no click, touch or held note for a second and a half: every tap at the top of a song plays the song
   at once, and a pointer on its way to the window's title bar brings nothing. It also comes down by itself for 3 seconds when the
   game's picture first shows (not during its black start) and after each switch between a window and full screen, so
