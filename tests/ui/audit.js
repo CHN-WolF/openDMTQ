@@ -363,12 +363,12 @@ const noFindings = async (page, name) => {
 
 // Pages left open while things change (the notices and away stages): their own looks run ten times as often, their
 // timers sped up before the page's scripts run, so that a change shows in seconds; the server's answers are as they are.
-// A mark on the window that only a page opened anew would lose: what changed came by itself.
 function quickTimers() {
   const every = window.setInterval;
   window.setInterval = (fn, ms, ...rest) => every(fn, Math.max(250, (ms || 0) / 10), ...rest);
-  window.keptOpen = true;
 }
+// A mark put on the window once the page is open (openAlone()), which only a page opened anew would lose: what changed
+// came by itself into the same page.
 const keptOpen = page => page.evaluate(() => window.keptOpen === true).catch(() => false);
 // A page left open in a window of its own (a context of its own, signed in): the browser keeps only the front tab of a
 // window in sight, and a page out of sight rightly asks nothing (it catches up when it is looked at again).
@@ -378,6 +378,7 @@ async function openAlone(contexts, url) {
   const page = await context.newPage();
   await page.evaluateOnNewDocument(quickTimers);
   await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => { window.keptOpen = true; });
   return page;
 }
 // Until the page says so (test, run in the page with arg), for ms at most: whether it came.
@@ -2109,6 +2110,31 @@ async function adminFlows(contexts) {
       }
       await maintenance('off');
       await all(null, `round ${round}: maintenance ended, the word and the sentence go by themselves`);
+    }
+    // PAGE-57 too: broadcasts off for the server and on again, twice, with the same pages left open.
+    // Off, they open anew without anything of broadcasts (as before); on again, they open anew with them, by themselves.
+    // Before: off came by itself, on did not (the pages waited to be opened again).
+    const broadcasts = async on => {
+      await owner.goto(`${A}/recordings`, { waitUntil: 'domcontentloaded' });
+      const button = `#broadcasts button[value=${on ? 'broadcasts-on' : 'broadcasts-off'}]`;
+      if (await owner.$(`${button}[data-ask]`)) await pressAndConfirm(owner, button);
+      else await press(owner, button);
+    };
+    // LIVE in the menu and, on the live page, the live page itself (not the page that says broadcasts are off); or neither.
+    const live = on => {
+      const menu = !!document.querySelector('.nav a[href="/opendmtq/live.php"]');
+      const offPage = !!document.querySelector('.live-off');
+      return on ? menu && !offPage : !menu;
+    };
+    for (const round of [1, 2]) {
+      await broadcasts(false);
+      const went = [];
+      for (const page of open) went.push(await until(page, live, false));
+      check(`round ${round}: broadcasts off, the pages left open lose LIVE by themselves`, went.every(Boolean), went.join(' '));
+      await broadcasts(true);
+      const came = [];
+      for (const page of open) came.push(await until(page, live, true));
+      check(`round ${round}: broadcasts on again, the pages left open bring LIVE back by themselves`, came.every(Boolean), came.join(' '));
     }
     for (const page of open) await page.browserContext().close();
     await owner.close();

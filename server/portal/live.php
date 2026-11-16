@@ -37,6 +37,9 @@ if (!live_enabled()) {
     echo '<section class="card live-empty off-air live-off"><span class="off-air-word" aria-hidden="true">OFF AIR</span>'
         . '<p class="live-empty-head">' . t('live.off_title') . '</p><p class="meta">' . t('live.off_text') . '</p>'
         . way_out([['/opendmtq/', t('go.home')]]) . '</section>';
+    // Left open, it looks every so often and comes again as the live page once broadcasts are on, as it came here when they
+    // went off (thumbs.js).
+    echo '<script src="' . asset_url('thumbs.js') . '"></script><script>liveThumbs.waitForOn();</script>';
     page_footer();
     exit;
 }

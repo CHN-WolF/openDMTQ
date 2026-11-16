@@ -123,6 +123,11 @@ page_header('OpenDMTQ', 'home', '', $stage);
   </section>
   <script src="<?= asset_url('thumbs.js') ?>"></script>
   <script>liveThumbs.home(<?= json_encode($live, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>, <?= dl_signed_in() ? 'true' : 'false' ?>, <?= json_encode(['count' => tp('live.count', ['n' => '{n}']), 'nav' => tp('live.nav')], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>);</script>
+  <?php else: ?>
+  <?php // Broadcasts off: the page looks every so often, and comes again with them once they are on, as it went without them
+        // when they went off (thumbs.js). ?>
+  <script src="<?= asset_url('thumbs.js') ?>"></script>
+  <script>liveThumbs.waitForOn();</script>
   <?php endif; ?>
 
   <?php // The rest of what goes on: who leads, and the newest records. One box with two lists, each as long as it is. ?>

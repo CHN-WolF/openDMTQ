@@ -331,5 +331,20 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) look(); });
   }
 
-  window.liveThumbs = { home, render, takePictures, headerCount, airTime, since, siteState };
+  // Broadcasts off for the server: the page (home, or the live page that says so) looks every so often, and opens anew once
+  // they are on again, so that LIVE comes back by itself as it went by itself. The site's state with it (siteState()).
+  function waitForOn() {
+    const look = () => {
+      if (document.hidden) return;
+      fetch('/opendmtq/?live=1', { cache: 'no-store' }).then(r => {
+        if (!r.ok) return;
+        siteState(r);
+        if (r.headers.get('X-Live') !== 'off') location.reload();
+      }).catch(() => { /* The next look. */ });
+    };
+    setInterval(look, 15000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) look(); });
+  }
+
+  window.liveThumbs = { home, render, takePictures, headerCount, airTime, since, siteState, waitForOn };
 })();
