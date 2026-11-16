@@ -84,8 +84,9 @@ While broadcasts are off for the server, which is how a new server starts:
 - The site shows nothing of broadcasts: no LIVE in the menu, no broadcasts on the home page or a player's page, no LIVE
   mark by a name, and no recording to watch. A link to the live page opens a page that says broadcasts are off, with the
   way home; one left open says so at its next look.
-- Each player's switch is kept. The Players page shows a switched-on player as switched on, held for when broadcasts are
-  on again; the Status page's tile says broadcasts are off.
+- Each player's switch is kept. The Players page shows a switched-on player as "On · server off", held for when
+  broadcasts are on again, and says above the list that a player is on air while their switch and the server's are both
+  on, and what new players start with; the Status page's tile says broadcasts are off.
 - Turned off while someone is on air (the page asks first), every live window goes at once and the recordings running
   are closed and kept. The owner can still watch, download and delete every recording on the Broadcasts page.
 - Turned on again, each player switched on is told in the game, between songs.
