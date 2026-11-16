@@ -2383,6 +2383,17 @@ LRESULT CALLBACK bar_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         }
         // The keyboard back to the game's window: the bar never takes it, another program may have.
         SetForegroundWindow(g_frame);
+        // A check's trace (PLAYER_TRACE_INPUT=1): the button let go of, and the one pressed.
+        static const bool trace = [] {
+            const char* v = std::getenv("PLAYER_TRACE_INPUT");
+            return v && *v && *v != '0';
+        }();
+        if (trace) {
+            char line[160];
+            std::snprintf(line, sizeof line, "player: input: the bar's button %d let go at %d,%d (pressed %d, the bar cut by %d)", chip_now,
+                          static_cast<int>(static_cast<short>(LOWORD(l))), static_cast<int>(static_cast<short>(HIWORD(l))), pressed, g_bar_press_cut);
+            note(line);
+        }
         // The X asks before quitting; the full screen chip switches at once (the window redraws the bar for it);
         // minimise minimises the game's window, as its own button did (the window holds the game and hides all this).
         if (chip_now != pressed) return 0;
@@ -3835,6 +3846,16 @@ void start(HWND frame, HWND game, const Hooks& hooks, bool korean) {
 }
 
 std::vector<HWND> pressed_windows() { return {g_bar.window, g_sound.window, g_ask.window}; }
+
+bool press_bar_button(int which) {
+    if (!g_bar.window || !g_bar.up || which < kQuitChip || which > kSoundChip) return false;
+    // The button's middle in the bar's window, where the bar's way has it now (its picture's rows cut above the edge).
+    const RectF r = chip_rect(which, area_w());
+    const int x = static_cast<int>(r.X + r.Width / 2), y = static_cast<int>(r.Y + r.Height / 2) - g_bar.cut;
+    PostMessageW(g_bar.window, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+    PostMessageW(g_bar.window, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+    return true;
+}
 
 void notice(const std::string& text, bool live) {
     if (!g_notice.window) return;

@@ -769,7 +769,8 @@ HWND window_at(POINT& in_game) {
 // place, moved to the second over the time in steps of 8 ms, then up there; drag=x0,y0,x1,y1[/ms] the same with the
 // mouse's first button; click=x,y/hold_ms holds the button. size=WxH sizes the window's game area as a person drags its
 // frame, and fullscreen switches to full screen and back as the bar's button does. notice=Title|Line and livenotice=...
-// (with the LIVE tag) show the server's notice as a broadcast's answer would. Nothing goes through Windows' own
+// (with the LIVE tag) show the server's notice as a broadcast's answer would; button=x|fullscreen|minimise|sound presses
+// that button of the bar's wherever the bar has it. Nothing goes through Windows' own
 // input, and
 // the keys reach the window while the game is held still (the planned taps follow the game's frames, which stop then).
 // Keys by their place on the keyboard, as keyboard play takes them (keyboard_play.h's names, A to Z, 0 to 9, Space,
@@ -794,7 +795,7 @@ void plan_keys() {
     }
     // What a press is: a key, a click, text, the window's close, the overlay's bar as a finger brings it, or a key by its
     // place (down and up, down only, up only).
-    enum class Kind { key, click, text, ime, close, bar, place, place_down, place_up, tap, swipe, drag, size, full, notice };
+    enum class Kind { key, click, text, ime, close, bar, place, place_down, place_up, tap, swipe, drag, size, full, notice, button };
     struct Press {
         double at;
         Kind kind;
@@ -881,6 +882,12 @@ void plan_keys() {
                 if (c == '|') c = '\n';
             }
             presses.push_back({at, Kind::notice, 0, live, hold, text, 0, 0, {}, 0});
+        } else if (key.rfind("button=", 0) == 0) {
+            // One of the bar's buttons by its name, wherever the bar has it (x, sound, minimise, fullscreen).
+            static const std::map<std::string, int> buttons = {{"x", 0}, {"fullscreen", 1}, {"minimise", 2}, {"sound", 3}};
+            const auto it = buttons.find(key.substr(7));
+            if (it != buttons.end()) presses.push_back({at, Kind::button, static_cast<UINT>(it->second), false, hold, key, 0, 0, {}, 0});
+            else jvm::log("player: PLAYER_KEYS: no button \"%s\"", key.c_str());
         } else if (key == "fullscreen") {
             // Full screen and back, as the bar's button does.
             presses.push_back({at, Kind::full, 0, false, hold, key, 0, 0, {}, 0});
@@ -1013,6 +1020,14 @@ void plan_keys() {
             if (k.kind == Kind::close) {
                 jvm::log("player: %.1f s: the window's close", k.at);
                 PostMessageW(g_frame, WM_CLOSE, 0, 0);
+                continue;
+            }
+            if (k.kind == Kind::button) {
+                jvm::log("player: %.1f s: %s", k.at, k.name.c_str());
+                const int which = static_cast<int>(k.vk);
+                main_looper().post([which] {
+                    if (!overlay::press_bar_button(which)) jvm::log("player: the bar is not down: no button to press");
+                });
                 continue;
             }
             if (k.kind == Kind::notice) {

@@ -43,6 +43,9 @@ struct Hooks {
 
 // Once the frame and the game's window are made; `korean` for the words.
 void start(HWND frame, HWND game, const Hooks& hooks, bool korean);
+// A check's press of one of the bar's buttons wherever the bar has it now (0 the X, 1 full screen, 2 minimise, 3 Sound),
+// as the mouse's button down and up on its middle: false when the bar is not down.
+bool press_bar_button(int which);
 // The overlay's windows that take the pointer (the bar, the sound panel, the question): a finger on them is a mouse's
 // click, as on the game, so the window gives them the game's quiet touch (no press and hold for a right click).
 std::vector<HWND> pressed_windows();
