@@ -93,7 +93,57 @@ class Install:
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class OwnerOnSiteTest(unittest.TestCase):
+    """The owner's ID and password from .env open the players' site too (owner.pass, which the site reads), and a
+    refused sign-in is noted in the log of changes whatever the reason (ADM-100)."""
 
+    def read(self, inst):
+        with open(inst.path("state/owner.pass"), encoding="utf-8") as f:
+            return f.read().splitlines()
+
+    def test_written_as_the_accounts_table_keeps_a_password(self):
+        with Install() as inst:
+            admin.auth.owner_file_write()
+            name, stored = self.read(inst)
+            self.assertEqual(name, "admin")
+            self.assertTrue(stored.startswith("pbkdf2_sha256$"))
+            self.assertTrue(admin.auth.account_pass_ok(stored, "pw"))
+            # Readable by this user only: it is as good as the password for guessing offline.
+            if os.name == "posix":
+                self.assertEqual(os.stat(inst.path("state/owner.pass")).st_mode & 0o077, 0)
+
+    def test_kept_over_a_restart_and_new_with_a_new_password(self):
+        with Install() as inst:
+            admin.auth.owner_file_write()
+            first = self.read(inst)
+            # A start with the same .env: the same file, so a sign-in on the site outlives it.
+            admin.auth.owner_file_write()
+            self.assertEqual(self.read(inst), first)
+            # A new password in .env: the old one no longer opens the site.
+            with mock.patch.object(admin.core, "PASSWORD", "new-pw"):
+                admin.auth.owner_file_write()
+            self.assertNotEqual(self.read(inst), first)
+            self.assertTrue(admin.auth.account_pass_ok(self.read(inst)[1], "new-pw"))
+            # No password at all: no owner on the site either.
+            with mock.patch.object(admin.core, "PASSWORD", ""):
+                admin.auth.owner_file_write()
+            self.assertFalse(os.path.exists(inst.path("state/owner.pass")))
+
+    def test_a_throttled_sign_in_is_noted(self):
+        with Install() as inst:
+            try:
+                for _ in range(admin.auth.PER_IP + 1):
+                    inst.client.post("/opendmtq/admin/login", data={"name": "admin", "password": "wrong"})
+            finally:
+                # The throttle is the process's: the other tests sign in from the same address.
+                admin.auth._failures.clear()
+                admin.auth._all_failures.clear()
+            with open(inst.path("state/changes.log"), encoding="utf-8") as f:
+                whats = [json.loads(line)["what"] for line in f]
+            self.assertIn("login:throttled", whats)
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class LogsPageTest(unittest.TestCase):
     def page(self, files):
         """The logs page over these files: name to (text, age in seconds)."""

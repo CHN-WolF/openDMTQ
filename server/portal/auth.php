@@ -65,6 +65,12 @@ function dl_key(): string
    (their Accounts page makes them; nobody makes their own), or null. */
 function site_account(string $name): ?array
 {
+    // The owner's account, from .env (the admin pages write its ID and password, as this table keeps one, beside the
+    // database: owner.pass). Whatever the table holds: no account may have the owner's ID.
+    $owner = site_owner();
+    if ($owner !== null && strcasecmp($owner['name'], $name) === 0) {
+        return $owner;
+    }
     $db = site_db();
     if (!$db || !preg_match('/^[A-Za-z0-9._-]{3,20}$/', $name)) {
         return null;
@@ -81,6 +87,21 @@ function site_account(string $name): ?array
     $r = @$q->execute();
     $row = $r ? $r->fetchArray(SQLITE3_ASSOC) : false;
     return $row ?: null;
+}
+
+/* The owner's account as the admin pages wrote it (owner.pass: the ID, then the password as account_hash() keeps one),
+   with admin rights and on; null when there is none. Read once per request. */
+function site_owner(): ?array
+{
+    static $owner = false;
+    if ($owner === false) {
+        $owner = null;
+        $lines = @file(odq_state_dir() . '/owner.pass', FILE_IGNORE_NEW_LINES);
+        if (is_array($lines) && count($lines) >= 2 && preg_match('/^[A-Za-z0-9._-]{1,40}$/', $lines[0]) && strpos($lines[1], 'pbkdf2_sha256$') === 0) {
+            $owner = ['name' => $lines[0], 'pass' => $lines[1], 'off' => 0, 'admin' => 1, 'guid' => null];
+        }
+    }
+    return $owner;
 }
 
 /* Whether $password is the one kept as $stored: PBKDF2-SHA256, as the admin pages write it (account_hash()). */

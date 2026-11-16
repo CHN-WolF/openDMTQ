@@ -52,7 +52,8 @@ CHANGE_WORDS = {
     "accounts_page:token": "change.token_make", "accounts_page:revoke": "change.token_revoke",
     # A token the API refused, as a failed sign-in is noted: by "API", with the address it came from.
     "api:refused": "change.api_refused",
-    "login:ok": "change.login_ok", "login:failed": "change.login_failed", "logout:": "change.logout",
+    "login:ok": "change.login_ok", "login:failed": "change.login_failed",
+    "login:throttled": "change.login_throttled", "login:no_rights": "change.login_no_rights", "logout:": "change.logout",
     # The setup's steps and the Maintenance page's stop (setup.py): the owner signed in by the server PC's own link, the
     # game's files brought in, the address changed, the server stopped.
     "setup:signin": "change.setup_signin", "setup:import": "change.setup_import", "setup:address": "change.setup_address",

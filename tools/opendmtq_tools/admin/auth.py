@@ -3,6 +3,7 @@ accounts' passwords, the CSRF token on every form and the throttle on failed sig
 
 import hashlib
 import hmac
+import os
 import re
 import secrets
 import socket
@@ -286,7 +287,52 @@ def admin_check(name, password):
     ok = account_pass_ok(row["pass"] if row else _NOBODY, password)
     if row and ok and row["admin"] and not row["off"]:
         return row["name"], account_stamp(row["pass"])
+    # The right password of a site account without admin rights (or one turned off): told so, not called wrong.
+    if row and ok:
+        return False
     return None
+
+
+# The owner's account for the players' site too: the site signs people in with the accounts' table, which has no row
+# for the owner (that account lives in .env, here). This file gives the site the owner's ID and password as the table
+# would keep them, so the ID and password the console and .env name open both doors. Beside the database, readable by
+# this user only; rewritten when the password in .env changed, kept otherwise (its salt with it, so a sign-in on the
+# site outlives a restart).
+def owner_file():
+    """Where the owner's account for the site is kept: owner.pass beside the database."""
+    return os.path.join(os.path.dirname(core.DB), "owner.pass")
+
+
+def owner_file_write():
+    """Writes owner_file() for the owner's account as it is in .env now (removed when no password is set). Quietly does
+    nothing when the folder cannot be written: the admin pages still work, and the site keeps its own accounts."""
+    path = owner_file()
+    try:
+        if not core.PASSWORD:
+            # No owner's password: nothing to sign in with on the site either.
+            if os.path.exists(path):
+                os.remove(path)
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                name, stored = (f.read().splitlines() + ["", ""])[:2]
+        except FileNotFoundError:
+            name, stored = "", ""
+        # Already right: the same ID and the same password.
+        if name == core.ADMIN_USER and account_pass_ok(stored, core.PASSWORD):
+            return
+        # A new file beside it, then moved over the old one, so the site never reads half of it.
+        temp = path + ".new"
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(f"{core.ADMIN_USER}\n{account_hash(core.PASSWORD)}\n")
+        os.replace(temp, path)
+    except OSError:
+        pass
+
+
+# At start: the owner signs in to the site with what .env says from the first page on.
+owner_file_write()
 
 
 @app.route(BASE + "/login", methods=["GET", "POST"])
@@ -307,7 +353,14 @@ def login():
         name = request.form.get("name", "").strip()[:40]
         who = None if throttled(ip) else admin_check(name, request.form.get("password", ""))
         if throttled(ip):
+            # Noted too: a sign-in that is refused for this reason must show in the log of changes.
+            changed("login:throttled", f"{name}, {ip}" if name else ip)
             flash(t("login.throttled"), "bad")
+        elif who is False:
+            # The site's account, right password, but not one of these pages' accounts.
+            note_failure(ip)
+            changed("login:no_rights", f"{name}, {ip}")
+            flash(t("login.no_rights"), "bad")
         elif who:
             session.clear()
             session.permanent = True
