@@ -15,7 +15,8 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 DISTRO=${DISTRO:-ubuntu:24.04}
 PORT=${PORT:-18711}
 ADMIN=$((PORT + 1))
-NAME=odq-hosttest
+# NAME_PREFIX keeps this run's container apart from another run's on the same machine.
+NAME=${NAME_PREFIX:-odq}-hosttest
 IMAGE=opendmtqtest:$(echo "$DISTRO" | tr ':/' '--')
 failures=0
 
@@ -63,10 +64,10 @@ tar -C "$ROOT" -cf - host/get.sh | docker exec -i -u player "$NAME" sh -c 'tar -
 # With a time limit: what asks the terminal a question waits for ever here, as it did when apt asked for a time zone.
 if timeout 900 docker exec -t -u player -w /home/player "$NAME" bash -lc \
     "cat /tmp/host/get.sh | OPENDMTQ_TARBALL=file:///tmp/release.tar.gz OPENDMTQ_DIR=\$HOME/OpenDMTQ OPENDMTQ_NO_SETUP=1 bash" \
-    > /tmp/odq-hosttest-install.log 2>&1 && inside "test -f OpenDMTQ/.host/installed"; then
+    > /tmp/$NAME-install.log 2>&1 && inside "test -f OpenDMTQ/.host/installed"; then
   pass "the one command downloads OpenDMTQ and installs everything on $DISTRO"
 else
-  tail -n 30 /tmp/odq-hosttest-install.log
+  tail -n 30 /tmp/$NAME-install.log
   fail "the one command on $DISTRO"
   exit 1
 fi
@@ -86,9 +87,9 @@ fi
 # own bundle stands in for the release's; without one (nothing here built it) the builder tries the release and says so.
 BUNDLE=${ARM32_BUNDLE:-$ROOT/data/apk/arm32}
 if [ -f "$BUNDLE/bundle.json" ]; then
-  python3 "$ROOT/tools/opendmtq_tools/runtime.py" --pack "$BUNDLE" /tmp/odq-hosttest-runtime.zip >/dev/null
+  python3 "$ROOT/tools/opendmtq_tools/runtime.py" --pack "$BUNDLE" /tmp/$NAME-runtime.zip >/dev/null
   inside "mkdir -p OpenDMTQ/data/apk"
-  docker cp /tmp/odq-hosttest-runtime.zip "$NAME:/home/player/OpenDMTQ/data/apk/opendmtq-arm32-runtime.zip"
+  docker cp /tmp/$NAME-runtime.zip "$NAME:/home/player/OpenDMTQ/data/apk/opendmtq-arm32-runtime.zip"
   docker exec "$NAME" chown -R player /home/player/OpenDMTQ/data
 fi
 # The settings setup would write, with this test's ports (a loopback address, which setup refuses for phones).
@@ -96,17 +97,17 @@ inside "printf 'PUBLIC_HOST=127.0.0.1:$PORT\nLISTEN_PORT=$PORT\nADMIN_PORT=$ADMI
 
 # 3. setup starts the server and, with nothing imported, hands over to its pages: there is no browser here, so it
 #    prints their one-time link.
-if inside "opendmtq setup" > /tmp/odq-hosttest-setup.log 2>&1; then
+if inside "opendmtq setup" > /tmp/$NAME-setup.log 2>&1; then
   pass "opendmtq setup: the server answers"
 else
-  cat /tmp/odq-hosttest-setup.log
+  cat /tmp/$NAME-setup.log
   inside "tail -n 40 OpenDMTQ/data/state/logs/host.log OpenDMTQ/data/state/logs/server.log OpenDMTQ/data/state/logs/programs.log" || true
   fail "opendmtq setup"
   exit 1
 fi
-link=$(grep -o "http://localhost:$ADMIN/opendmtq/admin/setup/start?key=[A-Za-z0-9_-]*" /tmp/odq-hosttest-setup.log | tail -n 1 || true)
+link=$(grep -o "http://localhost:$ADMIN/opendmtq/admin/setup/start?key=[A-Za-z0-9_-]*" /tmp/$NAME-setup.log | tail -n 1 || true)
 expect "setup prints the one-time link to its pages" test -n "$link"
-expect "setup prints the way in from another computer" grep -q "From another computer: http://127.0.0.1:$PORT/opendmtq/admin/setup" /tmp/odq-hosttest-setup.log
+expect "setup prints the way in from another computer" grep -q "From another computer: http://127.0.0.1:$PORT/opendmtq/admin/setup" /tmp/$NAME-setup.log
 
 # 4. The setup in the browser, as the owner goes through it: the link, the files found in Downloads, the import, an
 #    account for a player, and the app.
@@ -199,7 +200,7 @@ if [ -n "${APK:-}" ]; then
     list=$(inside "python3 -m zipfile -l '$built'" | awk '{print $1}')
     expect "the app has the translator" grep -qx "lib/arm64-v8a/libarm32.so" <<<"$list"
     expect "and the licenses of what it adds" grep -qx "assets/opendmtq/NOTICES.txt" <<<"$list"
-    rm -f /tmp/odq-hosttest-runtime.zip
+    rm -f /tmp/$NAME-runtime.zip
   fi
   expect "signed out, the app's download asks to sign in" is 302 "http://127.0.0.1:$PORT/apk"
   size=$(web "$site" -o /dev/null -w '%{size_download}' "http://127.0.0.1:$PORT/apk")
@@ -222,10 +223,10 @@ expect "a stop asked of an earlier run is not this run's" is 200 "http://127.0.0
 #     says why, and a start brings it back. The owner signs in first (the stop above ended the sessions).
 # A server already gone (a fault above) fails the checks below, not the whole run.
 web "$admin" -o /dev/null -d "name=admin&password=hosttest" "$A/login" || true
-stopped=$(web "$admin" -o /tmp/odq-hosttest-stopped.html -w '%{http_code}' \
+stopped=$(web "$admin" -o /tmp/$NAME-stopped.html -w '%{http_code}' \
   --data-urlencode "csrf=$(web "$admin" "$A/maintenance" | token)" "$A/server/stop" || true)
 expect "the admin pages' Stop the server answers ($stopped)" test "$stopped" = 200
-expect "and says the command that starts it again" grep -q "./opendmtq start" /tmp/odq-hosttest-stopped.html
+expect "and says the command that starts it again" grep -q "./opendmtq start" /tmp/$NAME-stopped.html
 for _ in $(seq 30); do
   inside "test ! -e OpenDMTQ/.host/run/host.pid" && break
   sleep 1
@@ -296,10 +297,10 @@ fi
 marker=$(inside "sha256sum OpenDMTQ/.env | cut -d' ' -f1")
 if timeout 600 docker exec -u player -w /home/player "$NAME" bash -lc \
     "cat /tmp/host/get.sh | OPENDMTQ_TARBALL=file:///tmp/release.tar.gz OPENDMTQ_DIR=\$HOME/OpenDMTQ OPENDMTQ_NO_SETUP=1 sh" \
-    > /tmp/odq-hosttest-update.log 2>&1; then
+    > /tmp/$NAME-update.log 2>&1; then
   pass "the one command again updates the folder"
 else
-  tail -n 30 /tmp/odq-hosttest-update.log
+  tail -n 30 /tmp/$NAME-update.log
   fail "the one command again updates the folder"
 fi
 expect "the update keeps the settings" test "$marker" = "$(inside "sha256sum OpenDMTQ/.env | cut -d' ' -f1")"

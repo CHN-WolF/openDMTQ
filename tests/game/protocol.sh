@@ -9,8 +9,9 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-TAG=protocol
-NAME=odq-protocol
+# NAME_PREFIX and TAG keep a run's containers, network and images apart from another run's on the same machine.
+TAG=${TAG:-protocol}
+NAME=${NAME_PREFIX:-odq}-protocol
 PORT=${PORT:-18701}
 DATA=$(mktemp -d)
 

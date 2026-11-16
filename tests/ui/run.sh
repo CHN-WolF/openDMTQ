@@ -13,10 +13,12 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 UI=$ROOT/tests/ui
 REPORT=$(realpath -m "${1:-$ROOT/_work/ui-report}")
-TAG=uitest
-NET=odq-uitest
-SITE=odq-uitest-site
-ADMIN=odq-uitest-admin
+# NAME_PREFIX and TAG keep a run's containers, network and images apart from another run's on the same machine.
+NAME_PREFIX=${NAME_PREFIX:-odq}
+TAG=${TAG:-uitest}
+NET=$NAME_PREFIX-uitest
+SITE=$NAME_PREFIX-uitest-site
+ADMIN=$NAME_PREFIX-uitest-admin
 SITE_PORT=${SITE_PORT:-18801}
 ADMIN_PORT=${ADMIN_PORT:-18802}
 # The owner's admin password and the site account's (an account's has six letters at least).

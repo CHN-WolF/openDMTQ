@@ -10,10 +10,12 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-TAG=livetest
-NET=odq-livetest
-SITE=odq-livetest-site
-ADMIN=odq-livetest-admin
+# NAME_PREFIX and TAG keep a run's containers, network and images apart from another run's on the same machine.
+NAME_PREFIX=${NAME_PREFIX:-odq}
+TAG=${TAG:-livetest}
+NET=$NAME_PREFIX-livetest
+SITE=$NAME_PREFIX-livetest-site
+ADMIN=$NAME_PREFIX-livetest-admin
 SITE_PORT=${SITE_PORT:-18597}
 ADMIN_PORT=${ADMIN_PORT:-18598}
 HOST=live-test.example.net:8790

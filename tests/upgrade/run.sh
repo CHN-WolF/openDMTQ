@@ -20,9 +20,11 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TAG=${TAG:-upgrade}
-NET=odq-upgrade
-SITE=odq-upgrade-site
-ADMIN=odq-upgrade-admin
+# NAME_PREFIX and TAG keep a run's containers, network and images apart from another run's on the same machine.
+NAME_PREFIX=${NAME_PREFIX:-odq}
+NET=$NAME_PREFIX-upgrade
+SITE=$NAME_PREFIX-upgrade-site
+ADMIN=$NAME_PREFIX-upgrade-admin
 SITE_PORT=${SITE_PORT:-18721}
 ADMIN_PORT=${ADMIN_PORT:-18722}
 # The owner's admin password, on both sides of the upgrade.

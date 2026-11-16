@@ -20,6 +20,9 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${OUT:-$ROOT/_work/windows}
 PORT=${PORT:-18731}
+# NAME_PREFIX names this run's container and network, TAG its Wine image, apart from another run's on the same machine.
+NAME_PREFIX=${NAME_PREFIX:-odq}
+WINE_IMAGE=opendmtq-wine:${TAG:-local}
 
 # ------------------------------------------------------------------------------ outside: build, then the Wine container
 
@@ -30,7 +33,7 @@ if [ -z "${IN_WINE:-}" ]; then
   [ -f "$OUT/OpenDMTQ/OpenDMTQ.exe" ] || { echo "FAIL no bundle in $OUT (run host/windows/build.sh)"; exit 1; }
   # WineHQ's stable Wine, at a fixed version. Debian's own (8.0) lacks a network call Java makes when it seeds its random
   # numbers (java.net.NetworkInterface.getAll), so keytool and the signer died there and the app's build could not be tried.
-  docker build -q -t opendmtq-wine:local - >/dev/null <<'DOCKERFILE'
+  docker build -q -t "$WINE_IMAGE" - >/dev/null <<'DOCKERFILE'
 FROM debian:12
 RUN dpkg --add-architecture i386 && apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
       --no-install-recommends ca-certificates curl gnupg python3 php-cli >/dev/null \
@@ -48,19 +51,19 @@ DOCKERFILE
   status=0
   if [ -n "${CLOSED:-}" ]; then
     # An internal network: the container gets a private address, and nothing it sends gets past this machine.
-    docker network inspect odq-closed >/dev/null 2>&1 || docker network create --internal --subnet 192.168.98.0/24 odq-closed >/dev/null
-    network=(--network odq-closed)
+    docker network inspect "$NAME_PREFIX-closed" >/dev/null 2>&1 || docker network create --internal --subnet "${CLOSED_SUBNET:-192.168.98.0/24}" "$NAME_PREFIX-closed" >/dev/null
+    network=(--network "$NAME_PREFIX-closed")
   fi
   client=()
   if [ -n "${APK:-}" ]; then
     [ -f "$APK" ] || { echo "FAIL no such client: $APK"; exit 1; }
     client=(-v "$(cd "$(dirname "$APK")" && pwd)/$(basename "$APK"):/client.apk:ro" -e CLIENT=/client.apk)
   fi
-  docker run --rm "${network[@]}" "${client[@]}" -e IN_WINE=1 -e PORT="$PORT" -e CLOSED="${CLOSED:-}" -e WINEDEBUG=-all \
-    -e WINEPREFIX=/tmp/wine -v "$OUT/OpenDMTQ:/bundle:ro" -v "$ROOT:/repo:ro" opendmtq-wine:local bash /repo/tests/windows/wine.sh \
+  docker run --rm --name "$NAME_PREFIX-wine" "${network[@]}" "${client[@]}" -e IN_WINE=1 -e PORT="$PORT" -e CLOSED="${CLOSED:-}" -e WINEDEBUG=-all \
+    -e WINEPREFIX=/tmp/wine -v "$OUT/OpenDMTQ:/bundle:ro" -v "$ROOT:/repo:ro" "$WINE_IMAGE" bash /repo/tests/windows/wine.sh \
     || status=$?
   if [ -n "${CLOSED:-}" ]; then
-    docker network rm odq-closed >/dev/null 2>&1 || true
+    docker network rm "$NAME_PREFIX-closed" >/dev/null 2>&1 || true
   fi
   exit "$status"
 fi
