@@ -32,6 +32,10 @@ KEPT_TABLES = ("BoardStamp", "ApiToken")
 # What a backup holds of the custom folder, as the admin pages' backups have it (admin/backups.py, make_backup).
 BACKED_UP = ("songs", "hidden.json", "ids.json")
 
+# What a backup's name starts with, as the admin pages' and the command line's backups are named (admin/backups.py
+# BACKUP_PREFIX): what it is, then when it was made and why.
+BACKUP_PREFIX = "OpenDMTQ-Server-Backup-"
+
 
 class Layout:
     """Where each part lives, from the environment as the admin service and the tools see it: OPENDMTQ_DB (the database,
@@ -120,12 +124,12 @@ def backup(layout, reason="before-delete"):
         return None
     os.makedirs(layout.backups, exist_ok=True)
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(layout.backups, f"opendmtq-{stamp}-{reason}.tar.gz")
+    path = os.path.join(layout.backups, f"{BACKUP_PREFIX}{stamp}-{reason}.tar.gz")
     n = 1
     # Two in one second must not overwrite each other.
     while os.path.exists(path):
         n += 1
-        path = os.path.join(layout.backups, f"opendmtq-{stamp}-{reason}-{n}.tar.gz")
+        path = os.path.join(layout.backups, f"{BACKUP_PREFIX}{stamp}-{reason}-{n}.tar.gz")
     partial = path + ".part"
     with tempfile.TemporaryDirectory() as tmp:
         snap = os.path.join(tmp, "dmtq.db3")
