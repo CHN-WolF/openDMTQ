@@ -154,6 +154,10 @@ check("off by default: no token, no notice", s["on"] is False and "token" not in
 # and kind (before: only "on" and the words).
 check("the reply has both switches and the notice's number and kind",
       (s.get("switch"), s.get("broadcasts"), s.get("toast_id"), s.get("toast_kind")) == (False, False, 0, ""), s)
+# The phones' runtime finds a key by its first quoted occurrence (json_value() in arm32/src/live_net.cpp), and a notice's
+# kind may be the word "on": the key "on" must come first in the reply, before any value that could read the same.
+raw = request(plain, f"{SITE}/live/state?ids={IDS}&lang=en")[2]
+check("the reply starts with on, before any value of the same word", raw.startswith(b'{"on":'), raw[:40])
 check("the encoder settings are always there", (s["fps"], s["height"], s["bitrate"], s["segment"]) == (30, 720, 2000000, 2), s)
 check("unknown ids are simply off", json.loads(request(plain, SITE + "/live/state?ids=nobody")[2])["on"] is False)
 check("upload refused while off", upload("0" * 32, 0) == 403)
