@@ -259,7 +259,9 @@ if [ -n "$lan" ]; then
   expect "the page that waits for the restart carries the way back, with its one-time key" \
     test "${back#/opendmtq/admin/setup/start?key=}" != "$back"
   restarted=no
-  for _ in $(seq 1 90); do
+  # Through the server's one port: the answer comes once Apache is back too, which takes longer under Wine than the
+  # admin service alone (the page itself waits for as long as it takes).
+  for _ in $(seq 1 300); do
     now=$(curl -s -m 3 "$A/setup/ping" || true)
     if [ -n "$now" ] && [ "$now" != "$before" ]; then restarted=yes; break; fi
     sleep 1

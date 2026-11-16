@@ -277,7 +277,8 @@ if [ -n "$lan" ]; then
   expect "the page that waits for the restart carries the way back, with its one-time key" \
     test "${back#/opendmtq/admin/setup/start?key=}" != "$back"
   restarted=no
-  for _ in $(seq 90); do
+  # Through the server's one port: the answer comes once Apache is back too (the page itself waits for as long as it takes).
+  for _ in $(seq 300); do
     # A short wait for each look: a closed port may swallow the connection rather than refuse it (WSL).
     now=$(curl -s -m 3 "$A/setup/ping" || true)
     if [ -n "$now" ] && [ "$now" != "$before" ]; then restarted=yes; break; fi
