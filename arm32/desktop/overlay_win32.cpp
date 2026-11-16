@@ -1985,6 +1985,8 @@ void counter_place();
 void notice_frame();
 void motion_start();
 void trace_step(const Slide& way, std::int64_t now, float place, int rows);
+// With the trace on (PLAYER_TRACE_MOTION=1), where a move of a pull has put the bar.
+void trace_pull();
 void trace_settled(std::int64_t now);
 void trace_cut(std::int64_t now);
 // Whether the bar is being hidden by its own way's last step (bar_step), not put away at once midway.
@@ -2197,6 +2199,8 @@ void bar_frame() {
             g_slide.rest(g_pull_place);
             g_bar_on_way = false;
             bar_step();
+            // A check's trace: where this move of the pull put the bar.
+            trace_pull();
             // Held there: its stay starts when it is let go.
             g_bar_since = now;
             g_bar_stay = kBarStayMs;
@@ -3590,6 +3594,14 @@ std::string watch_said(const Watched& w, std::int64_t now) {
 }
 
 void trace_settled(std::int64_t now);
+
+void trace_pull() {
+    if (!g_trace_motion) return;
+    char line[160];
+    std::snprintf(line, sizeof line, "player: motion: pulled: the bar at %.3f, %d of %d rows in sight, %d cut", static_cast<double>(g_pull_place),
+                  bar_in_sight(), g_bar.rows, g_bar.cut);
+    note(line);
+}
 
 // A step of the bar's way `way`, for the trace and the stats: a new way watched from its first step (one cut short by
 // a turn back is said as it is), and with the trace on, the step said.

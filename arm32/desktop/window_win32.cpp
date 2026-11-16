@@ -1596,6 +1596,10 @@ LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         if ((GetMessageExtraInfo() & 0xFFFFFF00) != 0xFF515700) overlay::pointer_moved(p.x, p.y, g_pressed);
         if (!g_pressed) return 0;
         if (g_gesture.active() && g_gesture_id == kMousePress) {
+            // A move that says the button is up is not this press's (every move of a held button says it is down): a move
+            // Windows makes up where the pointer really is when a window under it changes, while a check's press is
+            // posted elsewhere. Read as the press's, it put a pulled bar whole and back at each such move.
+            if (!(w & MK_LBUTTON)) return 0;
             // A press held at the edge: drawn down, the bar follows it; across or up, it is the game's from now on.
             const overlay::Act act = g_gesture.move(p.x, p.y, now_ns());
             if (act != overlay::Act::kGame) {
