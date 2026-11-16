@@ -38,6 +38,18 @@ code_url() {
   fi
 }
 
+# Every file under $1 with its SHA-256, as sha256sum writes them ("hash  ./path"), in a fixed order: sha256sum on Linux,
+# shasum on macOS.
+manifest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sum="sha256sum"
+  else
+    sum="shasum -a 256"
+  fi
+  # shellcheck disable=SC2086  # "shasum -a 256" is a command and its options, split on purpose.
+  (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 $sum)
+}
+
 # The code, into the folder only when it has come whole. Over what is there: only the program's files are in it, so the
 # settings (.env), the data (data/) and this install's own programs (.host/) stay.
 fetch_code() {
@@ -59,6 +71,14 @@ fetch_code() {
   fi
   mkdir -p "$DIR"
   cp -R "$work/." "$DIR/"
+  # The list of the program's files as this download brought them, which the repair checks them against
+  # (tools/opendmtq_tools/manifest.py). In .host/, which an update keeps; written anew with each.
+  mkdir -p "$DIR/.host"
+  if manifest "$work" > "$DIR/.host/manifest.sha256.new"; then
+    mv "$DIR/.host/manifest.sha256.new" "$DIR/.host/manifest.sha256"
+  else
+    rm -f "$DIR/.host/manifest.sha256.new"
+  fi
   rm -rf "$work"
   # The release it is, which the site and the admin pages show and a bug report asks for. Code from elsewhere has none:
   # the number an earlier update wrote would be another's.

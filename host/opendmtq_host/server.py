@@ -274,6 +274,9 @@ class Server:
         self.gave_up = None
         # True when the admin pages asked for the stop (stop.request in the run folder).
         self.stopped_by_page = False
+        # What the admin pages' Server page asked of an uninstall (uninstall.request: {"keep_data": ...}), or None: done
+        # once every part has stopped (cmd_run).
+        self.uninstall_asked = None
         self.stopping = threading.Event()
         # Every program's output goes to one log beside the server's, kept to 3 files of 10 MB.
         os.makedirs(LOGS, exist_ok=True)
@@ -357,6 +360,22 @@ class Server:
                 except OSError:
                     pass
                 logging.info("stopping, as asked on the admin pages")
+                self.stopped_by_page = True
+                self.stopping.set()
+                break
+            # Uninstall, asked on the Server page: a stop as above, and then the removal (cmd_run).
+            removal = os.path.join(RUN, "uninstall.request")
+            if os.path.exists(removal):
+                try:
+                    with open(removal, encoding="utf-8") as f:
+                        self.uninstall_asked = json.load(f)
+                except (OSError, ValueError):
+                    self.uninstall_asked = {}
+                try:
+                    os.remove(removal)
+                except OSError:
+                    pass
+                logging.info("stopping to uninstall, as asked on the admin pages")
                 self.stopped_by_page = True
                 self.stopping.set()
                 break
@@ -493,7 +512,7 @@ def cmd_run(args, values=None, found=None):
     end_with_this_program()
     # What the admin pages asked of an earlier run that ended before it read it (its window closed at once): not this
     # run's to do, or a stop asked then would end this run as it starts.
-    for left in ("stop.request", "restart.request"):
+    for left in ("stop.request", "restart.request", "uninstall.request"):
         try:
             os.remove(os.path.join(RUN, left))
         except OSError:
@@ -518,6 +537,11 @@ def cmd_run(args, values=None, found=None):
             os.remove(pid_file())
         except OSError:
             pass
+    if server.uninstall_asked is not None:
+        # Every part has stopped: now the removal the Server page asked for.
+        from .remove import uninstall
+        uninstall(bool(server.uninstall_asked.get("keep_data")))
+        return 0
     if server.stopped_by_page:
         say("Stopped from the admin pages. " + ("Start OpenDMTQ.exe to run it again." if WINDOWS else
                                                  f"{CLI} start runs it again."))

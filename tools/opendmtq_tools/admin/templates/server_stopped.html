@@ -1,9 +1,14 @@
 {% extends "base.html" %}{% block title %}{{ t('server.stopped_title') }}{% endblock %}
 {% block body %}
-{# Shown once, as the server stops: these pages stop with it, so nothing here can be pressed afterwards. #}
-<section class="card">
-  <h2>{{ t('server.stopped_title') }}</h2>
-  <p class="lead">{{ t('server.stopped_lead') }}</p>
-  <p class="setup-state"><span class="lamp off"></span>{{ t('server.start_again_windows') if windows else t('server.start_again') }}</p>
+{# Shown once, as the server stops: these pages stop with it, so nothing here can be pressed afterwards. The page asks
+   which process answers (admin.js, data-ping, as a restart's page does): while this one does, the server is still
+   stopping; once nothing answers it has stopped (data-stopped's words take the heading's place); should a new one answer,
+   it runs again (data-again), with the way back. #}
+<section class="card server-state" id="stop-wait" data-ping="{{ ping }}" data-instance="{{ instance }}" data-stopped="{{ tp('server.stopped_done') }}" data-stopped-lead="{{ tp('server.stopped_done_lead') }}" data-again="{{ tp('server.running_again') }}">
+  <p class="auto-line big"><span class="lamp wait" id="stop-lamp"></span><b id="stop-head">{{ t('server.stopped_title') }}</b></p>
+  <p class="lead" id="stop-lead">{{ t('server.stopped_lead') }}</p>
+  <p class="setup-state">{{ t('server.start_again_windows') if windows else t('server.start_again') }}</p>
+  <p class="meta">{{ t('server.comes_back', address=address) }}</p>
+  <div class="btn-line" id="stop-back" hidden><a class="btn btn-primary" href="{{ url_for('server_page') }}">{{ t('server.back') }}</a></div>
 </section>
 {% endblock %}

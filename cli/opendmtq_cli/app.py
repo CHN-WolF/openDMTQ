@@ -598,6 +598,191 @@ def cmd_restore(args):
     return 0 if back else 1
 
 
+# ----------------------------------------------------------------------------- the server's life: repair, data, uninstall
+# The admin pages' Server page names these commands: in containers it cannot rebuild the images, delete the game files it
+# only reads, or remove the containers it runs in.
+
+# Where the tools container sees each part of the server's data (compose.yaml, service "tools": data/ is /data there), for
+# opendmtq_tools.server_data and opendmtq_tools.repair.
+TOOLS_PATHS = {"OPENDMTQ_DB": "/data/state/dmtq.db3", "OPENDMTQ_APK": "/apk", "OPENDMTQ_BACKUPS": "/data/backups",
+               "OPENDMTQ_CUSTOM": "/custom", "OPENDMTQ_LOGS": "/data/state/logs", "OPENDMTQ_CONTENT": "/data/content"}
+
+# The parts of the data, in the Server page's order (tools/opendmtq_tools/server_data.py PARTS).
+DATA_PARTS = ("database", "recordings", "songs", "apps", "backups", "logs", "game")
+
+
+def typed_yes(word, question):
+    """True when the person types word at the question (a terminal only: a script passes --yes)."""
+    if not sys.stdin.isatty():
+        die(f"{question} Run it in a terminal to answer, or add --yes")
+    try:
+        return input(f"{question} Type {word} to go ahead: ").strip().lower() == word
+    except EOFError:
+        return False
+
+
+def program_files_changed():
+    """The program's tracked files that differ from the commit (a clone: git knows them), or None where git cannot say."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", ROOT, "status", "--porcelain", "--untracked-files=no"], capture_output=True,
+                           text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    return [line[3:] for line in r.stdout.splitlines() if line.strip()]
+
+
+def cmd_repair(args):
+    """Checks and repairs the server: its folders and their owner, the images (built again from this folder), the HTTPS
+    certificates, the database's integrity, the owner's sign-in for the players' site, the song list; then the server
+    started again with all of it, and the phone app built when it has to be."""
+    host = require_host()
+    system.make_data_dirs()
+    owner = system.data_owner_problem()
+    if owner:
+        die(owner)
+    ok("folders in place")
+    changed = program_files_changed()
+    if changed:
+        warn(f"files changed from this folder's commit: {', '.join(changed[:8])}{' ...' if len(changed) > 8 else ''}"
+             " (git checkout -- <file> puts one back)")
+    elif changed == []:
+        ok("program files as the commit has them")
+    system.build("server", "builder", "admin")
+    ok("images built from this folder")
+    ensure_https(host)
+    # The steps that look at the data, in the tools container as the admin pages run them.
+    values = env.load(ENV_FILE)
+    extra = dict(TOOLS_PATHS, ADMIN_USER=values.get("ADMIN_USER", ""), ADMIN_PASSWORD=values.get("ADMIN_PASSWORD", ""))
+    status = system.tool("repair", extra_env=extra).returncode
+    # Every part again, with the images and certificates as they are now; the builder makes the app when it has to.
+    since = time.time()
+    system.compose("up", "-d", "--force-recreate", "server", "admin", "edge")
+    system.compose("up", "-d", "builder")
+    if not wait_healthy():
+        not_healthy()
+    ok("the server runs again")
+    wait_builder(since)
+    return status
+
+
+def cmd_delete_data(args):
+    """Deletes parts of the server's data (a backup first unless --no-backup); without parts, lists them with their size."""
+    import json as jsonlib
+    require_host()
+    unknown = [part for part in args.parts if part not in DATA_PARTS]
+    if unknown:
+        die(f"no such part: {', '.join(unknown)} (the parts: {', '.join(DATA_PARTS)})")
+    if not args.parts:
+        r = system.tool("server_data", "sizes", extra_env=TOOLS_PATHS, capture=True)
+        try:
+            sizes = jsonlib.loads(r.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            die(f"the data could not be counted: {(r.stderr or r.stdout).strip()}")
+        for part in DATA_PARTS:
+            print(f"{part:<11} {sizes[part]['bytes'] / 1024 / 1024:>9.1f} MB")
+        print("\n./opendmtq delete-data <part>... deletes those, a backup first.")
+        return 0
+    if not args.yes and not typed_yes("delete", f"Delete {', '.join(args.parts)} for good?"):
+        die("nothing was deleted")
+    keep = []
+    if not args.no_backup:
+        made = backup.create("before-delete")
+        if made:
+            ok(f"backup {os.path.relpath(made, ROOT)}")
+            keep = ["--keep", os.path.basename(made)]
+    # In the tools container, as the server's own files are seen there; while the server runs, as on the admin pages.
+    status = system.tool("server_data", "delete", *args.parts, *keep, extra_env=TOOLS_PATHS).returncode
+    if status != 0:
+        die("not everything could be deleted (see above)")
+    if "songs" in args.parts or "game" in args.parts:
+        # The song list without them, read by the server at once.
+        system.tool("songs")
+    ok(f"deleted: {', '.join(args.parts)}")
+    if "apps" in args.parts and system.container_state() == "running":
+        # The app for players again, as at every start.
+        since = time.time()
+        system.compose("up", "-d", "builder")
+        wait_builder(since)
+    return 0
+
+
+def remove_path_link():
+    """The opendmtq command on the PATH (cli/install.sh put it there), when it is this folder's: without a password asked
+    for, where sudo needs one it is said instead."""
+    import subprocess
+    for folder in ("/usr/local/bin", os.path.expanduser("~/.local/bin")):
+        link = os.path.join(folder, "opendmtq")
+        if not (os.path.islink(link) and os.path.realpath(link) == os.path.realpath(os.path.join(ROOT, "opendmtq"))):
+            continue
+        try:
+            os.remove(link)
+        except OSError:
+            if subprocess.run(["sudo", "-n", "rm", "-f", link], capture_output=True).returncode != 0:
+                warn(f"{link} stays (sudo rm {link} removes it)")
+                continue
+        ok(f"removed {link}")
+
+
+def cmd_uninstall(args):
+    """Removes this server: its containers and their network, the images built for it, the Windows firewall rule its setup
+    made (WSL), the command on the PATH, and its folder (--keep-data: data/ and .env stay)."""
+    import shutil
+    import subprocess
+    keep = bool(args.keep_data)
+    what = "this server, keeping data/ and .env," if keep else "this server and all its data"
+    if not args.yes and not typed_yes("uninstall", f"Remove {what} from this computer?"):
+        die("nothing was removed")
+    values = env.load(ENV_FILE)
+    images = system.image_names()
+    # The containers and their network: stopped and gone.
+    system.compose("--profile", "tools", "down", "--volumes", "--remove-orphans", check=False)
+    ok("containers removed")
+    if not keep:
+        # What the containers wrote may not be this user's (an earlier run with sudo): removed from inside the server's
+        # image, while it is still here.
+        shutil.rmtree(DATA, ignore_errors=True)
+        if os.path.exists(DATA):
+            subprocess.run(["docker", "run", "--rm", "-u", "0", "-v", f"{DATA}:/d", "--entrypoint", "sh", images[0], "-c",
+                            "rm -rf /d/* /d/.[!.]*"], capture_output=True)
+            shutil.rmtree(DATA, ignore_errors=True)
+    for image in images:
+        # An image another copy still uses stays: docker refuses it.
+        if subprocess.run(["docker", "image", "rm", image], capture_output=True).returncode == 0:
+            ok(f"removed the image {image}")
+    if env.is_wsl() and values.get("PUBLIC_HOST"):
+        problem = system.run_firewall_script(port=env.listen_port(values), remove=True)
+        if problem:
+            warn(f"the Windows firewall rule stays: {problem}")
+        else:
+            ok(f"removed the firewall rule {system.firewall_rule_name(env.listen_port(values))}")
+    remove_path_link()
+    # The folder last: this command runs from it, which Linux and macOS allow.
+    for name in os.listdir(ROOT):
+        if keep and name in ("data", ".env"):
+            continue
+        path = os.path.join(ROOT, name)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    if keep:
+        ok(f"removed the program from {ROOT}; data/ and .env stay there")
+    else:
+        try:
+            os.rmdir(ROOT)
+            ok(f"removed {ROOT}")
+        except OSError:
+            warn(f"{ROOT} is not quite empty: something else put files there")
+    print("OpenDMTQ is uninstalled.")
+    return 0
+
+
 def cmd_firewall(args):
     if not env.is_wsl():
         die("the firewall command is for WSL on Windows; on Linux, open the port in your own firewall if you use one")
@@ -976,6 +1161,17 @@ def main(argv=None):
                    help="also serve the admin pages on the public port (over HTTPS with the server's own certificate)")
     p.set_defaults(fn=cmd_expose)
 
+    sub.add_parser("repair", help="check and repair: folders, images, certificates, database, song list, app").set_defaults(
+        fn=cmd_repair)
+    p = sub.add_parser("delete-data", help="list the server's data by part, or delete parts of it (a backup first)")
+    p.add_argument("parts", nargs="*", metavar="part", help="database, recordings, songs, apps, backups, logs or game")
+    p.add_argument("--no-backup", action="store_true", help="no backup first")
+    p.add_argument("--yes", action="store_true", help="do not ask")
+    p.set_defaults(fn=cmd_delete_data)
+    p = sub.add_parser("uninstall", help="remove this server: containers, images, its folder")
+    p.add_argument("--keep-data", action="store_true", help="leave data/ and .env in the folder")
+    p.add_argument("--yes", action="store_true", help="do not ask")
+    p.set_defaults(fn=cmd_uninstall)
     p = sub.add_parser("firewall", help="allow phones through the Windows firewall (WSL; asks for admin once)")
     p.add_argument("--remove", action="store_true")
     p.set_defaults(fn=cmd_firewall)

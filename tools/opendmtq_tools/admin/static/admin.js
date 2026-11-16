@@ -175,22 +175,73 @@ for (const box of document.querySelectorAll('.drop')) {
 
 // What cannot be undone asks first, in the site's own look: data-ask on the button or its form says what is lost, data-yes
 // names the button that goes ahead. A form that was asked about comes back through here with its answer.
+// What deletes for good asks for a word to be typed as well (data-type on the button, data-type-label its label): the
+// button that goes ahead waits for it, Enter in the field goes ahead once it is right, and the word goes with the form
+// (its confirm field), which the server checks again. A button with data-need asks only once a box of that name is
+// ticked; without one, its form says so (data-need-words) and nothing opens.
 document.addEventListener('submit', e => {
   const form = e.target, button = e.submitter, ask = document.getElementById('ask');
   if (form.method === 'dialog') return;
   const question = (button && button.dataset.ask) || form.dataset.ask;
   if (!question || form.dataset.answered) { delete form.dataset.answered; return; }
   e.preventDefault();
+  const need = button && button.dataset.need;
+  if (need && !form.querySelector(`input[name="${need}"]:checked`)) {
+    formSays(form, button.dataset.needWords || '');
+    form.querySelector(`input[name="${need}"]`)?.focus();
+    return;
+  }
   ask.querySelector('p').textContent = question.replace('{n}', form.querySelectorAll('input[name=sel]:checked').length);
   const yes = ask.querySelector('[value=yes]');
   yes.textContent = (button && button.dataset.yes) || form.dataset.yes || yes.dataset.word;
+  // The word to type, when there is one; otherwise the field stays hidden and the button ready.
+  const word = (button && button.dataset.type) || '';
+  const typed = ask.querySelector('.ask-type'), field = typed.querySelector('input');
+  typed.hidden = !word;
+  field.value = '';
+  yes.disabled = Boolean(word);
+  if (word) {
+    typed.querySelector('span').textContent = button.dataset.typeLabel || word;
+    field.oninput = () => { yes.disabled = field.value.trim().toLowerCase() !== word.toLowerCase(); };
+    field.onkeydown = ev => {
+      if (ev.key !== 'Enter') return;
+      // Not the dialog form's own Enter, whose first button is Cancel.
+      ev.preventDefault();
+      if (!yes.disabled) ask.close('yes');
+    };
+  }
   ask.returnValue = '';
   ask.onclose = () => {
     if (ask.returnValue !== 'yes') return;
+    if (word) {
+      const confirm = form.querySelector('input[name=confirm]');
+      if (confirm) confirm.value = field.value.trim();
+    }
     form.dataset.answered = '1';
     form.requestSubmit(button || undefined);
   };
   ask.showModal();
+  // The field first, where there is one: the keyboard types the word at once.
+  if (word) field.focus();
+});
+
+// A message said just above a form, in the page's look (as the page's own checks say theirs): one per form.
+function formSays(form, words) {
+  let says = form.previousElementSibling;
+  if (!says || !says.matches('.form-says')) {
+    says = document.createElement('p');
+    form.before(says);
+  }
+  says.className = 'form-says flash bad';
+  says.setAttribute('role', 'alert');
+  says.textContent = words;
+}
+// A box ticked: the form's message about it goes.
+document.addEventListener('change', e => {
+  const box = e.target;
+  if (box.type !== 'checkbox' || !box.form) return;
+  const says = box.form.previousElementSibling;
+  if (says && says.classList.contains('form-says') && box.form.querySelector('input[type=checkbox]:checked')) says.remove();
 });
 
 // Forms: a button that was pressed shows that it is working (a backup or an upload takes a while; its data-busy says what
@@ -622,6 +673,39 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
     }
     if (Date.now() - started > 60000) document.getElementById('slow').hidden = false;
     setTimeout(look, 1500);
+  })();
+})();
+
+// The server stopping (or removing itself) from the Server page: which process answers is asked (data-ping), as a
+// restart's page does. Once nothing answers, it has stopped: the heading says so (data-stopped, data-stopped-lead) and
+// its light goes off. Should another process answer later (the server started again on its PC), it runs again
+// (data-again), with the way back to the Server page.
+(() => {
+  const wait = document.getElementById('stop-wait');
+  if (!wait) return;
+  const head = document.getElementById('stop-head'), lead = document.getElementById('stop-lead');
+  const lamp = document.getElementById('stop-lamp');
+  let stopped = false;
+  (async function look() {
+    let instance = null;
+    try {
+      const r = await fetch(wait.dataset.ping, { cache: 'no-store' });
+      if (r.ok) instance = (await r.json()).instance;
+    } catch (e) {
+      // Nothing answers: the server has stopped.
+    }
+    if (instance === null && !stopped) {
+      stopped = true;
+      head.textContent = wait.dataset.stopped;
+      if (wait.dataset.stoppedLead) lead.textContent = wait.dataset.stoppedLead;
+      lamp.className = 'lamp off';
+    } else if (instance !== null && instance !== wait.dataset.instance && wait.dataset.again) {
+      head.textContent = wait.dataset.again;
+      lamp.className = 'lamp on';
+      document.getElementById('stop-back').hidden = false;
+      return;
+    }
+    setTimeout(look, 2000);
   })();
 })();
 

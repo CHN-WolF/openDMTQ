@@ -6,7 +6,7 @@ import os
 import subprocess
 import tempfile
 
-from .paths import APP, BUNDLE, DATA, ENV_FILE, LOGS, PYTHON, RUN, WINDOWS
+from .paths import APP, BUNDLE, DATA, ENV_FILE, LOGS, PYTHON, ROOT, RUN, WINDOWS
 from .output import die
 from .programs import find_programs
 from .settings import admin_port, listen_port, settings
@@ -97,6 +97,9 @@ def tools_env(values, found):
         "OPENDMTQ_HOST_INSTALL": "yes",
         "OPENDMTQ_ENV_FILE": ENV_FILE,
         "OPENDMTQ_RUN": RUN,
+        # The install's folder: the repair checks the program's files there against its list (manifest.py), and the
+        # Server page names it for an uninstall.
+        "OPENDMTQ_ROOT": ROOT,
     })
     return e
 

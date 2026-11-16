@@ -1,0 +1,84 @@
+{% extends "base.html" %}{% block title %}{{ t('server.page') }}{% endblock %}
+{% block body %}
+{# A repair or a deletion that took longer than its form waited: its log until it ends, then this page again with what it
+   said (followJob in admin.js); gone with a restart of this service, the page as it is now. #}
+{% if job %}
+<section class="card" aria-live="polite">
+  <h2>{{ t('repair.working') if job_kind == 'repair' else t('data.working') }}</h2>
+  <pre class="log" id="log" data-job="{{ url_for('job_status', job_id=job) }}" data-done="{{ url_for('server_page', job=job) }}" data-failed="{{ url_for('server_page', job=job) }}" data-gone="{{ url_for('server_page') }}">{{ t('app.starting') }}</pre>
+</section>
+{% endif %}
+{# The server's state first, and what starts and stops it: here, on an install whose program reads these pages' requests;
+   elsewhere the commands that do it. #}
+<section class="card server-power" id="power">
+  <h2>{{ t('server.title') }}</h2>
+  <p class="auto-line big"><span class="lamp on"></span><b>{{ t('server.running') }}</b>{% if since %}<span class="meta">{{ t('server.since', when=since) }}</span>{% endif %}</p>
+  <table class="kv server-facts">
+    <tr><td>{{ t('server.address') }}</td><td><code>http://{{ public_host }}/</code></td></tr>
+    <tr><td>{{ t('server.admin_address') }}</td><td><code>http://{{ public_host }}/opendmtq/admin/</code></td></tr>
+    {% if version %}<tr><td>{{ t('server.version') }}</td><td>{{ version }}</td></tr>{% endif %}
+    <tr><td>{{ t('server.install') }}</td><td>{{ t(kind_words[kind]) }}</td></tr>
+  </table>
+  {% if can_run %}
+  <p class="lead">{{ t('server.power_lead') }}</p>
+  <div class="btn-line">
+    <form method="post" action="{{ url_for('server_restart') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-ask="{{ tp('server.restart_confirm') }}" data-yes="{{ tp('server.restart') }}">{{ t('server.restart') }}</button></form>
+    <form method="post" action="{{ url_for('server_stop') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-danger" data-ask="{{ tp('server.confirm') }}" data-yes="{{ tp('server.stop') }}">{{ t('server.stop') }}</button></form>
+  </div>
+  {% else %}
+  <p class="lead">{{ t(command_leads[kind]) }}</p>
+  <pre class="log cmd">{{ commands.stop }}
+{{ commands.restart }}</pre>
+  {% endif %}
+</section>
+{# The repair: the page's one main button, as it changes nothing that is right. #}
+<section class="card" id="repair">
+  <h2>{{ t('repair.title') }}</h2>
+  <p class="lead">{{ t('repair.lead') }}</p>
+  <form method="post" action="{{ url_for('server_repair') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><div class="btn-line"><button class="btn btn-primary" data-busy="{{ t('repair.busy') }}">{{ t('repair.start') }}</button></div></form>
+  {% if kind == 'docker' %}<p class="meta repair-more">{{ t('repair.docker_more') }}</p>{% endif %}
+</section>
+{# The data, part by part, with its size; the parts ticked go, after a backup (ticked as the page comes) and the word typed. #}
+<section class="card" id="data">
+  <h2>{{ t('data.title') }} <span class="meta-inline">{{ t('data.total') }} {{ total|human }}</span></h2>
+  <p class="lead">{{ t('data.lead') }}</p>
+  <form method="post" action="{{ url_for('server_delete') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="confirm" value="">
+    <div class="table-scroll"><table class="data data-parts">
+      <thead><tr><th class="pick"></th><th>{{ t('data.part') }}</th><th class="r">{{ t('data.size') }}</th></tr></thead>
+      <tbody>
+      {% for p in parts %}
+        <tr{% if not p.can_delete %} class="off"{% endif %}>
+          <td class="pick">{% if p.can_delete %}<input type="checkbox" name="part" value="{{ p.part }}" id="part-{{ p.part }}">{% endif %}</td>
+          <td class="primary"><label for="part-{{ p.part }}">{{ t(part_words[p.part][0]) }}</label><span class="runtime">{{ t(part_words[p.part][1]) }}{% if not p.can_delete %} {{ t('data.not_here') }}{% endif %}</span></td>
+          <td class="r size" data-label="{{ t('data.size') }}">{{ p.bytes|human }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="btn-line data-go">
+      <label class="check"><input type="checkbox" name="backup" value="yes" checked> {{ t('data.backup_first') }}</label>
+      <button class="btn btn-danger" data-ask="{{ tp('data.confirm') }}" data-yes="{{ tp('data.delete') }}" data-type="{{ tp('data.delete_word') }}" data-type-label="{{ tp('server.type_label', word=tp('data.delete_word')) }}" data-need="part" data-need-words="{{ tp('data.none_chosen') }}">{{ t('data.delete') }}</button>
+    </div>
+  </form>
+</section>
+{# Removing the server from the PC: what goes on this install, and the button (or the command) that does it. #}
+<section class="card" id="remove">
+  <h2>{{ t('server.remove_title') }}</h2>
+  <p class="lead">{{ t(remove_leads[kind]) }}</p>
+  {% if can_run %}
+  <ul class="removes">{% for item in removes %}<li>{{ t(remove_words[item], root=root) }}</li>{% endfor %}</ul>
+  <form method="post" action="{{ url_for('server_uninstall') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="confirm" value="">
+    <div class="btn-line">
+      <label class="check"><input type="checkbox" name="keep" value="yes"> {{ t('server.keep_data') }}</label>
+      <button class="btn btn-danger" data-ask="{{ tp('server.remove_confirm') }}" data-yes="{{ tp('server.remove') }}" data-type="{{ tp('server.remove_word') }}" data-type-label="{{ tp('server.type_label', word=tp('server.remove_word')) }}">{{ t('server.remove') }}</button>
+    </div>
+  </form>
+  {% else %}
+  <ul class="removes">{% for item in removes %}<li>{{ t(remove_words[item], root=root) }}</li>{% endfor %}</ul>
+  <pre class="log cmd">{{ commands.uninstall }}{% if kind == 'kubernetes' %}
+{{ commands.delete_data }}{% endif %}</pre>
+  {% endif %}
+</section>
+{% endblock %}

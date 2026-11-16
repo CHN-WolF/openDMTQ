@@ -20,8 +20,8 @@ import time
 from flask import g, jsonify, request, send_file
 from werkzeug.exceptions import HTTPException
 
-from .. import songs
-from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, logs, players, recordings, setup, site, song_pages, tokens
+from .. import server_data, songs
+from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, tokens
 # The status page's module by another name: the route's handler is called status.
 from . import status as status_page
 from .core import Refused, app, changed, db, json_error, plain, tp
@@ -568,12 +568,61 @@ def maintenance_clear(args):
     return notice()
 
 
+# ------------------------------------------------------------------------------ the server page
+
+@handler
+def server_get(args):
+    """GET /server: the Server page's state and data (lifecycle.py)."""
+    started = int(setup.STARTED.rsplit("-", 1)[1]) if "-" in setup.STARTED else None
+    return {"install": lifecycle.install_kind(), "address": f"http://{core.PUBLIC_HOST}/",
+            "version": os.environ.get("OPENDMTQ_VERSION") or None, "started": started,
+            "runs_itself": lifecycle.can_run_itself(), "commands": lifecycle.commands(), "data": lifecycle.data_parts()}
+
+
 @handler
 def server_stop(args):
-    """POST /server/stop: the Maintenance page's Stop the server (setup.stop_server). 202: the answer leaves before the
+    """POST /server/stop: the Server page's Stop the server (setup.stop_server). 202: the answer leaves before the
     server stops."""
     setup.stop_server()
     return {"stopping": True}, 202
+
+
+@handler
+def server_restart(args):
+    """POST /server/restart: the Server page's Restart (lifecycle.restart_server). 202: the answer leaves first."""
+    lifecycle.restart_server()
+    return {"restarting": True}, 202
+
+
+@handler
+def server_repair(args):
+    """POST /server/repair: the Server page's Check and repair, the same job (lifecycle.start_repair)."""
+    return started(lifecycle.start_repair())
+
+
+@handler
+def server_data_get(args):
+    """GET /server/data: the Server page's data, part by part."""
+    return {"items": lifecycle.data_parts()}
+
+
+@handler
+def server_data_delete(args):
+    """POST /server/data/delete: the Server page's Delete, the same job (lifecycle.start_delete): a backup first unless
+    backup is false. Parts this server has not are refused with the ones it has."""
+    unknown = [p for p in args["parts"] if p not in server_data.PARTS]
+    if unknown or not args["parts"]:
+        raise Refused(400, "no_parts", message=f"Name parts to delete, of: {', '.join(server_data.PARTS)}"
+                      + (f" (not {', '.join(unknown)})." if unknown else "."))
+    return started(lifecycle.start_delete(args["parts"], args.get("backup", True), args["confirm"]))
+
+
+@handler
+def server_uninstall(args):
+    """POST /server/uninstall: the Server page's Uninstall (lifecycle.uninstall_server). 202: the answer leaves first."""
+    keep = bool(args.get("keep_data", False))
+    lifecycle.uninstall_server(keep, args["confirm"])
+    return {"uninstalling": True, "keep_data": keep}, 202
 
 
 # ------------------------------------------------------------------------------ players

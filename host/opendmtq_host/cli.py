@@ -7,8 +7,8 @@ import sys
 from .paths import CLI, WINDOWS
 from .output import die
 from .server import cmd_run
-from .commands import (cmd_apk, cmd_check, cmd_runtime, cmd_host, cmd_import, cmd_restart, cmd_service, cmd_start, cmd_status,
-                       cmd_stop)
+from .commands import (cmd_apk, cmd_check, cmd_delete_data, cmd_host, cmd_import, cmd_repair, cmd_restart, cmd_runtime,
+                       cmd_service, cmd_start, cmd_status, cmd_stop, cmd_uninstall)
 from .setup import cmd_setup
 
 
@@ -43,6 +43,17 @@ def main(argv=None):
     h.add_argument("address", nargs="?")
     h.set_defaults(fn=cmd_host)
     sub.add_parser("check", help="walk the game's whole path against the running server").set_defaults(fn=cmd_check)
+    sub.add_parser("repair", help="check and repair the folders, database, song list, app and program files").set_defaults(
+        fn=cmd_repair)
+    d = sub.add_parser("delete-data", help="list the server's data by part, or delete parts of it (a backup first)")
+    d.add_argument("parts", nargs="*", metavar="part", help="database, recordings, songs, apps, backups, logs or game")
+    d.add_argument("--no-backup", action="store_true", help="no backup first")
+    d.add_argument("--yes", action="store_true", help="do not ask")
+    d.set_defaults(fn=cmd_delete_data)
+    u = sub.add_parser("uninstall", help="remove the server from this computer")
+    u.add_argument("--keep-data", action="store_true", help="leave data/ and .env in the folder")
+    u.add_argument("--yes", action="store_true", help="do not ask")
+    u.set_defaults(fn=cmd_uninstall)
     v = sub.add_parser("service", help="start the server with the computer (systemd or launchd)")
     v.add_argument("--remove", action="store_true", help="stop starting it with the computer")
     v.set_defaults(fn=cmd_service)

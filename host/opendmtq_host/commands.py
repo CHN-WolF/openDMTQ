@@ -332,3 +332,90 @@ def cmd_service(args):
     subprocess.run(["loginctl", "enable-linger", os.environ.get("USER", "")], check=False)
     ok(f"starts at boot: {unit} (systemctl --user status opendmtq)")
     return 0
+
+
+# ------------------------------------------------------------------------------ the server's life: repair, data, uninstall
+# The admin pages' Server page does each of these too; here they are for the terminal (and a server that does not start).
+
+def typed_yes(word, question):
+    """True when the person types word at the question (a terminal only: a script passes --yes)."""
+    if not (sys.stdin and sys.stdin.isatty()):
+        die(f"{question} Run it in a terminal to answer, or add --yes")
+    try:
+        return input(f"{question} Type {word} to go ahead: ").strip().lower() == word
+    except EOFError:
+        return False
+
+
+def ask_running_program(name, body):
+    """Writes a request for the running server's program (it looks every two seconds), as the Server page does."""
+    from .paths import RUN
+    with open(os.path.join(RUN, name + ".new"), "w", encoding="utf-8") as f:
+        f.write(body)
+    os.replace(os.path.join(RUN, name + ".new"), os.path.join(RUN, name))
+
+
+def cmd_repair(args):
+    """Checks and repairs what the server can make again by itself (opendmtq_tools.repair), the app built when it has to
+    be; then a running server starts again with all of it."""
+    values = require_settings()
+    found = programs()
+    make_folders()
+    status = tool("repair", "--build", values=values, found=found)
+    if running_pid():
+        # Its programs read what was put back at their start.
+        ask_running_program("restart.request", str(int(time.time())))
+        ok("the server starts again with it")
+    return status
+
+
+def data_sizes(values, found):
+    """The server's data by part, as opendmtq_tools.server_data counts it: {part: {"bytes", "can_delete"}}."""
+    from .folders import tools_env
+    e = tools_env(values, found)
+    r = subprocess.run([sys.executable, "-I", "-X", "utf8", "-m", "opendmtq_tools.server_data", "sizes"], env=e,
+                       capture_output=True, text=True, encoding="utf-8")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        die(f"the data could not be counted: {r.stderr.strip()}")
+
+
+def cmd_delete_data(args):
+    """Deletes parts of the server's data (a backup first unless --no-backup): without parts, lists them with their size."""
+    values = require_settings()
+    found = programs()
+    sizes = data_sizes(values, found)
+    unknown = [part for part in args.parts if part not in sizes]
+    if unknown:
+        die(f"no such part: {', '.join(unknown)} (the parts: {', '.join(sizes)})")
+    if not args.parts:
+        for part, info in sizes.items():
+            say(f"{part:<11} {info['bytes'] / 1024 / 1024:>9.1f} MB")
+        say(f"\n{CLI} delete-data <part>... deletes those (database recordings songs apps backups logs game), a backup first.")
+        return 0
+    if not args.yes and not typed_yes("delete", f"Delete {', '.join(args.parts)} for good?"):
+        die("nothing was deleted")
+    status = tool("server_data", "delete", *args.parts, *([] if args.no_backup else ["--backup"]), values=values, found=found)
+    if status != 0:
+        die("not everything could be deleted (see above)")
+    ok(f"deleted: {', '.join(args.parts)}")
+    return 0
+
+
+def cmd_uninstall(args):
+    """Removes the server from this computer: stopped first, then what it set up, then its folder (--keep-data: data/
+    and .env stay)."""
+    from .remove import uninstall
+    what = "OpenDMTQ, keeping data/ and .env," if args.keep_data else "OpenDMTQ and all its data"
+    if not args.yes and not typed_yes("uninstall", f"Remove {what} from this computer?"):
+        die("nothing was removed")
+    if running_pid():
+        if WINDOWS:
+            # Its window's program stops, then removes it, as the Server page asks it to.
+            ask_running_program("uninstall.request", json.dumps({"keep_data": bool(args.keep_data)}))
+            ok("the server's window stops, then removes OpenDMTQ")
+            return 0
+        cmd_stop(args)
+    uninstall(bool(args.keep_data))
+    return 0

@@ -786,3 +786,36 @@ table.sortable :is(th.r, th.rank)[data-sort]::after { position: absolute; margin
 .setup-phone ol { flex: 1 1 260px; display: grid; gap: 6px; margin: 0; padding-left: 20px; color: var(--chalk); }
 /* The setup's app step: the question about newer phones above its button. */
 .setup-build { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0; }
+
+/* The Server page (server.html): its state as a table of facts, the commands where the page cannot act, the data part by
+   part with a box to tick, and what an uninstall takes away. */
+.server-facts { margin: 0 0 6px; }
+.server-facts td:first-child { width: 8.5em; }
+.server-power .btn-line { margin-top: 12px; }
+.log.cmd { color: #fff; white-space: pre-wrap; overflow-wrap: anywhere; }
+.repair-more { margin: 12px 0 0; }
+/* A part's name reads as the row's title, its note under it; the size at the row's end, its figures aligned. */
+table.data-parts th.pick, table.data-parts td.pick { width: 34px; text-align: center; }
+table.data-parts td.primary label { color: #fff; font-weight: 600; cursor: pointer; }
+table.data-parts tr.off td.primary label { color: var(--chalk); cursor: default; }
+table.data-parts td.size { white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.data-parts .runtime { font-weight: 400; }
+/* On a phone: the box, the part, its size on one row; the note under the part's name. */
+@media (max-width: 700px) {
+  table.data.data-parts tr { grid-template-columns: 26px minmax(0, 1fr) auto; align-items: start; }
+  table.data.data-parts td.pick { grid-column: 1; grid-row: 1; display: block; width: auto; padding-top: 2px; }
+  table.data.data-parts td.pick::before, table.data.data-parts td.size::before { content: none; }
+  table.data.data-parts td.primary { grid-column: 2; grid-row: 1; }
+  table.data.data-parts td.size { grid-column: 3; grid-row: 1; display: block; font-size: var(--t-md); }
+}
+.data-go { justify-content: space-between; margin-top: 14px; }
+.removes { margin: 0 0 4px; padding-left: 1.2em; color: var(--chalk); font-size: var(--t-sm); line-height: 1.7; }
+.removes code { overflow-wrap: anywhere; }
+/* The word to type before what deletes for good, in the question's own box. */
+.ask-type { display: grid; gap: 7px; margin-top: 16px; font-size: var(--t-sm); color: var(--ash); }
+.ask-type[hidden] { display: none; }
+.ask-type input { height: var(--ctl); padding: 0 12px; font: 600 var(--t-md)/1 var(--mono); color: #fff; background: #11161b; border: 1px solid var(--seam); border-radius: 0; }
+.ask-type input:focus-visible { outline: 2px solid var(--chalk); outline-offset: 1px; }
+.ask .btn[disabled] { opacity: 0.42; cursor: not-allowed; }
+/* The stopped page's state, its light beside the heading as on the Server page. */
+.server-state .setup-state { color: var(--chalk); }

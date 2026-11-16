@@ -1008,9 +1008,11 @@ def server_stop():
         if e.code == "host_only":
             abort(404)
         flash(e.words, e.tone)
-        return redirect(url_for("maintenance_page"))
-    # How to start it again: OpenDMTQ.exe on Windows, the command elsewhere.
-    return render_template("server_stopped.html", windows=os.name == "nt")
+        return redirect(url_for("server_page"))
+    # How to start it again: OpenDMTQ.exe on Windows, the command elsewhere. The page looks for these pages to answer
+    # (data-ping): it says when the server has stopped, and when it runs again.
+    return render_template("server_stopped.html", windows=os.name == "nt", ping=url_for("setup_ping"), instance=STARTED,
+                           address=f"http://{core.PUBLIC_HOST}/")
 
 
 def stop_server():

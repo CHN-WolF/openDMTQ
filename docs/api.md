@@ -550,14 +550,13 @@ Refusals:
 
 ### Maintenance
 
-The Maintenance page: the notice, and stopping the server.
+The Maintenance page: the in-game notice.
 
 | Route | Scope | What it does |
 |:---|:---:|:---|
 | [`GET /maintenance`](#get-maintenance) | read | The in-game maintenance notice: on or off, and what it says. |
 | [`PUT /maintenance`](#put-maintenance) | write | Turns the notice on, or changes what it says while it is on. |
 | [`DELETE /maintenance`](#delete-maintenance) | write | Turns the notice off. |
-| [`POST /server/stop`](#post-serverstop) | write | Stops the server, as the Maintenance page's Stop the server does. |
 
 #### `GET /maintenance`
 
@@ -585,9 +584,29 @@ Turns the notice off.
 
 Answer: `200` with [Notice](#notice).
 
+### Server
+
+The Server page: the server's state, stopping and restarting it, the repair, its data, and uninstalling it.
+
+| Route | Scope | What it does |
+|:---|:---:|:---|
+| [`GET /server`](#get-server) | read | The server as the Server page shows it: how it is installed, its address, what this API can do with it there, and its data part by part. |
+| [`POST /server/stop`](#post-serverstop) | write | Stops the server, as the Server page's Stop the server does. |
+| [`POST /server/restart`](#post-serverrestart) | write | Restarts the server, as the Server page's Restart does. |
+| [`POST /server/repair`](#post-serverrepair) | write | Checks and repairs the server, as the Server page's Check and repair does. |
+| [`GET /server/data`](#get-serverdata) | read | The server's data, part by part, with how much each holds. |
+| [`POST /server/data/delete`](#post-serverdatadelete) | write | Deletes parts of the server's data, as the Server page's Delete does. |
+| [`POST /server/uninstall`](#post-serveruninstall) | write | Uninstalls the server, as the Server page's Uninstall does. |
+
+#### `GET /server`
+
+The server as the Server page shows it: how it is installed, its address, what this API can do with it there, and its data part by part.
+
+Answer: `200` with [ServerState](#serverstate).
+
 #### `POST /server/stop`
 
-Stops the server, as the Maintenance page's Stop the server does. A host install and the Windows bundle only. Every part stops, these pages and the API too: the answer comes first.
+Stops the server, as the Server page's Stop the server does. A host install and the Windows bundle only. Every part stops, these pages and the API too: the answer comes first.
 
 Answer: `202` with [Stopping](#stopping).
 
@@ -595,6 +614,68 @@ Refusals:
 
 - `404 host_only`: Not a host install: stop it with ./opendmtq down or Kubernetes.
 - `500 stop_failed`: The stop could not be asked for (the message says why).
+
+#### `POST /server/restart`
+
+Restarts the server, as the Server page's Restart does. A host install and the Windows bundle only. Every part stops and starts again with the settings in .env as they are now, the API too: the answer comes first, and `GET /status` answers again within seconds.
+
+Answer: `202` with [Restarting](#restarting).
+
+Refusals:
+
+- `404 host_only`: Not a host install: ./opendmtq restart, or Kubernetes' rollout restart.
+- `500 restart_failed`: The restart could not be asked for (the message says why).
+
+#### `POST /server/repair`
+
+Checks and repairs the server, as the Server page's Check and repair does. Its folders, the database's integrity, the owner's sign-in for the players' site, the song list, the site's look kept here, the phone app (built again when it is missing or for another address) and the program's own files against the install's list of them. The job's log says what each step found and did.
+
+Answer: `202` with [JobAnswer](#jobanswer).
+
+Refusals:
+
+- `409 busy`: An import or an app build runs (the message says which).
+
+#### `GET /server/data`
+
+The server's data, part by part, with how much each holds.
+
+Answer: `200` with [DataParts](#dataparts).
+
+#### `POST /server/data/delete`
+
+Deletes parts of the server's data, as the Server page's Delete does. A backup comes first unless `backup` is false, and stays whatever else goes. The database keeps its tables and the API's tokens, and a recording still being made stays. The job's log says what went.
+
+Body (JSON):
+
+- `parts` (list of string): The parts to delete: any of database, recordings, songs, apps, backups, logs, game.
+- `backup` (boolean, optional): Make a backup first (default true).
+- `confirm` (string): The word that confirms it: delete.
+
+Answer: `202` with [JobAnswer](#jobanswer).
+
+Refusals:
+
+- `400 no_parts`: No part, or none this server has (the message says which ones there are).
+- `400 not_confirmed`: confirm is not the word.
+- `409 busy`: An import or an app build runs (the message says which).
+
+#### `POST /server/uninstall`
+
+Uninstalls the server, as the Server page's Uninstall does. A host install and the Windows bundle only. The server stops, then its program removes itself: the folder (all but data/ and .env with keep_data), and what it set up on the computer. The answer comes first; nothing answers afterwards.
+
+Body (JSON):
+
+- `keep_data` (boolean, optional): Keep the data folder and .env (default false).
+- `confirm` (string): The word that confirms it: uninstall.
+
+Answer: `202` with [Uninstalling](#uninstalling).
+
+Refusals:
+
+- `400 not_confirmed`: confirm is not the word.
+- `404 host_only`: Not a host install: ./opendmtq uninstall, or helm uninstall.
+- `500 uninstall_failed`: The uninstall could not be asked for (the message says why).
 
 ### Players
 
@@ -1949,6 +2030,47 @@ A stop asked for.
 
 - `stopping` (boolean): True: the server stops within a few seconds, these pages and the API with it.
 
+#### ServerState
+
+The server as the Server page shows it.
+
+- `install` (string): How it is installed. One of `windows`, `host`, `docker`, `kubernetes`.
+- `address` (string): Its one address: the players' site, with the admin pages under /opendmtq/admin/ and this API under /opendmtq/api/.
+- `version` (string, or null): Its version.
+- `started` (integer, or null): When the admin service started, with the server (Unix time).
+- `runs_itself` (boolean): True where this API can stop, restart and uninstall the server (a host install, the Windows bundle).
+- `commands` (object of string): Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall), on the server PC or the cluster.
+- `data` (list of [DataPart](#datapart)): The server's data, part by part.
+
+#### DataPart
+
+One part of the server's data.
+
+- `part` (string): Which part. One of `database`, `recordings`, `songs`, `apps`, `backups`, `logs`, `game`.
+- `bytes` (integer): How much it holds.
+- `can_delete` (boolean): True when this API can delete it here (with Docker Compose the game files are the command line's).
+
+#### DataParts
+
+The server's data.
+
+- `items` (list of [DataPart](#datapart)): Every part, in the Server page's order.
+
+#### Restarting
+
+A new address, the server starting again for it.
+
+- `address` (string): The new address.
+- `restarting` (boolean): True: every program starts again within seconds, and the app is built for the address.
+- `instance` (string): This run of the admin service: GET /status gives another once the new one answers.
+
+#### Uninstalling
+
+An uninstall asked for.
+
+- `uninstalling` (boolean): True: the server stops, then its program removes itself.
+- `keep_data` (boolean): True when the data folder and .env stay.
+
 #### Player
 
 A player on the Players page.
@@ -2367,14 +2489,6 @@ What a file or folder is to the import.
 - `path` (string): The path.
 - `ok` (boolean): True when the import can take it.
 - `text` (string): What it is, in words.
-
-#### Restarting
-
-A new address, the server starting again for it.
-
-- `address` (string): The new address.
-- `restarting` (boolean): True: every program starts again within seconds, and the app is built for the address.
-- `instance` (string): This run of the admin service: GET /status gives another once the new one answers.
 
 #### SiteSong
 

@@ -287,6 +287,24 @@ SHAPES = {
         Field("on", "boolean", "True while it is on: players see it and cannot start the game."),
         Field("message", "string", "What it says (empty: the usual words).")]),
     "Stopping": Shape("A stop asked for.", [Field("stopping", "boolean", "True: the server stops within a few seconds, these pages and the API with it.")]),
+    # The Server page.
+    "ServerState": Shape("The server as the Server page shows it.", [
+        Field("install", "string", "How it is installed.", enum=["windows", "host", "docker", "kubernetes"]),
+        Field("address", "string", "Its one address: the players' site, with the admin pages under /opendmtq/admin/ and this API under /opendmtq/api/."),
+        Field("version", "string", "Its version.", nullable=True),
+        Field("started", "integer", "When the admin service started, with the server (Unix time).", nullable=True),
+        Field("runs_itself", "boolean", "True where this API can stop, restart and uninstall the server (a host install, the Windows bundle)."),
+        Field("commands", "{string}", "Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall), on the server PC or the cluster."),
+        Field("data", "[DataPart]", "The server's data, part by part.")]),
+    "DataPart": Shape("One part of the server's data.", [
+        Field("part", "string", "Which part.", enum=["database", "recordings", "songs", "apps", "backups", "logs", "game"]),
+        Field("bytes", "integer", "How much it holds."),
+        Field("can_delete", "boolean", "True when this API can delete it here (with Docker Compose the game files are the command line's).")]),
+    "DataParts": Shape("The server's data.", [Field("items", "[DataPart]", "Every part, in the Server page's order.")]),
+    "Restarting": Shape("A restart asked for.", [Field("restarting", "boolean", "True: every part stops and starts again within seconds, this API with it.")]),
+    "Uninstalling": Shape("An uninstall asked for.", [
+        Field("uninstalling", "boolean", "True: the server stops, then its program removes itself."),
+        Field("keep_data", "boolean", "True when the data folder and .env stay.")]),
     # The Players page.
     "Player": Shape("A player on the Players page.", [
         Field("id", "integer", "Their number."),
@@ -662,7 +680,8 @@ TAGS = [
     ("Jobs", "Work that runs in the background: app builds, imports, restores."),
     ("App", "The App page: the app on offer, its builds, the way players get it."),
     ("Songs", "The Songs page."),
-    ("Maintenance", "The Maintenance page: the notice, and stopping the server."),
+    ("Maintenance", "The Maintenance page: the in-game notice."),
+    ("Server", "The Server page: the server's state, stopping and restarting it, the repair, its data, and uninstalling it."),
     ("Players", "The Players page."),
     ("Accounts", "The Accounts page: the site's accounts."),
     ("Tokens", "The Accounts page: the API's tokens."),
@@ -753,7 +772,7 @@ ROUTES = [
           answer="Deleted",
           errors=[(404, "song_not_found", "No such song."), (409, "not_added", "One of the game's own songs."),
                   (500, "song_action_failed", "The song list could not be made without it.")]),
-    # The Maintenance page: the notice (song_pages.set_notice) and Stop the server (setup.stop_server).
+    # The Maintenance page: the notice (song_pages.set_notice).
     Route("GET", "/maintenance", "read", "maintenance_get", "Maintenance", "The in-game maintenance notice: on or off, and what it says.",
           answer="Notice"),
     Route("PUT", "/maintenance", "write", "maintenance_set", "Maintenance", "Turns the notice on, or changes what it says while it is on.",
@@ -762,11 +781,48 @@ ROUTES = [
                       optional=True)], answer="Notice",
           errors=[(400, "message_too_long", "The message is longer than 200 characters.")]),
     Route("DELETE", "/maintenance", "write", "maintenance_clear", "Maintenance", "Turns the notice off.", answer="Notice"),
-    Route("POST", "/server/stop", "write", "server_stop", "Maintenance", "Stops the server, as the Maintenance page's Stop the server does.",
+    # The Server page (lifecycle.py): the state, stop and restart (setup.stop_server, lifecycle.restart_server), the repair,
+    # the data, the uninstall.
+    Route("GET", "/server", "read", "server_get", "Server", "The server as the Server page shows it: how it is installed, its address, "
+          "what this API can do with it there, and its data part by part.", answer="ServerState"),
+    Route("POST", "/server/stop", "write", "server_stop", "Server", "Stops the server, as the Server page's Stop the server does.",
           "A host install and the Windows bundle only. Every part stops, these pages and the API too: the answer comes first.",
           answer="Stopping", status=202,
           errors=[(404, "host_only", "Not a host install: stop it with ./opendmtq down or Kubernetes."),
                   (500, "stop_failed", "The stop could not be asked for (the message says why).")]),
+    Route("POST", "/server/restart", "write", "server_restart", "Server", "Restarts the server, as the Server page's Restart does.",
+          "A host install and the Windows bundle only. Every part stops and starts again with the settings in .env as they are "
+          "now, the API too: the answer comes first, and `GET /status` answers again within seconds.",
+          answer="Restarting", status=202,
+          errors=[(404, "host_only", "Not a host install: ./opendmtq restart, or Kubernetes' rollout restart."),
+                  (500, "restart_failed", "The restart could not be asked for (the message says why).")]),
+    Route("POST", "/server/repair", "write", "server_repair", "Server", "Checks and repairs the server, as the Server page's Check and repair does.",
+          "Its folders, the database's integrity, the owner's sign-in for the players' site, the song list, the site's look kept here, "
+          "the phone app (built again when it is missing or for another address) and the program's own files against the install's "
+          "list of them. The job's log says what each step found and did.",
+          answer="JobAnswer", status=202,
+          errors=[(409, "busy", "An import or an app build runs (the message says which).")]),
+    Route("GET", "/server/data", "read", "server_data_get", "Server", "The server's data, part by part, with how much each holds.",
+          answer="DataParts"),
+    Route("POST", "/server/data/delete", "write", "server_data_delete", "Server", "Deletes parts of the server's data, as the Server page's Delete does.",
+          "A backup comes first unless `backup` is false, and stays whatever else goes. The database keeps its tables and the API's "
+          "tokens, and a recording still being made stays. The job's log says what went.",
+          body=[Field("parts", "[string]", "The parts to delete: any of database, recordings, songs, apps, backups, logs, game."),
+                Field("backup", "boolean", "Make a backup first (default true).", optional=True),
+                Field("confirm", "string", "The word that confirms it: delete.")],
+          answer="JobAnswer", status=202,
+          errors=[(400, "no_parts", "No part, or none this server has (the message says which ones there are)."),
+                  (400, "not_confirmed", "confirm is not the word."),
+                  (409, "busy", "An import or an app build runs (the message says which).")]),
+    Route("POST", "/server/uninstall", "write", "server_uninstall", "Server", "Uninstalls the server, as the Server page's Uninstall does.",
+          "A host install and the Windows bundle only. The server stops, then its program removes itself: the folder (all but data/ "
+          "and .env with keep_data), and what it set up on the computer. The answer comes first; nothing answers afterwards.",
+          body=[Field("keep_data", "boolean", "Keep the data folder and .env (default false).", optional=True),
+                Field("confirm", "string", "The word that confirms it: uninstall.")],
+          answer="Uninstalling", status=202,
+          errors=[(400, "not_confirmed", "confirm is not the word."),
+                  (404, "host_only", "Not a host install: ./opendmtq uninstall, or helm uninstall."),
+                  (500, "uninstall_failed", "The uninstall could not be asked for (the message says why).")]),
     # The Players page (players.py). The writes take ?seen= as the page's forms send it.
     Route("GET", "/players", "read", "players_list", "Players", "Every player, with how they have been playing and their broadcast.",
           answer="PlayerList"),

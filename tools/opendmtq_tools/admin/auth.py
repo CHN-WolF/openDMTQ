@@ -17,6 +17,7 @@ import urllib.request
 
 from flask import abort, flash, redirect, render_template, request, session, url_for
 
+from .. import owner
 from . import core
 from .core import app, BASE, changed, db, same_text, t, tp
 
@@ -370,29 +371,9 @@ def owner_file():
 def owner_file_write():
     """Writes owner_file() for the owner's account as it is in .env now (removed when no password is set). Quietly does
     nothing when the folder cannot be written: the admin pages still work, and the site keeps its own accounts."""
-    path = owner_file()
-    try:
-        if not core.PASSWORD:
-            # No owner's password: nothing to sign in with on the site either.
-            if os.path.exists(path):
-                os.remove(path)
-            return
-        try:
-            with open(path, encoding="utf-8") as f:
-                name, stored = (f.read().splitlines() + ["", ""])[:2]
-        except FileNotFoundError:
-            name, stored = "", ""
-        # Already right: the same ID and the same password.
-        if name == core.ADMIN_USER and account_pass_ok(stored, core.PASSWORD):
-            return
-        # A new file beside it, then moved over the old one, so the site never reads half of it.
-        temp = path + ".new"
-        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(f"{core.ADMIN_USER}\n{account_hash(core.PASSWORD)}\n")
-        os.replace(temp, path)
-    except OSError:
-        pass
+    # The file's own rules (owner.py, which the repair uses too), with these pages' own way of keeping a password.
+    # Returns what it did ("kept", "written", "removed", "failed"), which the repair reports.
+    return owner.write_file(owner_file(), core.ADMIN_USER, core.PASSWORD, account_hash, account_pass_ok)
 
 
 # At start: the owner signs in to the site with what .env says from the first page on.

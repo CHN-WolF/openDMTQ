@@ -57,7 +57,8 @@ CHANGE_WORDS = {
     # The setup's steps and the Maintenance page's stop (setup.py): the owner signed in by the server PC's own link, the
     # game's files brought in, the address changed, the server stopped.
     "setup:signin": "change.setup_signin", "setup:import": "change.setup_import", "setup:address": "change.setup_address",
-    "server:stop": "change.server_stop",
+    "server:stop": "change.server_stop", "server:restart": "change.server_restart", "server:uninstall": "change.server_uninstall",
+    "server:repair": "change.server_repair", "server:delete-data": "change.server_delete_data",
 }
 
 

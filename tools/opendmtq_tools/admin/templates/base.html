@@ -22,7 +22,7 @@
 <div class="facets" aria-hidden="true"></div>
 {% set ep = request.endpoint %}
 {% set pages = [('dashboard', 'nav.status'), ('app_page', 'nav.app'), ('songs_page', 'nav.songs'), ('players_page', 'nav.players'), ('accounts_page', 'nav.accounts'), ('recordings_page', 'nav.recordings'),
-                ('backups_page', 'nav.backups'), ('maintenance_page', 'nav.maintenance'), ('logs_page', 'nav.logs')] %}
+                ('backups_page', 'nav.backups'), ('maintenance_page', 'nav.maintenance'), ('server_page', 'nav.server'), ('logs_page', 'nav.logs')] %}
 <header class="bar">
   <div class="wrap bar-in">
     {# One name, DMTQ and ADMIN together, and at the bar's right end, only when the game server is not answering, one word
@@ -48,7 +48,7 @@
   {# The game server is not answering: what that means here, on every page. A server being set up, with only the game's
      files missing, is pointed to the setup instead (whose first step says it there). Not on the page that says the
      whole server is stopping. #}
-  {% if is_signed_in and not server_ok and ep not in ('login', 'server_stop') %}
+  {% if is_signed_in and not server_ok and ep not in ('login', 'server_stop', 'server_restart', 'server_uninstall') %}
     {% if server_waiting %}
       {% if not (ep or '').startswith('setup') %}<div class="site-alert" role="status"><p>{{ t('down.waiting', url=url_for('setup_page', step='files')) }}</p></div>{% endif %}
     {% else %}
@@ -60,6 +60,8 @@
 {# The one question the page asks before what cannot be undone (admin.js asks it, for a button or form with data-ask). #}
 <dialog id="ask" class="ask">
   <p></p>
+  {# For what deletes for good: the word to type, which the button that goes ahead waits for (data-type on the button). #}
+  <label class="ask-type" hidden><span></span><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
   <form method="dialog" class="btn-line"><button class="btn" value="no">{{ t('btn.cancel') }}</button><button class="btn btn-danger" value="yes" data-word="{{ t('btn.continue') }}">{{ t('btn.continue') }}</button></form>
 </dialog>
 {# The footer: what this software is, in two short lines, then the same three as the players' site's footer in the same

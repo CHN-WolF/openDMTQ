@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}{{ t('server.removing_title') }}{% endblock %}
+{% block body %}
+{# The last page of this server: it stops, then its program removes itself. The page asks which process answers, as the
+   stop's page does, and says once nothing does. #}
+<section class="card server-state" id="stop-wait" data-ping="{{ ping }}" data-instance="{{ instance }}" data-stopped="{{ tp('server.removing_done') }}" data-stopped-lead="">
+  <p class="auto-line big"><span class="lamp wait" id="stop-lamp"></span><b id="stop-head">{{ t('server.removing_title') }}</b></p>
+  <p class="lead" id="stop-lead">{{ t('server.removing_lead') }}</p>
+  {% if keep %}<p class="meta">{{ t('server.removing_kept') }}</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}{{ t('server.restarting_title') }}{% endblock %}
+{% block body %}
+{# Every part starts again. These pages restart with it, so this one asks which process answers (admin.js, data-ping) until
+   it is not this one (data-instance), then goes back to the Server page (data-back). #}
+<section class="card" id="restart-wait" data-ping="{{ ping }}" data-instance="{{ instance }}" data-back="{{ back }}">
+  <p class="auto-line big"><span class="lamp wait"></span><b>{{ t('server.restarting_title') }}</b></p>
+  <p class="lead">{{ t('server.restarting_lead') }}</p>
+  <p class="meta" id="slow" hidden>{{ t('server.restart_slow') }}</p>
+</section>
+{% endblock %}
