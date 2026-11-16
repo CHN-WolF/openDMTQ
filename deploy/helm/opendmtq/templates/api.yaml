@@ -152,6 +152,11 @@ spec:
             - {name: TZ, value: {{ . | quote }}}
             {{- end }}
             - {name: ADMIN_USER, value: {{ .Values.admin.user | default "admin" | quote }}}
+            # The release and its namespace, for the commands the Server page names (it cannot stop or remove the cluster's
+            # parts from inside them).
+            - {name: OPENDMTQ_RELEASE, value: {{ .Release.Name | quote }}}
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef: {name: {{ default (printf "%s-admin" (include "opendmtq.fullname" .)) .Values.admin.existingSecret }}, key: ADMIN_PASSWORD}
