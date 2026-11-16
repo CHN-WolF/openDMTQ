@@ -40,9 +40,6 @@ body[data-section="admin"] { --gap: 14px; }
 .flash.bad { background: color-mix(in srgb, var(--bad) 15%, var(--deck)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 46%, transparent); color: #ffc4cb; }
 /* What to do next, where nothing went wrong (a server without songs yet). */
 .flash.note { background: var(--deck); box-shadow: inset 0 0 0 1px var(--seam); color: var(--chalk); }
-/* A message inside a box, with something under it (the Players page's note over its search): the room a lead leaves
-   under itself, so that the two boxes never meet. At the page's level the page's gap is between them. */
-.card .flash:not(.float):not(:last-child) { margin-bottom: 12px; }
 /* What a form's own check found (admin.js), just above the form: the room under it that a lead leaves above it. On the
    sign-in it is the site's .error, with that box's own room. */
 .flash.form-says { margin: 0 0 12px; }
