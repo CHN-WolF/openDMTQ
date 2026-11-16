@@ -41,6 +41,9 @@ def _windows_vt(stream):
     try:
         import ctypes
         import msvcrt
+        # Wine takes the setting but its console window prints the codes as text: no colour there.
+        if hasattr(ctypes.windll.ntdll, "wine_get_version"):
+            return False
         kernel = ctypes.windll.kernel32
         handle = msvcrt.get_osfhandle(stream.fileno())
         mode = ctypes.c_uint32()

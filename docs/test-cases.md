@@ -360,7 +360,7 @@ it runs ([testing.md](testing.md)):
 | SRV-41 | The same output with NO_COLOR, TERM=dumb, in a pipe or the log | No colour codes; in a pipe or the log one plain name line and no drawing | `cli/tests/test_look.py#test_plain_in_a_pipe` | unit |
 | SRV-42 | Status and the addresses block | Values in one column after the longest label; the players' site, the admin pages, the admin ID and where the password is, between two lines | `cli/tests/test_look.py#test_values_in_one_column` | unit |
 | SRV-43 | The running server's lines in its window | The time in grey and a note or error word in colour; the date and plain text in the log file | `cli/tests/test_look.py#test_log_lines` | unit |
-| SRV-44 | The host install's own messages (the Windows bundle's window) on a terminal | The same state words and colours as ./opendmtq | `cli/tests/test_look.py#test_the_host_window_uses_it` | unit |
+| SRV-44 | The host install's own messages (the Windows bundle's window) on a terminal | The same state words and colours as ./opendmtq; colour on Windows' console once its virtual terminal is on, none in Wine's, which prints the codes as text | `cli/tests/test_look.py#test_the_host_window_uses_it`, `cli/tests/test_look.py#test_windows_console_turned_to_colour_but_not_wines` | unit |
 
 ## TS-CLI: the command line
 

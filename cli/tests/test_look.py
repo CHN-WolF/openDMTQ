@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sys
+import types
 import unittest
 from unittest import mock
 
@@ -75,6 +76,21 @@ class LookTest(unittest.TestCase):
                 self.assertNotRegex(look.state_line("note", "x", tty), CODE)
         finally:
             close(tty)
+
+    def test_windows_console_turned_to_colour_but_not_wines(self):
+        # Windows' console draws the codes once its virtual terminal is on; Wine's takes the setting and prints them as
+        # text, so there the window stays plain.
+        def windows(wine):
+            set_to = []
+            ntdll = types.SimpleNamespace(wine_get_version=lambda: "11.0") if wine else types.SimpleNamespace()
+            kernel32 = types.SimpleNamespace(GetConsoleMode=lambda handle, mode: 1,
+                                             SetConsoleMode=lambda handle, mode: set_to.append(mode) or 1)
+            fake = types.SimpleNamespace(windll=types.SimpleNamespace(ntdll=ntdll, kernel32=kernel32),
+                                         c_uint32=lambda: types.SimpleNamespace(value=3), byref=lambda x: x)
+            with mock.patch.dict(sys.modules, {"ctypes": fake, "msvcrt": types.SimpleNamespace(get_osfhandle=lambda fd: 7)}):
+                return look._windows_vt(types.SimpleNamespace(fileno=lambda: 1)), set_to
+        self.assertEqual(windows(wine=False), (True, [3 | 4]))
+        self.assertEqual(windows(wine=True), (False, []))
 
     def test_plain_in_a_pipe(self):
         out = io.StringIO()
