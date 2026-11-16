@@ -3,8 +3,9 @@
     python3 .github/release_notes.py v1.2.3 [--root DIR]
 
 Checks that the tag, the Helm chart's version and appVersion (deploy/helm/opendmtq/Chart.yaml) and a section of
-CHANGELOG.md all name the same version, then prints that section, each paragraph and list item on one line, which
-release.yml publishes as the release's notes. Exits 1, saying what differs or what is missing: a release does not go
+CHANGELOG.md all name the same version, then prints the release's notes, which release.yml publishes: which file is for
+whom (release_assets.py's list, with this version in the names), then that section, each paragraph and list item on one
+line. Exits 1, saying what differs or what is missing: a release does not go
 out under a number its chart does not carry, or without notes. The standard library only: it runs on the runner's own
 Python, before any setup.
 """
@@ -12,6 +13,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+# The release's files, from the list beside this script (it lives outside any package, as this one does).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import release_assets  # noqa: E402
 
 # The repository: this file is in .github/.
 ROOT = Path(__file__).resolve().parent.parent
@@ -90,6 +95,11 @@ def main(argv=None):
         for problem in problems:
             print(problem, file=sys.stderr)
         return 1
+    # Which file is for whom first, for a person who came to download one; then what changed.
+    print(release_assets.notes_head(version))
+    print()
+    print(f"## What changed in {version}")
+    print()
     print(unwrap(body))
     return 0
 

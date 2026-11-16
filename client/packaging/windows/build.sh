@@ -11,7 +11,8 @@
 #   or a folder (local or HTTP) holding the update packages; the launcher looks for updates there. Without it, none.
 #   PLAYER_ZIP is the player for Windows (default _work/arm32/opendmtq-player-windows.zip, where arm32/bundle_windows.sh
 #   leaves it).
-# OUT_DIR/releases then holds what a release publishes: OpenDMTQ-Setup.exe and its .version, and Velopack's packages.
+# OUT_DIR/releases then holds what a release takes (.github/release_assets.py names them for it): OpenDMTQ-Setup.exe and
+# its .version, and Velopack's update feed (releases.win.json) and package (OpenDMTQ.Client-<version>-full.nupkg).
 set -euo pipefail
 OUT=$(realpath -m "${1:?usage: build.sh OUT_DIR}")
 REPO=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -150,8 +151,11 @@ docker run --rm --network none -v "$OUT:/out" opendmtq-client-vpk:local vpk "[wi
   --packTitle OpenDMTQ --packAuthors OpenDMTQ --icon /out/assets/OpenDMTQ.ico \
   --splashImage /out/assets/splash.png --outputDir /out/releases > "$OUT/vpk.log" 2>&1 || { cat "$OUT/vpk.log"; exit 1; }
 own
-# The portable zip vpk also makes is no part of a release: OpenDMTQ-Setup.exe installs, and the packages update.
+# The portable zip vpk also makes is no part of a release: OpenDMTQ-Setup.exe installs, and the feed and the package update.
 rm -f "$OUT/releases/"*-Portable.zip
+# Nor are vpk's two other lists: RELEASES is the older Squirrel feed and assets.win.json the list vpk's own upload reads;
+# Velopack's GitHub source in the launcher reads releases.win.json alone (its sources/github.rs and sources/mod.rs).
+rm -f "$OUT/releases/RELEASES" "$OUT/releases/assets.win.json"
 ls -la "$OUT/releases"
 
 # ---- 5. the installer people run: the launcher's dialogs around Velopack's setup, in one file
