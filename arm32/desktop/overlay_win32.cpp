@@ -69,6 +69,11 @@
 #include "overlay_scale.h"
 // The bar's way down and up, and the handle's part in it.
 #include "overlay_motion.h"
+// The sound panel's layout, and the sound it sets.
+#include "sound_panel.h"
+#include "mixer.h"
+#include "player.h"
+#include "soundmix.h"
 
 #include <algorithm>
 #include <atomic>
@@ -524,9 +529,9 @@ float crisp(float at, float width) { return std::floor(at - width / 2 + 0.5f) + 
 
 // ---- the bar's sizes and the room it takes (both threads: the UI thread's clicks, the painter's pictures)
 
-// What is under the pointer on the bar: nothing, the X (at the right end), the full screen chip (left of it) or the
-// minimise chip (left of that).
-constexpr int kNone = -1, kQuitChip = 0, kScreenChip = 1, kMinChip = 2;
+// What is under the pointer on the bar: nothing, the X (at the right end), the full screen chip (left of it), the
+// minimise chip (left of that) or the Sound button (left of that, a word beside its speaker).
+constexpr int kNone = -1, kQuitChip = 0, kScreenChip = 1, kMinChip = 2, kSoundChip = 3;
 // Whether the pieces at the game's top (the notice, a counter in a top corner) are placed under the bar (the UI
 // thread's): from when the bar has come down whole until it has gone up. While the bar is on its way they keep the
 // place they had and are moved with it.
@@ -551,6 +556,12 @@ int top_room() {
 // that; each centred in the bar's height.
 RectF chip_rect(int which, int w) {
     const float size = static_cast<float>(chip_size());
+    if (which == kSoundChip) {
+        // Left of minimise by the same gap, as tall as the others, kSoundChipWide wide (sound_panel.h).
+        const float right = static_cast<float>(chip_left(kMinChip, w, scale()) - chip_gap());
+        const float wide = static_cast<float>(px(kSoundChipWide));
+        return RectF(right - wide, static_cast<float>((bar_height() - chip_size()) / 2), wide, size);
+    }
     // Across: overlay_scale.h's arithmetic, which a check holds to the wordmark's end; down, in the bar's middle.
     const float x = static_cast<float>(chip_left(which, w, scale()));
     return RectF(x, static_cast<float>((bar_height() - chip_size()) / 2), size, size);
@@ -558,7 +569,7 @@ RectF chip_rect(int which, int w) {
 
 // The chip under a point of the bar's window, or kNone.
 int chip_at(int x, int y) {
-    for (int which : {kQuitChip, kScreenChip, kMinChip}) {
+    for (int which : {kQuitChip, kScreenChip, kMinChip, kSoundChip}) {
         if (chip_rect(which, area_w()).Contains(static_cast<REAL>(x), static_cast<REAL>(y))) return which;
     }
     return kNone;
@@ -789,7 +800,22 @@ RectF bar_name(Graphics& g, float h) {
 
 // The bar's look for the chip under the pointer, the one held, and full screen or not (its chip's icon the other way),
 // across the view's whole width.
-void bar_look(Paint& p, int hover, int pressed, bool full) {
+// The Sound button's speaker centred at (cx, cy): a box and its cone, and two waves out of it, in the button's ink.
+void speaker_icon(Graphics& g, Pen& line, float cx, float cy) {
+    const float u = fpx(1);
+    // The cone, its narrow end the box: drawn as one outline, closed.
+    const PointF cone[] = {PointF(cx - 7 * u, cy - 2.5f * u), PointF(cx - 4 * u, cy - 2.5f * u), PointF(cx + 0.5f * u, cy - 6.5f * u),
+                           PointF(cx + 0.5f * u, cy + 6.5f * u), PointF(cx - 4 * u, cy + 2.5f * u), PointF(cx - 7 * u, cy + 2.5f * u)};
+    g.DrawPolygon(&line, cone, 6);
+    // The waves: two arcs to its right, the inner shorter.
+    g.DrawArc(&line, cx - 0.5f * u, cy - 4 * u, 6 * u, 8 * u, -55, 110);
+    g.DrawArc(&line, cx - 0.5f * u, cy - 7.5f * u, 10 * u, 15 * u, -55, 110);
+}
+
+// The Sound button's word in the language of the PC.
+const wchar_t* sound_word() { return g_korean ? L"사운드" : L"Sound"; }
+
+void bar_look(Paint& p, int hover, int pressed, bool full, bool sound_open) {
     const int w = area_w();
     Look& look = p.look;
     const int h = bar_height();
@@ -825,10 +851,12 @@ void bar_look(Paint& p, int hover, int pressed, bool full) {
     // pointer; full screen and minimise its secondary buttons, quiet metal, a lighter plate under the pointer, no lime.
     // Their glyphs bolder than the words' lines (2.5 at 720 lines, in whole pixels so that they stay crisp).
     g->Flush(FlushIntentionSync);
-    for (int which : {kQuitChip, kScreenChip, kMinChip}) {
+    for (int which : {kQuitChip, kScreenChip, kMinChip, kSoundChip}) {
         const RectF r = chip_rect(which, w);
         const bool quit = which == kQuitChip;
-        const bool lit = which == hover, in = lit && which == pressed;
+        const bool lit = which == hover;
+        // Held, or the Sound button while its panel is open (the state it marks): sunk.
+        const bool in = (lit && which == pressed) || (which == kSoundChip && sound_open);
         const Fill& fill = quit ? (in ? launcher::kMainPressed : lit ? launcher::kMainHover : launcher::kMain)
                                 : (in ? launcher::kMetalPressed : lit ? launcher::kMetalHover : launcher::kMetal);
         launcher_face(*look.fore, static_cast<int>(r.X), static_cast<int>(r.Y), static_cast<int>(r.Width), static_cast<int>(r.Height), fill, in, scale());
@@ -849,6 +877,20 @@ void bar_look(Paint& p, int hover, int pressed, bool full) {
         } else {
             minimise_icon(*g, line_pen, cx, cy);
         }
+    }
+    // The Sound button: its speaker and its word, centred as a pair, the speaker thinner than the chips' glyphs, the
+    // word in the buttons' bold; the game's green line under the word while its panel is open.
+    {
+        const RectF r = chip_rect(kSoundChip, w);
+        Pen line_pen(launcher::kMetalInk, std::max(1.5f, std::round(fpx(1.7f))));
+        line_pen.SetLineJoin(LineJoinRound);
+        auto word_font = font(Weight::kBold, fpx(14), g_korean);
+        const RectF word = measure(sound_word(), *word_font);
+        const float icon = fpx(17), between = fpx(6);
+        const float x0 = r.X + (r.Width - icon - between - word.Width) / 2;
+        speaker_icon(*g, line_pen, x0 + fpx(7), r.Y + r.Height / 2);
+        say(*g, sound_word(), *word_font, launcher::kMetalInk, PointF(x0 + icon + between, r.Y + (r.Height - word.Height) / 2));
+        if (sound_open) game_line(*g, r.X + fpx(8), r.X + r.Width - fpx(8), r.Y + r.Height - fpx(5), game::kLine);
     }
     // The name's zone: the tint deepens there as much as the frame behind needs for it.
     look.zones = {Look::Zone{name.X - fpx(6), name.Y - fpx(4), name.X + name.Width + fpx(6), name.Y + name.Height + fpx(4), kUnderPrimary}};
@@ -967,12 +1009,170 @@ int ask_at(int x, int y) {
 }
 bool in_card(int x, int y) { return ask_layout().card.Contains(static_cast<REAL>(x), static_cast<REAL>(y)); }
 
+// ---- the sound panel's look (its layout both threads', its picture the painter's)
+
+// The panel's scale while it is laid out or drawn: the overlay's, held so that it fits under the bar (sound_panel.h).
+struct SoundScale {
+    float before;
+    SoundScale() : before(t_scale_cap) { t_scale_cap = sound_scale(area_w(), area_h(), scale(), bar_height()); }
+    ~SoundScale() { t_scale_cap = before; }
+    SoundScale(const SoundScale&) = delete;
+    SoundScale& operator=(const SoundScale&) = delete;
+};
+
+// The panel's layout in the game's area now: docked to its right edge under the bar (the bar's own height, at the
+// overlay's scale; the panel at its own).
+SoundLayout sound_layout_now() { return sound_layout(area_w(), area_h(), scale(), bar_height()); }
+
+// The panel's words in the language of the PC.
+const wchar_t* sound_title() { return g_korean ? L"사운드" : L"Sound"; }
+const wchar_t* eq_title() { return g_korean ? L"이퀄라이저" : L"Equaliser"; }
+const wchar_t* control_name(int c) {
+    static const wchar_t* const en[] = {L"Master", L"Music", L"Effects", L"Low", L"Mid", L"High", L"Flat", L"Bass", L"Vocal", L"Treble", L"Custom"};
+    static const wchar_t* const ko[] = {L"마스터", L"배경음", L"효과음", L"저음", L"중음", L"고음", L"기본", L"베이스", L"보컬", L"트레블", L"직접"};
+    return c >= 0 && c < kSoundControls ? (g_korean ? ko[c] : en[c]) : L"";
+}
+// A band's corner under its name, quieter.
+const wchar_t* band_hz(int c) { return c == kLow ? L"120 Hz" : c == kMid ? L"1 kHz" : L"6 kHz"; }
+
+// A control's value in the levels: the volumes in percent, the bands in dB (the preset's bands while not custom).
+int control_value(const audio::Levels& l, int c) {
+    const audio::EqBands b = l.bands();
+    switch (c) {
+    case kMaster: return l.master;
+    case kMusic: return l.music;
+    case kEffects: return l.effects;
+    case kLow: return b.low;
+    case kMid: return b.mid;
+    case kHigh: return b.high;
+    default: return 0;
+    }
+}
+
+// The panel's look for the levels, the control under the pointer and the one held, in a window around its glass: glass
+// with the game's corners and bevel as the question's card, the title bold with the game's green line under it, each
+// slider a dark groove with the game's green up to its thumb (from the middle for a band), the thumb the launcher's metal
+// (lighter under the pointer, ringed in lime while held), its value at the right; the presets the game's chips, the
+// chosen one ringed in the game's green with its words lit.
+void sound_look(Paint& p, const audio::Levels& levels, int hover, int held) {
+    const SoundScale cap;
+    const SoundLayout l = sound_layout_now();
+    const RECT win = window_around(static_cast<int>(l.panel.x), static_cast<int>(l.panel.y), static_cast<int>(l.panel.w), static_cast<int>(l.panel.h));
+    p.x = win.left;
+    p.y = win.top;
+    const int w = win.right - win.left, h = win.bottom - win.top;
+    const float ox = static_cast<float>(win.left), oy = static_cast<float>(win.top);
+    auto at = [&](const Box& b) { return RectF(b.x - ox, b.y - oy, b.w, b.h); };
+    const float radius = fpx(6);
+    const RectF glass = at(l.panel);
+    Look& look = p.look;
+    pane_shape(look, w, h, glass, radius);
+    look.tint = kTintCard;
+    std::unique_ptr<Bitmap> surface;
+    std::unique_ptr<Graphics> g(fresh_fore(look, surface));
+    edge(*g, glass, radius);
+    bevel(*g, glass, radius, 40, 90);
+    auto title_font = font(Weight::kBold, fpx(17), g_korean);
+    auto label_font = font(Weight::kRegular, fpx(14), g_korean);
+    auto small_font = font(Weight::kRegular, fpx(11), g_korean);
+    auto value_font = font(Weight::kSemiBold, fpx(13), false);
+    auto chip_font = font(Weight::kBold, fpx(13), g_korean);
+    // A row's words in the middle of its height, at its left or right.
+    auto say_left = [&](const wchar_t* text, const Font& f, const Color& c, const RectF& box) {
+        const RectF m = measure(text, f);
+        say(*g, text, f, c, PointF(box.X, box.Y + (box.Height - m.Height) / 2));
+    };
+    auto say_right = [&](const wchar_t* text, const Font& f, const Color& c, const RectF& box) {
+        const RectF m = measure(text, f);
+        say(*g, text, f, c, PointF(box.X + box.Width - m.Width, box.Y + (box.Height - m.Height) / 2));
+    };
+    // The two titles and their lines.
+    say_left(sound_title(), *title_font, tone::kPrimary, at(l.title));
+    game_line(*g, l.title.x - ox, l.title.right() - ox, l.title_line - oy, game::kLine);
+    say_left(eq_title(), *title_font, tone::kPrimary, at(l.eq_title));
+    game_line(*g, l.eq_title.x - ox, l.eq_title.right() - ox, l.eq_line - oy, game::kLine);
+    // The sliders.
+    const float line = std::max(1.0f, fpx(1));
+    for (int c = kMaster; c <= kHigh; ++c) {
+        const RectF label = at(l.label[c]), track = at(l.track[c]), value_box = at(l.value[c]);
+        if (is_band(c)) {
+            // A band: its name over its corner frequency, the two as one block in the row's middle.
+            const RectF name = measure(control_name(c), *label_font), hz = measure(band_hz(c), *small_font);
+            const float top = label.Y + (label.Height - name.Height - hz.Height) / 2;
+            say(*g, control_name(c), *label_font, tone::kPrimary, PointF(label.X, top));
+            say(*g, band_hz(c), *small_font, tone::kSecondary, PointF(label.X, top + name.Height));
+        } else {
+            say_left(control_name(c), *label_font, tone::kPrimary, label);
+        }
+        // The groove: dark, a line of light along its foot, its ends round.
+        GraphicsPath groove;
+        rounded(groove, track, track.Height / 2);
+        SolidBrush deep(Color(170, 0, 0, 0));
+        g->FillPath(&deep, &groove);
+        Pen lip(Color(40, 255, 255, 255), line);
+        g->DrawLine(&lip, track.X + track.Height / 2, track.Y + track.Height + line / 2, track.X + track.Width - track.Height / 2, track.Y + track.Height + line / 2);
+        const int v = control_value(levels, c);
+        const float thumb_x = slider_x(l, c, v) - ox;
+        // The game's green from the start (a band's from its middle, its 0 dB) to the thumb.
+        const float from = is_band(c) ? slider_x(l, c, 0) - ox : track.X;
+        const float x0 = std::min(from, thumb_x), x1 = std::max(from, thumb_x);
+        if (x1 - x0 >= 1) {
+            SolidBrush green(game::kLine);
+            g->FillRectangle(&green, x0, track.Y, x1 - x0, track.Height);
+        }
+        if (is_band(c)) {
+            // The middle's mark: a short line across the groove at 0 dB.
+            Pen mark(Color(150, 255, 255, 255), line);
+            const float mx = crisp(slider_x(l, c, 0) - ox, line);
+            g->DrawLine(&mark, mx, track.Y - fpx(4), mx, track.Y + track.Height + fpx(4));
+        }
+        // The thumb: the launcher's metal, round, lighter under the pointer, ringed in lime while held.
+        const float d = fpx(kThumb), cy = track.Y + track.Height / 2;
+        const RectF knob(thumb_x - d / 2, cy - d / 2, d, d);
+        const bool lit = c == hover || c == held;
+        LinearGradientBrush metal(PointF(0, knob.Y), PointF(0, knob.Y + knob.Height), lit ? Color(255, 0xF2, 0xF5, 0xF8) : Color(255, 0xDC, 0xE1, 0xE6),
+                                  lit ? Color(255, 0xA9, 0xB3, 0xBD) : Color(255, 0x96, 0xA0, 0xAA));
+        g->FillEllipse(&metal, knob);
+        Pen rim(Color(200, 0x10, 0x14, 0x18), line);
+        g->DrawEllipse(&rim, knob);
+        if (c == held) {
+            Pen ring(tone::kLime, std::max(1.5f, fpx(2)));
+            g->DrawEllipse(&ring, RectF(knob.X - fpx(3), knob.Y - fpx(3), knob.Width + fpx(6), knob.Height + fpx(6)));
+        }
+        // The value: percent for the volumes, dB with its sign for a band.
+        wchar_t text[16];
+        if (is_band(c)) std::swprintf(text, 16, v > 0 ? L"+%d dB" : L"%d dB", v);
+        else std::swprintf(text, 16, L"%d %%", v);
+        say_right(text, *value_font, c == held ? tone::kPrimary : tone::kSecondary, value_box);
+    }
+    // The presets: the game's chips, the chosen one ringed in its green and its words lit, the one under the pointer a
+    // lighter plate.
+    g->Flush(FlushIntentionSync);
+    for (int i = 0; i < kPresets; ++i) {
+        const int c = kChipFlat + i;
+        const RectF r = at(l.chip[i]);
+        const bool chosen = static_cast<int>(levels.eq) == i, lit = c == hover;
+        GraphicsPath chip;
+        rounded(chip, r, fpx(5));
+        SolidBrush plate(lit ? Color(235, 0x41, 0x4B, 0x57) : Color(225, 0x2A, 0x31, 0x39));
+        g->FillPath(&plate, &chip);
+        Pen border(chosen ? game::kLine : Color(90, 255, 255, 255), chosen ? std::max(1.5f, fpx(2)) : line);
+        g->DrawPath(&border, &chip);
+        const RectF m = measure(control_name(c), *chip_font);
+        say(*g, control_name(c), *chip_font, chosen ? tone::kLime : tone::kPrimary, PointF(r.X + (r.Width - m.Width) / 2, r.Y + (r.Height - m.Height) / 2));
+    }
+    // The words' zones: the whole inside, as dark as the quiet words need.
+    look.zones = {Look::Zone{glass.X + fpx(8), glass.Y + fpx(8), glass.X + glass.Width - fpx(8), glass.Y + glass.Height - fpx(8), kUnderSecondary}};
+    look.feather = fpx(16);
+    ++p.look_serial;
+}
+
 // ---- the notice's look (the painter's)
 
 // The notice's look for "title\ndetail": a glass card with the red LIVE tag on its left while live (once ended, the
 // title says so alone: no tag), the title over where to watch; its window's place goes to the paint, centred at the top
 // of the game's area, clear of a counter in a top corner (`corner`, Settings::ShowFps's order).
-void notice_look(Paint& p, const std::string& text, bool live, int corner) {
+void notice_look(Paint& p, const std::string& text, bool live, int corner, int free_right) {
     const std::wstring all = wide(text);
     const std::size_t cut = all.find(L'\n');
     std::wstring title = all.substr(0, cut), detail = cut == std::wstring::npos ? L"" : all.substr(cut + 1);
@@ -987,7 +1187,8 @@ void notice_look(Paint& p, const std::string& text, bool live, int corner) {
     const float badge_w = live ? measure(badge, *badge_font).Width + badge_pad * 2 + fpx(0.66f) * 4 + slant : 0.0f;
     // The words' room: within 560 at 720 lines, and within the game's area however small its window; a long server name
     // wraps there, into even lines. A counter in a top corner keeps its corner: the card, centred, stays clear of it.
-    const int aw = area_w();
+    // Its room across: the area's width, or up to the sound panel's left edge while that is open (free_right).
+    const int aw = free_right > 0 ? std::min(free_right, area_w()) : area_w();
     float beside = pad + badge_w + gap + after + 2 * px(kRoomSide);
     if (corner == 1 || corner == 2) {
         // The counter's size and place as it is drawn, at its own scale; the notice's own lengths at the overlay's.
@@ -1261,7 +1462,7 @@ std::shared_ptr<Canvas> handle_picture(int& x, int& y, int& lip, bool lit) {
 // ---- the painter: its orders and what it hands back
 
 // The pieces, in the order the painter takes their orders: the question first (the game waits for it to be held).
-enum Piece { kQuestionPiece, kBarPiece, kNoticePiece, kCounterPiece, kHandlePiece, kPieces };
+enum Piece { kQuestionPiece, kBarPiece, kNoticePiece, kCounterPiece, kHandlePiece, kSoundPiece, kPieces };
 
 // What one piece is to show, as the UI thread asks for it: the view it is drawn for, the frame's last read, and each
 // piece's own state (the rest left as it is).
@@ -1271,6 +1472,13 @@ struct Order {
     std::shared_ptr<const std::vector<glass::Shot>> shots;
     // The bar's chip under the pointer and the one held; the question's choice, what is under its pointer and held.
     int hover = kNone, pressed = kNone, choice = kKeep;
+    // Whether the sound panel is open (the bar's Sound button sunk); the panel's levels, the control under the pointer
+    // and the one held.
+    bool sound_open = false;
+    audio::Levels levels;
+    int sound_hover = kNoControl, sound_held = kNoControl;
+    // The notice's room across: the area's right edge, or the sound panel's left edge less a gap while it is open.
+    int free_right = 0;
     // The notice's words and whether it is live; the counter's corner and its numbers; whether the handle is lit.
     std::string text;
     bool live = false, lit = false;
@@ -1335,7 +1543,7 @@ struct QuestionPaint {
 Painted paint_bar(const Order& o, Paint& p) {
     const Drawing d(o.view);
     if (p.made_for != o.key) {
-        bar_look(p, o.hover, o.pressed, o.view.full);
+        bar_look(p, o.hover, o.pressed, o.view.full, o.sound_open);
         p.made_for = o.key;
     }
     paint_draw(p, *o.shots);
@@ -1349,7 +1557,7 @@ Painted paint_bar(const Order& o, Paint& p) {
 Painted paint_notice(const Order& o, Paint& p) {
     const Drawing d(o.view);
     if (p.made_for != o.key) {
-        notice_look(p, o.text, o.live, o.corner);
+        notice_look(p, o.text, o.live, o.corner, o.free_right);
         p.made_for = o.key;
     }
     paint_draw(p, *o.shots);
@@ -1386,6 +1594,17 @@ Painted paint_handle(const Order& o, Paint& p) {
     // Its rail's rows, which the bar's foot takes the place of as the bar comes down.
     made.rows = p.lip;
     return made;
+}
+
+// The sound panel's picture for an order: its look, its glass's blur over the frame behind.
+Painted paint_sound(const Order& o, Paint& p) {
+    const Drawing d(o.view);
+    if (p.made_for != o.key) {
+        sound_look(p, o.levels, o.sound_hover, o.sound_held);
+        p.made_for = o.key;
+    }
+    paint_draw(p, *o.shots);
+    return Painted{true, p.picture, p.x, p.y, p.have_backdrop, p.made, o.key};
 }
 
 // The question's picture for an order: the dimmed, blurred game from a read of the whole frame (the notice laid over it,
@@ -1477,6 +1696,7 @@ void painter_loop() {
             case kNoticePiece: out[i] = paint_notice(o, paints[i]); break;
             case kCounterPiece: out[i] = paint_counter(o, paints[i]); break;
             case kHandlePiece: out[i] = paint_handle(o, paints[i]); break;
+            case kSoundPiece: out[i] = paint_sound(o, paints[i]); break;
             default: break;
             }
             // Its time, for the stats line.
@@ -1666,6 +1886,13 @@ constexpr UINT_PTR kBarTimer = 2;
 constexpr UINT64 kBarStayMs = 600, kBarTouchStayMs = 4000, kBarRevealMs = 3000, kBarLookMs = 100;
 // Shown by a finger: the pointer Windows parks where the finger was is no mouse on the bar, until the mouse moves.
 bool g_bar_by_touch = false;
+// The sound panel is open (the bar's Sound button): the bar stays down meanwhile. Its window's state is its own section's
+// (the sound panel, below).
+bool g_sound_open = false;
+void sound_close(const char* why);
+void sound_frame();
+void sound_open();
+Shown g_sound;
 // A press pulling the bar down (pull_to): the bar's place is the press's, not its way's, until it is let go
 // (pull_end), and then it settles from there.
 bool g_pull = false;
@@ -1727,7 +1954,8 @@ int under_bar(const Shown& s) { return piece_down(bar_in_sight(), s.room); }
 // The bar's look as text: its size, the scale, the chip under the pointer, the one held, full screen or not.
 std::string bar_key(const View& v) {
     char key[96];
-    std::snprintf(key, sizeof key, "bar %dx%d %.4f %d %d %d", v.w, v.h, static_cast<double>(v.dpi), g_bar_hover, g_bar_pressed, v.full ? 1 : 0);
+    std::snprintf(key, sizeof key, "bar %dx%d %.4f %d %d %d %d", v.w, v.h, static_cast<double>(v.dpi), g_bar_hover, g_bar_pressed, v.full ? 1 : 0,
+                  g_sound_open ? 1 : 0);
     return key;
 }
 
@@ -1747,6 +1975,7 @@ void order_bar() {
     o.view = v;
     o.hover = g_bar_hover;
     o.pressed = g_bar_pressed;
+    o.sound_open = g_sound_open;
     o.key = key;
     order(kBarPiece, std::move(o));
 }
@@ -1770,6 +1999,8 @@ void move_for_bar() {
 // The bar gone: hidden at once wherever its way had it, its timer stopped, nothing under the pointer or held on it.
 void hide_bar() {
     if (!g_bar.window) return;
+    // The sound panel hangs from it: it goes first.
+    sound_close("the bar went up");
     const bool was = g_bar.up, room = g_bar_room;
     hide(g_bar);
     // Put away at once in the middle of a way (the window minimised): the trace says so.
@@ -1984,7 +2215,8 @@ void bar_frame() {
     // Down until the later of its stay after the pointer and a reveal's own time (the pointer leaving it does not
     // shorten a reveal); the question takes it up.
     const UINT64 down_until = std::max(g_bar_since + g_bar_stay, g_bar_reveal_until);
-    const bool down = now <= down_until && !asking();
+    // Down while its time lasts, and while the sound panel hangs from it.
+    const bool down = (now <= down_until || g_sound_open) && !asking();
     if (!g_bar.up) {
         // Not on the screen, and no longer wanted there (its time ran out before its picture came, or the question
         // opened): nothing comes.
@@ -2157,6 +2389,11 @@ LRESULT CALLBACK bar_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         if (chip_now == kQuitChip) ask_quit();
         else if (chip_now == kScreenChip && g_hooks.toggle_fullscreen) g_hooks.toggle_fullscreen();
         else if (chip_now == kMinChip) ShowWindow(g_frame, SW_MINIMIZE);
+        else if (chip_now == kSoundChip) {
+            // The sound panel: open, or closed again.
+            if (g_sound_open) sound_close("its button again");
+            else sound_open();
+        }
         return 0;
     }
     case WM_SETCURSOR:
@@ -2412,9 +2649,25 @@ void counter_show() {
 
 // The counter where its look and place are now: asked of the painter for a new look or a new read, on the screen once
 // its picture is ready, off it while its reading hides it.
+// Whether the counter's glass lies under the sound panel while that is open: it is hidden then rather than covered.
+bool counter_under_panel() {
+    if (!g_sound_open) return false;
+    FpsMetrics m{};
+    POINT at{};
+    {
+        const CounterScale own;
+        m = fps_metrics();
+        at = fps_place(g_fps_corner, static_cast<int>(m.w), static_cast<int>(m.h));
+    }
+    const SoundScale cap;
+    const SoundLayout lay = sound_layout_now();
+    const float x0 = static_cast<float>(at.x), y0 = static_cast<float>(at.y), x1 = x0 + m.w, y1 = y0 + m.h;
+    return x1 > lay.panel.x && x0 < lay.panel.right() && y1 > lay.panel.y && y0 < lay.panel.bottom();
+}
+
 void counter_place() {
     if (!g_fps.window || !g_fps_corner) return;
-    if (!g_reading.shown) {
+    if (!g_reading.shown || counter_under_panel()) {
         if (g_fps.up) hide(g_fps);
         g_fps.wanted = 0;
         return;
@@ -2490,9 +2743,17 @@ bool g_notice_stepping = false;
 int g_notice_drop = 0;
 
 // The notice's look as text: its words, live or not, the counter's corner beside it, its view.
+// The notice's room across: up to the sound panel's left edge, less a gap, while the panel is open; else the whole area.
+int notice_free_right() {
+    if (!g_sound_open) return area_w();
+    const SoundScale cap;
+    return static_cast<int>(sound_layout_now().panel.x) - px(8);
+}
+
 std::string notice_key(const View& v) {
-    char head[96];
-    std::snprintf(head, sizeof head, "notice %dx%d %.4f %d %d %d ", v.w, v.h, static_cast<double>(v.dpi), v.top_room, g_fps_corner, g_notice_live ? 1 : 0);
+    char head[112];
+    std::snprintf(head, sizeof head, "notice %dx%d %.4f %d %d %d %d ", v.w, v.h, static_cast<double>(v.dpi), v.top_room, g_fps_corner, g_notice_live ? 1 : 0,
+                  notice_free_right());
     return head + g_notice_text;
 }
 
@@ -2504,6 +2765,7 @@ void order_notice() {
     o.text = g_notice_text;
     o.live = g_notice_live;
     o.corner = g_fps_corner;
+    o.free_right = notice_free_right();
     o.key = notice_key(v);
     order(kNoticePiece, std::move(o));
 }
@@ -2729,6 +2991,279 @@ glass::Rect with_reach(const Shown& s) {
     return glass::Rect{s.x - blur_reach(), s.y - blur_reach(), s.picture->w + 2 * blur_reach(), s.picture->h + 2 * blur_reach()};
 }
 
+// ---- the sound panel (the UI thread's)
+
+// The levels the panel shows and sets (sound_mix.h), the control under the pointer and the one held (a slider being
+// dragged, a chip pressed), and what was ordered of the painter last.
+audio::Levels g_levels;
+int g_sound_hover = kNoControl, g_sound_held = kNoControl;
+std::string g_sound_ordered;
+// The settings' keys the held control changed, written back to the settings file when it is let go.
+std::vector<std::pair<std::string, std::string>> g_sound_changes;
+
+std::string sound_key(const View& v) {
+    char key[160];
+    const audio::EqBands b = g_levels.bands();
+    std::snprintf(key, sizeof key, "sound %dx%d %.4f %d %d %d %d %d %d %d %d %d", v.w, v.h, static_cast<double>(v.dpi), g_levels.master, g_levels.music,
+                  g_levels.effects, static_cast<int>(g_levels.eq), b.low, b.mid, b.high, g_sound_hover, g_sound_held);
+    return key;
+}
+
+// The panel's picture as it should look now, asked of the painter unless asked already with the same read.
+void order_sound() {
+    const View v = view_now();
+    const std::string key = sound_key(v);
+    if (key == g_sound_ordered && g_sound.key == key) return;
+    g_sound_ordered = key;
+    Order o;
+    o.view = v;
+    o.levels = g_levels;
+    o.sound_hover = g_sound_hover;
+    o.sound_held = g_sound_held;
+    o.key = key;
+    order(kSoundPiece, std::move(o));
+}
+
+// The panel on the screen as it should be now: its picture for its look asked for, shown once it is there (with the
+// frame behind it, or after the glass's wait).
+// The panel's timer: a look again while its first picture waits for the frame behind it.
+constexpr UINT_PTR kSoundTimer = 9;
+
+void sound_frame() {
+    if (!g_sound_open || !g_sound.window) return;
+    order_sound();
+    if (!g_sound.up && !ready(g_sound)) {
+        // Not on the screen yet: a look again soon (its picture with the frame behind it, or the glass's wait over).
+        SetTimer(g_sound.window, kSoundTimer, 15, nullptr);
+        return;
+    }
+    KillTimer(g_sound.window, kSoundTimer);
+    if (g_sound.picture) show(g_sound);
+}
+
+// The levels set from now on: the master and the equaliser on the mix, the music's and the effects' shares in the game's
+// OpenAL, and the panel's look; `keys`, the settings' keys they change, for the file when the control is let go.
+void sound_set(const audio::Levels& l, std::vector<std::pair<std::string, std::string>> keys) {
+    g_levels = l;
+    audio::set_levels(l);
+    soundmix_shares(audio::percent_gain(l.music), audio::percent_gain(l.effects));
+    // The player's own settings follow, for the next write and the log.
+    Settings& st = settings();
+    st.volume = l.master;
+    st.music_volume = l.music;
+    st.effects_volume = l.effects;
+    st.eq = audio::eq_name(l.eq);
+    st.eq_low = l.custom.low;
+    st.eq_mid = l.custom.mid;
+    st.eq_high = l.custom.high;
+    for (auto& kv : keys) {
+        // A key changed again during the same hold keeps one entry, the latest value.
+        bool found = false;
+        for (auto& had : g_sound_changes) {
+            if (had.first == kv.first) {
+                had.second = kv.second;
+                found = true;
+            }
+        }
+        if (!found) g_sound_changes.push_back(std::move(kv));
+    }
+    sound_frame();
+}
+
+// The keys changed since the last write, written back to the settings file (only those: what the launcher wrote
+// meanwhile stays), and said in the log.
+void sound_save() {
+    if (g_sound_changes.empty()) return;
+    const bool saved = save_settings_keys(settings_path(), g_sound_changes);
+    std::string said;
+    for (const auto& kv : g_sound_changes) said += (said.empty() ? "" : ", ") + kv.first + "=" + kv.second;
+    char line[400];
+    std::snprintf(line, sizeof line, "player: sound: %s%s", said.c_str(), saved ? ", written to the settings" : " (the settings file could not be written)");
+    note(line);
+    g_sound_changes.clear();
+}
+
+// A slider moved to `value`, or a chip pressed: the levels it makes, applied at once.
+void sound_change(int control, int value) {
+    audio::Levels l = g_levels;
+    std::vector<std::pair<std::string, std::string>> keys;
+    switch (control) {
+    case kMaster:
+        l.master = value;
+        keys.push_back({"volume", std::to_string(value)});
+        break;
+    case kMusic:
+        l.music = value;
+        keys.push_back({"music_volume", std::to_string(value)});
+        break;
+    case kEffects:
+        l.effects = value;
+        keys.push_back({"effects_volume", std::to_string(value)});
+        break;
+    case kLow:
+    case kMid:
+    case kHigh: {
+        // A band moved: custom from now on, from the bands the preset had.
+        audio::EqBands b = l.bands();
+        (control == kLow ? b.low : control == kMid ? b.mid : b.high) = value;
+        l.eq = audio::EqPreset::kCustom;
+        l.custom = b;
+        keys.push_back({"eq", "custom"});
+        keys.push_back({"eq_low", std::to_string(b.low)});
+        keys.push_back({"eq_mid", std::to_string(b.mid)});
+        keys.push_back({"eq_high", std::to_string(b.high)});
+        break;
+    }
+    default:
+        if (control >= kChipFlat && control <= kChipCustom) {
+            // A preset: its bands, custom keeping the ones chosen before.
+            l.eq = static_cast<audio::EqPreset>(control - kChipFlat);
+            keys.push_back({"eq", audio::eq_name(l.eq)});
+        }
+        break;
+    }
+    if (control_value(l, control) == control_value(g_levels, control) && l.eq == g_levels.eq) return;
+    sound_set(l, std::move(keys));
+}
+
+// The panel opened (the bar's Sound button): its levels as they are now, the bar kept down while it is open.
+void sound_open() {
+    if (!g_sound.window || asking()) return;
+    g_sound_open = true;
+    g_levels = audio::levels();
+    g_sound_hover = g_sound_held = kNoControl;
+    g_sound.wanted = GetTickCount64();
+    note("player: the sound panel opens");
+    // The counter in the top right corner would be under it: hidden while it is open (counter_place).
+    counter_place();
+    // The notice keeps clear of it.
+    if (g_notice_up) notice_frame();
+    glass_wish();
+    sound_frame();
+    bar_frame();
+}
+
+void sound_close(const char* why) {
+    if (!g_sound_open) return;
+    g_sound_open = false;
+    // A hold still on it is let go: what it changed is written.
+    if (g_sound_held != kNoControl && GetCapture() == g_sound.window) ReleaseCapture();
+    g_sound_held = g_sound_hover = kNoControl;
+    sound_save();
+    KillTimer(g_sound.window, kSoundTimer);
+    hide(g_sound);
+    g_sound.picture.reset();
+    g_sound.key.clear();
+    g_sound_ordered.clear();
+    char line[120];
+    std::snprintf(line, sizeof line, "player: the sound panel closes (%s)", why);
+    note(line);
+    counter_place();
+    if (g_notice_up) notice_frame();
+    glass_wish();
+    // The bar again as the pointer has it: it stays while the pointer is on it, or goes up after its wait.
+    g_bar_since = GetTickCount64();
+    g_bar_stay = g_bar_by_touch ? kBarTouchStayMs : kBarStayMs;
+    bar_frame();
+}
+
+// The control under a point of the panel's window, against the layout at the panel's own scale.
+int sound_at(LPARAM l) {
+    const SoundScale cap;
+    const SoundLayout lay = sound_layout_now();
+    // The window's point in the game's area: its window's place plus the point.
+    const float x = static_cast<float>(g_sound.x + static_cast<short>(LOWORD(l))), y = static_cast<float>(g_sound.y + static_cast<short>(HIWORD(l)));
+    return sound_control_at(lay, x, y);
+}
+// A slider's value under a point of the panel's window.
+int sound_value_at(int control, LPARAM l) {
+    const SoundScale cap;
+    const SoundLayout lay = sound_layout_now();
+    return slider_value_at(lay, control, static_cast<float>(g_sound.x + static_cast<short>(LOWORD(l))));
+}
+
+LRESULT CALLBACK sound_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
+    if (system_reshow(g_sound, msg, w, l)) return 0;
+    switch (msg) {
+    case WM_TIMER:
+        if (w == kSoundTimer) sound_frame();
+        return 0;
+    case WM_NCHITTEST: {
+        // Only the glass takes the pointer: its shadow's room is the game's.
+        POINT p{static_cast<short>(LOWORD(l)), static_cast<short>(HIWORD(l))};
+        ScreenToClient(h, &p);
+        const SoundScale cap;
+        const SoundLayout lay = sound_layout_now();
+        const float x = static_cast<float>(g_sound.x + p.x), y = static_cast<float>(g_sound.y + p.y);
+        if (!lay.panel.contains(x, y)) return HTTRANSPARENT;
+        return HTCLIENT;
+    }
+    case WM_MOUSEMOVE: {
+        // Held on a slider: it follows the pointer (a finger's moves too, Windows' copies); else what is under it lights.
+        if (g_sound_held != kNoControl && is_slider(g_sound_held)) {
+            sound_change(g_sound_held, sound_value_at(g_sound_held, l));
+            return 0;
+        }
+        const int now = sound_at(l);
+        if (now != g_sound_hover) {
+            g_sound_hover = now;
+            sound_frame();
+        }
+        // Told when it leaves, so that nothing stays lit.
+        TRACKMOUSEEVENT t{sizeof t, TME_LEAVE, h, 0};
+        TrackMouseEvent(&t);
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        if (g_sound_hover != kNoControl && g_sound_held == kNoControl) {
+            g_sound_hover = kNoControl;
+            sound_frame();
+        }
+        return 0;
+    case WM_LBUTTONDOWN: {
+        const int c = sound_at(l);
+        if (c == kNoControl) return 0;
+        // A slider takes its value at once and follows the pointer while held; a chip acts when let go on it.
+        g_sound_held = c;
+        g_sound_hover = c;
+        SetCapture(h);
+        if (is_slider(c)) sound_change(c, sound_value_at(c, l));
+        else sound_frame();
+        return 0;
+    }
+    case WM_LBUTTONUP: {
+        const int held = g_sound_held;
+        g_sound_held = kNoControl;
+        if (GetCapture() == h) ReleaseCapture();
+        if (held >= kChipFlat && sound_at(l) == held) sound_change(held, 0);
+        g_sound_hover = from_touch() ? kNoControl : sound_at(l);
+        // Let go: what it changed goes to the settings file.
+        sound_save();
+        sound_frame();
+        // The keyboard back to the game's window: the panel never takes it, another program may have.
+        SetForegroundWindow(g_frame);
+        return 0;
+    }
+    case WM_CAPTURECHANGED:
+        // Taken away while held: let go where it is, what it changed written.
+        if (g_sound_held != kNoControl && reinterpret_cast<HWND>(l) != h) {
+            g_sound_held = kNoControl;
+            sound_save();
+            sound_frame();
+        }
+        return 0;
+    case WM_SETCURSOR:
+        SetCursor(cursor(false));
+        return TRUE;
+    case WM_MOUSEACTIVATE:
+        // A press never takes the focus from the game.
+        return MA_NOACTIVATE;
+    default:
+        break;
+    }
+    return DefWindowProcW(h, msg, w, l);
+}
+
 void glass_wish() {
     const int w = area_w(), h = area_h();
     std::vector<glass::Rect> rects;
@@ -2752,6 +3287,13 @@ void glass_wish() {
             rects.push_back(r);
         }
         if (g_fps_corner && g_reading.shown && g_fps.picture) rects.push_back(with_reach(g_fps));
+        // The sound panel while it is open: its glass and its shadow's room under the bar.
+        if (g_sound_open) {
+            const SoundScale cap;
+            const SoundLayout lay = sound_layout_now();
+            rects.push_back(glass::Rect{static_cast<int>(lay.panel.x) - blur_reach(), static_cast<int>(lay.panel.y) - blur_reach(),
+                                        static_cast<int>(lay.panel.w) + 2 * blur_reach(), static_cast<int>(lay.panel.h) + 2 * blur_reach()});
+        }
         // A piece that moved: its new place too, until its picture there has the frame behind it.
         if (g_notice_up && g_notice.moving) rects.push_back(g_notice.next);
         if (g_fps_corner && g_reading.shown && g_fps.moving) rects.push_back(g_fps.next);
@@ -2921,6 +3463,13 @@ void take_painted() {
     if (got[kHandlePiece].ready) {
         take(g_handle, got[kHandlePiece]);
         handle_update();
+    }
+    if (got[kSoundPiece].ready && g_sound_open) {
+        const bool placed = g_sound.picture != nullptr;
+        take(g_sound, got[kSoundPiece]);
+        sound_frame();
+        // Its first picture says where it goes: the frame behind it is read for that place from now on.
+        if (!placed) glass_wish();
     }
 }
 
@@ -3260,6 +3809,8 @@ void start(HWND frame, HWND game, const Hooks& hooks, bool korean) {
     g_fps.window = make_window(L"OpenDMTQFrameCounter", fps_proc, true);
     g_notice.window = make_window(L"OpenDMTQNotice", notice_proc, true);
     g_bar.window = make_window(L"OpenDMTQBar", bar_proc, false);
+    // The sound panel above the notice and the counter, under the handle and the question.
+    g_sound.window = make_window(L"OpenDMTQSound", sound_proc, false);
     g_handle.window = make_window(L"OpenDMTQBarHandle", handle_proc, true);
     g_ask.window = make_window(L"OpenDMTQQuestion", ask_proc, false);
     // The glass's clock: a window for messages alone, never on the screen.
@@ -3282,6 +3833,8 @@ void start(HWND frame, HWND game, const Hooks& hooks, bool korean) {
     // What the pictures cost, every five seconds, with the stats on.
     if (g_clock && g_hooks.stats) SetTimer(g_clock, kStatsTimer, 5000, nullptr);
 }
+
+std::vector<HWND> pressed_windows() { return {g_bar.window, g_sound.window, g_ask.window}; }
 
 void notice(const std::string& text, bool live) {
     if (!g_notice.window) return;
@@ -3347,6 +3900,9 @@ void pointer_moved(int x, int y, bool pressed) {
 }
 
 void game_pressed(bool down) {
+    // A press on the game outside the sound panel closes it, as a press outside any open menu does; the game has the
+    // press all the same.
+    if (down) sound_close("a press on the game");
     // A press or a release on the game: the game is played, and no rest at the edge or on the handle brings the bar
     // until the pointer moves there again with the game quiet.
     g_game_down = down;
@@ -3419,6 +3975,8 @@ bool asking() { return g_ask.window && g_asking; }
 
 void ask_quit() {
     if (!g_ask.window || g_asking) return;
+    // The sound panel goes before the question comes over the game.
+    sound_close("the question before quitting");
     g_asking = true;
     // The keys pressed on the game let go now, while the game may still go on for a few frames before it is held.
     if (g_hooks.question) g_hooks.question();
@@ -3492,8 +4050,12 @@ void place() {
         if (g_ask.up) show(g_ask);
         draw_ask();
     }
-    // The bar across the game's top at its new width, if it is down.
+    // The bar across the game's top at its new width, if it is down, and the sound panel hanging from it.
     if (g_bar.up || g_bar_wanted) bar_frame();
+    if (g_sound_open) {
+        sound_frame();
+        glass_wish();
+    }
     if (g_notice_up) notice_frame();
     // The frame counter in its corner, at the new scale (a move counts nothing: its numbers stay its timer's).
     counter_place();

@@ -21,6 +21,8 @@
 #include "overlay_scale.h"
 #include "player.h"
 #include "refresh_meter.h"
+#include "sound_panel.h"
+#include "sound_mix.h"
 #include "typed_text.h"
 
 #include <cmath>
@@ -1053,6 +1055,163 @@ void bar_gesture_checks() {
     }
 }
 
+// The sound's keys of the in-game panel (music_volume, effects_volume, eq, eq_low, eq_mid, eq_high), read as the
+// launcher writes them, and written back by the player as the contract says: only the keys changed, each in its place,
+// whatever the launcher wrote meanwhile kept, Windows' line ends and a byte order mark kept, by a rename.
+std::string file_text(const std::string& path) {
+    std::string out;
+    if (std::FILE* f = std::fopen(path.c_str(), "rb")) {
+        char buf[4096];
+        std::size_t n;
+        while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) out.append(buf, n);
+        std::fclose(f);
+    }
+    return out;
+}
+void write_text(const std::string& path, const std::string& text) {
+    if (std::FILE* f = std::fopen(path.c_str(), "wb")) {
+        std::fwrite(text.data(), 1, text.size(), f);
+        std::fclose(f);
+    }
+}
+
+void sound_settings_checks() {
+    const std::string path = "settingstest-sound.txt";
+    const player::Settings fresh;
+    check(fresh.music_volume == 100 && fresh.effects_volume == 100 && fresh.eq == "flat" && fresh.eq_low == 0 && fresh.eq_mid == 0 &&
+              fresh.eq_high == 0,
+          "music and effects at 100 and a flat equaliser by default");
+    const player::Settings& chosen = read(path, "volume=80\nmusic_volume=40\neffects_volume=70\neq=custom\neq_low=5\neq_mid=-3\neq_high=12\n");
+    check(chosen.volume == 80 && chosen.music_volume == 40 && chosen.effects_volume == 70, "music_volume=40 and effects_volume=70 are read");
+    check(chosen.eq == "custom" && chosen.eq_low == 5 && chosen.eq_mid == -3 && chosen.eq_high == 12, "eq=custom with its three bands");
+    const player::Settings& held = read(path, "music_volume=150\neffects_volume=-5\neq_low=20\neq_high=-40\n");
+    check(held.music_volume == 100 && held.effects_volume == 0 && held.eq_low == 12 && held.eq_high == -12, "shares and bands out of range held to them");
+    const player::Settings& bad = read(path, "music_volume=loud\neq=rock\neq_mid=1.5\nvolume=60\n");
+    check(bad.music_volume == 100 && bad.eq == "flat" && bad.eq_mid == 0 && bad.volume == 60, "a value it cannot read keeps the default, the rest read");
+    check(read(path, "EQ=Treble\nMusic_Volume=10\n").eq == "treble" && read(path, "EQ=Treble\nMusic_Volume=10\n").music_volume == 10,
+          "keys and presets in capitals");
+    // Each preset's bands.
+    using player::audio::EqPreset;
+    using player::audio::preset_bands;
+    check(preset_bands(EqPreset::kFlat, {3, 3, 3}).low == 0 && preset_bands(EqPreset::kBass, {}).low == 6 && preset_bands(EqPreset::kTreble, {}).high == 6 &&
+              preset_bands(EqPreset::kVocal, {}).mid == 4 && preset_bands(EqPreset::kCustom, {1, 2, 3}).mid == 2,
+          "the presets' bands, custom keeping its own");
+    // Written back: only the key changed, in its place, the launcher's other keys and its CR LF and byte order mark kept.
+    write_text(path, "\xEF\xBB\xBF" "display=window\r\nvolume=80\r\nkeyboard=on\r\neq=vocal\r\n");
+    check(player::save_settings_keys(path, {{"music_volume", "40"}}), "a key written back");
+    check(file_text(path) == "\xEF\xBB\xBF" "display=window\r\nvolume=80\r\nmusic_volume=40\r\nkeyboard=on\r\neq=vocal\r\n",
+          "music_volume goes right after volume, every line ending CR LF, the mark kept");
+    check(player::save_settings_keys(path, {{"volume", "55"}}) &&
+              file_text(path) == "\xEF\xBB\xBF" "display=window\r\nvolume=55\r\nmusic_volume=40\r\nkeyboard=on\r\neq=vocal\r\n",
+          "volume changed in its place; eq=vocal the launcher wrote stays");
+    // The launcher writes the whole file meanwhile (another key changed, its own order): the player's next change keeps it.
+    write_text(path, "volume=55\nmusic_volume=40\nrender_scale=75\neq=bass\n");
+    check(player::save_settings_keys(path, {{"effects_volume", "30"}}) &&
+              file_text(path) == "volume=55\nmusic_volume=40\neffects_volume=30\nrender_scale=75\neq=bass\n",
+          "effects_volume after music_volume; render_scale=75 and eq=bass the launcher wrote stay, LF line ends kept");
+    // A key in capitals from a hand-made file: changed where it is.
+    write_text(path, "Volume=10\nMUSIC_VOLUME=20\n");
+    check(player::save_settings_keys(path, {{"music_volume", "25"}}) && file_text(path) == "Volume=10\nmusic_volume=25\n", "a key in capitals is changed where it is");
+    // A file without the sound's keys: at the end, in order.
+    write_text(path, "display=window\n");
+    check(player::save_settings_keys(path, {{"eq", "custom"}, {"eq_low", "-4"}}) && file_text(path) == "display=window\neq=custom\neq_low=-4\n",
+          "keys the file has not go at its end in order");
+    // Read back alone while the game runs (the launcher changed them): only the sound's keys into the settings.
+    write_text(path, "volume=33\r\nmusic_volume=44\r\neffects_volume=55\r\neq=treble\r\nrender_scale=50\r\n");
+    player::Settings mine;
+    mine.render_scale = 100;
+    check(player::load_sound_settings(path, mine) && mine.volume == 33 && mine.music_volume == 44 && mine.effects_volume == 55 && mine.eq == "treble" &&
+              mine.render_scale == 100,
+          "the sound's keys read back alone, CR LF and all");
+    // No temporary file left beside it.
+    check(file_text(path + ".player.tmp").empty(), "no temporary file left");
+    std::remove(path.c_str());
+}
+
+// The sound panel's layout (sound_panel.h) and the bar's Sound button, over the shapes and Windows' scales players have:
+// within the game's area, apart from the bar and the window's edge, its rows apart, every word inside its padding, its
+// gaps on its spacing scale, its controls large enough to hit, and room left for the notice beside it.
+void sound_panel_checks() {
+    using namespace player::overlay;
+    // Every gap of the panel's on its spacing scale (4, 8, 12, 16, 20 at 720 lines).
+    bool on_scale = true;
+    for (const float gap : {kPanelSide, kPanelTop, kPanelFoot, kTitleLine, kAfterLine, kGroupGap, kChipsAfter, kLabelGap, kValueGap, kPanelInset}) {
+        if (!(gap == 4 || gap == 8 || gap == 12 || gap == 16 || gap == 20)) on_scale = false;
+    }
+    check(on_scale, "every gap of the sound panel's is 4, 8, 12, 16 or 20 at 720 lines");
+    struct Shape {
+        int w, h;
+        float dpi;
+    };
+    const Shape shapes[] = {{480, 270, 1}, {720, 405, 1.5f}, {960, 540, 2}, {1024, 768, 1}, {1280, 720, 1}, {1366, 768, 1}, {1280, 960, 1.25f},
+                            {1600, 900, 1.25f}, {1920, 1080, 1}, {1920, 1080, 1.5f}, {1920, 1200, 1}, {2520, 1080, 1}, {2560, 1440, 1.5f},
+                            {3360, 1440, 1}, {3840, 2160, 2}, {5120, 2880, 2.25f}};
+    int bad = 0;
+    for (const Shape& sh : shapes) {
+        const float k0 = scale_for(sh.h, sh.dpi);
+        const int bar = static_cast<int>(std::lround(kBarTall * k0));
+        const SoundLayout l = sound_layout(sh.w, sh.h, k0, bar);
+        const float k = l.scale;
+        auto fail = [&](const char* what) {
+            ++bad;
+            std::printf("  %dx%d at %.0f %%: %s\n", sh.w, sh.h, static_cast<double>(sh.dpi * 100), what);
+        };
+        // Within the area, apart from the bar's foot and the area's right edge and foot by its inset (whole pixels).
+        const float inset = std::round(kPanelInset * k);
+        if (l.panel.x < 0 || l.panel.right() > static_cast<float>(sh.w) - inset + 0.01f || l.panel.bottom() > static_cast<float>(sh.h) - inset + 0.01f) fail("the panel leaves the area or its inset");
+        if (l.panel.y < static_cast<float>(bar) + inset - 0.01f) fail("the panel touches the bar");
+        // Its rows one under another, none over the next; the titles' lines between their titles and the next row.
+        float last = l.title.bottom();
+        if (l.title_line <= l.title.bottom() || l.title_line >= l.row[kMaster].y) fail("the title's line is not between it and the first row");
+        for (int i = kMaster; i <= kEffects; ++i) {
+            if (l.row[i].y < last - 0.01f) fail("a volume's row over the one above it");
+            last = l.row[i].bottom();
+        }
+        if (l.eq_title.y < last + kGroupGap * k - 0.01f) fail("the equaliser's title closer than its gap");
+        if (l.eq_line <= l.eq_title.bottom() || l.eq_line >= l.chip[0].y) fail("the equaliser's line is not between its title and the chips");
+        for (int i = 0; i < kPresets; ++i) {
+            if (i + 1 < kPresets && l.chip[i].right() + 4 * k > l.chip[i + 1].x + 0.01f) fail("two chips closer than 4");
+            if (l.chip[i].x < l.panel.x + kPanelSide * k - 0.01f || l.chip[i].right() > l.panel.right() - kPanelSide * k + 0.01f) fail("a chip outside the padding");
+        }
+        last = l.chip[0].bottom();
+        for (int i = kLow; i <= kHigh; ++i) {
+            if (l.row[i].y < last - 0.01f) fail("a band's row over what is above it");
+            last = l.row[i].bottom();
+        }
+        if (last > l.panel.bottom() - kPanelFoot * k + 0.01f) fail("the last row inside the foot's padding");
+        // Each slider: the thumb at either end clear of its label and its value by 4 at least, the value inside the padding.
+        for (int i = kMaster; i <= kHigh; ++i) {
+            const float half = kThumb / 2 * k;
+            if (l.track[i].x - half < l.label[i].right() + 4 * k - 0.01f) fail("a thumb at its least over its label");
+            if (l.track[i].right() + half > l.value[i].x - 4 * k + 0.01f) fail("a thumb at its most over its value");
+            if (l.value[i].right() > l.panel.right() - kPanelSide * k + 0.01f) fail("a value outside the padding");
+            if (l.track[i].w < 60 * k) fail("a track shorter than 60");
+        }
+        // Large enough to hit: a slider's row and a chip at least 20 and 16 of Windows' own pixels high.
+        if (l.row[kMaster].h < 20 * sh.dpi - 0.01f || l.chip[0].h < 16 * sh.dpi - 0.01f) fail("a control too small to hit");
+        // Room for the notice beside it: at least 300 at 720 lines left of it (its least).
+        if (l.panel.x - 8 * k0 < 300 * k0 * 0.5f) fail("no room left for the notice beside the panel");
+        // The bar's Sound button: left of minimise by the buttons' gap, clear of the wordmark (101 wide at 720 lines).
+        const int sound_right = chip_left(2, sh.w, k0) - static_cast<int>(std::lround(kChipGap * k0));
+        const float sound_left = static_cast<float>(sound_right) - std::round(kSoundChipWide * k0);
+        if (sound_left < wordmark_left(k0) + 101 * k0 + 20 * k0) fail("the Sound button reaches the wordmark");
+        // A point on each control is that control; a point in the panel's padding is none.
+        for (int i = kMaster; i <= kHigh; ++i) {
+            if (sound_control_at(l, l.track[i].x + l.track[i].w / 2, l.row[i].y + l.row[i].h / 2) != i) fail("a slider's middle is not it");
+        }
+        for (int i = 0; i < kPresets; ++i) {
+            if (sound_control_at(l, l.chip[i].x + l.chip[i].w / 2, l.chip[i].y + l.chip[i].h / 2) != kChipFlat + i) fail("a chip's middle is not it");
+        }
+        if (sound_control_at(l, l.panel.x + 2, l.panel.y + 2) != kNoControl) fail("the panel's corner is a control");
+        // A slider's ends give its range's ends, and its middle a band's 0 dB.
+        if (slider_value_at(l, kMaster, l.track[kMaster].x - 5) != 0 || slider_value_at(l, kMaster, l.track[kMaster].right() + 5) != 100 ||
+            slider_value_at(l, kLow, l.track[kLow].x + l.track[kLow].w / 2) != 0 || slider_value_at(l, kHigh, l.track[kHigh].right()) != 12) {
+            fail("a slider's ends or middle give the wrong value");
+        }
+    }
+    check(bad == 0, "the sound panel and its button over 16 shapes and scales: inside, apart, padded, large enough, room for the notice");
+}
+
 int main() {
     // A file of its own beside the program's current folder.
     const std::string path = "settingstest.txt";
@@ -1213,6 +1372,10 @@ int main() {
     refresh_meter_checks();
     // A press on the handle or the top edge: the bar's or the game's.
     bar_gesture_checks();
+    // The sound panel's keys, read and written back.
+    sound_settings_checks();
+    // The sound panel's layout and the bar's Sound button.
+    sound_panel_checks();
     if (g_failed) {
         std::printf("%d of %d checks FAILED\n", g_failed, g_checks);
         return 1;

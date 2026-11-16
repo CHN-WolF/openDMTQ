@@ -741,6 +741,20 @@ void ime_cancel(HWND h) {
     }
 }
 
+// The player's window at a point of the game's window (the game's own, or a piece of the overlay over it that takes the
+// pointer there), as Windows would send the mouse there; the point turned into that window's pixels. A check's click.
+HWND window_at(POINT& in_game) {
+    POINT screen = in_game;
+    ClientToScreen(g_window, &screen);
+    HWND hit = WindowFromPoint(screen);
+    DWORD pid = 0;
+    if (!hit || !GetWindowThreadProcessId(hit, &pid) || pid != GetCurrentProcessId()) return g_window;
+    POINT local = screen;
+    ScreenToClient(hit, &local);
+    in_game = local;
+    return hit;
+}
+
 // Checks press keys at seconds of their choosing (PLAYER_KEYS="@seconds:key[/hold_ms];...", the seconds from the window's
 // first showing): esc, enter, space, up, down, f11, alt+enter, alt+f4, each posted to the frame as Windows would send it,
 // down, then up after hold_ms (50 when not given); f11, alt+enter and alt+f4 are there for a check to show that they do
@@ -753,7 +767,10 @@ void ime_cancel(HWND h) {
 // (bar_gesture.h) through the same ways as a touch screen's fingers and the mouse: tap=x,y[/hold_ms] a finger down and
 // up at x,y of the game's pixels (a long press with a long hold); swipe=x0,y0,x1,y1[/ms] a finger down at the first
 // place, moved to the second over the time in steps of 8 ms, then up there; drag=x0,y0,x1,y1[/ms] the same with the
-// mouse's first button; click=x,y/hold_ms holds the button. Nothing goes through Windows' own input, and
+// mouse's first button; click=x,y/hold_ms holds the button. size=WxH sizes the window's game area as a person drags its
+// frame, and fullscreen switches to full screen and back as the bar's button does. notice=Title|Line and livenotice=...
+// (with the LIVE tag) show the server's notice as a broadcast's answer would. Nothing goes through Windows' own
+// input, and
 // the keys reach the window while the game is held still (the planned taps follow the game's frames, which stop then).
 // Keys by their place on the keyboard, as keyboard play takes them (keyboard_play.h's names, A to Z, 0 to 9, Space,
 // Semicolon and the rest, or a scan code as 0x21): key=NAME[/hold_ms] down then up, keydown=NAME and keyup=NAME only
@@ -777,7 +794,7 @@ void plan_keys() {
     }
     // What a press is: a key, a click, text, the window's close, the overlay's bar as a finger brings it, or a key by its
     // place (down and up, down only, up only).
-    enum class Kind { key, click, text, ime, close, bar, place, place_down, place_up, tap, swipe, drag };
+    enum class Kind { key, click, text, ime, close, bar, place, place_down, place_up, tap, swipe, drag, size, full, notice };
     struct Press {
         double at;
         Kind kind;
@@ -807,9 +824,11 @@ void plan_keys() {
         const char* stop = name;
         // Text runs to the next item: a '/' in it is the text's, not a hold.
         const bool is_text = std::strncmp(name, "text=", 5) == 0 || std::strncmp(name, "ime=", 4) == 0;
+        // A notice's words too run to the next item, a '/' in them theirs.
+        const bool is_words = is_text || std::strncmp(name, "notice=", 7) == 0 || std::strncmp(name, "livenotice=", 11) == 0;
         // ime= is text the input method composes: the same reading after its shorter name.
         const bool is_ime = std::strncmp(name, "ime=", 4) == 0;
-        while (*stop && *stop != ';' && *stop != '\n' && *stop != '\r' && (is_text || *stop != '/')) ++stop;
+        while (*stop && *stop != ';' && *stop != '\n' && *stop != '\r' && (is_words || *stop != '/')) ++stop;
         const std::string key(name, static_cast<std::size_t>(stop - name));
         int hold = 50;
         if (*stop == '/') hold = static_cast<int>(std::strtol(stop + 1, const_cast<char**>(&stop), 10));
@@ -848,6 +867,23 @@ void plan_keys() {
         } else if (key == "close") {
             // The window's own close, as its X or the taskbar's Close sends it.
             presses.push_back({at, Kind::close, 0, false, hold, key, 0, 0, {}, 0});
+        } else if (key.rfind("size=", 0) == 0) {
+            // The window's game area resized to WxH (a check's, as a person drags its frame).
+            float x = 0, y = 0;
+            if (std::sscanf(key.c_str() + 5, "%fx%f", &x, &y) == 2) presses.push_back({at, Kind::size, 0, false, hold, key, x, y, {}, 0});
+            else jvm::log("player: PLAYER_KEYS: no size in \"%s\"", key.c_str());
+        } else if (key.rfind("notice=", 0) == 0 || key.rfind("livenotice=", 0) == 0) {
+            // The server's notice as the broadcast's answer gives it (its title, '|', the line under it), with the LIVE tag
+            // for livenotice=: for a check of how it lies over the game and beside the bar and the sound panel.
+            const bool live = key[0] == 'l';
+            std::string text = key.substr(live ? 11 : 7);
+            for (char& c : text) {
+                if (c == '|') c = '\n';
+            }
+            presses.push_back({at, Kind::notice, 0, live, hold, text, 0, 0, {}, 0});
+        } else if (key == "fullscreen") {
+            // Full screen and back, as the bar's button does.
+            presses.push_back({at, Kind::full, 0, false, hold, key, 0, 0, {}, 0});
         } else if (key == "bar") {
             // The overlay's bar, as a finger drawn down from the game's top edge brings it: down for its 4 s, then up.
             presses.push_back({at, Kind::bar, 0, false, hold, key, 0, 0, {}, 0});
@@ -919,10 +955,14 @@ void plan_keys() {
                 // The game's pixels on the area's own, as the mouse would give them there.
                 const int cx = g_area_w > 0 ? static_cast<int>(k.x * static_cast<float>(g_area_w) / static_cast<float>(app().width)) : static_cast<int>(k.x);
                 const int cy = g_area_h > 0 ? static_cast<int>(k.y * static_cast<float>(g_area_h) / static_cast<float>(app().height)) : static_cast<int>(k.y);
-                jvm::log("player: %.1f s: a click at %.0f,%.0f (%d,%d on the window)", k.at, k.x, k.y, cx, cy);
-                PostMessageW(g_window, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(cx, cy));
+                // To the window of the player's there (the game's, or a piece of the overlay over it: the bar, the
+                // sound panel), as Windows sends the mouse's own; its own pixels.
+                POINT at{cx, cy};
+                const HWND to = window_at(at);
+                jvm::log("player: %.1f s: a click at %.0f,%.0f (%d,%d on the window%s)", k.at, k.x, k.y, cx, cy, to == g_window ? "" : ", on the overlay");
+                PostMessageW(to, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(at.x, at.y));
                 std::this_thread::sleep_for(std::chrono::milliseconds(k.hold));
-                PostMessageW(g_window, WM_LBUTTONUP, 0, MAKELPARAM(cx, cy));
+                PostMessageW(to, WM_LBUTTONUP, 0, MAKELPARAM(at.x, at.y));
                 continue;
             }
             if (k.kind == Kind::tap || k.kind == Kind::swipe || k.kind == Kind::drag) {
@@ -932,11 +972,17 @@ void plan_keys() {
                 // A check's finger has an id of its own, past any touch screen's.
                 constexpr WPARAM kId = 0x7001;
                 const bool by_finger = k.kind != Kind::drag;
-                const auto send = [by_finger](int phase, int x, int y) {
+                // The mouse's drag goes to the window of the player's where it starts and stays with it (as Windows'
+                // capture keeps it), in that window's pixels; a check's finger to the game's window, whose way it takes.
+                POINT start{wx(k.x), wy(k.y)};
+                const HWND to = by_finger ? g_window : window_at(start);
+                const POINT shift{start.x - wx(k.x), start.y - wy(k.y)};
+                const auto send = [by_finger, to, shift](int phase, int x, int y) {
                     if (by_finger) {
                         PostMessageW(g_window, kTestFinger, (static_cast<WPARAM>(phase) << 24) | kId, MAKELPARAM(x, y));
                     } else {
-                        PostMessageW(g_window, phase == 0 ? WM_LBUTTONDOWN : phase == 1 ? WM_LBUTTONUP : WM_MOUSEMOVE, phase == 1 ? 0 : MK_LBUTTON, MAKELPARAM(x, y));
+                        PostMessageW(to, phase == 0 ? WM_LBUTTONDOWN : phase == 1 ? WM_LBUTTONUP : WM_MOUSEMOVE, phase == 1 ? 0 : MK_LBUTTON,
+                                     MAKELPARAM(x + shift.x, y + shift.y));
                     }
                 };
                 jvm::log("player: %.1f s: %s", k.at, k.name.c_str());
@@ -967,6 +1013,27 @@ void plan_keys() {
             if (k.kind == Kind::close) {
                 jvm::log("player: %.1f s: the window's close", k.at);
                 PostMessageW(g_frame, WM_CLOSE, 0, 0);
+                continue;
+            }
+            if (k.kind == Kind::notice) {
+                jvm::log("player: %.1f s: a notice", k.at);
+                show_notice(k.name, k.alt);
+                continue;
+            }
+            if (k.kind == Kind::size || k.kind == Kind::full) {
+                jvm::log("player: %.1f s: %s", k.at, k.name.c_str());
+                const int w = static_cast<int>(k.x), h = static_cast<int>(k.y);
+                const bool full = k.kind == Kind::full;
+                main_looper().post([w, h, full] {
+                    if (full) {
+                        toggle_fullscreen(g_frame);
+                        return;
+                    }
+                    // The frame around a client area of w by h, as its style and its display's scale make it.
+                    RECT r{0, 0, w, h};
+                    AdjustWindowRectEx(&r, static_cast<DWORD>(GetWindowLongPtrW(g_frame, GWL_STYLE)), FALSE, static_cast<DWORD>(GetWindowLongPtrW(g_frame, GWL_EXSTYLE)));
+                    SetWindowPos(g_frame, nullptr, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                });
                 continue;
             }
             if (k.kind == Kind::bar) {
@@ -1790,6 +1857,11 @@ bool open_window(const std::string& title) {
     // The display's refresh interval, as the frames are paced by it (watch_display): a motion's steps fall back on it.
     hooks.refresh_ns = [] { return static_cast<long long>(arm32::g_display_interval.load()); };
     overlay::start(g_frame, g_window, hooks, host_locale().first == "ko");
+    // A finger on the bar's buttons, the sound panel's sliders and the question's buttons is a click and a drag as on the
+    // game: no circle, no press and hold that would turn a held finger into a right click.
+    for (HWND w : overlay::pressed_windows()) {
+        if (w) quiet_touch(w);
+    }
     // The frame counter in the corner the PC's settings name (none: no counter).
     overlay::show_fps(static_cast<int>(settings().show_fps));
     // A check's planned keys (PLAYER_KEYS), from now on.

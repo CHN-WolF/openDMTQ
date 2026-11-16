@@ -8,6 +8,7 @@
 #include <windows.h>
 
 #include <string>
+#include <vector>
 
 #include "bar_gesture.h"
 #include "frame_rate.h"
@@ -42,6 +43,9 @@ struct Hooks {
 
 // Once the frame and the game's window are made; `korean` for the words.
 void start(HWND frame, HWND game, const Hooks& hooks, bool korean);
+// The overlay's windows that take the pointer (the bar, the sound panel, the question): a finger on them is a mouse's
+// click, as on the game, so the window gives them the game's quiet touch (no press and hold for a right click).
+std::vector<HWND> pressed_windows();
 // The server's notice ("title\ndetail"), with the LIVE mark while broadcasting, or the ended one.
 void notice(const std::string& text, bool live);
 // The mouse moved over the game, at (x, y) of its window, with its button down or not: resting at the very top edge or
