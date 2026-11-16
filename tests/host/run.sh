@@ -377,7 +377,9 @@ has_actions() {
 signed_in
 page=$(web "$admin" "$A/server")
 expect "the Server page has Restart, Stop the server, the repair, the data and Uninstall (ADM-113)" has_actions
-expect "and names the one address on the server's port" grep -q "http://127.0.0.1:$PORT/opendmtq/admin/" <<<"$page"
+# The address as .env has it now (the setup's step moved it to this computer's network address).
+address=$(inside "sed -n 's/^PUBLIC_HOST=//p' OpenDMTQ/.env" | tr -d '\r')
+expect "and names the one address on the server's port ($address)" grep -q "http://$address/opendmtq/admin/" <<<"$page"
 expect "the install wrote the list of the program's files" inside "test -s OpenDMTQ/.host/manifest.sha256"
 # Restart: the server's program starts every part again, and these pages answer as another process.
 before=$(web "$admin" "$A/setup/ping")
