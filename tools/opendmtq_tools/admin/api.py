@@ -592,6 +592,8 @@ def player_views(only=None):
                     "charts": p["charts"], "total": p["total"], "last_played": a["last"], "plays_30_days": a["recent"], "days": list(a["days"]),
                     "phones": phones.get(p["id"], 0),
                     "broadcast": "held" if held and p["id"] in live else "on_air" if live.get(p["id"]) else "waiting" if p["id"] in live else "off",
+                    # Their own switch, whatever the server's says: with the server's off it is kept for when it is on.
+                    "switch": p["id"] in live,
                     "seen": seen.get(p["id"], "")})
     return out
 

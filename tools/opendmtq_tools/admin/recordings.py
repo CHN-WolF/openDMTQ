@@ -15,12 +15,26 @@ from flask import abort, flash, redirect, render_template, request, send_file, u
 from . import core, players, status
 from .core import Refused, app, BASE, changed, db, t
 
-# The live view: the owner's switch per player, the phone's upload key, the notice waiting to be shown
-# ("on", "off" or "end", which server/game/live/state.php words) and whether the player is in a song. The server makes this table at start
-# (server/game/bin/setup-db.php, the same statement); a database restored from before it needs it here too.
+# The live view: the owner's switch per player, the phone's upload key, the notice waiting to be shown (a key of TOASTS in
+# server/game/live/state.php, which words it) with its number (higher for each new notice, so that the player can tell a
+# new one from one it showed) and whether the player is in a song. The server makes this table at start
+# (server/game/bin/setup-db.php, the same statement); a database restored from before it needs it here too (live_table).
 LIVE_TABLE = """CREATE TABLE IF NOT EXISTS LiveSwitch (guid INTEGER PRIMARY KEY, live INTEGER NOT NULL DEFAULT 0,
                    token TEXT, toast TEXT, changed_at INTEGER, playing INTEGER NOT NULL DEFAULT 0,
-                   pattern_id INTEGER, play_at INTEGER)"""
+                   pattern_id INTEGER, play_at INTEGER, toast_id INTEGER NOT NULL DEFAULT 0)"""
+
+# The notices, by what changed for a player (server/game/live/state.php words them): their own switch flipped while
+# broadcasts are on for the server ("on", "off"), or while they are off ("wait", "held"); the server's switch turned on
+# ("on") or off ("end") under a player whose own switch is on.
+NOTICE_OWN = {(True, True): "on", (True, False): "off", (False, True): "wait", (False, False): "held"}
+
+
+def live_table(con):
+    """The live view's table as it is now: made when there is none, and the notice's number added to one made before it (a
+    database restored from an older backup, before the server's next start adds it too)."""
+    con.execute(LIVE_TABLE)
+    if "toast_id" not in {r[1] for r in con.execute("PRAGMA table_info(LiveSwitch)")}:
+        con.execute("ALTER TABLE LiveSwitch ADD COLUMN toast_id INTEGER NOT NULL DEFAULT 0")
 
 # Recordings of live broadcasts, and the limits the server keeps them to (LIVE_REC_* in
 # server/portal/live_lib.php, which closes them and enforces the limits; this file lists, hides and
@@ -130,9 +144,10 @@ def live_settings():
 def live_settings_save(on=None, new_players=None, quality=None):
     """Changes the settings given and keeps the others, in one transaction with what goes with them: the players'
     notices, and their switches when new players start on from now. Broadcasts turned on: each player switched on hears
-    of it once, between songs, as when their own switch is flipped. Turned off: whoever is on air hears once that the
-    broadcast ended, every live window goes at once and the recordings are closed, as each switch off does; the switches
-    stay for when broadcasts are on again. New players turned to start on: everyone who has played so far counts as
+    of it once, between songs, as when their own switch is flipped. Turned off: each player switched on hears once that
+    their broadcast ended and that broadcasts are off on the server, every live window goes at once and the recordings are
+    closed, as each switch off does; the switches stay for when broadcasts are on again. A player whose own switch is off
+    hears nothing of it: nothing changes for them. New players turned to start on: everyone who has played so far counts as
     chosen for (off, unless switched on), so that it reaches only those who come after."""
     if quality is not None and quality not in LIVE_PRESETS:
         raise Refused(400, "bad_quality", t("live.bad_quality"))
@@ -151,15 +166,12 @@ def live_settings_save(on=None, new_players=None, quality=None):
             now = {**was, **{k: bool(v) if k != "quality" else v for k, v in given.items()}}
             # Only what was given, and the first decision: new players follow LIVE_DEFAULT until the owner chooses.
             write_settings(con, {**({"on": was["on"]} if first else {}), **{k: now[k] for k in given}})
-            con.execute(LIVE_TABLE)
+            live_table(con)
             switched = [r[0] for r in con.execute("SELECT guid FROM LiveSwitch WHERE live = 1")]
             if now["on"] != was["on"]:
-                # Who is on air as broadcasts end: they hear that it ended, and that broadcasts are off for now.
-                on_air = [guid for guid in switched if live_streaming(guid)] if not now["on"] else []
-                # The notices: "on" for those switched on as broadcasts begin; "end" for those on air as they end, the
-                # rest have none waiting while broadcasts are off.
-                con.execute("UPDATE LiveSwitch SET toast = CASE WHEN live = 1 AND ? THEN 'on' ELSE '' END", (int(now["on"]),))
-                con.executemany("UPDATE LiveSwitch SET toast = 'end' WHERE guid = ?", [(g,) for g in on_air])
+                # A new notice, with a new number, for each player switched on: "on" as broadcasts begin, "end" as they
+                # end. It takes the place of one they have not read yet: only the newest change is worth a word.
+                con.execute("UPDATE LiveSwitch SET toast = ?, toast_id = toast_id + 1 WHERE live = 1", ("on" if now["on"] else "end",))
             if now["new_players"] and not was["new_players"]:
                 touch_everyone(con)
     finally:
@@ -216,20 +228,25 @@ def live_streaming(guid):
 
 def live_set(con, guid, on):
     """Switch a player's live view. On: a new upload key, and a notice for the phone. Off: the key is
-    gone (the phone's next upload is refused and it stops), and so is the video on disk at once."""
-    con.execute(LIVE_TABLE)
-    row = con.execute("SELECT live, toast FROM LiveSwitch WHERE guid = ?", (guid,)).fetchone()
+    gone (the phone's next upload is refused and it stops), and so is the video on disk at once. Every flip leaves the
+    player a new notice with a new number, in place of one not read yet, which says what the switch is now and what the
+    server's switch makes of it (NOTICE_OWN): flipped on and back off before the phone looked, the phone hears "off"."""
+    live_table(con)
+    row = con.execute("SELECT live FROM LiveSwitch WHERE guid = ?", (guid,)).fetchone()
     # Already so (a form sent twice): no new key, no second notice.
     if bool(row and row["live"]) == on:
         return
-    # A notice the phone has not read yet is simply taken back when the switch is flipped back: the
-    # player never learned of the change. Otherwise the phone is told.
-    pending = row["toast"] if row else None
-    toast = "" if pending in ("on", "off") else ("on" if on else "off")
+    # Broadcasts on for the server, as its settings say now. Before any look at them the first decision is made here, as
+    # live_settings() makes it, before this switch counts: a player switched on never turns broadcasts on for the server.
+    rows = setting_rows(con)
+    if "on" not in rows:
+        con.execute("INSERT OR IGNORE INTO LiveSetting (name, value) VALUES ('on', ?)", ("1" if used_before(con) else "0",))
+        rows = setting_rows(con)
+    toast = NOTICE_OWN[(rows.get("on") == "1", on)]
     token = secrets.token_hex(16) if on else None
-    con.execute("""INSERT INTO LiveSwitch (guid, live, token, toast, changed_at) VALUES (?, ?, ?, ?, ?)
+    con.execute("""INSERT INTO LiveSwitch (guid, live, token, toast, toast_id, changed_at) VALUES (?, ?, ?, ?, 1, ?)
                    ON CONFLICT (guid) DO UPDATE SET live = excluded.live, token = excluded.token,
-                       toast = excluded.toast, changed_at = excluded.changed_at""",
+                       toast = excluded.toast, toast_id = LiveSwitch.toast_id + 1, changed_at = excluded.changed_at""",
                 (guid, int(on), token, toast, int(time.time())))
     if not on:
         # The live window goes; the recording stays, and the server's next sweep closes it.

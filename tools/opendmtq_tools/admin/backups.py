@@ -518,7 +518,7 @@ def restore_backup(name, path):
                 if not kept:
                     with db() as con:
                         live_stamp = board_stamp(con)
-                        con.execute(recordings.LIVE_TABLE)
+                        recordings.live_table(con)
                         switches = con.execute("SELECT * FROM LiveSwitch").fetchall()
                         settings = sorted(recordings.setting_rows(con).items())
                         tokens.token_table(con)
@@ -545,11 +545,11 @@ def restore_backup(name, path):
                 swap_in(restored)
             with db() as con:
                 bring_schema_up_to_date(con)
-                con.execute(recordings.LIVE_TABLE)
+                recordings.live_table(con)
                 con.execute("DELETE FROM LiveSwitch")
-                con.executemany("INSERT INTO LiveSwitch (guid, live, token, toast, changed_at, playing, pattern_id, play_at) "
-                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                [(r["guid"], r["live"], r["token"], r["toast"], r["changed_at"], r["playing"],
+                con.executemany("INSERT INTO LiveSwitch (guid, live, token, toast, toast_id, changed_at, playing, pattern_id, "
+                                "play_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                [(r["guid"], r["live"], r["token"], r["toast"], r["toast_id"], r["changed_at"], r["playing"],
                                   r["pattern_id"], r["play_at"]) for r in switches])
                 # The settings as they were today, the backup's gone: a restore never turns broadcasts on.
                 con.execute(recordings.SETTING_TABLE)

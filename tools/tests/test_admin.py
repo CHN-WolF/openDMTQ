@@ -474,10 +474,13 @@ class SiteCopiesTest(unittest.TestCase):
 class LiveSwitchTest(unittest.TestCase):
     """The owner's switch: what it leaves for the phone, and the video it removes."""
 
-    def _switch(self, inst, *flips):
-        """Flip the switch of player 7 in order; the row afterwards."""
+    def _switch(self, inst, *flips, server=True):
+        """Flip the switch of player 7 in order, with broadcasts on for the server unless the owner has chosen already (or
+        server=None: no choice yet); the row afterwards."""
         con = sqlite3.connect(inst.path("state/dmtq.db3"))
         con.row_factory = sqlite3.Row
+        if server is not None and "on" not in admin.recordings.setting_rows(con):
+            admin.recordings.write_settings(con, {"on": server})
         for on in flips:
             admin.recordings.live_set(con, 7, on)
         con.commit()
@@ -517,9 +520,41 @@ class LiveSwitchTest(unittest.TestCase):
             self.assertEqual((row["live"], row["token"]), (0, None))
             self.assertFalse(os.path.exists(folder))
 
-    def test_a_notice_not_yet_read_is_taken_back(self):
+    def test_every_flip_leaves_a_new_notice_with_a_new_number(self):
+        # LIVE-40: on, then off before the phone looked, then on again: each flip a notice of its own, in place of the
+        # one not read, numbered higher each time (the player shows a notice whose number it has not shown).
         with Install() as inst:
-            self.assertEqual(self._switch(inst, True, False)["toast"], "")
+            numbers = []
+            for on, kind in ((True, "on"), (False, "off"), (True, "on")):
+                row = self._switch(inst, on)
+                self.assertEqual(row["toast"], kind)
+                numbers.append(row["toast_id"])
+            self.assertEqual(numbers, sorted(set(numbers)))
+
+    def test_a_flip_with_broadcasts_off_for_the_server_says_so(self):
+        # LIVE-41: with the server's broadcasts off, a player's switch flipped still tells them, in words that say it
+        # waits for the server ("wait") or stays off then ("held").
+        with Install() as inst:
+            with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
+                admin.recordings.setting_rows(con)
+                admin.recordings.write_settings(con, {"on": False})
+            self.assertEqual(self._switch(inst, True)["toast"], "wait")
+            self.assertEqual(self._switch(inst, False)["toast"], "held")
+
+    def test_a_switch_before_any_look_never_turns_broadcasts_on(self):
+        # LIVE-42: the first decision comes before the switch counts: a new server stays off, and the player hears "wait".
+        with Install() as inst:
+            self.assertEqual(self._switch(inst, True, server=None)["toast"], "wait")
+            self.assertFalse(admin.recordings.live_settings()["on"])
+
+    def test_an_older_table_gets_the_number(self):
+        # LIVE-43: a database from 0.10.0 (no toast_id) gets the column at the first flip.
+        with Install() as inst:
+            with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
+                con.execute("CREATE TABLE LiveSwitch (guid INTEGER PRIMARY KEY, live INTEGER NOT NULL DEFAULT 0, token TEXT, "
+                            "toast TEXT, changed_at INTEGER, playing INTEGER NOT NULL DEFAULT 0, pattern_id INTEGER, play_at INTEGER)")
+                con.execute("INSERT INTO LiveSwitch (guid, live, toast) VALUES (7, 0, '')")
+            self.assertEqual(self._switch(inst, True)["toast_id"], 1)
 
     def test_streaming_only_while_uploads_arrive(self):
         with Install() as inst:
@@ -576,6 +611,11 @@ class BroadcastsTest(unittest.TestCase):
         with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
             return dict(con.execute("SELECT guid, toast FROM LiveSwitch ORDER BY guid").fetchall())
 
+    def _numbers(self, inst):
+        """Each player's notice's number."""
+        with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
+            return dict(con.execute("SELECT guid, toast_id FROM LiveSwitch ORDER BY guid").fetchall())
+
     def test_off_until_turned_on_and_the_page_says_so(self):
         with Install() as inst:
             self.assertEqual(admin.recordings.live_settings(), {"on": False, "new_players": False, "quality": "standard"})
@@ -599,8 +639,11 @@ class BroadcastsTest(unittest.TestCase):
 
     def test_a_server_from_before_the_switch_stays_on_when_it_broadcast(self):
         with Install() as inst:
-            # A player switched on before the switch existed: on, and written down in the database.
-            self._switched_on(inst, 7)
+            # A player switched on before the switch existed (a row as an older server left it): on, and written down in the
+            # database.
+            with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
+                admin.recordings.live_table(con)
+                con.execute("INSERT INTO LiveSwitch (guid, live, token, toast) VALUES (7, 1, 'k', '')")
             self.assertTrue(admin.recordings.live_settings()["on"])
             self.assertEqual(self._rows(), {"on": "1"})
         with Install() as inst:
@@ -629,6 +672,7 @@ class BroadcastsTest(unittest.TestCase):
             self.assertTrue(admin.recordings.live_settings()["on"])
             # Each player switched on is told, once, between songs.
             self.assertEqual(self._toasts(inst), {7: "on", 8: "on"})
+            numbers = self._numbers(inst)
             # A live window and a recording running when broadcasts go off: the window goes, the recording is closed.
             folder = admin.recordings.live_folder(7)
             os.makedirs(folder, exist_ok=True)
@@ -643,9 +687,13 @@ class BroadcastsTest(unittest.TestCase):
             self.assertFalse(admin.recordings.live_settings()["on"])
             self.assertFalse(os.path.exists(folder))
             self.assertTrue(os.path.exists(os.path.join(rec, ".close-now")))
-            # The player on air hears once that the broadcast ended and that broadcasts are off for now; no other notice
-            # waits while broadcasts are off, and the switches stay.
-            self.assertEqual(self._toasts(inst), {7: "end", 8: ""})
+            # LIVE-44: every player switched on hears that their broadcast ended and that broadcasts are off for now, on air
+            # or not (before: only the one on air), each with a new number; the switches stay.
+            self.assertEqual(self._toasts(inst), {7: "end", 8: "end"})
+            self.assertTrue(all(self._numbers(inst)[g] > numbers[g] for g in (7, 8)))
+            # And on again: a new "on" for both, whatever they had not read.
+            inst.client.post("/opendmtq/admin/recordings", data={"csrf": csrf, "action": "broadcasts-on"})
+            self.assertEqual(self._toasts(inst), {7: "on", 8: "on"})
             with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
                 self.assertEqual(con.execute("SELECT COUNT(*) FROM LiveSwitch WHERE live = 1").fetchone()[0], 2)
 
@@ -673,7 +721,9 @@ class BroadcastsTest(unittest.TestCase):
             inst.sign_in()
             page = inst.client.get("/opendmtq/admin/players").get_data(as_text=True)
             self.assertIn("Broadcasts are off for the whole server", page)
-            self.assertIn("Switched on", page)
+            self.assertIn("On · server off", page)
+            # LIVE-45: how the two switches go together, and what new players start with, said on the Players page.
+            self.assertIn("while their switch below and the server's broadcasts are both on. New players start off", page)
             dash = inst.client.get("/opendmtq/admin/").get_data(as_text=True)
             self.assertIn("Broadcasts are off", dash)
             self._settings(on=True)

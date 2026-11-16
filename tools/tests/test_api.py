@@ -487,8 +487,9 @@ def CASES():
         C("player_live_on", "POST", "/players/7/live", 200, setup=broadcasts_on,
           check=lambda t, inst, r: t.assertEqual(r.get_json()["player"]["broadcast"], "waiting")),
         # With broadcasts off for the server, the switch is kept for then.
+        # API-40: their own switch beside it, on while the server's is off (before: only the state word said so).
         C("player_live_on", "POST", "/players/7/live", 200, setup=broadcasts_off,
-          check=lambda t, inst, r: t.assertEqual(r.get_json()["player"]["broadcast"], "held")),
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["player"]["broadcast"], r.get_json()["player"]["switch"]), ("held", True))),
         C("player_live_on", "POST", "/players/99/live", 404, "player_not_found"),
         C("player_live_off", "DELETE", "/players/7/live", 200),
         C("player_live_off", "DELETE", "/players/7/live?seen=0123456789abcdef", 409, "stale"),

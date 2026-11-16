@@ -183,7 +183,7 @@ function live_ids(string $raw): array
 }
 
 /*
- * The player these device ids belong to: ['guid', 'live', 'token', 'toast', 'playing', 'play_at'],
+ * The player these device ids belong to: ['guid', 'live', 'token', 'toast', 'toast_id', 'playing', 'play_at'],
  * or null when no account has any of them. A phone can match several rows: a second phone's row
  * shares its player's guid, and old ids may have made old accounts. A player the owner shows live
  * (or who still has a line to read) comes first, so a forgotten old account never hides that; then
@@ -200,7 +200,8 @@ function live_player(SQLite3 $db, array $ids): ?array
         $marks[] = ":id$i";
     }
     $q = @$db->prepare("SELECT CAST(m.guid AS INTEGER) AS guid, COALESCE(l.live, 0) AS live, l.token,
-                               COALESCE(l.toast, '') AS toast, COALESCE(l.playing, 0) AS playing, l.play_at,
+                               COALESCE(l.toast, '') AS toast, COALESCE(l.toast_id, 0) AS toast_id,
+                               COALESCE(l.playing, 0) AS playing, l.play_at,
                                l.pattern_id
                           FROM Member m LEFT JOIN LiveSwitch l ON l.guid = CAST(m.guid AS INTEGER)
                          WHERE m.udid IN (" . implode(',', $marks) . ") AND m.udid IS NOT :check AND m.guid IS NOT NULL

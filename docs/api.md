@@ -695,7 +695,7 @@ Refusals:
 
 #### `POST /players/{player}/live`
 
-Turns a player's broadcast on. The phone gets a new upload key and a line between songs that says so ([live.md](live.md)).
+Turns a player's broadcast on. The phone gets a new upload key and a notice between songs that says so; while broadcasts are off for the server, the notice says the broadcast starts once they are on ([live.md](live.md)).
 
 Parameters:
 
@@ -711,7 +711,7 @@ Refusals:
 
 #### `DELETE /players/{player}/live`
 
-Turns a player's broadcast off. The phone's next upload is refused, the live window goes at once and the recording is closed and kept.
+Turns a player's broadcast off. The phone's next upload is refused, the live window goes at once and the recording is closed and kept. The player gets a notice between songs that says so, also while broadcasts are off for the server ([live.md](live.md)).
 
 Parameters:
 
@@ -959,7 +959,7 @@ Answer: `200` with [BroadcastSettings](#broadcastsettings).
 
 #### `PUT /broadcasts`
 
-Turns broadcasts on or off for the server, sets what new players start with and the quality. What is left out stays as it is. Off: phones and PCs send nothing and the site shows nothing of broadcasts; each player's switch is kept, whoever is on air is told once in the game that the broadcast ended, every live window goes at once and running recordings are closed. On: each player switched on is told in the game, between songs. New players turned to start on: every player already there counts as chosen for, so only those who come after start on. Phones and the PC player follow a new quality within 15 seconds.
+Turns broadcasts on or off for the server, sets what new players start with and the quality. What is left out stays as it is. Off: phones and PCs send nothing and the site shows nothing of broadcasts; each player's switch is kept, each player switched on is told once in the game that their broadcast ended, every live window goes at once and running recordings are closed. On: each player switched on is told in the game, between songs. Players switched off hear of neither: nothing changes for them. New players turned to start on: every player already there counts as chosen for, so only those who come after start on. Phones and the PC player follow a new quality within 15 seconds.
 
 Body (JSON):
 
@@ -1963,6 +1963,7 @@ A player on the Players page.
 - `days` (list of integer): Plays on each of the last 14 days, oldest first.
 - `phones` (integer): Phones they have played on.
 - `broadcast` (string): Their broadcast: off, switched on and waiting for video, on air, or switched on and held while broadcasts are off for the server. One of `off`, `waiting`, `on_air`, `held`.
+- `switch` (boolean): Their own switch (POST or DELETE /players/{player}/live). A player is on air only while it and the server's (GET /broadcasts, on) are both on; while the server's is off, theirs is kept for then.
 - `seen` (string): Who the number belongs to now: send it as ?seen= with a change.
 
 #### PlayerList
@@ -2586,7 +2587,7 @@ A best record.
 The server's broadcasts as a whole (the Broadcasts page).
 
 - `on` (boolean): True while broadcasts are on: only then do phones and PCs send video and does the site show broadcasts.
-- `new_players` (boolean): True when a new player's switch starts on, from their first play.
+- `new_players` (boolean): True when a new player's switch starts on, from their first play (also while broadcasts are off: it is kept for then).
 - `quality` (string): The stream's quality the phones and the PC player are asked for. One of `light`, `standard`, `smooth`, `sharp`.
 - `qualities` (list of [BroadcastQuality](#broadcastquality)): Every quality, with what it costs.
 - `switched_on` (integer): Players whose own switch is on.

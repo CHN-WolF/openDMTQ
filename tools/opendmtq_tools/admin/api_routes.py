@@ -300,6 +300,8 @@ SHAPES = {
         Field("phones", "integer", "Phones they have played on."),
         Field("broadcast", "string", "Their broadcast: off, switched on and waiting for video, on air, or switched on and held while "
               "broadcasts are off for the server.", enum=["off", "waiting", "on_air", "held"]),
+        Field("switch", "boolean", "Their own switch (POST or DELETE /players/{player}/live). A player is on air only while it and the "
+              "server's (GET /broadcasts, on) are both on; while the server's is off, theirs is kept for then."),
         Field("seen", "string", "Who the number belongs to now: send it as ?seen= with a change.")]),
     "PlayerList": Shape("The players.", [Field("items", "[Player]", "Every player, by number.")]),
     "PlayerAnswer": Shape("A player.", [Field("player", "Player", "The player.")]),
@@ -608,7 +610,8 @@ SHAPES = {
         Field("set_at", "integer", "When it was set (null for a record older than the play log).", nullable=True)]),
     "BroadcastSettings": Shape("The server's broadcasts as a whole (the Broadcasts page).", [
         Field("on", "boolean", "True while broadcasts are on: only then do phones and PCs send video and does the site show broadcasts."),
-        Field("new_players", "boolean", "True when a new player's switch starts on, from their first play."),
+        Field("new_players", "boolean", "True when a new player's switch starts on, from their first play (also while broadcasts are off: "
+              "it is kept for then)."),
         Field("quality", "string", "The stream's quality the phones and the PC player are asked for.", enum=["light", "standard", "smooth", "sharp"]),
         Field("qualities", "[BroadcastQuality]", "Every quality, with what it costs."),
         Field("switched_on", "integer", "Players whose own switch is on."),
@@ -785,10 +788,12 @@ ROUTES = [
           errors=[(404, "player_not_found", "No such player."), (409, "stale", "The number belongs to someone else now."),
                   (500, "backup_failed", "The backup could not be made (the message says why).")]),
     Route("POST", "/players/{player}/live", "write", "player_live_on", "Players", "Turns a player's broadcast on.",
-          "The phone gets a new upload key and a line between songs that says so ([live.md](live.md)).", query=[SEEN], answer="PlayerAnswer",
+          "The phone gets a new upload key and a notice between songs that says so; while broadcasts are off for the server, the notice says "
+          "the broadcast starts once they are on ([live.md](live.md)).", query=[SEEN], answer="PlayerAnswer",
           errors=[(404, "player_not_found", "No such player."), (409, "stale", "The number belongs to someone else now.")]),
     Route("DELETE", "/players/{player}/live", "write", "player_live_off", "Players", "Turns a player's broadcast off.",
-          "The phone's next upload is refused, the live window goes at once and the recording is closed and kept.", query=[SEEN],
+          "The phone's next upload is refused, the live window goes at once and the recording is closed and kept. The player gets a "
+          "notice between songs that says so, also while broadcasts are off for the server ([live.md](live.md)).", query=[SEEN],
           answer="PlayerAnswer",
           errors=[(404, "player_not_found", "No such player."), (409, "stale", "The number belongs to someone else now.")]),
     # The Accounts page's accounts (accounts.py).
@@ -852,8 +857,9 @@ ROUTES = [
     Route("PUT", "/broadcasts", "write", "broadcasts_set", "Broadcasts", "Turns broadcasts on or off for the server, sets what new players "
           "start with and the quality.",
           "What is left out stays as it is. Off: phones and PCs send nothing and the site shows nothing of broadcasts; each player's switch "
-          "is kept, whoever is on air is told once in the game that the broadcast ended, every live window goes at once and running "
-          "recordings are closed. On: each player switched on is told in the game, between songs. New players turned to start on: "
+          "is kept, each player switched on is told once in the game that their broadcast ended, every live window goes at once and running "
+          "recordings are closed. On: each player switched on is told in the game, between songs. Players switched off hear of neither: "
+          "nothing changes for them. New players turned to start on: "
           "every player already there counts as chosen for, so only those who come after start on. Phones and the PC player follow "
           "a new quality within 15 seconds.",
           body=[Field("on", "boolean", "Broadcasts on or off for the server.", optional=True),

@@ -210,11 +210,21 @@ foreach (['PlayLog', 'Play', 'Member'] as $table) {
     }
 }
 // The live view: the switch per player (the admin writes it), the upload key of the phone, the notice waiting
-// to be shown, and whether the player is in a song (the game's requests keep that, src/live.php). The same
+// to be shown and its number, and whether the player is in a song (the game's requests keep that, src/live.php). The same
 // statement as LIVE_TABLE in the admin pages.
 $db->exec('CREATE TABLE IF NOT EXISTS LiveSwitch (guid INTEGER PRIMARY KEY, live INTEGER NOT NULL DEFAULT 0,
            token TEXT, toast TEXT, changed_at INTEGER, playing INTEGER NOT NULL DEFAULT 0,
-           pattern_id INTEGER, play_at INTEGER)');
+           pattern_id INTEGER, play_at INTEGER, toast_id INTEGER NOT NULL DEFAULT 0)');
+// The waiting notice's number (higher for each new one, so the player can tell a new notice from one it showed): a table
+// from before it gets the column, 0 in every row. Silenced: another start at the same moment may have added it first.
+$live_columns = [];
+$found = @$db->query('PRAGMA table_info(LiveSwitch)');
+while ($found && ($column = $found->fetchArray(SQLITE3_ASSOC))) {
+    $live_columns[] = $column['name'];
+}
+if (!in_array('toast_id', $live_columns, true)) {
+    @$db->exec('ALTER TABLE LiveSwitch ADD COLUMN toast_id INTEGER NOT NULL DEFAULT 0');
+}
 // The owner's settings for broadcasts as a whole (whether there are any, what new players start with, the quality): a
 // name and its value per row, which the admin pages' Broadcasts page writes and portal/live_lib.php reads. The same
 // statement as SETTING_TABLE in the admin pages.

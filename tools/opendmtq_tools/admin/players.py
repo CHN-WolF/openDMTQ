@@ -78,8 +78,10 @@ def players_page():
                         "recent": activity[p["id"]]["recent"],
                         "spark": charts.days(activity[p["id"]]["days"], busiest, day_tips(activity[p["id"]]["days"]), tp("players.days_label"))} for p in rows}
     # Broadcasts off for the server: the switches are kept, and the page says so above them.
+    # And what new players start with, which the page says with how the two switches go together.
+    settings = recordings.live_settings()
     return render_template("players.html", players=rows, live=live, seen=seen, played=played, phones=phones,
-                           broadcasts_on=recordings.live_settings()["on"])
+                           broadcasts_on=settings["on"], new_players=settings["new_players"])
 
 
 def csv_text(value):
@@ -130,7 +132,8 @@ def player_action(pid):
         # With broadcasts off for the server, the switch waits for them, and the notice with it.
         flash(t("players.live_on" if recordings.live_settings()["on"] else "players.live_on_held", who=who), "ok")
     elif action == "live-off":
-        flash(t("players.live_off", who=who), "ok")
+        # Told in the game either way: with broadcasts off for the server too, the switch stays off for when they are on.
+        flash(t("players.live_off" if recordings.live_settings()["on"] else "players.live_off_held", who=who), "ok")
     return redirect(url_for("players_page"))
 
 

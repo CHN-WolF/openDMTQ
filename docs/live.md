@@ -9,8 +9,8 @@ A player's play can be shown on the site as a live broadcast. Broadcasts are off
 them on, on the admin pages' Broadcasts page. A server updated from a version without that switch keeps broadcasting
 when it did: with a player switched on, or with `LIVE_DEFAULT=on`, it starts with them on. With them on, the owner turns
 them on for each player on the Players page, or for every new player at once (a setting on the Broadcasts page). The
-game then shows that player a short notice between songs, when their broadcast is turned on and when it is turned off,
-with where it can be watched. Playing is not affected: the phone or the PC encodes and uploads on its own threads, and
+game then shows that player a short notice between songs at every change of their own switch, and of the server's while
+theirs is on: on, off, and with broadcasts off for the server, that theirs waits for them or stays off then. Playing is not affected: the phone or the PC encodes and uploads on its own threads, and
 drops video rather than hold the game up.
 
 Broadcasting needs Android 8 or newer on a phone or a tablet, for its video encoder, or the player for Windows
@@ -36,7 +36,8 @@ running time on the picture, and the player's name and profile under it.
   "Waiting" until video arrives, and "On air" with a Watch link while it does. The Status page counts the players
   broadcasting now.
 - **For every new player:** on the Broadcasts page, New players, Start on: a new player's switch turns on at their first
-  play, with the same notice in the game. Players turned off on the Players page stay off. Until the owner chooses there,
+  play (also while broadcasts are off for the server: it is kept for then), with the same notice in the game. Players
+  turned off on the Players page stay off. Until the owner chooses there,
   `LIVE_DEFAULT=on` in `.env` (`live.default` in the Helm chart) turns on every player whose switch the owner has not
   set, the players already there included.
 - **The quality:** on the Broadcasts page, one of four ([Limits](#limits)). Phones and the PC player follow a new one
@@ -76,8 +77,10 @@ The video shows the game's picture and sound. Nothing else on the device is capt
 While broadcasts are off for the server, which is how a new server starts:
 
 - Phones and the PC player are told off at every look (`/live/state`), with no key, and every upload is refused, which
-  stops one that was sending. A player who was on air as broadcasts went off is told once, between songs, that the
-  broadcast ended and that broadcasts are off on the server for now; nobody else gets a notice.
+  stops one that was sending. Every player switched on as broadcasts went off is told once, between songs, that the
+  broadcast ended and that broadcasts are off on the server for now; a player switched off hears nothing of it. A
+  player's own switch flipped meanwhile still tells them: that theirs is on and starts once broadcasts are on, or that
+  it is off and stays off then.
 - The site shows nothing of broadcasts: no LIVE in the menu, no broadcasts on the home page or a player's page, no LIVE
   mark by a name, and no recording to watch. A link to the live page opens a page that says broadcasts are off, with the
   way home; one left open says so at its next look.
@@ -143,12 +146,12 @@ game matches them; a player switched on wins over a forgotten old account on the
 
 | Request | Answer |
 |---|---|
-| `GET /live/state?ids=...&lang=ko\|en` | JSON `{"on", "token" (only when on), "fps", "height", "bitrate", "segment", "toast"}`: the stream by the owner's quality; off for everyone while broadcasts are off for the server, the one notice then being for a player on air as they went off, told once that the broadcast ended |
+| `GET /live/state?ids=...&lang=ko\|en` | JSON `{"on", "token" (only when on), "fps", "height", "bitrate", "segment", "switch", "broadcasts", "toast", "toast_id", "toast_kind"}`: on air (both switches on), the stream by the owner's quality, the player's own switch and the server's, and the notice waiting, once; off for everyone while broadcasts are off for the server |
 | `POST /live/upload?ids=...&seq=<n>&dur=<ms>` with `X-Live-Token`, body one MPEG-TS segment | `204` stored; `403` off (the player's switch, or broadcasts for the server) or wrong token, the phone stops; `400` bad numbers, not MPEG-TS, under 1880 bytes or fewer bytes than announced; `411` no `Content-Length` (chunked); `413` over 4 MiB; `503` could not store it or the disk is nearly full, try the next one |
 | `POST /live/end?ids=...` with `X-Live-Token` | `204`; `403` as above. Ends the playlist. |
 
 - `token` is random and new each time the switch is turned on.
-- `toast` is set when the owner flips the switch and returned once, and only outside a song. It is two lines: a short title (the play is live now, or the broadcast has ended), then where to watch it live and its recording later, the site's LIVE page by the server's name. When the owner turns broadcasts off for the server, a player on air gets one of its own instead: the broadcast has ended, and broadcasts are off on this server for now (the site then shows no recordings). A song
+- `toast` is set at every change of the player's own switch, and of the server's while theirs is on, and returned once, and only outside a song; a newer change takes the place of a notice not read yet. It is two lines: a short title, then where to watch it or what the server's switch means for it. `toast_kind` says which: `on` (on air from the next song: where to watch it live and later, the site's LIVE page by the server's name), `off` (their broadcast ended: where to watch the replay), `end` (the server's broadcasts turned off under them: it ended, and broadcasts are off on this server for now), `wait` (switched on while the server's are off: it starts once they are on), `held` (switched off while the server's are off: it stays off then). `toast_id` is the notice's number, higher for each new one of that player (0 with none): a player can tell a new notice from one it showed, also with the same words. `switch` is the player's own switch, `broadcasts` the server's. A song
   starts with `game.getPreviewPlayInfo` or `game.getPatternUrl`. It ends with `game.savePlayResult`
   or `game.savePlayResultFailLog`. A quit song sends no result, so a menu request more than 10 seconds
   after the start ends it too, and after 20 minutes it counts as over regardless.
