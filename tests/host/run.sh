@@ -92,7 +92,8 @@ if [ -f "$BUNDLE/bundle.json" ]; then
   docker cp /tmp/$NAME-runtime.zip "$NAME:/home/player/OpenDMTQ/data/apk/opendmtq-arm32-runtime.zip"
   docker exec "$NAME" chown -R player /home/player/OpenDMTQ/data
 fi
-# The settings setup would write, with this test's ports (a loopback address, which setup refuses for phones).
+# The settings setup would write, with this test's ports (a loopback address, which setup refuses for phones): the
+# server's one port, and the admin service's own beside it on loopback, as an install from before 0.11.0 has it.
 inside "printf 'PUBLIC_HOST=127.0.0.1:$PORT\nLISTEN_PORT=$PORT\nADMIN_PORT=$ADMIN\nADMIN_PASSWORD=hosttest\n' > OpenDMTQ/.env"
 
 # 3. setup starts the server and, with nothing imported, hands over to its pages: there is no browser here, so it
@@ -105,8 +106,8 @@ else
   fail "opendmtq setup"
   exit 1
 fi
-link=$(grep -o "http://localhost:$ADMIN/opendmtq/admin/setup/start?key=[A-Za-z0-9_-]*" /tmp/$NAME-setup.log | tail -n 1 || true)
-expect "setup prints the one-time link to its pages" test -n "$link"
+link=$(grep -o "http://localhost:$PORT/opendmtq/admin/setup/start?key=[A-Za-z0-9_-]*" /tmp/$NAME-setup.log | tail -n 1 || true)
+expect "setup prints the one-time link to its pages, on the server's one port" test -n "$link"
 expect "setup prints the way in from another computer" grep -q "From another computer: http://127.0.0.1:$PORT/opendmtq/admin/setup" /tmp/$NAME-setup.log
 
 # 4. The setup in the browser, as the owner goes through it: the link, the files found in Downloads, the import, an
@@ -114,7 +115,8 @@ expect "setup prints the way in from another computer" grep -q "From another com
 admin=$(mktemp)
 site=$(mktemp)
 web() { curl -s -m 60 -c "$1" -b "$1" "${@:2}"; }
-A="http://127.0.0.1:$ADMIN/opendmtq/admin"
+# The admin pages on the server's one port, as the owner opens them (DEP-45).
+A="http://127.0.0.1:$PORT/opendmtq/admin"
 # The form token on a page of the admin pages.
 token() { grep -o 'name="csrf" value="[^"]*"' | head -n 1 | cut -d'"' -f4; }
 # have <label>: the setup's files step says that file is in place (its lamp is on).
@@ -173,8 +175,8 @@ expect "a bare visit goes to the site" is 302 "http://127.0.0.1:$PORT/"
 expect "signed out, the site asks to sign in" is 302 "http://127.0.0.1:$PORT/opendmtq/index.php"
 expect "the sign-in page answers" is 200 "http://127.0.0.1:$PORT/opendmtq/login.php"
 expect "the licenses page answers anyone" is 200 "http://127.0.0.1:$PORT/opendmtq/licenses.php"
-expect "the admin pages answer on this machine" is 200 "$A/login"
-expect "the admin pages answer on the public port" is 200 "http://127.0.0.1:$PORT/opendmtq/admin/login"
+expect "the admin pages answer on the server's one port" is 200 "$A/login"
+expect "the admin service's own port is loopback only" sh -c "! ss -ltn | grep -q '0.0.0.0:$ADMIN '"
 web "$site" -o /dev/null "http://127.0.0.1:$PORT/opendmtq/login.php"
 player=$(web "$site" -o /dev/null -w '%{http_code}' --data-urlencode "user=tester" --data-urlencode "password=$password" \
   -d "next=/opendmtq/" "http://127.0.0.1:$PORT/opendmtq/login.php")
@@ -218,6 +220,26 @@ inside "opendmtq start" >/dev/null || true
 expect "started again, healthy" is 200 "http://127.0.0.1:$PORT/opendmtq/health.php"
 sleep 5
 expect "a stop asked of an earlier run is not this run's" is 200 "http://127.0.0.1:$PORT/opendmtq/health.php"
+# owner_signs_in <when>: the ID and password that .env and the console name open both the admin pages and the players'
+# site (ADM-101), each in a browser of its own.
+owner_signs_in() {
+  local jar code
+  jar=$(mktemp)
+  web "$jar" -o /dev/null "$A/login"
+  code=$(web "$jar" -o /dev/null -w '%{http_code}' -d "name=admin&password=hosttest" "$A/login")
+  expect "$1, the owner signs in to the admin pages with .env's password ($code)" test "$code" = 302
+  rm -f "$jar"
+  jar=$(mktemp)
+  web "$jar" -o /dev/null "http://127.0.0.1:$PORT/opendmtq/login.php"
+  code=$(web "$jar" -o /dev/null -w '%{http_code}' --data-urlencode "user=admin" --data-urlencode "password=hosttest" \
+    -d "next=/opendmtq/" "http://127.0.0.1:$PORT/opendmtq/login.php")
+  expect "$1, the owner signs in to the players' site with the same ID and password ($code)" test "$code" = 303
+  rm -f "$jar"
+}
+owner_signs_in "stopped and started again"
+inside "opendmtq status" > /tmp/$NAME-status.log 2>&1 || true
+expect "status names the admin pages on the one port" grep -q "Admin pages  http://127.0.0.1:$PORT/opendmtq/admin/" /tmp/$NAME-status.log
+expect "and no other port" sh -c "! grep -q ':$ADMIN' /tmp/$NAME-status.log"
 
 # 8b. Stopped from the admin pages (Maintenance): the program that runs the server stops every part and ends, its log
 #     says why, and a start brings it back. The owner signs in first (the stop above ended the sessions).
@@ -236,6 +258,7 @@ expect "and nothing of it stays running" inside "test ! -e OpenDMTQ/.host/run/ho
 expect "its log says the admin pages asked for the stop" inside "grep -q 'as asked on the admin pages' OpenDMTQ/data/state/logs/host.log"
 inside "opendmtq start" >/dev/null || true
 expect "started again after that, healthy" is 200 "http://127.0.0.1:$PORT/opendmtq/health.php"
+owner_signs_in "stopped from the admin pages and started again"
 inside "opendmtq status"
 
 # 9. Another address, chosen in the setup: saved to .env, the server started again for it, and the browser back,
@@ -261,7 +284,7 @@ if [ -n "$lan" ]; then
     sleep 1
   done
   expect "the server starts again by itself" test "$restarted" = yes
-  went=$(web "$admin" -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$ADMIN$back")
+  went=$(web "$admin" -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$PORT$back")
   expect "the page comes back signed in, at the players' step ($went)" test "$went" = "302 $A/setup?step=players"
   expect "the server answers at the new address" is 200 "http://$lan:$PORT/opendmtq/health.php"
 else

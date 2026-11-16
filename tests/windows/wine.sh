@@ -124,6 +124,33 @@ expect "and runs the server on the port it chose (${first:-none})" sh -c "case \
   http://127.0.0.1:${first:-1}/opendmtq/health.php) in 200 | 503) exit 0 ;; esac; exit 1"
 expect "with nothing gone wrong in its window" sh -c "! grep -q 'Traceback\|error:' /tmp/first.log"
 grep -q 'Traceback\|error:' /tmp/first.log && tail -n 30 /tmp/first.log
+# A new install's one port is 8791: the players' site, the admin pages and the API on it (DEP-46), the admin service's own
+# port elsewhere on loopback, never shown.
+expect "a new install takes port 8791 (${first:-none})" test "${first:-}" = 8791
+inner=$(sed -n 's/^ADMIN_PORT=\([0-9]*\).*/\1/p' .env 2>/dev/null | tr -d '\r' || true)
+expect "the admin service's own port is another (${inner:-none})" sh -c "test -n '$inner' && test '$inner' != 8791"
+expect "the window names the admin pages on that port" grep -q "/opendmtq/admin/" /tmp/first.log
+expect "and no other port" sh -c "! grep -q ':$inner' /tmp/first.log"
+expect "the admin pages answer on it" is 200 "http://127.0.0.1:${first:-1}/opendmtq/admin/login"
+# owner_signs_in <port> <password> <when>: the ID and password the window and .env name open the admin pages and the
+# players' site alike (ADM-101), each in a browser of its own. The owner's own case: the site refused them.
+owner_signs_in() {
+  local jar code
+  jar=$(mktemp)
+  curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null "http://127.0.0.1:$1/opendmtq/admin/login"
+  code=$(curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' --data-urlencode "name=admin" \
+    --data-urlencode "password=$2" "http://127.0.0.1:$1/opendmtq/admin/login")
+  expect "$3, the owner signs in to the admin pages with .env's password ($code)" test "$code" = 302
+  rm -f "$jar"
+  jar=$(mktemp)
+  curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null "http://127.0.0.1:$1/opendmtq/login.php"
+  code=$(curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' --data-urlencode "user=admin" \
+    --data-urlencode "password=$2" -d "next=/opendmtq/" "http://127.0.0.1:$1/opendmtq/login.php")
+  expect "$3, the owner signs in to the players' site with the same ID and password ($code)" test "$code" = 303
+  rm -f "$jar"
+}
+made=$(sed -n 's/^ADMIN_PASSWORD=//p' .env 2>/dev/null | tr -d '\r' || true)
+owner_signs_in "${first:-1}" "$made" "on a first start"
 # Its window closed: everything it started stops with it. The rest runs with this test's own ports and settings.
 wineserver -k 2>/dev/null || true
 sleep 3
@@ -154,14 +181,13 @@ else
   fail "a double-click on OpenDMTQ.exe runs the server on the bundle's Apache and PHP, waiting for the game's files"
   exit 1
 fi
-expect "the admin pages answer on this machine" is 200 "http://127.0.0.1:$ADMIN/opendmtq/admin/login"
-expect "the admin pages answer on the public port" is 200 "http://127.0.0.1:$PORT/opendmtq/admin/login"
+expect "the admin pages answer on the server's one port" is 200 "http://127.0.0.1:$PORT/opendmtq/admin/login"
 expect "signed out, the site asks to sign in" is 302 "http://127.0.0.1:$PORT/opendmtq/index.php"
 
 # The setup pages, as the browser the window opened sees them: signed in by the one-time key it carries (the file the
 # window wrote, though the server answered only after the wait ran out), the PC's drives to pick from, and the import of
 # the folder.
-A="http://127.0.0.1:$ADMIN/opendmtq/admin"
+A="http://127.0.0.1:$PORT/opendmtq/admin"
 jar=/tmp/admin.cookies
 web() { curl -s -m 60 -c "$jar" -b "$jar" "$@"; }
 token() { grep -o 'name="csrf" value="[^"]*"' | head -n 1 | cut -d'"' -f4; }
@@ -244,7 +270,7 @@ if [ -n "$lan" ]; then
     sleep 2
   done
   expect "the server answers at the new address" is 200 "http://$lan:$PORT/opendmtq/health.php"
-  went=$(web -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$ADMIN$back")
+  went=$(web -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$PORT$back")
   expect "the page comes back signed in, at the players' step ($went)" test "$went" = "302 $A/setup?step=players"
 else
   echo "SKIP no private address in this container: the address change is not tried"
@@ -338,6 +364,20 @@ for _ in $(seq 1 15); do
 done
 left
 expect "and nothing of it is left running" test -z "$(left)"
+
+# Started again as the owner did (a double-click on OpenDMTQ.exe), with the .env the first run used, Windows line ends
+# and all: the same ID and password open both doors (the owner's report: they did not).
+(timeout 600 wine OpenDMTQ.exe 2>&1 | cat > /tmp/again.log &)
+for _ in $(seq 1 150); do
+  case "$(code "http://127.0.0.1:$PORT/opendmtq/health.php")" in 200 | 503) break ;; esac
+  sleep 2
+done
+for _ in $(seq 1 30); do
+  is 200 "http://127.0.0.1:$PORT/opendmtq/admin/login" && break
+  sleep 1
+done
+owner_signs_in "$PORT" winetest "stopped from the admin pages and started again"
+wineserver -k 2>/dev/null || true
 
 echo "$([ $failures = 0 ] && echo PASS || echo FAIL) the Windows bundle under Wine: $failures failure(s)"
 exit $((failures > 0))
