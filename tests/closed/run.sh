@@ -243,7 +243,8 @@ host_way() {
   curl -fsSL -o "$KIT/kit/uber-apk-signer.jar" "$SIGNER_URL"
   curl -fsSL -o "$KIT/kit/7zip.tar.xz" "$SEVENZIP_LINUX_X64_URL"
   release_source "$KIT/kit/opendmtq-source.tar.gz"
-  cp "$KIT/$ZIP" "$KIT/kit/"
+  # Under the name a release gives it, as a person downloads it (.github/release_assets.py).
+  cp "$KIT/$ZIP" "$KIT/kit/OpenDMTQ-Phone-Runtime-1.0.0-android-arm64-armv7.zip"
   cp -r "$KIT/DMTQ" "$KIT/kit/DMTQ"
 
   # The computer on the closed network: the system and a user who may use sudo; the same image as the host install's test.
@@ -292,7 +293,7 @@ EOF
     local app
     app=$(inside 'ls -t openDMTQ-1.0.0/data/apk/out/*.apk | head -n 1')
     app_has_the_runtime "$(inside "python3 -m zipfile -l '$app'" | awk '{print $1}')"
-    expect "the zip carried in was taken" inside '! test -e openDMTQ-1.0.0/data/apk/opendmtq-arm32-runtime.zip'
+    expect "the zip carried in was taken" inside '! ls openDMTQ-1.0.0/data/apk/*.zip'
   fi
 
   # An update, as the guide says, over the first install's folder.

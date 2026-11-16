@@ -7,8 +7,9 @@ and it comes to data/apk/arm32 from the first of:
 
   * the copy that came with this program, beside this file: the Windows bundle and a release's tools image have one, the one
     tested with them. One of another version replaces what is in place: a new bundle or image brings its runtime along;
-  * a copy put in data/apk by hand: how a host install without internet gets it (docs/closed-network.md). It is taken, and goes
-    once it is in place: left there, it would hold back every later runtime;
+  * a copy put in data/apk by hand, as downloaded from a release (OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip) or
+    under this program's own name: how a host install without internet gets it (docs/closed-network.md). It is taken, and
+    goes once it is in place: left there, it would hold back every later runtime;
   * the project's latest release, when no runtime is in place, or when asked to look (--refresh: `opendmtq runtime`, and the
     update of a host install with its one command).
 
@@ -20,9 +21,11 @@ Usage: python3 -m opendmtq_tools.runtime                 the runtime, unless it 
        python3 -m opendmtq_tools.runtime --pack DIR ZIP  a bundle as that zip, for a release and the Windows bundle
 """
 
+import glob
 import http.client
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -31,8 +34,15 @@ import urllib.request
 import zipfile
 import zlib
 
+# The zip's name beside this file, in data/apk and in a release job's build.
 ZIP_NAME = "opendmtq-arm32-runtime.zip"
-RELEASE_URL = "https://github.com/kanggu12/openDMTQ/releases/latest/download/" + ZIP_NAME
+# The project's releases. Each file of a release has the release's version in its name (.github/release_assets.py names
+# them), so a download first asks which release is the latest.
+RELEASES = "https://github.com/kanggu12/openDMTQ/releases"
+# The zip's name in a release, as a person also downloads it into data/apk.
+RELEASE_NAME = "OpenDMTQ-Phone-Runtime-{version}-android-arm64-armv7.zip"
+# A file of that name, whatever its version, for one put in data/apk by hand.
+RELEASE_GLOB = RELEASE_NAME.format(version="*")
 # The copy a Windows bundle or a release's tools image comes with, beside this file.
 HERE = os.path.dirname(os.path.abspath(__file__))
 APK_DIR = os.environ.get("OPENDMTQ_APK", "/apk")
@@ -55,6 +65,45 @@ class RuntimeError_(Exception):
 def log(message):
     """One line of progress, at once: the setup page shows them as they come."""
     print(message, flush=True)
+
+
+def latest_version(releases=None):
+    """The latest release's version (1.2.3). GitHub answers the releases' /latest with a redirect to the tag's page: the
+    page's address is all it takes, so a HEAD request, and no API, whose limit for unnamed callers a shared address runs
+    into."""
+    releases = releases or RELEASES
+    try:
+        with urllib.request.urlopen(urllib.request.Request(releases + "/latest", method="HEAD"), timeout=TIMEOUT) as r:
+            where = r.geturl()
+    # No way out, or an answer cut off: said as for a download.
+    except (OSError, http.client.HTTPException) as e:
+        raise RuntimeError_(f"could not ask {releases} for the latest release: {e}") from e
+    # A repository with no release stays on its releases' page.
+    found = re.search(r"/releases/tag/v([0-9][0-9A-Za-z.+-]*)/?$", where)
+    if not found:
+        raise RuntimeError_(f"{releases} has no release")
+    return found.group(1)
+
+
+def release_url(name, version, releases=None):
+    """Where the release `version` keeps its file `name` (a pattern with {version})."""
+    return f"{releases or RELEASES}/download/v{version}/{name.format(version=version)}"
+
+
+def by_hand(apk_dir):
+    """A copy put in data/apk by hand: under this program's name, or as downloaded from a release (the newest name
+    first, should there be several); None when there is none."""
+    plain = os.path.join(apk_dir, ZIP_NAME)
+    if os.path.isfile(plain):
+        return plain
+    found = glob.glob(os.path.join(glob.escape(apk_dir), RELEASE_GLOB))
+    # The newest by the numbers in its name: 0.11.0 after 0.9.0, which an order by the letters would not give.
+    return max(found, key=numbers_in) if found else None
+
+
+def numbers_in(path):
+    """A file name's numbers in order, to compare versions by: (0, 11, 0) for ...-0.11.0-..."""
+    return tuple(int(n) for n in re.findall(r"[0-9]+", os.path.basename(path)))
 
 
 def fetch(url, path):
@@ -154,18 +203,21 @@ def add_runtime(apk_dir=None, refresh=False):
     os.makedirs(apk_dir, exist_ok=True)
     have = version_in_place(dest)
     came_with_the_program = os.path.join(HERE, ZIP_NAME)
-    by_hand = os.path.join(apk_dir, ZIP_NAME)
+    put_there = by_hand(apk_dir)
     if os.path.isfile(came_with_the_program):
         put_in_place(came_with_the_program, dest, have)
-    elif os.path.isfile(by_hand):
-        put_in_place(by_hand, dest, have)
-        os.remove(by_hand)
+    elif put_there:
+        put_in_place(put_there, dest, have)
+        # The one taken goes, and with it any older one downloaded before: the next build would take that one back.
+        for path in [put_there] + glob.glob(os.path.join(glob.escape(apk_dir), RELEASE_GLOB)):
+            if os.path.exists(path):
+                os.remove(path)
     elif refresh or not have:
         # In the data folder: the same disk as where it goes, which is the one known to have room.
         work = tempfile.mkdtemp(dir=apk_dir, prefix=".runtime-")
         try:
             path = os.path.join(work, ZIP_NAME)
-            fetch(RELEASE_URL, path)
+            fetch(release_url(RELEASE_NAME, latest_version()), path)
             put_in_place(path, dest, have)
         finally:
             shutil.rmtree(work, ignore_errors=True)

@@ -10,6 +10,7 @@ import struct
 import tempfile
 import time
 import unittest
+import urllib.request
 from unittest import mock
 
 from opendmtq_tools import windows_client
@@ -45,6 +46,25 @@ class Answer(io.BytesIO):
 
     def geturl(self):
         return self.url
+
+
+def release(download, version):
+    """urlopen as GitHub answers it for the release `version`: its /latest (a HEAD request) redirected to the tag's page,
+    then `download` for the installer. The calls are kept in `.asked`, each as (method, address)."""
+    def answer(url, timeout=None):
+        if isinstance(url, urllib.request.Request):
+            answer.asked.append((url.get_method(), url.full_url))
+            return Answer(b"", f"{windows_client.RELEASES}/tag/v{version}")
+        answer.asked.append(("GET", url))
+        return download
+    answer.asked = []
+    return answer
+
+
+def release_url(version):
+    """Where the release `version` keeps its installer, as .github/release_assets.py names it."""
+    return (f"https://github.com/kanggu12/openDMTQ/releases/download/v{version}/"
+            f"OpenDMTQ-PC-Client-{version}-windows-x64-Setup.exe")
 
 
 class Place:
@@ -113,10 +133,12 @@ class FindTest(unittest.TestCase):
         with Place() as p:
             placed = installer(os.path.join(p.apk, windows_client.SETUP_NAME), body=b"old", version="1.0.0")
             written_ago(placed, days=8)
-            newer = Answer(b"MZnew" + bytes(windows_client.SMALLEST), "https://github.com/o/r/releases/download/v1.1.0/OpenDMTQ-Setup.exe")
-            with mock.patch.object(windows_client.urllib.request, "urlopen", return_value=newer) as urlopen:
+            # GitHub's last redirect is to its file store, whose address names no version: the tag's is written.
+            newer = Answer(b"MZnew" + bytes(windows_client.SMALLEST), "https://objects.example.com/a1b2")
+            answer = release(newer, "1.1.0")
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=answer):
                 self.assertEqual(windows_client.find(p.apk), (placed, "1.1.0"))
-            self.assertEqual(urlopen.call_args.args[0], windows_client.RELEASE_URL)
+            self.assertEqual(answer.asked, [("HEAD", windows_client.RELEASES + "/latest"), ("GET", release_url("1.1.0"))])
             with open(placed, "rb") as f:
                 self.assertEqual(f.read(5), b"MZnew")
 
@@ -138,8 +160,8 @@ class FindTest(unittest.TestCase):
             failed = os.path.join(p.apk, windows_client.FAILED)
             self.assertTrue(os.path.isfile(failed))
             written_ago(failed, days=1, hours=1)
-            fetched = Answer(b"MZ" + bytes(windows_client.SMALLEST), "https://github.com/o/r/releases/download/v2.0.0/OpenDMTQ-Setup.exe")
-            with mock.patch.object(windows_client.urllib.request, "urlopen", return_value=fetched):
+            fetched = Answer(b"MZ" + bytes(windows_client.SMALLEST), "https://objects.example.com/c3d4")
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=release(fetched, "2.0.0")):
                 path, version = windows_client.find(p.apk)
             self.assertEqual((os.path.basename(path), version), (windows_client.SETUP_NAME, "2.0.0"))
             # It worked: the failure's note goes.
@@ -149,8 +171,8 @@ class FindTest(unittest.TestCase):
         with Place() as p:
             placed = installer(os.path.join(p.apk, windows_client.SETUP_NAME), body=b"good", version="1.0.0")
             written_ago(placed, days=8)
-            cut = Answer(b"MZ cut off", "https://github.com/o/r/releases/download/v1.1.0/OpenDMTQ-Setup.exe")
-            with mock.patch.object(windows_client.urllib.request, "urlopen", return_value=cut):
+            cut = Answer(b"MZ cut off", "https://objects.example.com/e5f6")
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=release(cut, "1.1.0")):
                 self.assertEqual(windows_client.find(p.apk), (placed, "1.0.0"))
             with open(placed, "rb") as f:
                 self.assertEqual(f.read(6), b"MZgood")
@@ -164,9 +186,18 @@ class FindTest(unittest.TestCase):
             self.assertEqual(windows_client.find(p.apk), (None, None))
             self.assertFalse(os.path.exists(placed))
 
-    def test_the_version_comes_from_the_release_address(self):
-        self.assertEqual(windows_client.release_version("https://github.com/o/r/releases/download/v0.8.0/OpenDMTQ-Setup.exe"), "0.8.0")
-        self.assertEqual(windows_client.release_version("https://example.com/OpenDMTQ-Setup.exe"), "")
+    def test_one_downloaded_from_a_release_and_put_there_by_hand_is_taken_with_its_version(self):
+        with Place() as p:
+            for version in ("0.9.0", "0.11.0"):
+                installer(os.path.join(p.apk, windows_client.RELEASE_NAME.format(version=version)), body=version.encode())
+            path, version = windows_client.find(p.apk)
+            # The newest by its numbers (0.11.0 after 0.9.0), under this program's name, its version from its name.
+            self.assertEqual((os.path.basename(path), version), (windows_client.SETUP_NAME, "0.11.0"))
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(8), b"MZ0.11.0")
+            # The older goes too: it would only wait there to be taken back.
+            self.assertEqual(sorted(os.listdir(p.apk)), sorted(["code", "out", windows_client.SETUP_NAME,
+                                                                 windows_client.VERSION_NAME]))
 
 
 class KeepTest(unittest.TestCase):

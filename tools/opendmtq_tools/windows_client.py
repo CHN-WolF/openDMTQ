@@ -5,15 +5,17 @@ file to set the launcher up for this server. Players then sign in from the launc
 
 The installer comes from the first of: the copy beside this code (a release's tools image and the Windows bundle have
 one); one in data/apk (put there by hand or by a host install's kit, for a server without internet, or fetched there
-before); the project's latest release, fetched into data/apk when there is none, as the runtime for newer phones is
-(runtime.py). A copy in data/apk a week old gives way to the latest release's, and stays when that cannot be had. A
-fetch that fails is not tried again for a day: a server without internet would wait for it at every start. Without any
-copy, the site offers none.
+before; one put there as downloaded from a release, OpenDMTQ-PC-Client-1.2.3-windows-x64-Setup.exe, takes this
+program's name with its version beside it); the project's latest release, fetched into data/apk when there is none, as
+the runtime for newer phones is (runtime.py). A copy in data/apk a week old gives way to the latest release's, and
+stays when that cannot be had. A fetch that fails is not tried again for a day: a server without internet would wait
+for it at every start. Without any copy, the site offers none.
 
 The builder copies it into data/apk/out, where the portal reads it, and describes it in windows.json there (keep()).
 """
 
 import datetime
+import glob
 import hashlib
 import json
 import os
@@ -31,8 +33,10 @@ SETUP_NAME = "OpenDMTQ-Setup.exe"
 VERSION_NAME = SETUP_NAME + ".version"
 # What data/apk/out holds for the portal and the admin pages: the installer, and what it is.
 MANIFEST = "windows.json"
-# The latest release's installer, for a server that has none.
-RELEASE_URL = "https://github.com/kanggu12/openDMTQ/releases/latest/download/" + SETUP_NAME
+# The installer's name in a release, as a person also downloads it into data/apk (.github/release_assets.py names it), and
+# the releases it is fetched from, for a server that has none.
+RELEASE_NAME = "OpenDMTQ-PC-Client-{version}-windows-x64-Setup.exe"
+RELEASES = runtime.RELEASES
 # In data/apk: why the last fetch failed. The file's own time says when, and so when the next one may be tried.
 FAILED = "client-windows-error.txt"
 # How long a failed fetch keeps the next one off: each try waits for an answer (runtime.TIMEOUT) on a network with no way out.
@@ -95,32 +99,45 @@ def bundled(path=None):
     return path, version_beside(path)
 
 
-def release_version(url):
-    """The version a release download's final address names (GitHub sends /releases/latest/download/... on to
-    /releases/download/v1.2.3/...), or ""."""
-    m = re.search(r"/releases/download/v?([0-9][0-9A-Za-z.+-]*)/", url)
-    return m.group(1) if m else ""
-
-
-def fetch(url, path):
+def fetch(releases, path):
     """The latest release's installer to `path`, through a file beside it that takes its name once whole and checked, with
     its version beside it: a copy already there stays when the download fails or brings a damaged one."""
+    # Which release is the latest: its version is in the installer's name there.
+    latest = runtime.latest_version(releases)
+    url = runtime.release_url(RELEASE_NAME, latest, releases)
     print(f"builder: fetching the installer for Windows from {url}", flush=True)
     part = path + ".part"
     try:
         with urllib.request.urlopen(url, timeout=runtime.TIMEOUT) as r, open(part, "wb") as out:
             shutil.copyfileobj(r, out)
-            # Where the redirects ended: the release's own address, which names its version.
-            version = release_version(r.geturl())
         # Read whole before it replaces anything: a file damaged on its way is no installer.
         if not whole(part):
             raise ValueError(f"{SETUP_NAME} from {url} is damaged")
         os.replace(part, path)
+        # The tag's version: where GitHub's redirects end (its file store) names none.
         with open(path + ".version", "w", encoding="utf-8") as f:
-            f.write(version + "\n")
+            f.write(latest + "\n")
     finally:
         # What a cut-off or damaged download left (a stop of the builder too: SystemExit passes through here).
         remove(part)
+
+
+def adopt(apk_dir, placed):
+    """An installer in `apk_dir` as a release names it (the newest, should there be several) moved to `placed`, with its
+    version beside it, when it is whole; the others of that name go, as they would only wait there to be taken back."""
+    found = glob.glob(os.path.join(glob.escape(apk_dir), RELEASE_NAME.format(version="*")))
+    if not found:
+        return
+    newest = max(found, key=runtime.numbers_in)
+    # The version from the name: ...-PC-Client-1.2.3-windows-x64-Setup.exe.
+    version = re.search(r"-PC-Client-([0-9][0-9A-Za-z.+]*)-windows-", os.path.basename(newest))
+    if whole(newest):
+        os.replace(newest, placed)
+        with open(placed + ".version", "w", encoding="utf-8") as f:
+            f.write((version.group(1) if version else "") + "\n")
+        print(f"builder: took {os.path.basename(newest)} from data/apk", flush=True)
+    for path in found:
+        remove(path)
 
 
 def fresh(path, limit):
@@ -144,6 +161,8 @@ def find(apk_dir):
     placed = os.path.join(apk_dir, SETUP_NAME)
     # What a fetch cut off at its worst left behind (a container killed before it could tidy up): the installer's size.
     remove(placed + ".part")
+    # One downloaded from a release and put there by hand: under this program's name, with the version its name says.
+    adopt(apk_dir, placed)
     path, version = bundled(placed)
     # Damaged (a copy cut short, a disk that failed): out of the way, so that a whole one can take its place.
     if not path and os.path.exists(placed):
@@ -159,7 +178,7 @@ def find(apk_dir):
             print("builder: no installer for Windows (the last fetch failed less than a day ago)", flush=True)
         return path, version
     try:
-        fetch(RELEASE_URL, placed)
+        fetch(RELEASES, placed)
     except Exception as e:  # noqa: BLE001 - no internet, no release with one, a damaged download: what there was stays
         print(f"builder: could not fetch the installer for Windows ({e}); the next try is in a day", flush=True)
         try:

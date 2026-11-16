@@ -94,6 +94,21 @@ link_dir() {
   fi
 }
 
+# A file of the kit: the newest one named by the pattern $1 (a release's name, with the version in it), else the one
+# named $2 (the program's own name, as an older kit has it); nothing without a kit or such a file.
+kit_file() {
+  [[ -n $KIT ]] || return 0
+  local found
+  # Newest by the version's numbers (0.11.0 after 0.9.0): sort -V on the names, which differ only in the version.
+  # compgen fails when nothing matches, which is no failure here (pipefail and set -e would end the install).
+  found=$(cd "$KIT" && { compgen -G "$1" || true; } | sort -V | tail -n 1)
+  if [[ -n $found ]]; then
+    printf '%s\n' "$KIT/$found"
+  elif [[ -f $KIT/$2 ]]; then
+    printf '%s\n' "$KIT/$2"
+  fi
+}
+
 uninstall() {
   step "Removing the host install"
   # The link on the PATH, when it is this clone's.
@@ -193,21 +208,26 @@ main() {
   # Its license stays beside it.
   tar -xJf "$LOCAL/downloads/7zip.tar.xz" -C "$LOCAL/share/7-zip" License.txt readme.txt
   ok "7-Zip 25.01"
-  # The runtime for newer phones, where the app builder takes it from.
-  if [[ -f $KIT/opendmtq-arm32-runtime.zip ]]; then
+  # The runtime for newer phones, where the app builder takes it from: as a release names it, or under the program's own
+  # name (an older kit); the builder takes either (tools/opendmtq_tools/runtime.py).
+  local runtime_zip setup_exe
+  runtime_zip=$(kit_file 'OpenDMTQ-Phone-Runtime-*-android-arm64-armv7.zip' opendmtq-arm32-runtime.zip)
+  if [[ -n $runtime_zip ]]; then
     mkdir -p "$REPO/data/apk"
-    cp "$KIT/opendmtq-arm32-runtime.zip" "$REPO/data/apk/"
+    cp "$runtime_zip" "$REPO/data/apk/"
     ok "the runtime for newer phones, for the next app"
   elif [[ -n $KIT ]]; then
-    printf '  note  opendmtq-arm32-runtime.zip is not in %s: without it the app runs only on phones that run 32-bit apps\n' "$KIT"
+    printf '  note  OpenDMTQ-Phone-Runtime-*-android-arm64-armv7.zip is not in %s: without it the app runs only on phones that run 32-bit apps\n' "$KIT"
   fi
   # The installer for Windows (the PC client), which the site hands to players set up for this server
-  # (tools/opendmtq_tools/windows_client.py), with its version when the kit has it.
-  if [[ -f $KIT/OpenDMTQ-Setup.exe ]]; then
+  # (tools/opendmtq_tools/windows_client.py, which takes a release's name with the version in it, or the program's own
+  # name with its .version beside it).
+  setup_exe=$(kit_file 'OpenDMTQ-PC-Client-*-windows-x64-Setup.exe' OpenDMTQ-Setup.exe)
+  if [[ -n $setup_exe ]]; then
     mkdir -p "$REPO/data/apk"
-    cp "$KIT/OpenDMTQ-Setup.exe" "$REPO/data/apk/"
-    if [[ -f $KIT/OpenDMTQ-Setup.exe.version ]]; then
-      cp "$KIT/OpenDMTQ-Setup.exe.version" "$REPO/data/apk/"
+    cp "$setup_exe" "$REPO/data/apk/"
+    if [[ -f $setup_exe.version ]]; then
+      cp "$setup_exe.version" "$REPO/data/apk/"
     fi
     ok "the installer for Windows, for the site"
   fi

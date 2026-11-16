@@ -9,6 +9,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.request
 import zipfile
 from unittest import mock
 
@@ -61,6 +62,17 @@ class PackTest(unittest.TestCase):
             self.assertIn("libc++", str(e.exception))
 
 
+class Answer(io.BytesIO):
+    """What urlopen gives: the body, and the address the redirects ended at."""
+
+    def __init__(self, body, url):
+        super().__init__(body)
+        self.url = url
+
+    def geturl(self):
+        return self.url
+
+
 class AddTest(unittest.TestCase):
     """The whole way, with the release's server stood in for."""
 
@@ -73,17 +85,26 @@ class AddTest(unittest.TestCase):
         self.here = os.path.join(self.root, "program")
         os.makedirs(self.here)
         self.fetched = []
+        self.asked = []
         self.release = None
         for patch in (mock.patch.object(runtime, "HERE", self.here), mock.patch.object(runtime, "log"),
                       mock.patch.object(runtime.urllib.request, "urlopen", self.urlopen)):
             patch.start()
             self.addCleanup(patch.stop)
 
+    # The release the stand-in server calls the latest, and where it keeps the zip.
+    LATEST = "1.2.3"
+    RELEASE_URL = "https://github.com/kanggu12/openDMTQ/releases/download/v1.2.3/OpenDMTQ-Phone-Runtime-1.2.3-android-arm64-armv7.zip"
+
     def urlopen(self, url, timeout=None):
-        """The release's server: its zip, or no answer when there is none."""
-        self.fetched.append(url)
+        """The release's server: which release is the latest (a HEAD request, answered by a redirect to its tag), then
+        its zip; no answer when there is none."""
         if self.release is None:
             raise urllib.error.URLError("no way out")
+        if isinstance(url, urllib.request.Request):
+            self.asked.append((url.get_method(), url.full_url))
+            return Answer(b"", runtime.RELEASES + "/tag/v" + self.LATEST)
+        self.fetched.append(url)
         with open(self.release, "rb") as f:
             return io.BytesIO(f.read())
 
@@ -105,11 +126,34 @@ class AddTest(unittest.TestCase):
     def test_first_time_it_comes_from_the_latest_release_and_leaves_nothing_on_the_way(self):
         self.release = self.made_zip()
         runtime.add_runtime(self.apk)
-        self.assertEqual(self.fetched, [runtime.RELEASE_URL])
+        self.assertEqual(self.fetched, [self.RELEASE_URL])
         self.assertEqual(self.in_place(), "v1")
         self.assertEqual(os.listdir(self.apk), ["arm32"])
         with open(os.path.join(self.apk, "arm32", "sysroot/lib/libc.so"), encoding="utf-8") as f:
             self.assertEqual(f.read(), "sysroot/lib/libc.so")
+
+    def test_the_latest_release_is_asked_for_by_its_tag_and_its_zip_by_the_versioned_name(self):
+        self.release = self.made_zip()
+        runtime.add_runtime(self.apk)
+        # One HEAD to the releases' /latest, then the zip under the name the release gives it (.github/release_assets.py).
+        self.assertEqual(self.asked, [("HEAD", runtime.RELEASES + "/latest")])
+        self.assertEqual(self.fetched, [self.RELEASE_URL])
+        # Without a release, the repository's /latest stays on the releases' page: said, and nothing fetched.
+        with mock.patch.object(runtime.urllib.request, "urlopen", return_value=Answer(b"", runtime.RELEASES)):
+            with self.assertRaises(runtime.RuntimeError_) as e:
+                runtime.latest_version()
+        self.assertIn("has no release", str(e.exception))
+
+    def test_a_copy_downloaded_from_a_release_and_put_there_by_hand_is_taken_the_newest_first(self):
+        os.makedirs(self.apk)
+        shutil.copy(self.made_zip("older"), os.path.join(self.apk, runtime.RELEASE_NAME.format(version="0.9.0")))
+        shutil.copy(self.made_zip("newer"), os.path.join(self.apk, runtime.RELEASE_NAME.format(version="0.11.0")))
+        runtime.add_runtime(self.apk)
+        self.assertEqual(self.fetched, [])
+        # 0.11.0 after 0.9.0: by the numbers, not the letters.
+        self.assertEqual(self.in_place(), "newer")
+        # The one taken goes, and the older with it: the next build would take that one back.
+        self.assertEqual(os.listdir(self.apk), ["arm32"])
 
     def test_what_runs_on_the_phone_stays_executable(self):
         # The packer reads the modes where a host has them, and a zip does not bring them back.
@@ -294,7 +338,7 @@ class AddTest(unittest.TestCase):
     def test_with_no_way_out_it_says_where_it_tried(self):
         with self.assertRaises(runtime.RuntimeError_) as e:
             runtime.add_runtime(self.apk)
-        self.assertIn(runtime.RELEASE_URL, str(e.exception))
+        self.assertIn(runtime.RELEASES, str(e.exception))
         self.assertIn("no way out", str(e.exception))
         self.assertEqual(os.listdir(self.apk), [])
 
@@ -322,7 +366,7 @@ class AddTest(unittest.TestCase):
             # Asked to look, it does, and the same version changes nothing.
             with mock.patch.object(runtime, "install") as install:
                 self.assertEqual(runtime.main(["--refresh"]), 0)
-            self.assertEqual(self.fetched, [runtime.RELEASE_URL])
+            self.assertEqual(self.fetched, [self.RELEASE_URL])
             install.assert_not_called()
 
 

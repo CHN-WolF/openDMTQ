@@ -110,7 +110,7 @@ class Workshop:
             # The installer for Windows only where a test puts one, and no release to fetch it from: no test reaches the
             # internet.
             mock.patch.object(builder.windows_client, "HERE", self.path("no-code")),
-            mock.patch.object(builder.windows_client, "RELEASE_URL", "file:///nowhere/" + builder.windows_client.SETUP_NAME),
+            mock.patch.object(builder.windows_client, "RELEASES", "file:///nowhere"),
             mock.patch("subprocess.run", self.run),
         ]
         for p in self._patches:
