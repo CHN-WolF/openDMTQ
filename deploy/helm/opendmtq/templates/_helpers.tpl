@@ -106,3 +106,20 @@ no
 {{- end -}}
 {{- $h -}}
 {{- end -}}
+
+{{/*
+The router Service's port, the server's one port: router.service.port when set; else the port the Service has now (an
+upgrade keeps it, so the phones' app keeps its address); else 8791, a new install's.
+*/}}
+{{- define "opendmtq.routerPort" -}}
+{{- if .Values.router.service.port -}}
+{{- .Values.router.service.port -}}
+{{- else -}}
+{{- $svc := lookup "v1" "Service" .Release.Namespace (include "opendmtq.fullname" .) -}}
+{{- if and $svc $svc.spec $svc.spec.ports -}}
+{{- (index $svc.spec.ports 0).port -}}
+{{- else -}}
+8791
+{{- end -}}
+{{- end -}}
+{{- end -}}

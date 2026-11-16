@@ -33,9 +33,13 @@ services:
       # Whole backend in one container (the Helm chart also runs separate "assets" replicas).
       ROLE: api
       # The admin pages (/opendmtq/admin, and /admin, their old address) and their API (/opendmtq/api) are passed to the
-      # admin service (unless ADMIN_ON_PUBLIC_PORT=no, set when exposed).
+      # admin service, on this one port: from anywhere, or with ADMIN_ON_PUBLIC_PORT=no (set when exposed) from the server
+      # PC only.
       ADMIN_URL: http://admin:8000
       ADMIN_ON_PUBLIC_PORT: ${ADMIN_ON_PUBLIC_PORT:-yes}
+      # gateway: a visit from this stack's network gateway is the server PC's own (Docker Engine); the CLI says none under
+      # Docker Desktop, which passes every visit that way.
+      ADMIN_LOCAL: ${ADMIN_LOCAL:-none}
       TZ: ${TZ:-UTC}
     # No published port: phones and browsers come in through the edge service below.
     volumes:
@@ -83,9 +87,10 @@ services:
       # The server certificate and its key (./opendmtq up makes them).
       - ./data/https/serve:/etc/opendmtq/https:ro
     ports:
-      # On every interface so phones can reach it: port 80 on the LAN, or the forwarded port when
-      # exposed to the internet (./opendmtq expose). On Linux, Docker-published ports bypass ufw;
-      # set BIND_ADDRESS to one address to narrow it.
+      # The server's one port, on every interface so phones can reach it: the players' site, the admin pages
+      # (/opendmtq/admin) and the API. 8791 on a new install (./opendmtq setup writes LISTEN_PORT; 80 for one set up
+      # before it did), or the forwarded port when exposed to the internet (./opendmtq expose). On Linux,
+      # Docker-published ports bypass ufw; set BIND_ADDRESS to one address to narrow it.
       - "${BIND_ADDRESS:-0.0.0.0}:${LISTEN_PORT:-80}:8790"
     depends_on: [server]
     logging:
@@ -95,8 +100,8 @@ services:
         max-file: "3"
 
   admin:
-    # Admin pages at /opendmtq/admin (through the server): app builds, songs, players, backups, notices. Their API at
-    # /opendmtq/api, the same way.
+    # Admin pages at /opendmtq/admin (through the server, on its one port): app builds, songs, players, backups, notices.
+    # Their API at /opendmtq/api, the same way. No port of its own on this machine.
     # x86-64 only (7-Zip, and the aapt2 and zipalign that apktool and the signer carry): emulated on an ARM machine.
     platform: linux/amd64
     build: ./tools
@@ -111,10 +116,6 @@ services:
       # App builds unpack the client here (a few hundred MB while they run); the signer runs a
       # zipalign binary it extracts here, so this tmpfs must allow execution.
       - /tmp:mode=1777,size=1536m,exec
-    ports:
-      # Always reachable on this machine at http://localhost:8791/opendmtq/admin/ (loopback only by default), the API at
-      # http://localhost:8791/opendmtq/api/v1/.
-      - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-8791}:8000"
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST:?run ./opendmtq setup first}
       # The version the pages show (the CLI passes it on; see system.code_version()).

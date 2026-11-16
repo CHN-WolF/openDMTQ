@@ -10,7 +10,7 @@ from opendmtq_cli import discover
 from .paths import DATA, ROOT, WINDOWS
 from .output import die, ok, say, warn
 from .programs import programs
-from .settings import admin_port, ensure_settings, settings
+from .settings import admin_url, ensure_settings, settings, site_url
 from .folders import make_folders
 from .server import cmd_run, open_setup
 from .commands import app_manifest, build_status, cmd_import, cmd_start, show_address
@@ -138,8 +138,8 @@ def setup_finished(values):
 def summary(values):
     """Where everything is, once the server runs."""
     say("")
-    say(f"Server       http://{values['PUBLIC_HOST']}/")
-    say(f"Admin pages  http://localhost:{admin_port(values)}/opendmtq/admin/")
+    say(f"Server       {site_url(values)}")
+    say(f"Admin pages  {admin_url(values)}")
     say(f"             user {values.get('ADMIN_USER') or 'admin'}, password {values.get('ADMIN_PASSWORD')}")
     say(f"             (kept in the file .env in {ROOT}" + ("; Notepad opens it)" if WINDOWS else ")"))
     say("")

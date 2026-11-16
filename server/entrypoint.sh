@@ -44,14 +44,49 @@ if [ -n "${TZ:-}" ] && php -r 'exit(in_array(getenv("TZ"), timezone_identifiers_
 fi
 export PHP_INI_SCAN_DIR="/usr/local/etc/php/conf.d:$PHP_EXTRA"
 
+# The address phones use, split for the doors' own names (opendmtq.conf): the port is 80 when the
+# address has none.
+case "$PUBLIC_HOST" in
+    *:*) OPENDMTQ_NAME=${PUBLIC_HOST%:*}; OPENDMTQ_PORT=${PUBLIC_HOST##*:} ;;
+    *) OPENDMTQ_NAME=$PUBLIC_HOST; OPENDMTQ_PORT=80 ;;
+esac
+export OPENDMTQ_NAME OPENDMTQ_PORT
+
+# Only the server PC may use the admin pages and the API on this door (written into the doors' configuration); anyone
+# else is told where they open.
+local_only() {
+    cat <<CONF
+<LocationMatch "^/(opendmtq/)?admin(/|\$)">
+    Require ip $LOCAL_FROM
+    ErrorDocument 403 "The admin pages open on the server PC: http://localhost:$OPENDMTQ_PORT/opendmtq/admin/"
+</LocationMatch>
+<LocationMatch "^/opendmtq/api(/|\$)">
+    Require ip $LOCAL_FROM
+</LocationMatch>
+CONF
+}
+
 # The admin pages (/opendmtq/admin, and /admin, their address until 2026-11, which leads there) and their API
-# (/opendmtq/api) go to the admin service (compose service "admin", or a sidecar in Kubernetes).
+# (/opendmtq/api) go to the admin service (compose service "admin", or a sidecar in Kubernetes), on the server's one port:
+# the admin service has no port of its own anybody uses.
+PASS=/var/opendmtq/run/admin-pass.conf
 PROXY=/var/opendmtq/run/admin-proxy.conf
-rm -f "$PROXY"
-# Exposed to the internet, the admin pages and the API stay off the public port unless ADMIN_ON_PUBLIC_PORT=yes:
-# they are reachable on this machine instead (compose publishes the admin service on loopback).
-if [ -n "${ADMIN_URL:-}" ] && [ "${ADMIN_ON_PUBLIC_PORT:-yes}" = yes ]; then
-    cat > "$PROXY" <<CONF
+rm -f "$PASS" "$PROXY"
+# The server PC itself, as this server sees its visits (compose only): the gateway of the stack's network, through which
+# Docker Engine on Linux passes a visit to localhost. ADMIN_LOCAL=gateway says so (the CLI sets it); Docker Desktop
+# passes every visit, from anywhere, from such an address, so there the CLI sets none and no visit counts as local.
+LOCAL_FROM=
+if [ "${ADMIN_LOCAL:-}" = gateway ] && [ "${EDGE_DOORS:-yes}" = yes ]; then
+    # The default route's gateway, from the kernel's table (hexadecimal, its bytes in reverse order).
+    gw_hex=$(awk '$2 == "00000000" { print $3; exit }' /proc/net/route 2>/dev/null || true)
+    if [ -n "$gw_hex" ]; then
+        # shellcheck disable=SC2046  # Split into its four bytes on purpose.
+        set -- $(echo "$gw_hex" | sed 's/../& /g')
+        LOCAL_FROM=$(printf '%d.%d.%d.%d' "0x$4" "0x$3" "0x$2" "0x$1")
+    fi
+fi
+if [ -n "${ADMIN_URL:-}" ]; then
+    cat > "$PASS" <<CONF
 # The visitor's real address for the admin's sign-in throttle; any client-sent value is replaced.
 RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"
 # Sign-in forms are tiny; uploads (songs, backups) go to their own pages.
@@ -69,15 +104,18 @@ ProxyPassReverse "/admin" "$ADMIN_URL/admin"
 ProxyPass "/opendmtq/api" "$ADMIN_URL/opendmtq/api" timeout=900 disablereuse=On
 ProxyPassReverse "/opendmtq/api" "$ADMIN_URL/opendmtq/api"
 CONF
+    if [ "${ADMIN_ON_PUBLIC_PORT:-yes}" = yes ]; then
+        # From anywhere (over HTTPS on this door).
+        echo "Include $PASS" > "$PROXY"
+    elif [ -n "$LOCAL_FROM" ]; then
+        # Exposed to the internet with the admin pages kept to the server PC: that one visitor only, on this same port.
+        {
+            echo "Include $PASS"
+            local_only
+        } > "$PROXY"
+    fi
 fi
 
-# The address phones use, split for the doors' own names (opendmtq.conf): the port is 80 when the
-# address has none.
-case "$PUBLIC_HOST" in
-    *:*) OPENDMTQ_NAME=${PUBLIC_HOST%:*}; OPENDMTQ_PORT=${PUBLIC_HOST##*:} ;;
-    *) OPENDMTQ_NAME=$PUBLIC_HOST; OPENDMTQ_PORT=80 ;;
-esac
-export OPENDMTQ_NAME OPENDMTQ_PORT
 
 # The admin pages on the plain doors. With HTTPS working they go there, so the admin password never travels
 # in clear; the edge ends HTTPS on the same port. Without HTTPS it is proxied as on the HTTPS door
@@ -145,20 +183,25 @@ rm -f "$PLAIN_ADMIN"
 api_refusal() {
     printf '{\\"error\\": {\\"code\\": \\"%s\\", \\"message\\": \\"%s\\"}}' "$1" "$2"
 }
-if [ -f "$PROXY" ]; then
+if [ -f "$PASS" ]; then
     case "$OPENDMTQ_NAME" in
         10.*|192.168.*|127.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*|localhost) lan=yes ;;
         *) lan=no ;;
     esac
+    # A visit to localhost is the server PC's own: nothing of it travels, so it stays on plain HTTP, where the browser has
+    # no certificate to warn about. (A visitor from elsewhere who names localhost only sends their own password in clear.)
+    not_local='RewriteCond %{HTTP_HOST} !^(?:localhost|127\.[0-9.]+)(?::[0-9]+)?$'
     {
         # Sent to the HTTPS door while it works (a redirect answers before any access rule below).
         echo "$https_works"
+        echo "$not_local"
         # The old address (/admin) straight to the new one there.
         echo "RewriteRule ^/(?:opendmtq/)?admin(/.*)?\$ https://$OPENDMTQ_NAME:$OPENDMTQ_PORT/opendmtq/admin\$1 [R=302,L]"
         # The API is refused here while HTTPS works (403 use_https, with the address to use). Its token has gone out in
         # clear already: a redirect would have a script send it again, and curl -L would do so without a word. (Each
         # rule needs the test again: a condition only holds for the rule right after it.)
         echo "$https_works"
+        echo "$not_local"
         echo "RewriteRule ^/opendmtq/api(/.*)?\$ - [F]"
         # Its refusals on this door are worded as the API words them: JSON, with the reason. use_https while HTTPS
         # works; no_https where it is needed and is not working (an internet address, below).
@@ -169,20 +212,24 @@ if [ -f "$PROXY" ]; then
         ErrorDocument 403 "$(api_refusal use_https "This address takes the API over HTTPS only: https://$OPENDMTQ_NAME:$OPENDMTQ_PORT/opendmtq/api/v1/")"
     </If>
     <Else>
-        ErrorDocument 403 "$(api_refusal no_https "The API needs HTTPS on this address, and it is not working. With Docker Compose, run ./opendmtq up (or ./opendmtq doctor) on the server PC, or use http://localhost:8791/opendmtq/api/v1/ there. In Kubernetes, use kubectl port-forward to port 8000 of the api pod.")"
+        ErrorDocument 403 "$(api_refusal no_https "The API needs HTTPS on this address, and it is not working. Run ./opendmtq up (or ./opendmtq doctor) on the server PC, or use http://localhost:$OPENDMTQ_PORT/opendmtq/api/v1/ there. In Kubernetes, use kubectl port-forward to port 8000 of the api pod.")"
     </Else>
 </LocationMatch>
 CONF
-        if [ "$lan" = yes ] || [ "${ROUTER_TLS:-no}" = yes ]; then
+        if [ "${ADMIN_ON_PUBLIC_PORT:-yes}" = yes ] && { [ "$lan" = yes ] || [ "${ROUTER_TLS:-no}" = yes ]; }; then
             # Otherwise, on a local network address: proxied in clear, as it was before HTTPS. Behind the chart's
             # router this door also takes the visits it decrypted, which the line above lets through.
-            echo "Include $PROXY"
+            echo "Include $PASS"
+        elif [ -n "$LOCAL_FROM" ]; then
+            # Otherwise the server PC itself, on this same port; anyone else is told where they open.
+            echo "Include $PASS"
+            local_only
         else
-            # Otherwise, on an internet address: refused, with the ways in that still work (the API's words above).
+            # Otherwise refused, with the ways in that still work (the API's words above).
             cat <<'CONF'
 <LocationMatch "^/(opendmtq/)?admin(/|$)">
     Require all denied
-    ErrorDocument 403 "The admin pages need HTTPS on this address, and it is not working. With Docker Compose, run ./opendmtq up (or ./opendmtq doctor) on the server PC, or open http://localhost:8791/opendmtq/admin/ there. In Kubernetes, use kubectl port-forward to port 8000 of the api pod and open http://localhost:8000/admin/."
+    ErrorDocument 403 "The admin pages need HTTPS on this address, and it is not working. Run ./opendmtq up (or ./opendmtq doctor) on the server PC. In Kubernetes, use kubectl port-forward to port 8000 of the api pod and open http://localhost:8000/opendmtq/admin/."
 </LocationMatch>
 <LocationMatch "^/opendmtq/api(/|$)">
     Require all denied
@@ -191,7 +238,7 @@ CONF
         fi
     } > "$PLAIN_ADMIN"
     if [ -f /srv/https/ca.crt ]; then
-        echo "opendmtq: HTTPS on the public port too (own certificate); /opendmtq/admin and /opendmtq/api over HTTPS only"
+        echo "opendmtq: HTTPS on the public port too (own certificate); /opendmtq/admin and /opendmtq/api over HTTPS only, but from localhost on the server PC"
     fi
 fi
 

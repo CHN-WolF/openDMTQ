@@ -97,52 +97,55 @@ class PortTest(unittest.TestCase):
         """A machine where these ports are taken by something other than this server."""
         sb.busy_ports = set(busy)
 
-    def test_a_new_server_takes_port_80_when_free(self):
+    def test_a_new_server_takes_port_8791_when_free(self):
+        # One port for the site, the admin pages and the API, written out so compose publishes that one (DEP-40).
         with Sandbox(env_text=None) as sb:
-            self.assertEqual(app.ensure_env(), "192.168.0.10")
-            self.assertNotIn("LISTEN_PORT", env.load(sb.env_file))
-
-    def test_a_new_server_moves_off_a_taken_port_80(self):
-        with Sandbox(env_text=None) as sb:
-            self.new_server(sb, {80})
-            self.assertEqual(app.ensure_env(), "192.168.0.10:8080")
+            self.assertEqual(app.ensure_env(), "192.168.0.10:8791")
             values = env.load(sb.env_file)
-            self.assertEqual(values["PUBLIC_HOST"], "192.168.0.10:8080")
-            self.assertEqual(values["LISTEN_PORT"], "8080")
+            self.assertEqual(values["LISTEN_PORT"], "8791")
+            self.assertIsNone(env.port_problem(values))
+
+    def test_a_new_server_moves_off_a_taken_port_8791(self):
+        with Sandbox(env_text=None) as sb:
+            self.new_server(sb, {8791})
+            self.assertEqual(app.ensure_env(), "192.168.0.10:8792")
+            values = env.load(sb.env_file)
+            self.assertEqual(values["PUBLIC_HOST"], "192.168.0.10:8792")
+            self.assertEqual(values["LISTEN_PORT"], "8792")
             self.assertIsNone(env.port_problem(values))
 
     def test_and_past_the_next_ports_when_taken_too(self):
         with Sandbox(env_text=None) as sb:
-            self.new_server(sb, {80, 8080, 8081})
-            self.assertEqual(app.ensure_env(), "192.168.0.10:8082")
+            self.new_server(sb, {8791, 8792, 8793})
+            self.assertEqual(app.ensure_env(), "192.168.0.10:8794")
 
     def test_a_public_address_gets_the_port_too(self):
         # A machine on the internet by itself: what phones call and what is published have to agree.
         with Sandbox(env_text=None, detected="93.184.216.34") as sb:
-            self.new_server(sb, {80})
-            self.assertEqual(app.ensure_env(), "93.184.216.34:8080")
-            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "8080")
+            self.new_server(sb, {8791})
+            self.assertEqual(app.ensure_env(), "93.184.216.34:8792")
+            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "8792")
 
-    def test_port_80_held_by_this_server_itself_stays(self):
-        # Its .env is gone while it runs: its own edge answers on 80.
+    def test_port_8791_held_by_this_server_itself_stays(self):
+        # Its .env is gone while it runs: its own edge answers on 8791.
         with Sandbox(env_text=None) as sb:
-            sb.busy_ports = {80}
-            sb.edge_port = 80
-            self.assertEqual(app.ensure_env(), "192.168.0.10")
+            sb.busy_ports = {8791}
+            sb.edge_port = 8791
+            self.assertEqual(app.ensure_env(), "192.168.0.10:8791")
 
-    def test_going_back_from_the_internet_moves_off_a_taken_port_80(self):
-        # Its own edge runs on the exposed port; port 80 is the other copy's.
+    def test_going_back_from_the_internet_moves_off_a_taken_port_8791(self):
+        # Its own edge runs on the exposed port; port 8791 is the other copy's.
         with Sandbox(env_text="PUBLIC_HOST=game.example.com:8790\nLISTEN_PORT=8790\n") as sb:
-            sb.busy_ports = {80, 8790}
+            sb.busy_ports = {8791, 8790}
             sb.edge_port = 8790
             chosen = app.ensure_env(reset={"PUBLIC_HOST": "", "LISTEN_PORT": ""})
-            self.assertEqual(chosen, "192.168.0.10:8080")
-            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "8080")
+            self.assertEqual(chosen, "192.168.0.10:8792")
+            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "8792")
 
-    def test_going_back_writes_port_80_when_free(self):
+    def test_going_back_writes_port_8791_when_free(self):
         with Sandbox(env_text="PUBLIC_HOST=game.example.com:8790\nLISTEN_PORT=8790\n") as sb:
-            self.assertEqual(app.ensure_env(reset={"PUBLIC_HOST": "", "LISTEN_PORT": ""}), "192.168.0.10")
-            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "80")
+            self.assertEqual(app.ensure_env(reset={"PUBLIC_HOST": "", "LISTEN_PORT": ""}), "192.168.0.10:8791")
+            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "8791")
 
     def test_wsl_nat_address_is_refused_with_a_port_too(self):
         with Sandbox(env_text=None, detected="172.24.1.2", wsl=True) as sb, \
@@ -152,11 +155,12 @@ class PortTest(unittest.TestCase):
             self.assertFalse(os.path.exists(sb.env_file))
 
     def test_a_server_already_set_up_stays_where_it_is(self):
-        # Its own port answers while it runs, and the phones' app has that address in it.
+        # Set up before 0.11.0 on port 80, with no LISTEN_PORT: its own port answers while it runs, and the phones' app
+        # has that address in it. It stays there, now written out (DEP-41).
         with Sandbox() as sb:
             sb.busy_ports = {80}
             self.assertEqual(app.ensure_env(), "192.168.0.10")
-            self.assertNotIn("LISTEN_PORT", env.load(sb.env_file))
+            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "80")
 
     def test_a_port_named_in_env_is_kept(self):
         with Sandbox(env_text="LISTEN_PORT=9000\n") as sb:
@@ -167,25 +171,6 @@ class PortTest(unittest.TestCase):
         with Sandbox(env_text=None) as sb:
             sb.busy_ports = {80}
             self.assertEqual(app.ensure_env("192.168.0.10"), "192.168.0.10")
-
-    def test_admin_port_moves_off_a_taken_one(self):
-        with Sandbox() as sb:
-            sb.busy_ports = {8791, 8792}
-            app.ensure_admin_port()
-            self.assertEqual(env.load(sb.env_file)["ADMIN_PORT"], "8793")
-
-    def test_admin_port_stays_while_it_is_our_own(self):
-        with Sandbox() as sb:
-            sb.state = "running"
-            sb.busy_ports = {8791}
-            app.ensure_admin_port()
-            self.assertNotIn("ADMIN_PORT", env.load(sb.env_file))
-
-    def test_admin_port_named_in_env_is_kept(self):
-        with Sandbox(env_text="PUBLIC_HOST=192.168.0.10\nADMIN_PORT=9001\n") as sb:
-            sb.busy_ports = {9001, 8791}
-            app.ensure_admin_port()
-            self.assertEqual(env.load(sb.env_file)["ADMIN_PORT"], "9001")
 
 
 class OfflineBuildTest(unittest.TestCase):

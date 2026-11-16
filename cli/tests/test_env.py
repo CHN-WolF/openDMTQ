@@ -106,7 +106,9 @@ class HostTest(unittest.TestCase):
         self.assertEqual(env.join("a.example", 8790), "a.example:8790")
 
     def test_listen_port(self):
-        self.assertEqual(env.listen_port({}), 80)
+        # Not set up yet: the one port of a new install. Set up before .env named a port: 80, where it has been.
+        self.assertEqual(env.listen_port({}), 8791)
+        self.assertEqual(env.listen_port({"PUBLIC_HOST": "192.168.0.10"}), 80)
         self.assertEqual(env.listen_port({"LISTEN_PORT": "8790"}), 8790)
 
     def test_with_no_way_out_the_address_comes_from_the_machine_itself(self):

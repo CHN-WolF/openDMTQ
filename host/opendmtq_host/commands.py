@@ -13,7 +13,7 @@ from opendmtq_cli import checks, env
 from .paths import HERE, CLI, DATA, ENV_FILE, LOGS, MAC, ROOT, START_WAIT, WINDOWS
 from .output import die, ok, say
 from .programs import programs
-from .settings import admin_port, listen_port, require_settings, settings
+from .settings import admin_url, listen_port, require_settings, settings, site_url
 from .folders import make_folders, tool
 from .server import health, running_pid, wait_healthy
 
@@ -102,9 +102,9 @@ def cmd_status(args):
         say(f"Not set up yet: run {CLI} setup.")
         return 1
     h = health(values)
-    say(f"Address      http://{values['PUBLIC_HOST']}/")
+    say(f"Address      {site_url(values)}")
     user = values.get("ADMIN_USER") or "admin"
-    say(f"Admin pages  http://localhost:{admin_port(values)}/opendmtq/admin/  (user {user})")
+    say(f"Admin pages  {admin_url(values)}  (user {user}, password ADMIN_PASSWORD in .env)")
     say(f"Server       {'running' if h is not None else 'not running'}")
     if h is not None:
         say(f"Client data  {'yes' if h.get('game_data') else f'missing: {CLI} import <folder>'}")

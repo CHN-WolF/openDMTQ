@@ -41,8 +41,12 @@ MAC = sys.platform == "darwin"
 # The command people type, for the messages that name one.
 CLI = "OpenDMTQ.exe" if WINDOWS else "./opendmtq"
 
-# The port the admin pages answer on, on this machine only, as with Docker Compose.
-ADMIN_PORT = 8791
+# The server's one port on a new install: the players' site, the admin pages (/opendmtq/admin) and the API on it.
+DEFAULT_PORT = 8791
+
+# Where the admin service itself listens, on loopback only, for Apache to pass the admin pages on to: nobody opens this
+# one. Away from the server's own ports (an install from before 0.11.0 keeps the one its .env names, 8791 then).
+ADMIN_PORT = 18791
 
 # How long a start waits for the server's first answer before it says so. A test makes it short, to see that wait run
 # out on a server that is only slow.

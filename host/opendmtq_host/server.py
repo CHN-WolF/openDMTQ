@@ -19,7 +19,7 @@ from opendmtq_cli import env
 from .paths import ADMIN_WAIT, APP, CLI, DATA, LOGS, PYTHON, ROOT, RUN, START_WAIT, WINDOWS
 from .output import die, say, warn
 from .programs import programs
-from .settings import admin_port, listen_port, require_settings, settings
+from .settings import admin_port, admin_url, listen_port, require_settings, settings, site_url
 from .folders import php_command, server_env, tool, tools_env
 from .apache import write_configs
 
@@ -248,8 +248,7 @@ def announce_when_up(server, open_the_setup):
         # The settings as they are now: a restart may have changed them.
         values = server.values
         if health(values) is not None:
-            logging.info("serving http://%s/ (admin pages: http://localhost:%d/opendmtq/admin/)",
-                         values["PUBLIC_HOST"], admin_port(values))
+            logging.info("serving %s (admin pages: %s)", site_url(values), admin_url(values))
             if open_the_setup:
                 # The setup in the browser, signed in by a one-time link: the files, the address, the players, the app.
                 open_setup(values)
@@ -535,7 +534,8 @@ def setup_link(values):
     key = secrets.token_urlsafe(24)
     # Readable by this user only: for an hour it opens the setup signed in, to whoever can read it on this PC.
     env.write_private(os.path.join(RUN, "signin.token"), key)
-    return f"http://localhost:{admin_port(values)}/opendmtq/admin/setup/start?key={key}"
+    # Through the server's one port, as every other visit (the admin service's own port is Apache's business).
+    return f"http://localhost:{listen_port(values)}/opendmtq/admin/setup/start?key={key}"
 
 
 def admin_answers(values):
@@ -566,5 +566,7 @@ def open_setup(values):
         import webbrowser
         webbrowser.open(url)
     say(f"If no browser opened, open this link in one on this computer (it works once, for an hour): {url}")
-    say(f"From another computer: http://{values['PUBLIC_HOST']}/opendmtq/admin/setup, user "
-        f"{values.get('ADMIN_USER') or 'admin'}, password {values.get('ADMIN_PASSWORD')} (kept in .env).")
+    # From another computer only where the admin pages answer it (a local network address).
+    if not admin_url(values).startswith("http://localhost:"):
+        say(f"From another computer: {admin_url(values)}setup, user "
+            f"{values.get('ADMIN_USER') or 'admin'}, password {values.get('ADMIN_PASSWORD')} (kept in .env).")

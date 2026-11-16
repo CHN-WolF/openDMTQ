@@ -309,7 +309,6 @@ class HostStatusAppLineTest(unittest.TestCase):
                 mock.patch.object(self.commands, "say", lambda text: lines.append(text)), \
                 mock.patch.object(self.commands, "settings", lambda: {"PUBLIC_HOST": "192.168.0.20"}), \
                 mock.patch.object(self.commands, "health", lambda values: None), \
-                mock.patch.object(self.commands, "admin_port", lambda values: 8791), \
                 mock.patch.object(self.commands, "app_manifest", lambda: None), \
                 mock.patch.object(self.commands, "build_status", lambda: {"state": "failed"}):
             self.commands.cmd_status(None)
@@ -387,13 +386,18 @@ class HostAdminConfTest(unittest.TestCase):
         self.assertIn('ProxyPass "/opendmtq/api" "http://127.0.0.1:8791/opendmtq/api" timeout=900', conf)
         self.assertNotIn("Require all denied", conf)
 
-    def test_on_an_internet_address_or_kept_off_the_port_both_are_refused(self):
-        for values in ({"PUBLIC_HOST": "game.example.com:8790"}, {"PUBLIC_HOST": "192.168.0.10", "ADMIN_ON_PUBLIC_PORT": "no"}):
-            conf = self.apache.admin_conf(dict(values, ADMIN_PORT="8791"))
-            self.assertNotIn("ProxyPass", conf, values)
+    def test_on_an_internet_address_or_kept_off_the_port_the_server_pc_only(self):
+        # Still on the one port, for the server PC's own visits (Apache's "local"), and refused to anyone else with the
+        # address that works (DEP-44).
+        for values in ({"PUBLIC_HOST": "game.example.com:8790", "LISTEN_PORT": "8790"},
+                       {"PUBLIC_HOST": "192.168.0.10:8790", "LISTEN_PORT": "8790", "ADMIN_ON_PUBLIC_PORT": "no"}):
+            conf = self.apache.admin_conf(dict(values, ADMIN_PORT="18791"))
+            self.assertIn('ProxyPass "/opendmtq/admin" "http://127.0.0.1:18791/opendmtq/admin" timeout=900', conf)
             self.assertIn('<LocationMatch "^/(opendmtq/)?admin(/|$)">', conf)
             self.assertIn('<LocationMatch "^/opendmtq/api(/|$)">', conf)
-            self.assertEqual(conf.count("Require all denied"), 2, values)
+            self.assertEqual(conf.count("Require local"), 2, values)
+            self.assertIn("http://localhost:8790/opendmtq/admin/", conf)
+            self.assertNotIn("18791/opendmtq/admin/\"", conf)
 
 
 class VirtualInterfacesTest(unittest.TestCase):

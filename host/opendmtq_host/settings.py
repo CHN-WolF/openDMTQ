@@ -4,7 +4,7 @@ import secrets
 import socket
 
 from opendmtq_cli import env
-from .paths import ADMIN_PORT, CLI, ENV_FILE, WINDOWS
+from .paths import ADMIN_PORT, CLI, DEFAULT_PORT, ENV_FILE, WINDOWS
 from .output import die, ok
 
 
@@ -21,8 +21,22 @@ def listen_port(values):
 
 
 def admin_port(values):
-    """The port of the admin pages, on this machine only."""
+    """The admin service's own port, on loopback, behind Apache: never an address anybody opens."""
     return int(values.get("ADMIN_PORT") or ADMIN_PORT)
+
+
+def site_url(values):
+    """The server's one address: the players' site, with the admin pages and the API under it."""
+    return f"http://{values['PUBLIC_HOST']}/"
+
+
+def admin_url(values):
+    """Where the owner opens the admin pages: on the server's one port, under /opendmtq/admin/. At the address phones use
+    on a local network; on an internet address (or with ADMIN_ON_PUBLIC_PORT=no) on the server PC itself, as localhost
+    (this install has no HTTPS to carry the password from anywhere else)."""
+    if values.get("ADMIN_ON_PUBLIC_PORT", "yes") == "yes" and env.is_lan_only(values.get("PUBLIC_HOST", "")):
+        return f"http://{values['PUBLIC_HOST']}/opendmtq/admin/"
+    return f"http://localhost:{listen_port(values)}/opendmtq/admin/"
 
 
 def bindable(port, address="0.0.0.0"):
@@ -39,13 +53,12 @@ def bindable(port, address="0.0.0.0"):
 
 
 def choose_port():
-    """Port 80 when it is free and allowed (phones then need no port in the address), else the first free of 8080,
-    8790 and on."""
-    for port in (80, 8080, 8790, 8792, 8793, 8794, 8795):
+    """The port for a new install: 8791 when it is free, else the first free one after it."""
+    for port in range(DEFAULT_PORT, DEFAULT_PORT + 9):
         if bindable(port):
             return port
-    die("no free port for the server among 80, 8080, 8790 and 8792 to 8795: close the program that uses them (another "
-        "web server, Skype), or set another one as LISTEN_PORT in the file .env (Notepad opens it)")
+    die(f"no free port for the server among {DEFAULT_PORT} to {DEFAULT_PORT + 8}: close the program that uses them, or "
+        "set another one as LISTEN_PORT in the file .env" + (" (Notepad opens it)" if WINDOWS else ""))
 
 
 def ensure_settings(host=None, quiet=False):
@@ -75,15 +88,18 @@ def ensure_settings(host=None, quiet=False):
     # The owner's password for the admin pages, made once and kept.
     if not values.get("ADMIN_PASSWORD"):
         updates["ADMIN_PASSWORD"] = secrets.token_urlsafe(12)
-    # The admin pages' own port, free on this machine.
-    if not values.get("ADMIN_PORT"):
-        updates["ADMIN_PORT"] = str(next((p for p in range(ADMIN_PORT, ADMIN_PORT + 20) if bindable(p, "127.0.0.1")),
-                                         ADMIN_PORT))
+    # The admin service's own port on loopback, free on this machine and never the server's own (an install from
+    # before 0.11.0 has 8791 there, which a server moved to 8791 would then hold twice).
+    if not values.get("ADMIN_PORT") or int(values["ADMIN_PORT"]) == port:
+        updates["ADMIN_PORT"] = str(next((p for p in range(ADMIN_PORT, ADMIN_PORT + 20)
+                                          if p != port and bindable(p, "127.0.0.1")), ADMIN_PORT))
     if updates:
         env.save(ENV_FILE, updates)
         if not quiet:
             for k, v in updates.items():
-                ok(f"{k}={'(made, see below)' if k == 'ADMIN_PASSWORD' else v} written to .env")
+                # The admin service's own port is this program's business, not the owner's: not said.
+                if k != "ADMIN_PORT":
+                    ok(f"{k}={'(made, see below)' if k == 'ADMIN_PASSWORD' else v} written to .env")
     return settings()
 
 

@@ -125,40 +125,40 @@ def httpd_conf(values, found):
 
 
 def admin_conf(values):
-    """The admin pages (/opendmtq/admin) and their API (/opendmtq/api) on the public port: passed to the admin service on a
-    local network address, refused on an internet one, where this install has no HTTPS to keep the password and the
-    tokens safe."""
-    port = admin_port(values)
-    target = f"http://127.0.0.1:{port}"
-    if values.get("ADMIN_ON_PUBLIC_PORT", "yes") == "yes" and env.is_lan_only(values["PUBLIC_HOST"]):
-        return "\n".join([
-            # The visitor's real address for the sign-in throttle; whatever the visitor sent is replaced.
-            'RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"',
-            # Sign-in forms are tiny; uploads (songs, backups) go to their own pages.
-            '<LocationMatch "^/(opendmtq/)?admin/login">',
-            "    LimitRequestBody 8192",
+    """The admin pages (/opendmtq/admin) and their API (/opendmtq/api) on the server's one port, passed to the admin
+    service on loopback: from anywhere on a local network address; on an internet one (or with ADMIN_ON_PUBLIC_PORT=no)
+    from the server PC only, as this install has no HTTPS to keep the password and the tokens safe on the way."""
+    target = f"http://127.0.0.1:{admin_port(values)}"
+    port = listen_port(values)
+    lines = [
+        # The visitor's real address for the sign-in throttle; whatever the visitor sent is replaced.
+        'RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"',
+        # Sign-in forms are tiny; uploads (songs, backups) go to their own pages.
+        '<LocationMatch "^/(opendmtq/)?admin/login">',
+        "    LimitRequestBody 8192",
+        "</LocationMatch>",
+        f'ProxyPass "/opendmtq/admin" "{target}/opendmtq/admin" timeout=900',
+        f'ProxyPassReverse "/opendmtq/admin" "{target}/opendmtq/admin"',
+        # Their address until 2026-11, which the admin service sends on to the new one.
+        f'ProxyPass "/admin" "{target}/admin"',
+        f'ProxyPassReverse "/admin" "{target}/admin"',
+        # The API, on the same terms as the pages: its uploads and downloads take as long.
+        f'ProxyPass "/opendmtq/api" "{target}/opendmtq/api" timeout=900',
+        f'ProxyPassReverse "/opendmtq/api" "{target}/opendmtq/api"',
+    ]
+    if not (values.get("ADMIN_ON_PUBLIC_PORT", "yes") == "yes" and env.is_lan_only(values["PUBLIC_HOST"])):
+        # The server PC only (Apache's "local": loopback), on this same port; anyone else is told where they open.
+        lines += [
+            '<LocationMatch "^/(opendmtq/)?admin(/|$)">',
+            "    Require local",
+            f'    ErrorDocument 403 "The admin pages open on the server PC: http://localhost:{port}/opendmtq/admin/"',
             "</LocationMatch>",
-            f'ProxyPass "/opendmtq/admin" "{target}/opendmtq/admin" timeout=900',
-            f'ProxyPassReverse "/opendmtq/admin" "{target}/opendmtq/admin"',
-            # Their address until 2026-11, which the admin service sends on to the new one.
-            f'ProxyPass "/admin" "{target}/admin"',
-            f'ProxyPassReverse "/admin" "{target}/admin"',
-            # The API, on the same terms as the pages: its uploads and downloads take as long.
-            f'ProxyPass "/opendmtq/api" "{target}/opendmtq/api" timeout=900',
-            f'ProxyPassReverse "/opendmtq/api" "{target}/opendmtq/api"',
-        ]) + "\n"
-    return "\n".join([
-        '<LocationMatch "^/(opendmtq/)?admin(/|$)">',
-        "    Require all denied",
-        f'    ErrorDocument 403 "The admin pages are on the server PC only: open '
-        f'http://localhost:{port}/opendmtq/admin/ there."',
-        "</LocationMatch>",
-        # The API with them.
-        '<LocationMatch "^/opendmtq/api(/|$)">',
-        "    Require all denied",
-        f'    ErrorDocument 403 "The API is on the server PC only: use http://localhost:{port}/opendmtq/api/v1/ there."',
-        "</LocationMatch>",
-    ]) + "\n"
+            '<LocationMatch "^/opendmtq/api(/|$)">',
+            "    Require local",
+            f'    ErrorDocument 403 "The API answers on the server PC: http://localhost:{port}/opendmtq/api/v1/"',
+            "</LocationMatch>",
+        ]
+    return "\n".join(lines) + "\n"
 
 
 def php_ini(values, found):

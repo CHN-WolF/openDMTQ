@@ -1,7 +1,7 @@
 OpenDMTQ {{ .Chart.AppVersion }} is starting in namespace {{ .Release.Namespace }}.
 
 Phones on the same network reach it at:  http://{{ .Values.publicHost }}/
-That address must be where the "{{ include "opendmtq.fullname" . }}" Service answers on port {{ .Values.router.service.port }}.
+That address must be where the "{{ include "opendmtq.fullname" . }}" Service answers on port {{ include "opendmtq.routerPort" . }}.
 
 The builder job makes the app for that address; follow it with:
   kubectl -n {{ .Release.Namespace }} logs -f job/{{ include "opendmtq.fullname" . }}-builder
@@ -21,7 +21,7 @@ Admin pages, ID {{ .Values.admin.user | default "admin" }}; the password:
   Not through the router (admin.onPublicPort; router.tls.secretName adds HTTPS).
 {{- end }}
   On the machine with kubectl:
-  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "opendmtq.fullname" . }}-api 8791:8000
-  then open http://localhost:8791/opendmtq/admin/
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "opendmtq.fullname" . }}-api {{ include "opendmtq.routerPort" . }}:8000
+  then open http://localhost:{{ include "opendmtq.routerPort" . }}/opendmtq/admin/
   The API is beside them, at /opendmtq/api/v1/, with a token made on the Accounts page (docs/api.md).
 {{- end }}

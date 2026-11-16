@@ -52,15 +52,16 @@ def ensure_env(host=None, quiet=False, reset=None, adopt=True, retry="./opendmtq
                 "run ./opendmtq expose --off (then ./opendmtq host <address> for another LAN address)")
         chosen = host
     else:
-        # A detected address carries the port the server listens on: for a server set up for the first time, 80 unless
-        # that is taken (another copy of this server, a web server), then the first free one from 8080.
+        # A detected address carries the port the server listens on: for a server set up for the first time, 8791 unless
+        # that is taken (another copy of this server, another program), then the first free one after it.
         port = env.listen_port(values)
         # (Not by this server itself, whose .env is gone.)
         if (detected and env.check_host(current) and not values.get("LISTEN_PORT") and system.port_busy(port)
                 and not system.edge_holds(port)):
-            port = system.free_port(8080)
+            taken = port
+            port = system.free_port(port + 1)
             moved = True
-            ok(f"port 80 is taken on this machine: this server uses {port}")
+            ok(f"port {taken} is taken on this machine: this server uses {port}")
         found = env.join(detected, port) if detected else None
         chosen = (current if not env.check_host(current) else None) or found
         # A saved LAN address that no longer matches this machine (DHCP change, copied example file).
@@ -97,8 +98,9 @@ def ensure_env(host=None, quiet=False, reset=None, adopt=True, retry="./opendmtq
     port = env.split(chosen)[1]
     if (host or moved) and env.listen_port(values) != port:
         updates["LISTEN_PORT"] = str(port)
-    # Asked to start over (expose --off): whichever port was chosen is written, not left empty.
-    if updates.get("LISTEN_PORT") == "":
+    # Asked to start over (expose --off), or never written (a new server, or one set up before .env named its port):
+    # whichever port was chosen is written, so compose publishes that one.
+    if updates.get("LISTEN_PORT") == "" or not values.get("LISTEN_PORT"):
         updates["LISTEN_PORT"] = str(port)
     if updates:
         env.save(ENV_FILE, updates)
@@ -204,20 +206,21 @@ def restart_server():
 
 
 def admin_address(values):
-    """host:port where this PC reaches the admin service, as compose publishes it."""
-    bind = values.get("ADMIN_BIND") or "127.0.0.1"
-    # Published on every interface: loopback reaches it too.
-    if bind == "0.0.0.0":
-        bind = "127.0.0.1"
-    return f"{bind}:{values.get('ADMIN_PORT') or 8791}"
+    """host:port where this PC reaches the admin pages: the server's one port, on loopback (a visit to localhost stays on
+    plain HTTP and counts as the server PC's own, server/entrypoint.sh)."""
+    return f"127.0.0.1:{env.listen_port(values)}"
 
 
 def admin_link(values):
-    """The admin pages' own address, to print."""
-    address = admin_address(values)
-    if address.startswith("127.0.0.1:"):
-        return f"http://localhost:{address.split(':', 1)[1]}/opendmtq/admin/ on this PC"
-    return f"http://{address}/opendmtq/admin/"
+    """The admin pages' address, to print: on the server's one port, at the address phones use on a local network; on
+    an internet address over HTTPS when they are on the public port, else on this PC as localhost."""
+    host = values.get("PUBLIC_HOST", "")
+    public = values.get("ADMIN_ON_PUBLIC_PORT", "yes") == "yes"
+    if public and env.is_lan_only(host):
+        return f"http://{host}/opendmtq/admin/"
+    if public:
+        return f"https://{env.https_address(host)}/opendmtq/admin/"
+    return f"http://localhost:{env.listen_port(values)}/opendmtq/admin/ on this PC"
 
 
 def admin_sign_in(values):
@@ -242,17 +245,6 @@ def open_firewall(port, internet, replaces=None):
 
 # ----------------------------------------------------------------------------- commands
 
-def ensure_admin_port():
-    """The admin pages' own port, unless .env names one: the default one may be taken by another copy of this server, and
-    nothing outside this machine has that address yet. Only the port the server is not on already."""
-    values = env.load(ENV_FILE)
-    if values.get("ADMIN_PORT") or system.container_state("admin") == "running" or not system.port_busy(8791):
-        return
-    port = system.free_port(8792)
-    env.save(ENV_FILE, {"ADMIN_PORT": str(port)})
-    ok(f"port 8791 is taken on this machine: the admin pages use {port} here (ADMIN_PORT in .env)")
-
-
 def cmd_up(args):
     host = require_host()
     if not have_game_data():
@@ -273,7 +265,6 @@ def cmd_up(args):
     if not env.load(ENV_FILE).get("ADMIN_PASSWORD"):
         import secrets
         env.save(ENV_FILE, {"ADMIN_PASSWORD": secrets.token_urlsafe(12)})
-    ensure_admin_port()
     # The builder's status file and log keep earlier runs: this run's are the ones from now on.
     since = time.time()
     system.compose("up", "-d", "--quiet-pull", "server", "builder", "admin", "edge")
@@ -652,8 +643,13 @@ def cmd_expose(args):
         if args.admin_public:
             ok(f"admin pages: https://{env.https_address(address)}/opendmtq/admin/ once HTTPS is up (own certificate, "
                "see docs/internet.md#https)")
+        elif system.docker_desktop():
+            # Docker Desktop hands the server every visit from one address of its own, so the server cannot tell the
+            # server PC's visits from the internet's: there the admin pages are on the public port over HTTPS or nowhere.
+            ok("admin pages: off (Docker Desktop cannot tell this PC's visits from the internet's; --admin-public puts "
+               "them on the public port over HTTPS)")
         else:
-            ok(f"admin pages: {admin_link(values)} (--admin-public to change)")
+            ok(f"admin pages: {admin_link(env.load(ENV_FILE))} (--admin-public to change)")
     values = env.load(ENV_FILE)
     after = (values["PUBLIC_HOST"], env.listen_port(values))
     # New settings: restart (the builder rebuilds the app when the address changed), open the

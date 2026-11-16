@@ -105,9 +105,16 @@ def https_address(address):
     return f"{host}:{port}"
 
 
+# The server's one port on a new install: the players' site, the admin pages (/opendmtq/admin) and the API on it.
+DEFAULT_PORT = 8791
+
+
 def listen_port(values):
-    """Port the server publishes (LISTEN_PORT in .env, 80 when unset)."""
-    return int(values.get("LISTEN_PORT") or 80)
+    """Port the server publishes: LISTEN_PORT in .env; 80 for a server set up before .env named one (compose's own
+    default, and the port its address then has); 8791 for one not set up yet."""
+    if values.get("LISTEN_PORT"):
+        return int(values["LISTEN_PORT"])
+    return 80 if values.get("PUBLIC_HOST") else DEFAULT_PORT
 
 
 def port_problem(values):

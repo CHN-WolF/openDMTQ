@@ -1,5 +1,5 @@
 # Address phones use to reach the router Service: an IPv4 address or host name, with ":port" when
-# the Service port is not 80. It is written into every URL the server hands out and into the
+# the Service port is not 80 (on a new install it is 8791: "192.168.1.10:8791"). It is written into every URL the server hands out and into the
 # patched app. Required.
 publicHost: ""
 # The name after the game's title on phones: TECHNIKA Q (name). Empty: publicHost, port included.
@@ -68,7 +68,9 @@ router:
   service:
     # LoadBalancer on bare metal needs MetalLB, k3s servicelb or similar.
     type: LoadBalancer
-    port: 80
+    # The server's one port: the game, the players' site, the admin pages (/opendmtq/admin) and the API. Empty: 8791 on a
+    # new install, and on an upgrade the port its Service has now (so the phones' app keeps its address).
+    port: null
     nodePort: null
     loadBalancerIP: ""
   # HTTPS on the router's own port, next to the game's plain HTTP: the name of a kubernetes.io/tls Secret in this

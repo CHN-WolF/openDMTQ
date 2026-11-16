@@ -195,8 +195,27 @@ def compose_env(extra=None):
     # Container create/start chatter is noise here; errors still reach stderr. In the environment, not as compose's
     # --progress flag: the Compose of Docker 23 has no such flag and stops at it, and ignores a variable it does not know.
     env["COMPOSE_PROGRESS"] = "quiet"
+    # Whether the server may take a visit from its network's gateway as the server PC's own (the admin pages on the one
+    # port, server/entrypoint.sh): Docker Engine passes only this machine's own visits that way, Docker Desktop every one.
+    env["ADMIN_LOCAL"] = "none" if docker_desktop() else "gateway"
     env.update(extra or {})
     return env
+
+
+_desktop = None
+
+
+def docker_desktop():
+    """True when Docker here is Docker Desktop (asked once per run)."""
+    global _desktop
+    if _desktop is None:
+        try:
+            r = subprocess.run(["docker", "info", "--format", "{{.OperatingSystem}}"], capture_output=True, text=True,
+                               timeout=20)
+            _desktop = "Docker Desktop" in r.stdout
+        except (OSError, subprocess.SubprocessError):
+            _desktop = False
+    return _desktop
 
 
 def require_docker():

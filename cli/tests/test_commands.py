@@ -276,11 +276,20 @@ class ExposeTest(unittest.TestCase):
             self.assertIn("forward TCP 8790", sb.output())
             self.assertIn("new app", sb.output())
 
-    def test_admin_address_follows_admin_port(self):
+    def test_admin_pages_stay_on_the_one_port_on_this_pc(self):
+        # Exposed without --admin-public: on the server's one port, as localhost on this PC; no port of their own (DEP-42).
         with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_PORT=9791\n") as sb:
             self.assertEqual(self.expose(sb), 0, sb.output())
-            self.assertIn("localhost:9791/opendmtq/admin/", sb.output())
+            self.assertIn("http://localhost:8790/opendmtq/admin/", sb.output())
+            self.assertNotIn("9791", sb.output())
             self.assertNotIn("8791", sb.output())
+
+    def test_on_docker_desktop_they_are_said_to_be_off(self):
+        with Sandbox("PUBLIC_HOST=192.168.0.10\n") as sb:
+            sb.docker_desktop = True
+            self.assertEqual(self.expose(sb), 0, sb.output())
+            self.assertIn("admin pages: off", sb.output())
+            self.assertNotIn("localhost", sb.output())
 
     def test_a_server_that_does_not_come_back_is_reported(self):
         with Sandbox() as sb:
@@ -311,7 +320,7 @@ class ExposeTest(unittest.TestCase):
         with Sandbox(EXPOSED, detected="192.168.0.20") as sb:
             self.assertEqual(self.expose(sb, name=None, off=True, host=None), 0, sb.output())
             e = sb.env()
-            self.assertEqual((e["PUBLIC_HOST"], e["LISTEN_PORT"], e["ADMIN_ON_PUBLIC_PORT"]), ("192.168.0.20", "80", "yes"))
+            self.assertEqual((e["PUBLIC_HOST"], e["LISTEN_PORT"], e["ADMIN_ON_PUBLIC_PORT"]), ("192.168.0.20:8791", "8791", "yes"))
             # No shared site password any more: the site's accounts are made on the admin pages.
             self.assertNotIn("PORTAL_PASSWORD", e)
 
@@ -524,19 +533,21 @@ class MessageTest(unittest.TestCase):
             self.assertEqual(sb.call(app.cmd_apk, base=None), 0, sb.output())
             self.assertNotIn("same Wi-Fi", sb.output())
 
-    def test_up_names_the_admin_port_in_use(self):
-        with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PORT=9791\nADMIN_PASSWORD=x\n") as sb:
+    def test_up_names_the_admin_pages_on_the_one_port(self):
+        # Kept off the public port: on this PC, on the server's own port, and up waits for them there.
+        with Sandbox("PUBLIC_HOST=192.168.0.10\nLISTEN_PORT=80\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PORT=9791\nADMIN_PASSWORD=x\n") as sb:
             game_data(sb)
             with mock.patch.object(app.time, "sleep"):
                 self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
-            self.assertIn("http://localhost:9791/opendmtq/admin/", sb.output())
-            self.assertIn("http://127.0.0.1:9791/opendmtq/admin/login", sb.urls)
+            self.assertIn("http://localhost:80/opendmtq/admin/", sb.output())
+            self.assertIn("http://127.0.0.1:80/opendmtq/admin/login", sb.urls)
+            self.assertNotIn("9791", sb.output())
 
     def test_up_status_and_setup_name_one_admin_address(self):
-        # With the pages on the public port too (the default), up named that address and the setup's end another, and
-        # status none: all three now name the one on this PC, with where its password is, and nothing else of the pages.
-        wanted = "http://localhost:9791/opendmtq/admin/ on this PC  (ID admin, password: ADMIN_PASSWORD in .env)"
-        with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_PORT=9791\nADMIN_PASSWORD=x\n") as sb:
+        # up, status and the setup's end all name the admin pages on the server's one port, at the address phones use,
+        # with where the password is (DEP-43).
+        wanted = "http://192.168.0.10:8791/opendmtq/admin/  (ID admin, password: ADMIN_PASSWORD in .env)"
+        with Sandbox("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n") as sb:
             game_data(sb)
             with mock.patch.object(app.time, "sleep"):
                 self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
@@ -546,6 +557,7 @@ class MessageTest(unittest.TestCase):
                                  sb.output())
             self.assertEqual(sb.output().count(wanted), 3, sb.output())
             self.assertEqual(sb.output().count("/opendmtq/admin/"), 3, sb.output())
+            self.assertNotIn("localhost", sb.output())
 
     def test_help_keeps_deploy_out_of_the_newcomers_list(self):
         # deploy is a maintainer's command for a live server: under a heading of its own after the list, and it still
