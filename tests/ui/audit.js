@@ -324,8 +324,8 @@ async function self(contexts) {
   }
   // And the room between things laid out as the site lays them out (panels a gap apart, buttons in a row, words inside
   // their padding) is no finding: the checker sees faults, not every box.
-  await page.setContent(`<!doctype html><style>:root { --gap: 20px } body { margin: 0; background: #11151a; color: #eee; font: 14px/1.6 sans-serif }
-    main { display: grid; gap: var(--gap); padding: 24px } .card { padding: 24px; background: #222 } .line { display: flex; gap: 10px; margin: 14px 0 0 }
+  await page.setContent(`<!doctype html><style>:root { --gap: 20px; --pad: 24px } body { margin: 0; background: #11151a; color: #eee; font: 14px/1.6 sans-serif }
+    main { display: grid; gap: var(--gap); padding: 24px } .card { padding: var(--pad); background: #222 } .line { display: flex; gap: 10px; margin: 14px 0 0 }
     .btn { display: inline-flex; align-items: center; height: 42px; padding: 0 16px; background: #333 } p { margin: 0 0 14px }</style>
     <main><div class="card"><p>A panel with words in its padding.</p><div class="line"><span class="btn">One</span><span class="btn">Two</span><span class="btn">Three</span></div></div>
     <div class="card"><p>Another, a gap below the first.</p></div></main>`);

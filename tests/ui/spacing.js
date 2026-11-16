@@ -54,9 +54,13 @@ window.spacingAudit = function spacingAudit() {
     // Laid out as one box: a run of inline text is a line of text, whose marks are words, not boxes.
     if (s.display !== 'inline' && s.display !== 'contents' && seen(el) && !decoration(el) && !(el.closest('svg') && !el.matches('svg'))) {
       const bg = parse(s.backgroundColor);
-      const filled = (bg && bg.a > 0.06) || s.backgroundImage !== 'none';
+      // A fill painted only inside the letters (the leading place's gradient) is the text's colour, not a box.
+      const inLetters = s.webkitBackgroundClip === 'text' || s.backgroundClip === 'text';
+      const filled = !inLetters && ((bg && bg.a > 0.06) || s.backgroundImage !== 'none');
       const sides = borderSides(s);
-      if (el.matches(MEDIA)) found = { kind: 'media', sides: ALL };
+      // A picture, also one a box paints as its background or holds with no words (a jacket's frame): it may run to its
+      // box's edge.
+      if (el.matches(MEDIA) || (!inLetters && /url\(/.test(s.backgroundImage)) || (el.querySelector(MEDIA) && !el.textContent.trim() && !el.querySelector(CONTROL))) found = { kind: 'media', sides: ALL };
       else if (el.matches(CONTROL) && (filled || sides.length)) found = { kind: 'control', sides: filled ? ALL : sides };
       else if (filled || sides.length === 4 || outerShadow(s)) found = { kind: 'box', sides: ALL };
     }
@@ -84,20 +88,40 @@ window.spacingAudit = function spacingAudit() {
   };
   // Joined on purpose: the cells of a table, a segmented control's buttons, the tabs on their rule, the language switch's
   // two halves, a menu's or a list's rows with a line between them. Short, and each one a look the game itself has.
-  const JOINED = 'td, th, tr, thead, tbody, tfoot, caption, .seg > *, .tabs > *, .tabbar > *, .lang-switch > *, [role=tablist] > *, [role=menu] > *, [role=listbox] > *';
-  const joined = el => el.matches(JOINED);
+  // A gauge's fill runs from its track's edge, and a strip's or a calendar's cells stand a hair apart: they are drawings.
+  const JOINED = 'td, th, tr, thead, tbody, tfoot, caption, .seg > *, .tabs > *, .tabbar > *, .lang-switch > *, [role=tablist] > *, [role=menu] > *, [role=listbox] > *, .meter > *, .tile-meter > *, .strip > *, .daycells > *';
+  // A drawing's parts: a box with no words and nothing to press in a box with none either (a gauge's track and its fill,
+  // a stacked bar's segments) is drawn as one figure.
+  const wordless = el => !el.textContent.trim() && !el.querySelector(CONTROL) && !el.matches(CONTROL);
+  const joined = el => el.matches(JOINED) || (wordless(el) && !!el.parentElement && wordless(el.parentElement));
 
+  // The room between two rectangles across each axis: negative when they overlap along it.
+  const apart = (a, b) => ({ x: Math.max(a.left, b.left) - Math.min(a.right, b.right), y: Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom) });
+  // Whole in view of every box around it that cuts off or scrolls what passes its edge, up to the box it is in (that one
+  // too): what a scrolling list holds past its edge is reached by scrolling, not set against anything.
+  const clips = el => { const s = getComputedStyle(el); return s.overflowX !== 'visible' || s.overflowY !== 'visible'; };
+  const inView = (el, r, stop) => {
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      if (clips(a)) {
+        const v = a.getBoundingClientRect();
+        if (r.left < v.left - 1 || r.right > v.right + 1 || r.top < v.top - 1 || r.bottom > v.bottom + 1) return false;
+      }
+      if (a === stop) break;
+    }
+    return true;
+  };
   // Every box on the page, with its place, the box it sits in and its layer.
   const boxes = [];
   for (const el of document.body.querySelectorAll('*')) {
     const kind = boxOf(el);
     if (!kind) continue;
-    boxes.push({ el, kind: kind.kind, sides: kind.sides, r: el.getBoundingClientRect(), parent: holder(el), layer: layerOf(el) });
+    const r = el.getBoundingClientRect(), parent = holder(el);
+    // Only what is whole in view: what a scrolling box holds past its edge is not set against anything now.
+    if (!inView(el, r, parent)) continue;
+    boxes.push({ el, kind: kind.kind, sides: kind.sides, r, parent, layer: layerOf(el) });
   }
   const byParent = new Map();
   for (const b of boxes) byParent.set(b.parent, [...(byParent.get(b.parent) || []), b]);
-  // The room between two rectangles across each axis: negative when they overlap along it.
-  const apart = (a, b) => ({ x: Math.max(a.left, b.left) - Math.min(a.right, b.right), y: Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom) });
 
   // Two boxes in one box (or both on the page) and one layer, neither inside the other, with no room between them where
   // they face each other, or on top of each other.
@@ -140,7 +164,10 @@ window.spacingAudit = function spacingAudit() {
     if (!n.nodeValue.trim()) continue;
     const el = n.parentElement;
     if (!el || decoration(el) || !seen(el) || el.closest('svg')) continue;
-    range.selectNodeContents(n);
+    // The words without the spaces around them: a space before the next box is room, not letters.
+    const v = n.nodeValue, first = v.search(/\S/), last = v.length - v.match(/\s*$/)[0].length;
+    range.setStart(n, first);
+    range.setEnd(n, last);
     const lines = [...range.getClientRects()].filter(r => r.width > 0.5 && r.height > 0.5);
     if (!lines.length) continue;
     const s = getComputedStyle(el);
@@ -149,6 +176,9 @@ window.spacingAudit = function spacingAudit() {
     const size = px(s.fontSize), letters = (/[ㄱ-힣]/.test(n.nodeValue) ? 0.86 : 0.76) * size;
     const ink = lines.map(r => ({ left: r.left, right: r.right, top: (r.top + r.bottom) / 2 - letters / 2, bottom: (r.top + r.bottom) / 2 + letters / 2 }));
     const own = holder(el, true);
+    // Only text whole in view: lines scrolled past a list's edge are reached by scrolling.
+    const inkBox = { left: Math.min(...ink.map(r => r.left)), right: Math.max(...ink.map(r => r.right)), top: Math.min(...ink.map(r => r.top)), bottom: Math.max(...ink.map(r => r.bottom)) };
+    if (!inView(el, inkBox, own)) continue;
     // The text is placed in its box by the flow of the box, not laid over it.
     const sameLayer = layerOf(el) === layerOf(own);
     if (own && sameLayer) {
@@ -182,12 +212,13 @@ window.spacingAudit = function spacingAudit() {
     // A line of text beside a box in the same box and layer, with no room between them: a heading on a table's border, a
     // note on a field. Only the boxes that do not hold it, and not the words of what is pressed (a button's own words).
     if (el.closest('.btn, .button, button, label, summary') || !sameLayer && own) continue;
-    const box = { left: Math.min(...lines.map(r => r.left)), right: Math.max(...lines.map(r => r.right)), top: Math.min(...lines.map(r => r.top)), bottom: Math.max(...lines.map(r => r.bottom)) };
+    // The letters, not the font's whole height: a tall face's line box may reach past its own element without anything
+    // showing there.
     for (const b of byParent.get(own) || []) {
       if (b.el.contains(el) || joined(b.el) || b.layer !== layerOf(el)) continue;
-      const d = apart(box, b.r);
+      const d = apart(inkBox, b.r);
       const facesX = d.y < -2, facesY = d.x < -2;
-      if ((facesX && d.x < 1.5 && d.x > -1) || (facesY && d.y < 1.5 && d.y > -1)) say('touching', el, `"${n.nodeValue.trim().slice(0, 30)}" / ${describe(b.el)}: ${round(facesX ? d.x : d.y)}px apart`);
+      if ((facesX && d.x < 2 && d.x > -1) || (facesY && d.y < 2 && d.y > -1)) say('touching', el, `"${n.nodeValue.trim().slice(0, 30)}" / ${describe(b.el)}: ${round(facesX ? d.x : d.y)}px apart`);
     }
   }
   for (const t of tight.values()) say('tight-padding', t.el, `${t.side.toLowerCase()}: "${t.text}" ${round(t.g)}px from the edge, padding ${round(t.pad)}px`);
@@ -218,35 +249,51 @@ window.spacingAudit = function spacingAudit() {
     const spread = /space-(between|around|evenly)/.test(ps.justifyContent) || /space-(between|around|evenly)/.test(ps.alignContent);
     const flex = ps.display.includes('flex'), grid = ps.display.includes('grid');
     const across = [], down = [];
-    for (let i = 0; i + 1 < kids.length; i++) {
-      const a = kids[i], b = kids[i + 1];
-      // Only boxes next to each other in the markup: something drawn between them (a heading, a line of text) makes its
-      // own room.
-      let between = false;
-      for (let x = a.el.nextSibling; x && x !== b.el; x = x.nextSibling) {
-        if ((x.nodeType === Node.TEXT_NODE && x.nodeValue.trim()) || (x.nodeType === Node.ELEMENT_NODE && seen(x))) { between = true; break; }
+    // Something drawn in the room between two boxes (a heading, a line of text, a box of another layer) makes its own
+    // room: the two are not neighbours.
+    const children = [...parent.childNodes];
+    const drawnIn = (room, a, b) => children.some(x => {
+      if (x === a.el || x === b.el) return false;
+      let rects = [];
+      if (x.nodeType === Node.TEXT_NODE && x.nodeValue.trim()) { range.selectNodeContents(x); rects = [...range.getClientRects()]; }
+      else if (x.nodeType === Node.ELEMENT_NODE && seen(x)) rects = [x.getBoundingClientRect()];
+      return rects.some(r => Math.min(r.right, room.right) - Math.max(r.left, room.left) > 1 && Math.min(r.bottom, room.bottom) - Math.max(r.top, room.top) > 1);
+    });
+    // Each box with its nearest neighbour to the right (on its line) and below (in its column), wherever the markup has
+    // them: a podium's places, put in order by the stylesheet, stand side by side in another order than the markup's.
+    for (const a of kids) {
+      let right = null, below = null;
+      for (const b of kids) {
+        if (b === a) continue;
+        const d = apart(a.r, b.r);
+        if (d.y < -2 && b.r.left >= a.r.right - 1 && (!right || b.r.left < right.r.left)) right = b;
+        if (d.x < -2 && b.r.top >= a.r.bottom - 1 && (!below || b.r.top < below.r.top)) below = b;
       }
-      if (between) continue;
-      const d = apart(a.r, b.r);
-      const sa = getComputedStyle(a.el), sb = getComputedStyle(b.el);
-      if (d.y < -2 && d.x > 0) {
-        // Side by side.
-        if (autoMargin(a.el, 'right') || autoMargin(b.el, 'left')) continue;
-        across.push({ a, b, gap: d.x, want: (flex || grid ? px(ps.columnGap) : 0) + px(sa.marginRight) + px(sb.marginLeft) });
-      } else if (d.x < -2 && d.y > 0) {
+      const sa = getComputedStyle(a.el);
+      if (right && !autoMargin(a.el, 'right') && !autoMargin(right.el, 'left')) {
+        const room = { left: a.r.right, right: right.r.left, top: Math.max(a.r.top, right.r.top), bottom: Math.min(a.r.bottom, right.r.bottom) };
+        if (!drawnIn(room, a, right)) across.push({ a, b: right, gap: right.r.left - a.r.right, want: (flex || grid ? px(ps.columnGap) : 0) + px(sa.marginRight) + px(getComputedStyle(right.el).marginLeft) });
+      }
+      if (below && !autoMargin(a.el, 'bottom') && !autoMargin(below.el, 'top')) {
+        const room = { top: a.r.bottom, bottom: below.r.top, left: Math.max(a.r.left, below.r.left), right: Math.min(a.r.right, below.r.right) };
         // One under the other: in a flow of blocks the two margins between them become the larger one.
-        if (autoMargin(a.el, 'bottom') || autoMargin(b.el, 'top')) continue;
+        const sb = getComputedStyle(below.el);
         const margins = flex || grid ? px(sa.marginBottom) + px(sb.marginTop) : Math.max(px(sa.marginBottom), px(sb.marginTop));
-        down.push({ a, b, gap: d.y, want: (flex || grid ? px(ps.rowGap) : 0) + margins });
+        if (!drawnIn(room, a, below)) down.push({ a, b: below, gap: below.r.top - a.r.bottom, want: (flex || grid ? px(ps.rowGap) : 0) + margins });
       }
     }
+    // A grid's cells wider or taller than what is in them (placed at a start, an end or a middle) leave gaps of their own:
+    // only stretched ones are held to one gap.
+    const stretched = axis => !grid || ['normal', 'stretch', 'legacy'].includes(axis === 'across' ? ps.justifyItems : ps.alignItems);
     for (const [list, axis] of [[across, 'across'], [down, 'down']]) {
       // Each gap the same in one row or column (three boxes at least, so two gaps to compare).
       const sizes = list.map(g => g.gap);
-      if (!spread && list.length >= 2 && Math.max(...sizes) - Math.min(...sizes) > 1.5) say('uneven-gaps', parent, `${axis}: ${sizes.map(round).join(', ')}px`);
+      if (!spread && stretched(axis) && list.length >= 2 && Math.max(...sizes) - Math.min(...sizes) > 1.5) say('uneven-gaps', parent, `${axis}: ${sizes.map(round).join(', ')}px`);
       for (const g of list) {
-        // Panels (a page's boxes, a grid's tiles): the page's gap between them, as main, .two and .stack set it.
-        const panels = [g.a, g.b].every(x => x.kind === 'box' && x.r.width >= 200 && x.r.height >= 60);
+        // Panels: boxes with the page's own inner spacing (--pad, "one inner spacing for every box"). The page's gap
+        // between them, as main, .two and .stack set it.
+        const pad = px(ps.getPropertyValue('--pad'));
+        const panels = [g.a, g.b].every(x => x.kind === 'box' && pad && Math.abs(px(getComputedStyle(x.el).paddingLeft) - pad) <= 1 && Math.abs(px(getComputedStyle(x.el).paddingTop) - pad) <= 1);
         if (panels && pageGap && g.gap > 1.5 && Math.abs(g.gap - pageGap) > 1) say('off-scale', parent, `${pair(g.a.el, g.b.el)} ${axis}: ${round(g.gap)}px, the page's gap is ${round(pageGap)}px`);
         // A gap no stylesheet asked for: inline boxes keep the space between words in the markup, a line's leading adds to
         // one under another. Not where the room is shared out on purpose, nor a grid's columns wider than what is in them.
