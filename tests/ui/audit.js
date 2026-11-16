@@ -24,6 +24,8 @@ const OUT = process.env.OUT || '/out';
 const P = `${SITE}/opendmtq`;
 const A = `${ADMIN}/opendmtq/admin`;
 const layout = fs.readFileSync(path.join(__dirname, 'layout.js'), 'utf8');
+// The room between things (boxes touching, text against an edge, gaps off the page's scale), measured beside the layout.
+const spacing = fs.readFileSync(path.join(__dirname, 'spacing.js'), 'utf8');
 const pause = ms => new Promise(r => setTimeout(r, ms));
 
 // The screens every page is looked at on: a phone, the narrowest tablet (an iPad mini held upright), a tablet held sideways,
@@ -231,8 +233,8 @@ async function audit(page) {
     Promise.all(document.getAnimations().filter(a => a.effect && Number.isFinite(a.effect.getComputedTiming().endTime)).map(a => a.finished.catch(() => {}))),
     new Promise(done => setTimeout(done, 3000)),
   ]));
-  await page.addScriptTag({ content: layout });
-  return page.evaluate(() => window.layoutAudit());
+  await page.addScriptTag({ content: `${layout}\n${spacing}` });
+  return page.evaluate(() => [...window.layoutAudit(), ...window.spacingAudit()]);
 }
 
 // Every page of a list on every width, in both languages; findings grouped, so that one fault on eight views is one line.
@@ -316,9 +318,20 @@ async function self(contexts) {
   await page.setViewport({ width: 800, height: 600 });
   await page.goto(`file://${path.join(__dirname, 'defects.html')}`, { waitUntil: 'load' });
   const kinds = new Set((await audit(page)).map(f => f.kind));
-  for (const kind of ['clipped', 'sticks-out', 'overlap', 'rows', 'columns', 'past-screen', 'page-wide', 'covered', 'contrast', 'default-control', 'no-style', 'small-target', 'broken-image', 'side-scroll', 'broken-word', 'split-sentence']) {
+  for (const kind of ['clipped', 'sticks-out', 'overlap', 'rows', 'columns', 'past-screen', 'page-wide', 'covered', 'contrast', 'default-control', 'no-style', 'small-target', 'broken-image', 'side-scroll', 'broken-word', 'split-sentence',
+    'touching', 'edge-touch', 'tight-padding', 'uneven-gaps', 'off-scale']) {
     check(`the checker sees ${kind}`, kinds.has(kind));
   }
+  // And the room between things laid out as the site lays them out (panels a gap apart, buttons in a row, words inside
+  // their padding) is no finding: the checker sees faults, not every box.
+  await page.setContent(`<!doctype html><style>:root { --gap: 20px } body { margin: 0; background: #11151a; color: #eee; font: 14px/1.6 sans-serif }
+    main { display: grid; gap: var(--gap); padding: 24px } .card { padding: 24px; background: #222 } .line { display: flex; gap: 10px; margin: 14px 0 0 }
+    .btn { display: inline-flex; align-items: center; height: 42px; padding: 0 16px; background: #333 } p { margin: 0 0 14px }</style>
+    <main><div class="card"><p>A panel with words in its padding.</p><div class="line"><span class="btn">One</span><span class="btn">Two</span><span class="btn">Three</span></div></div>
+    <div class="card"><p>Another, a gap below the first.</p></div></main>`);
+  await page.addScriptTag({ content: spacing });
+  const clean = await page.evaluate(() => window.spacingAudit());
+  check('the checker sees no fault in a page laid out well', clean.length === 0, JSON.stringify(clean).slice(0, 300));
   // And two primary buttons on one screen of an owner's page (its address makes it one), not one of them far down the
   // page, nor one that cannot be pressed.
   const owner = await contexts.anon.newPage();

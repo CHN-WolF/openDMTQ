@@ -35,6 +35,15 @@
   <input id="planted-placeholder" placeholder="A placeholder far too long for this box" style="width: 60px; color: #eee; background: #333">
   <p style="display: flex; flex-direction: column">Open <b>the file</b> and play.</p>
   <div style="margin-left: 2000px; width: 100px">Past the screen</div>
+  <!-- One of each thing spacing.js looks for, with the page's own gap as the site's stylesheet gives one. -->
+  <section style="--gap: 20px">
+    <div style="display: flex"><div style="width: 120px; padding: 8px; background: #2a2a2a">Touching one</div><div style="width: 120px; padding: 8px; background: #303030">Touching two</div></div>
+    <div style="margin-top: 16px; width: 200px; padding: 0; background: #2a2a2a"><div style="height: 24px; margin: 0 0 10px; background: #3a3a3a"></div><p style="margin: 0 10px 10px">Against the edge</p></div>
+    <div style="margin-top: 16px"><span style="display: inline-block; padding: 0; background: #333">Glued</span></div>
+    <div style="margin-top: 16px; display: flex"><span style="padding: 4px 8px; margin-right: 4px; background: #333">a</span><span style="padding: 4px 8px; margin-right: 16px; background: #333">b</span><span style="padding: 4px 8px; background: #333">c</span></div>
+    <div style="margin-top: 16px"><span style="display: inline-block; padding: 4px 8px; background: #333">Spaced</span> <span style="display: inline-block; padding: 4px 8px; background: #333">by the markup</span></div>
+    <div style="margin-top: 16px; display: grid"><div style="width: 220px; height: 70px; background: #2a2a2a"></div><div style="width: 220px; height: 70px; margin-top: 33px; background: #2a2a2a"></div></div>
+  </section>
 </main>
 </body>
 </html>
