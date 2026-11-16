@@ -298,6 +298,12 @@ async function broadcastsOff(contexts, held) {
   if (held) {
     await page.goto(`${A}/players`, { waitUntil: 'domcontentloaded' });
     check("and the Players page that the switches wait for them", /Broadcasts are off for the whole server/.test(await textOf(page, 'main')) && /On · server off/.test(await textOf(page, 'main')));
+    // The note above the search keeps room under it (it sat against the search's edge).
+    const gap = await page.evaluate(() => {
+      const note = document.querySelector('main .flash.note'), search = document.querySelector('#player-search');
+      return note && search ? search.getBoundingClientRect().top - note.getBoundingClientRect().bottom : null;
+    });
+    check("and its note has room between it and the search under it", gap !== null && gap >= 8, String(gap));
   }
   await page.close();
 }

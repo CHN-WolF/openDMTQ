@@ -634,6 +634,9 @@ tr.row-warn { background: color-mix(in srgb, var(--warn) 6%, transparent); }
 .player-last { white-space: nowrap; font-size: var(--t-sm); color: var(--ash); }
 .player-last .spark, .player-last .daycells { margin-right: 8px; }
 .list-search { margin-bottom: 12px; }
+/* A note above the search (the Players page's, with broadcasts off for the server) keeps the same room under it: a note has
+   no margin of its own, and the box sat against the search's edge. */
+.flash.note + .list-search { margin-top: 12px; }
 /* A heading that sorts (data-sort in the page) says so from the page's first drawing, not once its script has come: a
    mark that came later widened its column and moved the rows under it. */
 table.sortable th[data-sort] { cursor: pointer; user-select: none; }
