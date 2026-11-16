@@ -160,6 +160,12 @@ def main():
     def run(name, make, steps=()):
         """Open the window as `make()` makes it, take each step (a function of the window and the installer), then a
         screenshot and the measures; the window closed after."""
+        if not os.path.isfile(st.LauncherState.path()):
+            # Delete everything took the launcher's settings, the player's language with them: given back, so that
+            # every page is seen in the run's language.
+            kept = st.LauncherState()
+            kept.language = args.lang
+            kept.save()
         made = make()
         window = made.window
         settle(window.root, 1.0)

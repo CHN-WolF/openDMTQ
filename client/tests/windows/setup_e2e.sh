@@ -2,8 +2,9 @@
 # The installer from end to end under Wine, as a person uses it, with no server and no game:
 #   1. OpenDMTQ-Setup.exe on a PC without OpenDMTQ: its Install page, Enter, the progress, the end page; Windows' entry
 #      opens OpenDMTQ's own uninstall (UninstallString) and Velopack's quiet one stays (QuietUninstallString); both
-#      shortcuts made
-#   2. OpenDMTQ-Setup.exe again: what to do with it; Repair puts back a file of the program that went
+#      shortcuts made; Enter on the end page's Open OpenDMTQ starts the launcher
+#   2. OpenDMTQ-Setup.exe again, the launcher open: what to do with it; Repair puts back a file of the program that went,
+#      the launcher closed for it
 #   3. OpenDMTQ-Setup.exe again: Uninstall, keeping the data: the program, both shortcuts, Windows' entry and OpenDMTQ's
 #      logs elsewhere gone, the data kept
 #   4. installed again with --silent; Windows' quiet uninstall (QuietUninstallString, as a tool runs it): nothing on
@@ -46,6 +47,7 @@ docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD
   wait_for() { local i; for i in $(seq 1 $1); do eval "$2" && return 0; sleep 1; done; return 1; }
   # The installer'"'"'s window by its title, the keys a person presses on it.
   setup_window() { xdotool search --name "^OpenDMTQ Setup\$" 2>/dev/null | tail -n 1; }
+  launcher_window() { xdotool search --name "^OpenDMTQ\$" 2>/dev/null | tail -n 1; }
   press() { xdotool windowfocus --sync "$(setup_window)" 2>/dev/null; sleep 0.3; xdotool key "$@"; }
   # One of the entry'"'"'s values as Windows keeps it, and the entry itself.
   entry() { wine reg query "$KEY" /v "$1" 2>/dev/null | tr -d "\r" | sed -n "s/.*REG_SZ *//p"; }
@@ -84,9 +86,12 @@ docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD
   echo "$un" | grep -q "current\\\\OpenDMTQ.exe\" --uninstall-window\$" || { echo "FAIL: the entry does not open OpenDMTQ'"'"'s own uninstall"; exit 1; }
   echo "$quiet" | grep -q "Update.exe\" --uninstall --silent\$" || { echo "FAIL: the quiet entry is not Velopack'"'"'s silent one"; exit 1; }
   [ "$(shortcuts | wc -l)" = 2 ] || { echo "FAIL: shortcuts: $(shortcuts)"; exit 1; }
-  press Escape
-  wait_for 20 "[ -z \"\$(setup_window)\" ]" || { snap install-stays; echo "FAIL: Esc did not close the end page"; exit 1; }
-  echo "1. installed through the window: the entry opens OpenDMTQ'"'"'s uninstall, both shortcuts made"
+  # Enter on the end page: Open OpenDMTQ starts the launcher, and the installer closes.
+  press Return
+  wait_for 60 "[ -n \"\$(launcher_window)\" ]" || { snap no-launcher; echo "FAIL: Open OpenDMTQ did not start the launcher"; exit 1; }
+  wait_for 20 "[ -z \"\$(setup_window)\" ]" || { snap install-stays; echo "FAIL: the installer stayed after Open OpenDMTQ"; exit 1; }
+  sleep 6; snap launcher-opened
+  echo "1. installed through the window: the entry opens OpenDMTQ'"'"'s uninstall, both shortcuts made, Open OpenDMTQ started the launcher"
 
   # ---- 2. Repair through the window: a file of the program back as it came.
   damaged="$(cd "$PROGRAM/current" && find _internal -name "*.ttf" | head -n 1)"
@@ -100,6 +105,8 @@ docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD
   wait_for 240 "[ \"\$(setups_done)\" -ge 2 ]" || { snap repair-stuck; echo "FAIL: the repair did not end"; exit 1; }
   sleep 3; snap repaired
   (cd "$PROGRAM/current" && echo "$sum" | md5sum -c --quiet) || { echo "FAIL: the repair did not put the file back"; exit 1; }
+  # The launcher that was open was closed for it (Velopack ends what runs from the program'"'"'s folder).
+  [ -z "$(launcher_window)" ] || { echo "FAIL: the launcher stayed open through the repair"; exit 1; }
   press Escape
   wait_for 20 "[ -z \"\$(setup_window)\" ]" || { echo "FAIL: Esc did not close the repair'"'"'s end page"; exit 1; }
   echo "2. repaired through the window: $damaged back as installed"

@@ -2,7 +2,8 @@
 # The PC client from end to end under Wine, against a test server:
 #   1. the installer as a player gets it: the build's OpenDMTQ-Setup.exe handed to the server (as a release's would
 #      be), then downloaded from the server's /windows, signed in, with the server on its end
-#   2. installed through its own dialog (Enter on Install), Velopack's setup underneath, the launcher started after
+#   2. installed through its own window (Enter on Install), Velopack's setup underneath, then Enter on its end page's
+#      Open OpenDMTQ starts the launcher
 #   3. the launcher's first-start guide: the server the installer brought, the sign-in, the app's download, PLAY
 #   4. the player reaching the game's menu (a frame of it saved); the bar sliding down by itself for 3 seconds when the
 #      game's picture first shows, and back up, by steps; the handle at the game's top centre (the pointer resting on it
@@ -146,12 +147,17 @@ docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -
   }
   trap collect EXIT
 
-  # 2. the installer and its dialog: Enter on Install
+  # 2. the installer's window: Enter on Install, then on its end page's Open OpenDMTQ
   wine '$SETUP' > /out/setup-stdout.log 2>&1 &
   wait_for 120 '[ -n \"\$(window \"OpenDMTQ Setup\")\" ]' || { snap setup-missing; echo 'FAIL: no installer window'; exit 1; }
   sleep 4; snap setup-asks
   xdotool windowfocus --sync \$(window 'OpenDMTQ Setup') 2>/dev/null; xdotool key Return
-  wait_for 240 '[ -n \"\$(window \"^OpenDMTQ\$\")\" ]' || { snap setup-stuck; echo 'FAIL: the launcher did not start'; exit 1; }
+  # The installer says in its log when Velopack's setup has ended well; its end page then shows.
+  setup_log=\"\$(winepath -u 'C:\\users\\root\\AppData\\Local\\Temp' 2>/dev/null)/OpenDMTQ-setup.log\"
+  wait_for 240 'grep -q \"setup ended with 0\" \"\$setup_log\" 2>/dev/null' || { snap setup-stuck; echo 'FAIL: the install did not end'; exit 1; }
+  sleep 3; snap setup-done
+  xdotool windowfocus --sync \$(window 'OpenDMTQ Setup') 2>/dev/null; xdotool key Return
+  wait_for 120 '[ -n \"\$(window \"^OpenDMTQ\$\")\" ]' || { snap setup-no-launcher; echo 'FAIL: the launcher did not start'; exit 1; }
   echo \"installed: \$(cat \"\$LOCAL/OpenDMTQ.Client/current/sq.version\" 2>/dev/null | grep -o '<version>[^<]*' | cut -c10-)\"
   sleep 6; snap guide-welcome
   # 3. the guide: the server the installer brought answers by itself
