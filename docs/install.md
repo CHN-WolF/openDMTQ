@@ -44,9 +44,10 @@ use and an account for each player, and builds the app.
 
 - **Windows Firewall** asks about Apache: allow it on private networks. If your Wi-Fi is a public network, set it to
   **Private** in Settings, or phones cannot connect.
-- **The server runs while its window is open.** To stop it, close the window, or press **Stop the server** under
-  **Maintenance** on the admin pages. To start it again, `start ~\OpenDMTQ\OpenDMTQ.exe`, or double-click it.
-- **To update**, close its window and run the same five lines again. The new files replace the program's; your `data`
+- **The server runs while its window is open.** To stop it, close the window, or press **Stop the server** on the admin
+  pages' **Server** page. To start it again, `start ~\OpenDMTQ\OpenDMTQ.exe`, or double-click it. The same page repairs
+  the install, deletes its data, and uninstalls it.
+- **To update**, close its window and run the same four lines again. The new files replace the program's; your `data`
   folder and `.env` stay.
 
 <details>
@@ -124,9 +125,18 @@ Android phone or tablet, or the PC client on a Windows PC: [playing on a server]
 | Start with the computer | a shortcut in `shell:startup` | `./opendmtq service` | `RESTART=unless-stopped` in `.env`, or `cli/install.sh --service` |
 | Import songs | admin pages, **Songs**, or a folder dropped on `OpenDMTQ.exe` (the game's files in it too) | admin pages, **Songs** | `./opendmtq import --songs <folder>` |
 | Name the app (`TECHNIKA Q (<name>)`) | `SERVER_NAME=<name>` in `.env`, restart, then build the app (admin pages, **App**) | the same | `./opendmtq name <name>` |
-| Remove it | close the window, then delete the folder | `./opendmtq stop`, `./opendmtq service --remove`, `host/install.sh --uninstall`, then delete the folder | `./opendmtq down`, `./opendmtq firewall --remove` under WSL, `docker image rm opendmtq-server:local opendmtq-tools:local` (the two images it built; with `COMPOSE_PROJECT_NAME` in `.env`, that name in place of `opendmtq`), then delete the folder |
+| Repair it | admin pages, **Server**, **Check and repair** | `./opendmtq repair`, or the same page | `./opendmtq repair` |
+| Delete its data | admin pages, **Server**, the parts ticked | `./opendmtq delete-data <part>...`, or the same page | `./opendmtq delete-data <part>...` |
+| Remove it | admin pages, **Server**, **Uninstall** (or `OpenDMTQ.exe uninstall`) | `./opendmtq uninstall`, or the same page | `./opendmtq uninstall` |
 
 Everything else is on the admin pages: the app, songs, players, accounts, recordings and backups.
+
+`uninstall` stops the server and removes what it set up, then its folder; `--keep-data` leaves `data` and `.env` in it.
+On Windows that is the folder, the firewall rules Windows made for its programs (Windows asks for permission once) and
+its shortcuts; on Linux and macOS its start with the computer and the `opendmtq` command on the PATH (the system packages
+`host/install.sh` brought stay, as other programs may use them); with Docker its containers and their network and the
+images built for it. `delete-data` without parts lists them with their size: `database` (players, scores, accounts),
+`recordings`, `songs` (added ones), `apps`, `backups`, `logs`, `game` (the imported game files); a backup comes first.
 
 An update keeps `data` and `.env`. Phones get a newer app on the site when the update brings one, and PCs update the
 launcher on its **Launcher** page ([the PC client](windows-player.md#the-launcher)).

@@ -25,8 +25,9 @@ Start
    "Download the installer (.exe)" and run it. It installs the PC client (this bundle brings it), set up for this
    server.
 
-The server runs while the window is open. To stop it, close the window, or on the admin pages open Maintenance and
-press "Stop the server".
+The server runs while the window is open. To stop it, close the window, or on the admin pages open Server and press
+"Stop the server". The same page repairs the bundle, deletes the server's data, and uninstalls it (the folder, and what
+Windows set up for it).
 
 If Windows says it protected your PC from an unknown app: "More info", then "Run anyway". OpenDMTQ.exe is not signed
 by a publisher Windows knows.
