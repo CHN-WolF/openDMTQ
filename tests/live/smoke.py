@@ -371,7 +371,9 @@ for lang, heading in (("ko", "방송"), ("en", "Broadcasts")):
     check(f"home ({lang}): the menu counts one on air", on_air_mark(home) == 1)
 for path in ("", "ranking.php", "songs.php", f"player.php?id={guid}", "song.php?id=1", "nope.php"):
     html = page(path)
-    check(f"{path or 'home'}: the menu has LIVE, with its count", 'href="/opendmtq/live.php">LIVE' in html and on_air_mark(html) == 1)
+    # The link may carry its name for a screen reader (the count in words) before its words.
+    check(f"{path or 'home'}: the menu has LIVE, with its count",
+          re.search(r'href="/opendmtq/live\.php"[^>]*>LIVE', html) is not None and on_air_mark(html) == 1)
 # A stranger gets the sign-in page whatever page they asked for, and back to it afterwards; nothing of what is inside, not
 # even who is on air, is in the sign-in page.
 for path in ("", "ranking.php", "songs.php", "song.php?id=1", f"player.php?id={guid}", "download.php"):

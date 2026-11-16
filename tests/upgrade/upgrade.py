@@ -332,8 +332,9 @@ def after():
     check("the stream a phone is asked for is the one it sent before (720p, 30 frames a second, 2 Mbit/s, 2 s segments)",
           (said.get("fps"), said.get("height"), said.get("bitrate"), said.get("segment")) == (30, 720, 2000000, 2), said)
     # The app of the release before reads this reply too: every field it had is there, with the value it had. The notice of
-    # the switch is handed out once, and went out before the upgrade: empty now.
-    diff = list(lost(kept["state"], said, "state", ("toast",)))
+    # the switch is handed out once, and went out before the upgrade: empty now, its number and kind with it (0 and "" with
+    # no notice, as the reply has them since they came).
+    diff = list(lost(kept["state"], said, "state", ("toast", "toast_id", "toast_kind")))
     check("the reply has everything the release before's had, and the notice already shown is not shown again",
           not diff and said.get("toast") == "", f"{diff} {said}")
 
