@@ -16,6 +16,8 @@
 #include <thread>
 #include <vector>
 
+#include "sound_mix.h"
+
 namespace player::audio {
 
 // The output's channels: everything is mixed to stereo.
@@ -33,6 +35,9 @@ struct Options {
     int buffer = 1;
     // The game's sound in percent, its amplitude the square of that share (half way is about half as loud).
     int volume = 100;
+    // The rest of the sound controls at the start (sound_mix.h): music and effects as shares of the volume, and the
+    // equaliser; set_levels changes them, the volume too, while the game plays.
+    Levels levels;
 };
 Options& options();
 // The sound devices this computer has, one JSON object a line, {"id": ..., "name": ..., "default": true or false}, for
@@ -94,6 +99,9 @@ public:
     void flush();
     // Each channel's gain (AudioTrack.setStereoVolume).
     void volume(float left, float right);
+    // The player's own share of this stream on top of the game's gain (the music or the effects control, for a stream
+    // that carries one of them alone), 0 to 1.
+    void share(float gain) { share_.store(gain, std::memory_order_relaxed); }
     bool playing() const { return state_.load() == kPlaying; }
     int rate() const { return rate_; }
     const std::string& name() const { return name_; }
@@ -135,6 +143,7 @@ private:
     bool primed_ = false;
     int waits_ = 0;
     float gain_[kChannels] = {1.0f, 1.0f};
+    std::atomic<float> share_{1.0f};
     Resampler resampler_;
     // The mixer's scratch for this stream's frames.
     std::vector<float> scratch_;
@@ -180,6 +189,8 @@ public:
     int rate() const { return rate_; }
     // The counters in the log: the output's, and each stream's.
     void report();
+    // The player's sound controls from now on (sound_mix.h): the master at once, the equaliser from the next period.
+    void set_levels(const Levels& levels);
     // A period's length, unless the output takes another (Output::period): what the mixer makes at a time.
     static constexpr std::size_t kPeriodMs = 5;
 
@@ -191,8 +202,15 @@ private:
     // frames of a period.
     const int rate_;
     std::size_t period_;
-    // The game's volume as a gain on every sample (Options::volume).
-    const float gain_;
+    // The game's volume as a gain on every sample (Options::volume, then set_levels).
+    std::atomic<float> gain_;
+    // The equaliser over the whole mix, on the mixer's thread; its bands as last set, picked up at a period's start.
+    Equalizer eq_;
+    std::mutex eq_lock_;
+    EqBands eq_wanted_;
+    std::atomic<bool> eq_changed_{false};
+    // What the equaliser cost, for the stats: microseconds over the periods it ran in since the last report.
+    std::atomic<std::uint64_t> eq_ns_{0}, eq_periods_{0};
     std::mutex lock_;
     std::vector<std::shared_ptr<Stream>> streams_;
     // Streams closed, kept for the report.
@@ -201,6 +219,13 @@ private:
     std::atomic<std::uint64_t> periods_{0}, late_{0};
     std::thread thread_;
 };
+
+// The player's sound controls (sound_mix.h) from now on, as the in-game panel changes them: the master and the
+// equaliser on the mix (the mixer's, once it is started), the effects' share on Unity's own sound (the stream named FMOD:
+// its menus' and buttons' sounds); the music and effects of the game's songs and menus are its OpenAL's (soundmix.cpp).
+// Kept for a mixer started later. The levels now.
+void set_levels(const Levels& levels);
+Levels levels();
 
 // Another taker of the mix, the computer's broadcast (live_mf.cpp): each period on the mixer's thread, before the
 // player's volume, as interleaved stereo floats at the output's rate. It must not block. Null: none.

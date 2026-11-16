@@ -76,6 +76,11 @@ struct Settings {
     bool audio_exclusive = false;
     int audio_buffer = 1;
     int volume = 100;
+    // The music and the effects as shares of the volume, in percent, and the equaliser on the whole sound: a preset, or
+    // custom with its three bands in dB (sound_mix.h). The in-game sound panel changes them and writes them back.
+    int music_volume = 100, effects_volume = 100;
+    std::string eq = "flat";
+    int eq_low = 0, eq_mid = 0, eq_high = 0;
     // The language the game and the player's own words speak, as the launcher chose it ("en", "ko"); "" for the
     // computer's (host_locale), as when the launcher follows Windows' display language.
     std::string language;
@@ -111,6 +116,16 @@ inline DrawSize draw_size(int w, int h, int scale) {
 }
 // Reads a settings file into settings(); false when there is none (the defaults stay).
 bool load_settings(const std::string& path);
+// Writes keys changed in the game (the sound panel's: volume, music_volume, effects_volume, eq, eq_low, eq_mid, eq_high)
+// back into the settings file at `path`, only those, each in its place; every other line kept as it is in the file just
+// before (what the launcher wrote meanwhile stays), the file's line ends and byte order mark kept; a key the file has
+// not goes after the sound's keys before it in that order (volume first), else at the end. By a temporary file beside
+// it then a rename: the launcher never reads half a file. False when it could not.
+bool save_settings_keys(const std::string& path, const std::vector<std::pair<std::string, std::string>>& changes);
+// Reads the sound's keys alone from the settings file into `s` (the launcher changed them while the game ran).
+bool load_sound_settings(const std::string& path, Settings& s);
+// The settings file the player was started with (--settings), "" for none: where the panel's changes are written.
+std::string& settings_path();
 // The language a settings file names (language=), "" for none or one the player does not speak: read before the app's
 // folder is in place, so that the player's first words (a folder it cannot use) speak it too.
 std::string settings_language(const std::string& path);

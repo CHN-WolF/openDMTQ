@@ -30,6 +30,15 @@
 //   audio_mode    shared | exclusive         with the computer's other sound, or the device alone (less latency)
 //   audio_buffer  low | normal | safe        how much sound is kept ahead of the device: less latency, or fewer breaks
 //   volume        0..100                     the game's sound, in percent (a number out of it held to it)
+//   music_volume  0..100                     the game's music (a song's own, the menus', a song's preview), as a share of
+//                                            volume, in percent (100 unless chosen)
+//   effects_volume 0..100                    the game's effects (the notes' key sounds, the judgement's and the menus'
+//                                            sounds), as a share of volume, in percent (100 unless chosen)
+//   eq            flat | bass | vocal |      the equaliser on the whole sound: a preset, or the three bands below
+//                 treble | custom
+//   eq_low        -12..12                    with eq=custom, the low shelf (120 Hz), the middle (1 kHz) and the high
+//   eq_mid                                   shelf (6 kHz) in dB, 0 unless chosen (a number out of it held to it); the
+//   eq_high                                  presets set their own
 //   language      en | ko                    the language the launcher chose for the game and the player's own words, in
 //                                            place of the computer's (host_locale); none: the computer's
 //   keyboard      on | off                   keyboard play: while a song is played, its lanes' keys play them, each press
@@ -47,12 +56,16 @@
 #include "player.h"
 
 #include "jvm.h"
+#include "sound_mix.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace player {
 
@@ -193,6 +206,25 @@ bool load_settings(const std::string& path) {
                 s.volume = std::clamp(n, 0, 100);
                 if (s.volume != n) jvm::log("player: settings: volume=%s is out of 0 to 100: %d", value.c_str(), s.volume);
             }
+        } else if (key == "music_volume" || key == "effects_volume") {
+            // A share of the volume, a number out of 0 to 100 held to it as the volume's is.
+            if ((ok = number(value, -2000000000, 2000000000, n))) {
+                const int held = std::clamp(n, 0, 100);
+                (key == "music_volume" ? s.music_volume : s.effects_volume) = held;
+                if (held != n) jvm::log("player: settings: %s=%s is out of 0 to 100: %d", key.c_str(), value.c_str(), held);
+            }
+        } else if (key == "eq") {
+            // A preset by its name; another keeps flat.
+            audio::EqPreset p;
+            ok = audio::eq_from_name(value, p);
+            if (ok) s.eq = value;
+        } else if (key == "eq_low" || key == "eq_mid" || key == "eq_high") {
+            // A band in dB, a number out of -12 to 12 held to it.
+            if ((ok = number(value, -2000000000, 2000000000, n))) {
+                const int held = audio::clamp_band(n);
+                (key == "eq_low" ? s.eq_low : key == "eq_mid" ? s.eq_mid : s.eq_high) = held;
+                if (held != n) jvm::log("player: settings: %s=%s is out of -12 to 12: %d", key.c_str(), value.c_str(), held);
+            }
         } else if (key == "language") {
             // The launcher's languages; another keeps the computer's (host_locale).
             ok = value == "en" || value == "ko";
@@ -232,6 +264,9 @@ bool load_settings(const std::string& path) {
              kCorners[static_cast<int>(s.show_fps)],
              s.audio_device.empty() ? "the default device" : "a chosen device", s.audio_exclusive ? "exclusive" : "shared",
              s.audio_buffer == 0 ? "a low" : s.audio_buffer == 1 ? "a normal" : "a safe", s.volume);
+    // The rest of the sound on a line of its own.
+    jvm::log("player: settings: music %d%%, effects %d%% of the volume; equaliser %s (low %+d, middle %+d, high %+d dB)", s.music_volume,
+             s.effects_volume, s.eq.c_str(), s.eq_low, s.eq_mid, s.eq_high);
     // The language on a line of its own: the launcher's when it chose one, else the computer's.
     jvm::log("player: settings: language %s", s.language.empty() ? "the computer's" : s.language.c_str());
     // Keyboard play on a line of its own too: each mode's keys as the file names them, or off.
@@ -240,6 +275,109 @@ bool load_settings(const std::string& path) {
                  keys::text(s.lanes[2]).c_str());
     } else {
         jvm::log("player: settings: keyboard play off: every key is the game's");
+    }
+    return true;
+}
+
+std::string& settings_path() {
+    static std::string path;
+    return path;
+}
+
+bool save_settings_keys(const std::string& path, const std::vector<std::pair<std::string, std::string>>& changes) {
+    if (path.empty() || changes.empty()) return false;
+    // The file as it is now, read just before writing: every line kept but the keys changed, which take their new values
+    // in their places, so that what the launcher wrote meanwhile (another key, or one of these the panel did not
+    // change) stays.
+    std::vector<std::string> lines;
+    {
+        std::ifstream in(utf8_path(path), std::ios::binary);
+        std::string line;
+        while (in && std::getline(in, line)) lines.push_back(line);
+    }
+    // Windows' line ends when the file has them (the launcher writes either; the whole file keeps what it had).
+    bool crlf = false;
+    for (std::string& line : lines) {
+        if (!line.empty() && line.back() == '\r') {
+            crlf = true;
+            line.pop_back();
+        }
+    }
+    // The sound's keys in the contract's order, for where one the file has not goes: after the last of the sound's keys
+    // before it in that order that the file has (volume first), else at the end.
+    static const char* const kOrder[] = {"volume", "music_volume", "effects_volume", "eq", "eq_low", "eq_mid", "eq_high"};
+    auto rank = [](const std::string& key) {
+        for (int i = 0; i < 7; ++i) {
+            if (key == kOrder[i]) return i;
+        }
+        return -1;
+    };
+    for (const auto& [key, value] : changes) {
+        bool found = false;
+        std::size_t after = std::string::npos;
+        int after_rank = -1;
+        for (std::size_t i = 0; i < lines.size(); ++i) {
+            std::string k, raw;
+            if (!key_value(lines[i], i == 0, k, raw)) continue;
+            if (k == key) {
+                // Its value now, past a byte order mark on the first line; a later line of the same key too (a file read
+                // takes the last one).
+                const bool bom = i == 0 && lines[i].compare(0, kBom.size(), kBom) == 0;
+                lines[i] = (bom ? kBom : std::string()) + key + "=" + value;
+                found = true;
+                continue;
+            }
+            // The latest of the sound's keys before this one in the order: the new line goes after it.
+            const int r = rank(k);
+            if (r >= 0 && r < rank(key) && r >= after_rank) {
+                after_rank = r;
+                after = i;
+            }
+        }
+        if (found) continue;
+        const std::size_t at = after == std::string::npos ? lines.size() : after + 1;
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(at), key + "=" + value);
+    }
+    // A temporary file beside it, then a rename over it: a reader sees the old file or the new one, never half.
+    const std::string temp = path + ".player.tmp";
+    {
+        std::ofstream out(utf8_path(temp), std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+        for (const std::string& line : lines) out << line << (crlf ? "\r\n" : "\n");
+        out.close();
+        if (!out) return false;
+    }
+    // std::filesystem::rename replaces the file there (MoveFileEx's replace on Windows, rename(2) elsewhere).
+    std::error_code error;
+    std::filesystem::rename(utf8_path(temp), utf8_path(path), error);
+    if (error) {
+        std::filesystem::remove(utf8_path(temp), error);
+        return false;
+    }
+    return true;
+}
+
+bool load_sound_settings(const std::string& path, Settings& s) {
+    // The sound's keys alone, as load_settings reads them, into `s`; the rest of `s` as it was.
+    std::ifstream f(utf8_path(path));
+    if (!f) return false;
+    std::string line, key, raw;
+    bool first = true;
+    int n = 0;
+    while (std::getline(f, line)) {
+        const bool read = key_value(line, first, key, raw);
+        first = false;
+        if (!read) continue;
+        const std::string value = lower(raw);
+        if (key == "volume" && number(value, -2000000000, 2000000000, n)) s.volume = std::clamp(n, 0, 100);
+        else if (key == "music_volume" && number(value, -2000000000, 2000000000, n)) s.music_volume = std::clamp(n, 0, 100);
+        else if (key == "effects_volume" && number(value, -2000000000, 2000000000, n)) s.effects_volume = std::clamp(n, 0, 100);
+        else if (key == "eq") {
+            audio::EqPreset p;
+            if (audio::eq_from_name(value, p)) s.eq = value;
+        } else if ((key == "eq_low" || key == "eq_mid" || key == "eq_high") && number(value, -2000000000, 2000000000, n)) {
+            (key == "eq_low" ? s.eq_low : key == "eq_mid" ? s.eq_mid : s.eq_high) = audio::clamp_band(n);
+        }
     }
     return true;
 }

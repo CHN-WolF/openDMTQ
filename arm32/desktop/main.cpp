@@ -21,6 +21,7 @@
 #include "jni_bridge.h"
 #include "keyplay.h"
 #include "mixer.h"
+#include "soundmix.h"
 #include "pacing.h"
 #include "player.h"
 #include "tweaks.h"
@@ -146,6 +147,8 @@ bool load_library(const std::string& guest_path) {
     tweaks_library_loaded(guest_path.substr(guest_path.rfind('/') + 1), h);
     // Keyboard play reaches the game's input through it too (keyplay.cpp).
     player::keyplay_library_loaded(guest_path.substr(guest_path.rfind('/') + 1), h);
+    // The game's OpenAL: its music and effects apart, before the game looks up any of its calls (soundmix.cpp).
+    player::soundmix_library_loaded(guest_path.substr(guest_path.rfind('/') + 1), h);
     // The natives it exports by name first; its JNI_OnLoad registers its own after, and they win.
     jni_bind_exports(&jvm::attach().jni, h, host_of(guest_path));
     gaddr onload = g.dlsym(h, "JNI_OnLoad");
@@ -314,7 +317,13 @@ int main(int argc, char** argv) {
     // The PC's settings, from the client's file (in that log): the frame pacing's choices for the runtime, the sound's for
     // the mixer, and the window's size. A size on the command line comes first, then the settings' own; without either a
     // start from a folder or with settings fits the window to the display, and a test's start keeps 1920x1080.
-    if (!settings_path.empty()) player::load_settings(settings_path);
+    if (!settings_path.empty()) {
+        player::load_settings(settings_path);
+        // Where the in-game sound panel writes its changes back, as an absolute path: the current folder changes below.
+        std::error_code ec;
+        const std::u8string u = std::filesystem::absolute(player::utf8_path(settings_path), ec).u8string();
+        player::settings_path() = ec ? settings_path : std::string(u.begin(), u.end());
+    }
     const player::Settings& st = player::settings();
     if (!size_given && st.window_w) {
         a.width = st.window_w;
@@ -329,6 +338,12 @@ int main(int argc, char** argv) {
     sound.exclusive = st.audio_exclusive;
     sound.buffer = st.audio_buffer;
     sound.volume = st.volume;
+    // The rest of the sound's controls (sound_mix.h): music and effects as shares of the volume, the equaliser.
+    sound.levels.master = st.volume;
+    sound.levels.music = st.music_volume;
+    sound.levels.effects = st.effects_volume;
+    player::audio::eq_from_name(st.eq, sound.levels.eq);
+    sound.levels.custom = {st.eq_low, st.eq_mid, st.eq_high};
     if (a.host_sysroot.empty() || a.host_agent.empty() || a.package.empty() || a.host_apk.empty() || a.host_libs.empty() || a.host_data.empty()) {
         std::fprintf(stderr, "usage: %s --sysroot DIR --agent FILE --package NAME --apk FILE --libs DIR --data DIR\n", argv[0]);
         return 2;
@@ -419,8 +434,12 @@ int main(int argc, char** argv) {
     }
     // The packer's field settings for the game (its frame cap), from its file among the libraries.
     tweaks_load(a.host_libs);
-    // Keyboard play looks for the game's input at the native render calls, on Unity's main thread (keyplay.cpp).
-    g_render_hook = &player::keyplay_render;
+    // Keyboard play looks for the game's input at the native render calls, on Unity's main thread (keyplay.cpp), and the
+    // sound panel's music and effects shares reach the game's OpenAL there (soundmix.cpp).
+    g_render_hook = [](Thread& th) {
+        player::keyplay_render(th);
+        player::soundmix_render(th);
+    };
     // UnityPlayer's static initializer: System.loadLibrary("main").
     if (!player::load_library(a.lib_dir + "/libmain.so")) {
         player::show_error("cannot load the app's libmain.so");

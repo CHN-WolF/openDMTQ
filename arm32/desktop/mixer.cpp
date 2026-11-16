@@ -252,6 +252,10 @@ void Stream::mix_into(float* out, std::size_t frames) {
     }
     // Room for the writer, which may be waiting.
     room_.notify_all();
+    // The player's share of it on top (the effects' for Unity's own sound).
+    const float share = share_.load(std::memory_order_relaxed);
+    gain[0] *= share;
+    gain[1] *= share;
     for (std::size_t k = 0; k < made; ++k) {
         out[k * kChannels] += scratch_[k * kChannels] * gain[0];
         out[k * kChannels + 1] += scratch_[k * kChannels + 1] * gain[1];
@@ -272,17 +276,60 @@ std::atomic<MixTap> g_tap{nullptr};
 
 void set_mix_tap(MixTap tap) { g_tap.store(tap, std::memory_order_release); }
 
+namespace {
+// The player's sound controls now (set_levels), from the settings at the start.
+std::mutex g_levels_lock;
+bool g_levels_set = false;
+Levels g_levels;
+}  // namespace
+
+Levels levels() {
+    std::lock_guard<std::mutex> l(g_levels_lock);
+    if (!g_levels_set) {
+        // The settings' own until the panel changes them.
+        Levels from = options().levels;
+        from.master = options().volume;
+        return from;
+    }
+    return g_levels;
+}
+
+void set_levels(const Levels& l) {
+    {
+        std::lock_guard<std::mutex> g(g_levels_lock);
+        g_levels = l;
+        g_levels_set = true;
+    }
+    options().volume = l.master;
+    if (Mixer* m = Mixer::started()) m->set_levels(l);
+}
+
 Mixer::Mixer(std::unique_ptr<Output> output)
     : output_(std::move(output)), rate_(output_->rate()),
       period_(output_->period() ? output_->period() : static_cast<std::size_t>(rate_) * kPeriodMs / 1000),
-      gain_([] {
-          // The square of the share: amplitude falls faster than the slider, as loudness is heard.
-          const float share = static_cast<float>(std::clamp(options().volume, 0, 100)) / 100.0f;
-          return share * share;
-      }()) {
-    jvm::log("player: sound out through %s at %d Hz, %.2f ms a period, %.1f ms buffered, volume %d%%", output_->name(), rate_,
-             1000.0 * static_cast<double>(period_) / rate_, output_->buffer_ms(), std::clamp(options().volume, 0, 100));
+      // The square of the share: amplitude falls faster than the slider, as loudness is heard.
+      gain_(percent_gain(options().volume)) {
+    // The equaliser as the settings had it (set_levels before the mixer started keeps its own in levels()).
+    const EqBands bands = levels().bands();
+    eq_.set(rate_, bands);
+    jvm::log("player: sound out through %s at %d Hz, %.2f ms a period, %.1f ms buffered, volume %d%%, equaliser %s (%+d %+d %+d dB)", output_->name(),
+             rate_, 1000.0 * static_cast<double>(period_) / rate_, output_->buffer_ms(), std::clamp(options().volume, 0, 100), eq_name(levels().eq),
+             bands.low, bands.mid, bands.high);
     thread_ = std::thread([this] { run(); });
+}
+
+void Mixer::set_levels(const Levels& l) {
+    gain_.store(percent_gain(l.master), std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> g(eq_lock_);
+        eq_wanted_ = l.bands();
+    }
+    eq_changed_.store(true, std::memory_order_release);
+    // Unity's own sound (menus' and buttons' sounds) is the effects'.
+    std::lock_guard<std::mutex> g(lock_);
+    for (const auto& s : streams_) {
+        if (s->name() == "FMOD") s->share(percent_gain(l.effects));
+    }
 }
 
 Mixer::~Mixer() {
@@ -325,6 +372,8 @@ Mixer& Mixer::get() {
 
 std::shared_ptr<Stream> Mixer::open(int rate, int channels, Encoding encoding, std::size_t capacity, const std::string& name) {
     auto s = std::make_shared<Stream>(rate, channels, encoding, capacity, name, rate_);
+    // Unity's own sound is the effects' (set_levels).
+    if (name == "FMOD") s->share(percent_gain(levels().effects));
     std::lock_guard<std::mutex> l(lock_);
     streams_.push_back(s);
     return s;
@@ -356,6 +405,12 @@ void Mixer::report() {
     };
     for (const auto& s : streams_) line(*s, s->playing() ? "playing" : "not playing");
     for (const auto& s : closed_) line(*s, "closed");
+    // The equaliser's cost, where it ran.
+    const std::uint64_t ran = eq_periods_.exchange(0), ns = eq_ns_.exchange(0);
+    if (ran) {
+        jvm::log("audio: the equaliser took %.2f us a period (%.3f %% of the mixer's time) over %llu periods", static_cast<double>(ns) / 1e3 / static_cast<double>(ran),
+                 100.0 * static_cast<double>(ns) / (static_cast<double>(ran) * 1e9 * static_cast<double>(period_) / rate_), static_cast<unsigned long long>(ran));
+    }
 }
 
 void Mixer::run() {
@@ -368,6 +423,12 @@ void Mixer::run() {
     const char* stats = std::getenv("ARM32_STATS");
     const bool report_often = stats && std::atoi(stats) > 0;
     Clock::time_point next_report = Clock::now() + std::chrono::seconds(5);
+    // The level's trace (a check's): its sums over the second so far.
+    const char* trace = std::getenv("PLAYER_TRACE_AUDIO");
+    const bool trace_level = trace && *trace == '1';
+    double level_sum = 0;
+    float level_peak = 0;
+    std::size_t level_frames = 0;
     while (running_.load()) {
         if (report_often && Clock::now() >= next_report) {
             report();
@@ -380,11 +441,39 @@ void Mixer::run() {
         }
         // The broadcast takes the mix as the game made it, whatever the player's volume.
         if (MixTap tap = g_tap.load(std::memory_order_acquire)) tap(buf.data(), period_, rate_);
+        // The equaliser as last set (the panel's change from this period on).
+        if (eq_changed_.exchange(false, std::memory_order_acquire)) {
+            std::lock_guard<std::mutex> g(eq_lock_);
+            eq_.set(rate_, eq_wanted_);
+        }
+        if (!eq_.flat()) {
+            const Clock::time_point a = Clock::now();
+            eq_.run(buf.data(), period_);
+            eq_ns_ += static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - a).count());
+            ++eq_periods_;
+        }
         // The game's volume, then a sum louder than full scale held at full scale, as a phone's mixer holds it.
-        if (gain_ != 1.0f) {
-            for (float& v : buf) v *= gain_;
+        const float gain = gain_.load(std::memory_order_relaxed);
+        if (gain != 1.0f) {
+            for (float& v : buf) v *= gain;
         }
         for (float& v : buf) v = std::clamp(v, -1.0f, 1.0f);
+        // A check's trace of the level (PLAYER_TRACE_AUDIO=1): each second's RMS and peak of what goes out, in dBFS.
+        if (trace_level) {
+            for (const float v : buf) {
+                level_sum += static_cast<double>(v) * static_cast<double>(v);
+                level_peak = std::max(level_peak, std::fabs(v));
+            }
+            level_frames += period_;
+            if (level_frames >= static_cast<std::size_t>(rate_)) {
+                const double rms = std::sqrt(level_sum / static_cast<double>(level_frames * kChannels));
+                jvm::log("audio: level %.1f dBFS, peak %.1f dBFS", rms > 0 ? 20 * std::log10(rms) : -200.0,
+                         level_peak > 0 ? 20 * std::log10(static_cast<double>(level_peak)) : -200.0);
+                level_sum = 0;
+                level_peak = 0;
+                level_frames = 0;
+            }
+        }
         // Away from the output longer than its buffer lasts: it ran dry.
         Clock::time_point now = Clock::now();
         if (last != Clock::time_point{} && now - last > std::chrono::duration<double, std::milli>(output_->buffer_ms())) ++late_;

@@ -339,6 +339,96 @@ int main() {
         mixer.close(s);
     }
 
+    // The sound panel's controls while the mix runs (set_levels): the master at once, the effects' share on Unity's own
+    // stream (FMOD) and not on the game's AudioTrack (its OpenAL's music and effects are shared out inside it).
+    {
+        auto capture = std::make_unique<Capture>(48000, false);
+        Capture* cap = capture.get();
+        Mixer mixer(std::move(capture));
+        auto fmod = mixer.open(48000, 2, Encoding::F32, 9600, "FMOD");
+        auto track = mixer.open(48000, 2, Encoding::F32, 9600, "AudioTrack 1");
+        std::vector<float> half(4800 * kChannels, 0.5f), none(4800 * kChannels, 0.0f);
+        // Unity's stream at 0.5 in the first 4800 frames, the game's track at 0.5 in the next 4800.
+        fmod->write(half.data(), 4800);
+        fmod->write(none.data(), 4800);
+        track->write(none.data(), 4800);
+        track->write(half.data(), 4800);
+        Levels l;
+        l.master = 50;
+        l.effects = 50;
+        l.music = 0;
+        mixer.set_levels(l);
+        fmod->play();
+        track->play();
+        cap->open();
+        for (int k = 0; k < 400 && (fmod->played() < 9600 || track->played() < 9600); ++k) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::vector<float> got = cap->taken();
+        // Master 50 % is 0.25 of amplitude; effects 50 % another 0.25 on Unity's stream: 0.5 x 0.25 x 0.25; the track
+        // 0.5 x 0.25 (its music share is OpenAL's own, not the mixer's).
+        std::size_t unity = 0, game = 0;
+        for (const float v : got) {
+            if (std::fabs(v - 0.5f * 0.25f * 0.25f) < 1e-6f) ++unity;
+            if (std::fabs(v - 0.5f * 0.25f) < 1e-6f) ++game;
+        }
+        std::snprintf(what, sizeof what, "master 50 %% and effects 50 %% at run time: %zu samples of Unity's stream at 1/32, %zu of the game's track at 1/8 (want 9600 each)",
+                      unity, game);
+        check(unity == 9600 && game == 9600, what);
+        mixer.close(fmod);
+        mixer.close(track);
+    }
+
+    // The equaliser (sound_mix.h): flat passes the mix as it is; each preset lifts its band against the others by its
+    // dB; a raised band takes its headroom first, so a full scale tone there never clips; custom bands as chosen.
+    {
+        const int rate = 48000;
+        auto through = [&](EqBands bands, double freq, double amplitude) {
+            Equalizer eq;
+            eq.set(rate, bands);
+            std::vector<float> v = tone(freq, rate, 1.0, amplitude);
+            eq.run(v.data(), v.size() / kChannels);
+            // The last half second, settled: its level against the tone's in.
+            std::vector<float> tail(v.begin() + static_cast<std::ptrdiff_t>(v.size() / 2), v.end());
+            float most = 0;
+            for (const float x : tail) most = std::max(most, std::fabs(x));
+            return std::make_pair(level_db(tail, amplitude), most);
+        };
+        const auto flat = through({0, 0, 0}, 1000, 0.5);
+        check(std::fabs(flat.first) < 0.01, "flat leaves a 1 kHz tone as it is");
+        Equalizer eq;
+        eq.set(rate, {0, 0, 0});
+        check(eq.flat(), "flat is no filter at all");
+        const auto bass_low = through(preset_bands(EqPreset::kBass, {}), 50, 0.5), bass_high = through(preset_bands(EqPreset::kBass, {}), 10000, 0.5);
+        std::snprintf(what, sizeof what, "bass: 50 Hz %.2f dB against 10 kHz %.2f dB (want 6 dB more, within 0.7)", bass_low.first, bass_high.first);
+        check(std::fabs((bass_low.first - bass_high.first) - 6) < 0.7, what);
+        const auto treble_low = through(preset_bands(EqPreset::kTreble, {}), 50, 0.5), treble_high = through(preset_bands(EqPreset::kTreble, {}), 14000, 0.5);
+        std::snprintf(what, sizeof what, "treble: 14 kHz %.2f dB against 50 Hz %.2f dB (want 6 dB more, within 0.7)", treble_high.first, treble_low.first);
+        check(std::fabs((treble_high.first - treble_low.first) - 6) < 0.7, what);
+        const auto vocal_mid = through(preset_bands(EqPreset::kVocal, {}), 1000, 0.5), vocal_low = through(preset_bands(EqPreset::kVocal, {}), 50, 0.5);
+        std::snprintf(what, sizeof what, "vocal: 1 kHz %.2f dB against 50 Hz %.2f dB (want 6 dB more, within 0.7)", vocal_mid.first, vocal_low.first);
+        check(std::fabs((vocal_mid.first - vocal_low.first) - 6) < 0.7, what);
+        // Full scale at the raised band: its headroom keeps it within full scale.
+        const auto loud = through({12, 0, 0}, 50, 1.0);
+        std::snprintf(what, sizeof what, "+12 dB at the low end with a full scale 50 Hz tone: peak %.3f (want 1.05 at most)", static_cast<double>(loud.second));
+        check(loud.second <= 1.05f, what);
+        const auto cut = through({0, -12, 0}, 1000, 0.5);
+        std::snprintf(what, sizeof what, "custom -12 dB in the middle: a 1 kHz tone %.2f dB (want -12, within 1)", cut.first);
+        check(std::fabs(cut.first + 12) < 1.0, what);
+        // What it costs: a 5 ms period of 48 kHz stereo, a thousand times.
+        Equalizer timed;
+        timed.set(rate, {6, -3, 4});
+        std::vector<float> period = tone(440, rate, 0.005, 0.5);
+        // Each period's output summed, so that none of the work can be left out.
+        volatile float sink = 0;
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 1000; ++i) {
+            timed.run(period.data(), period.size() / kChannels);
+            sink = sink + period[static_cast<std::size_t>(i) % period.size()];
+        }
+        const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / 1000;
+        std::snprintf(what, sizeof what, "the equaliser costs %.2f us for a 5 ms period (want under 100 us: 2 %% of the period)", us);
+        check(us < 100 && std::isfinite(static_cast<float>(sink)), what);
+    }
+
     std::printf("%d checks\n", g_checks);
     if (g_failures == 0) std::printf("ALL CHECKS PASSED\n");
     return g_failures == 0 ? 0 : 1;
