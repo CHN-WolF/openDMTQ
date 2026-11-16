@@ -381,6 +381,17 @@ async function openAlone(contexts, url) {
   await page.evaluate(() => { window.keptOpen = true; });
   return page;
 }
+// Pictures of pages left open, as they are now, at a phone's width and a laptop's (changing a page's width does not open it
+// anew): OUT/shots/<prefix>-<name>-<width>.jpg.
+async function shots(pages, names, prefix) {
+  for (const [i, page] of pages.entries()) {
+    for (const width of [360, 1280]) {
+      await page.setViewport({ width, height: 900 });
+      await pause(400);
+      await page.screenshot({ path: path.join(OUT, 'shots', `${prefix}-${names[i]}-${width}.jpg`), type: 'jpeg', quality: 72, fullPage: true }).catch(() => {});
+    }
+  }
+}
 // Until the page says so (test, run in the page with arg), for ms at most: whether it came.
 async function until(page, test, arg, ms = 90000) {
   const end = Date.now() + ms;
@@ -2096,14 +2107,17 @@ async function adminFlows(contexts) {
       const said = document.querySelector('body > .site-alert.maint'), word = document.querySelector('.bar-end > .state.maint');
       return words === null ? !said && !word : !!said && !!word && said.textContent.includes(words);
     };
-    const all = async (words, name) => {
+    const all = async (words, name, shot) => {
       const came = [];
       for (const page of open) came.push(await until(page, saying, words) && await keptOpen(page));
       check(name, came.every(Boolean), came.join(' '));
+      // What came by itself, at a phone's width and a laptop's: the same as a page opened then.
+      if (shot) await shots(open, ['home', 'live'], `notices-${shot}`);
     };
     for (const round of [1, 2]) {
       await maintenance('on', round === 1 ? 'Back at nine.' : '');
-      await all(round === 1 ? 'Back at nine.' : '', `round ${round}: maintenance begun, the home page and the live page left open say so by themselves`);
+      await all(round === 1 ? 'Back at nine.' : '', `round ${round}: maintenance begun, the home page and the live page left open say so by themselves`,
+        round === 1 ? 'maint-begun' : '');
       if (round === 1) {
         await maintenance('on', 'Back at ten.');
         await all('Back at ten.', 'a new message: the pages left open say the new words');
@@ -2161,6 +2175,7 @@ async function adminFlows(contexts) {
       const gone = [];
       for (const page of open) gone.push(stopped && await until(page, down) && await keptOpen(page));
       check(`round ${round}: the game server stopped, the pages left open say so by themselves`, gone.every(Boolean), gone.join(' '));
+      if (round === 1) await shots(open, ['players', 'status'], 'away-down');
       flag(`away-seen-down-${round}`);
       const started = await sign(`away-up-${round}`);
       const back = [];
