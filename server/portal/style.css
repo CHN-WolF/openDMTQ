@@ -557,10 +557,9 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
 .pw-toggle {
   position: absolute;
   right: 5px;
-  top: 50%;
+  top: 5px;
+  bottom: 5px;
   min-width: 64px;
-  height: 32px;
-  margin-top: -16px;
   padding: 0 10px;
   font: 700 var(--t-2xs)/1 var(--wide);
   letter-spacing: 0.08em;
