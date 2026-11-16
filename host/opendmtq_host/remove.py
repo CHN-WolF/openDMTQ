@@ -19,6 +19,9 @@ from .output import ok, say, warn
 # What stays when the data is kept: the data and the settings.
 KEPT = ("data", ".env")
 
+# Windows' flag for a program started outside its parent's job (the job must allow it: server.py sets BREAKAWAY_OK).
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+
 
 def in_folder(text):
     """True when text (a path, a unit, a shortcut's target) points into this install's folder."""
@@ -166,9 +169,18 @@ def remove_folder(keep_data):
             f.write(remover_script(root, keep_data))
         flags = (getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
                  | getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        # Out of the folder, so that it is not this script's own folder that is in use.
-        subprocess.Popen(["cmd", "/c", script], cwd=tempfile.gettempdir(), creationflags=flags, close_fds=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Outside the job that ends every program of this one with it (server.py, end_with_this_program), or the script
+        # would end with this program, before it deleted anything. Where another job around this one does not allow
+        # that, in it all the same.
+        for breakaway in (CREATE_BREAKAWAY_FROM_JOB, 0):
+            try:
+                # Out of the folder, so that it is not this script's own folder that is in use.
+                subprocess.Popen(["cmd", "/c", script], cwd=tempfile.gettempdir(), creationflags=flags | breakaway,
+                                 close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+                break
+            except OSError:
+                continue
         ok(f"{root} is deleted once this window has closed" + (" (data and .env stay)" if keep_data else ""))
         return
     for name in os.listdir(root):

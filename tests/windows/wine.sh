@@ -404,6 +404,61 @@ for _ in $(seq 1 30); do
 done
 web -o /dev/null "$A/login"
 web -o /dev/null -d "name=admin&password=winetest" "$A/login"
+# job_state <redirect>: how a job the Server page started ended: followed while it runs, or what the page then says.
+job_state() {
+  local job state said
+  job=$(sed -n 's/.*[?&]job=\([0-9a-f]*\).*/\1/p' <<<"$1")
+  if [ -n "$job" ]; then
+    state=running
+    for _ in $(seq 1 600); do
+      state=$(web "$A/jobs/$job" | python3 -c 'import json, sys; print(json.load(sys.stdin)["state"])' 2>/dev/null || echo gone)
+      [ "$state" = running ] || break
+      sleep 1
+    done
+    [ "$state" = "done" ] || web "$A/jobs/$job" | python3 -c 'import json, sys; print("\n".join(json.load(sys.stdin)["log"][-20:]))' || true
+    echo "$state"
+    return
+  fi
+  said=$(web "$A/server")
+  if grep -q 'class="flash bad"' <<<"$said"; then
+    grep -o '<p class="flash bad"[^>]*>[^<]*' <<<"$said" | sed 's/<[^>]*>//' >&2
+    echo failed
+  else
+    echo "done"
+  fi
+}
+# Check and repair, and the data, from the Server page, and the same from the command line (OpenDMTQ.exe repair and
+# delete-data, through a pipe as above).
+went=$(web -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf=$(web "$A/server" | token)" "$A/server/repair")
+state=$(job_state "$went")
+expect "Check and repair on the Server page ends ($state)" test "$state" = "done"
+echo old > data/backups/opendmtq-20200101-000000-manual.tar.gz
+went=$(web -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf=$(web "$A/server" | token)" -d part=backups -d part=logs \
+  -d backup=yes -d confirm=delete "$A/server/data")
+state=$(job_state "$went")
+expect "deleting the backups and the logs on the Server page ends ($state)" test "$state" = "done"
+expect "the old backup is gone, the one made first stays" sh -c "test ! -e data/backups/opendmtq-20200101-000000-manual.tar.gz && ls data/backups | grep -q before-delete"
+timeout 300 wine OpenDMTQ.exe delete-data recordings --yes 2>&1 | cat > /tmp/delete.log || true
+expect "OpenDMTQ.exe delete-data recordings --yes deletes them" grep -q "deleted: recordings" /tmp/delete.log
+tail -n 4 /tmp/delete.log
+before=$(web "$A/setup/ping")
+timeout 600 wine OpenDMTQ.exe repair 2>&1 | cat > /tmp/repair.log || true
+tail -n 8 /tmp/repair.log
+expect "OpenDMTQ.exe repair checks everything and the window starts the server again with it" grep -q "the server starts again with it" /tmp/repair.log
+restarted=no
+for _ in $(seq 1 120); do
+  now=$(curl -s -m 3 "$A/setup/ping" || true)
+  if [ -n "$now" ] && [ "$now" != "$before" ]; then restarted=yes; break; fi
+  sleep 1
+done
+expect "and it answers again" test "$restarted" = yes
+rm -f "$jar"
+for _ in $(seq 1 30); do
+  is 200 "$A/login" && break
+  sleep 1
+done
+web -o /dev/null "$A/login"
+web -o /dev/null -d "name=admin&password=winetest" "$A/login"
 asked=$(web -o /tmp/uninstall.html -w '%{http_code}' --data-urlencode "csrf=$(web "$A/server" | token)" -d confirm=uninstall \
   "$A/server/uninstall")
 expect "Uninstall on the Server page is asked for ($asked)" test "$asked" = 200

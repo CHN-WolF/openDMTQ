@@ -198,6 +198,19 @@ class HostRemoveTest(unittest.TestCase):
             self.remove.remove_link()
         self.assertTrue(os.path.lexists(mine))
 
+    def test_on_windows_the_script_is_started_outside_the_job_that_ends_with_the_program(self):
+        # The server's program ties every program it starts to a job that ends with it (server.py): the script that deletes
+        # the folder once it has ended must break away from it, which the job allows (BREAKAWAY_OK, 0x800). Without
+        # that, under Wine as on Windows, the script ended with the program and deleted nothing.
+        started = []
+        with mock.patch.object(self.remove, "WINDOWS", True), \
+                mock.patch.object(self.remove.subprocess, "Popen", lambda *a, **k: started.append(k)), \
+                mock.patch.object(self.remove.tempfile, "gettempdir", lambda: self._tmp.name), mock.patch("builtins.print"):
+            self.remove.remove_folder(False)
+        self.assertTrue(started[0]["creationflags"] & self.remove.CREATE_BREAKAWAY_FROM_JOB)
+        with open(os.path.join(REPO, "host", "opendmtq_host", "server.py"), encoding="utf-8") as f:
+            self.assertIn("LimitFlags = 0x2000 | 0x800", f.read())
+
     def test_the_windows_script_waits_and_keeps_what_is_kept(self):
         whole = self.remove.remover_script(r"C:\Users\someone\Desktop\OpenDMTQ", False)
         self.assertIn('set "D=C:\\Users\\someone\\Desktop\\OpenDMTQ"', whole)

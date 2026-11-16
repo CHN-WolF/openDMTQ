@@ -66,8 +66,10 @@ def end_with_this_program():
 
     job = k32.CreateJobObjectW(None, None)
     info = Extended()
-    # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-    info.BasicLimitInformation.LimitFlags = 0x2000
+    # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, and JOB_OBJECT_LIMIT_BREAKAWAY_OK: a program started on purpose outside the job
+    # (CREATE_BREAKAWAY_FROM_JOB) outlives this one, as the uninstall's script that deletes the folder once this has ended
+    # must (remove.py). Every other program started here stays in the job.
+    info.BasicLimitInformation.LimitFlags = 0x2000 | 0x800
     # JobObjectExtendedLimitInformation is information class 9.
     if not job or not k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)) \
             or not k32.AssignProcessToJobObject(job, k32.GetCurrentProcess()):
