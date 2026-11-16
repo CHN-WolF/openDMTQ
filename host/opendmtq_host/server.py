@@ -354,7 +354,7 @@ class Server:
         """Until asked to stop: a program that stopped by itself is started again, at most five times a minute."""
         restarts = []
         while not self.stopping.wait(2):
-            # Stop, asked on the admin pages (Maintenance): as Ctrl+C or the window's closing would.
+            # Stop, asked on the admin pages (the Server page): as Ctrl+C or the window's closing would.
             stop = os.path.join(RUN, "stop.request")
             if os.path.exists(stop):
                 try:

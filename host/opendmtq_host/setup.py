@@ -158,7 +158,7 @@ def summary(values):
             "sign in.")
         say("")
         tell("Leave this window open while people play. To stop the server, close it, or press Stop the server on the "
-            "admin pages, under Maintenance.")
+            "admin pages' Server page.")
         # Phones and the PC client reach the server alike: a public network keeps both out.
         tell("Windows may ask whether Apache may use the network: allow it on private networks. If your Wi-Fi is set "
             "as a public network, phones and other PCs cannot connect: in Settings, Network & internet, choose Private "
