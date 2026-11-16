@@ -369,7 +369,8 @@ def plays_file(con, wanted, strict=False):
     people = plays_players(con)
     if not strict and wanted["player"] not in {guid for guid, _ in people}:
         wanted["player"] = None
-    # What it is first, in the release's files' order and in lower case: opendmtq-server-plays-player7-2026-11-01-2026-11-17.csv.
+    # What it is first, in the release's files' order and in lower case:
+    # opendmtq-server-plays-player7-2026-11-01-2026-11-17.csv.
     parts = ["opendmtq-server-plays"] + ([f"player{wanted['player']}"] if wanted["player"] is not None else []) \
         + [d.date().isoformat() for d in (wanted["from"], wanted["to"]) if d]
     return plays_csv(plays_found(con, wanted), "-".join(parts) + ".csv")

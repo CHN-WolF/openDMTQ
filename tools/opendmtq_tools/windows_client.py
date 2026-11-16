@@ -315,8 +315,8 @@ def preset(url, name, ca=""):
 
 def download_name(host, version=""):
     """The file name the installer is handed out under: what it is, its version, the system, and the server it is set up
-    for, in the release's files' order and all in lower case: opendmtq-pc-client-0.11.0-windows-x64-setup-example.com-8080.exe,
-    without a version when the copy here does not say one."""
+    for, in the release's files' order and all in lower case, without a version when the copy here does not say one:
+    opendmtq-pc-client-0.11.0-windows-x64-setup-example.com-8080.exe."""
     # A version as a release names one (digits, letters, dots, + and -), or none, as the site's windows_download_name().
     version = version if re.fullmatch(r"[0-9][0-9A-Za-z.+-]*", version or "") else ""
     name = ("opendmtq-pc-client-" + (f"{version}-" if version else "") + "windows-x64-setup-"
