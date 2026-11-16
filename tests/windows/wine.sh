@@ -379,6 +379,42 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 owner_signs_in "$PORT" winetest "stopped from the admin pages and started again"
+
+# The Server page: Restart (every part again, the window stays), then Uninstall: the window's program stops every part,
+# and a script of its own outside the folder deletes it once the window has closed (ADM-114).
+rm -f "$jar"
+web -o /dev/null "$A/login"
+web -o /dev/null -d "name=admin&password=winetest" "$A/login"
+page=$(web "$A/server")
+offers() { grep -q 'action="/opendmtq/admin/server/restart"' <<<"$page" && grep -q 'action="/opendmtq/admin/server/uninstall"' <<<"$page"; }
+expect "the Server page offers Restart and Uninstall here" offers
+before=$(web "$A/setup/ping")
+web -o /dev/null --data-urlencode "csrf=$(token <<<"$page")" "$A/server/restart"
+restarted=no
+for _ in $(seq 1 120); do
+  now=$(curl -s -m 3 "$A/setup/ping" || true)
+  if [ -n "$now" ] && [ "$now" != "$before" ]; then restarted=yes; break; fi
+  sleep 1
+done
+expect "Restart on the Server page starts every part again in the same window" test "$restarted" = yes
+rm -f "$jar"
+for _ in $(seq 1 30); do
+  is 200 "$A/login" && break
+  sleep 1
+done
+web -o /dev/null "$A/login"
+web -o /dev/null -d "name=admin&password=winetest" "$A/login"
+asked=$(web -o /tmp/uninstall.html -w '%{http_code}' --data-urlencode "csrf=$(web "$A/server" | token)" -d confirm=uninstall \
+  "$A/server/uninstall")
+expect "Uninstall on the Server page is asked for ($asked)" test "$asked" = 200
+# The folder goes once the window has closed: its script tries again every two seconds.
+for _ in $(seq 1 180); do
+  [ -e "/tmp/Open DMTQ" ] || break
+  sleep 1
+done
+expect "and the bundle's folder is gone once its window has closed" test ! -e "/tmp/Open DMTQ"
+[ -e "/tmp/Open DMTQ" ] && { ls -A "/tmp/Open DMTQ"; tail -n 8 /tmp/again.log; }
+cd /tmp
 wineserver -k 2>/dev/null || true
 
 echo "$([ $failures = 0 ] && echo PASS || echo FAIL) the Windows bundle under Wine: $failures failure(s)"
