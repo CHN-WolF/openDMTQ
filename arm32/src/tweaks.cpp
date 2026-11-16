@@ -228,6 +228,24 @@ void tweaks_render(Thread& th) { ARM32_RENDER_HOOK(th)
         const auto target = static_cast<std::int32_t>(th.call(g_target_getter, {}));
         if (g_game_target.exchange(target, std::memory_order_relaxed) != target && g_stats) log("stats: game frame target %d", target);
     }
+    // The size the game itself renders at (Unity's Screen, which its cameras and its UI take theirs from), said when it
+    // changes: what the window's size and the render scale really made of it, not what the player asked for.
+    static gaddr screen_w = 0, screen_h = 0;
+    static std::int32_t said_w = -1, said_h = -1;
+    if (!screen_w) {
+        gaddr resolve = g.dlsym(g_il2cpp, "il2cpp_resolve_icall");
+        screen_w = resolve ? static_cast<gaddr>(th.call(resolve, {guest_string("UnityEngine.Screen::get_width")})) : 0;
+        screen_h = resolve ? static_cast<gaddr>(th.call(resolve, {guest_string("UnityEngine.Screen::get_height")})) : 0;
+        if (!screen_w || !screen_h) screen_w = screen_h = 1;
+    }
+    if (screen_w > 1 && screen_h > 1) {
+        const auto sw = static_cast<std::int32_t>(th.call(screen_w, {})), sh = static_cast<std::int32_t>(th.call(screen_h, {}));
+        if (sw != said_w || sh != said_h) {
+            said_w = sw;
+            said_h = sh;
+            log("arm32: the game renders at %dx%d (its own Screen size)", sw, sh);
+        }
+    }
     if (!g_low_resolution_done && g_renders > kLowResolutionRender) apply_low_resolution(th);
     if (!tweak_turn) return;
     for (Tweak& t : g_tweaks) apply(th, t);

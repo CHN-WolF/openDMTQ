@@ -31,6 +31,7 @@
 // EXT_disjoint_timer_query's names, for the GPU times in the stats.
 #include <GLES2/gl2ext.h>
 
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdlib>
@@ -46,6 +47,12 @@
 // SMAA's precomputed area and search textures (the reference's headers as they are, MIT).
 #include <smaa/AreaTex.h>
 #include <smaa/SearchTex.h>
+
+namespace arm32 {
+// The shot due for the frame being shown, and the game's own frame saved beside it (frames.cpp).
+std::string shot_due(bool take);
+void save_texture_shot(GLuint texture, int w, int h, const std::string& name);
+}  // namespace arm32
 
 namespace player {
 
@@ -691,13 +698,39 @@ const std::string& smaa_source() {
     }();
     return text;
 }
+// SMAA's preset and its edge detection: ULTRA by luma (its edges from a luma step of 0.05, its searches 32 pixels long,
+// its diagonals and corners on). The game's art is filtered pictures, soft at their own edges already: measured on the
+// same frames of its music list, HIGH (a step of 0.1) changed 5.8 % of the pixels and a fifth of the edges of a step of
+// 0.05 and more, ULTRA 9 % and three tenths, its words as before. A check names another (PLAYER_SMAA:
+// high, ultra, either with "-color" for its colour edge detection), so that the measures compare them on the same frames.
+struct SmaaChoice {
+    std::string preset = "ULTRA";
+    bool color = false;
+};
+const SmaaChoice& smaa_choice() {
+    static const SmaaChoice c = [] {
+        SmaaChoice out;
+        const char* v = std::getenv("PLAYER_SMAA");
+        const std::string want = v ? v : "";
+        if (want.rfind("high", 0) == 0) out.preset = "HIGH";
+        out.color = want.find("color") != std::string::npos;
+        if (v) arm32::log("player: picture: SMAA's preset %s, its edges by %s (PLAYER_SMAA)", out.preset.c_str(), out.color ? "colour" : "luma");
+        return out;
+    }();
+    return c;
+}
 // The preamble before it, for each stage; the stage's own lines come after.
-const char* kSmaaVertexHead = "#version 300 es\nprecision highp float;\nprecision highp int;\n#define SMAA_GLSL_3 1\n"
-                              "#define SMAA_PRESET_HIGH 1\n#define SMAA_INCLUDE_VS 1\n#define SMAA_INCLUDE_PS 0\n"
-                              "uniform highp vec4 metrics;\n#define SMAA_RT_METRICS metrics\n";
-const char* kSmaaFragmentHead = "#version 300 es\nprecision highp float;\nprecision highp int;\n#define SMAA_GLSL_3 1\n"
-                                "#define SMAA_PRESET_HIGH 1\n#define SMAA_INCLUDE_VS 0\n#define SMAA_INCLUDE_PS 1\n"
-                                "uniform highp vec4 metrics;\n#define SMAA_RT_METRICS metrics\n";
+const std::string& smaa_head(bool vertex) {
+    // The fragment stages' head, then the vertex stages'.
+    static const std::array<std::string, 2> heads = [] {
+        const std::string common = "#version 300 es\nprecision highp float;\nprecision highp int;\n#define SMAA_GLSL_3 1\n#define SMAA_PRESET_" +
+                                   smaa_choice().preset + " 1\n";
+        const std::string tail = "uniform highp vec4 metrics;\n#define SMAA_RT_METRICS metrics\n";
+        return std::array<std::string, 2>{common + "#define SMAA_INCLUDE_VS 0\n#define SMAA_INCLUDE_PS 1\n" + tail,
+                                          common + "#define SMAA_INCLUDE_VS 1\n#define SMAA_INCLUDE_PS 0\n" + tail};
+    }();
+    return heads[vertex ? 1 : 0];
+}
 // Each pass's vertex and fragment main, with the varyings SMAA's vertex functions fill.
 const char* kSmaaEdgesVertex = R"(
 out vec2 texcoord;
@@ -715,6 +748,14 @@ in vec2 texcoord;
 in vec4 offset[3];
 out vec4 color;
 void main() { color = vec4(SMAALumaEdgeDetectionPS(texcoord, offset, colorTex), 0.0, 0.0); }
+)";
+// The same by its colour edge detection (PLAYER_SMAA=...-color).
+const char* kSmaaEdgesColorFragment = R"(
+uniform highp sampler2D colorTex;
+in vec2 texcoord;
+in vec4 offset[3];
+out vec4 color;
+void main() { color = vec4(SMAAColorEdgeDetectionPS(texcoord, offset, colorTex), 0.0, 0.0); }
 )";
 const char* kSmaaWeightsVertex = R"(
 out vec2 texcoord;
@@ -942,12 +983,13 @@ void make_passes(const Gl& g, Passes& p, EGLContext context) {
         }
     }
     if (p.aa == 2) {
-        p.smaa_edges = link(g, "SMAA's edge detection", compile(g, GL_VERTEX_SHADER, "SMAA's edge detection", {kSmaaVertexHead, smaa_source().c_str(), kSmaaEdgesVertex}),
-                            compile(g, GL_FRAGMENT_SHADER, "SMAA's edge detection", {kSmaaFragmentHead, smaa_source().c_str(), kSmaaEdgesFragment}));
-        p.smaa_weights = link(g, "SMAA's blending weights", compile(g, GL_VERTEX_SHADER, "SMAA's blending weights", {kSmaaVertexHead, smaa_source().c_str(), kSmaaWeightsVertex}),
-                              compile(g, GL_FRAGMENT_SHADER, "SMAA's blending weights", {kSmaaFragmentHead, smaa_source().c_str(), kSmaaWeightsFragment}));
-        p.smaa_blend = link(g, "SMAA's neighbourhood blending", compile(g, GL_VERTEX_SHADER, "SMAA's neighbourhood blending", {kSmaaVertexHead, smaa_source().c_str(), kSmaaBlendVertex}),
-                            compile(g, GL_FRAGMENT_SHADER, "SMAA's neighbourhood blending", {kSmaaFragmentHead, smaa_source().c_str(), kSmaaBlendFragment}));
+        p.smaa_edges = link(g, "SMAA's edge detection", compile(g, GL_VERTEX_SHADER, "SMAA's edge detection", {smaa_head(true).c_str(), smaa_source().c_str(), kSmaaEdgesVertex}),
+                            compile(g, GL_FRAGMENT_SHADER, "SMAA's edge detection", {smaa_head(false).c_str(), smaa_source().c_str(),
+                                                                                       smaa_choice().color ? kSmaaEdgesColorFragment : kSmaaEdgesFragment}));
+        p.smaa_weights = link(g, "SMAA's blending weights", compile(g, GL_VERTEX_SHADER, "SMAA's blending weights", {smaa_head(true).c_str(), smaa_source().c_str(), kSmaaWeightsVertex}),
+                              compile(g, GL_FRAGMENT_SHADER, "SMAA's blending weights", {smaa_head(false).c_str(), smaa_source().c_str(), kSmaaWeightsFragment}));
+        p.smaa_blend = link(g, "SMAA's neighbourhood blending", compile(g, GL_VERTEX_SHADER, "SMAA's neighbourhood blending", {smaa_head(true).c_str(), smaa_source().c_str(), kSmaaBlendVertex}),
+                            compile(g, GL_FRAGMENT_SHADER, "SMAA's neighbourhood blending", {smaa_head(false).c_str(), smaa_source().c_str(), kSmaaBlendFragment}));
         if (p.smaa_edges && p.smaa_weights && p.smaa_blend) {
             g.use_program(p.smaa_edges);
             g.uniform_int(g.uniform_location(p.smaa_edges, "colorTex"), 0);
@@ -1271,6 +1313,8 @@ bool present(const arm32::OffscreenFrame& f) {
         else arm32::log("player: the game draws at %dx%d, the window's own size: no upscaler", f.width, f.height);
         arm32::log("player: anti-aliasing: %s", p.aa == 1 ? "CMAA 2" : p.aa == 2 ? "SMAA" : "off");
     }
+    // A check's shot of this frame (PLAYER_SHOTS): the game's own frame saved too, before the passes change it.
+    if (const std::string shot = arm32::shot_due(false); !shot.empty()) arm32::save_texture_shot(f.texture, f.width, f.height, shot);
     Saved saved;
     save_state(g, saved);
     if (!size_targets(g, p, f.width, f.height, f.out_width, f.out_height)) {

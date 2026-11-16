@@ -3,7 +3,8 @@
 // of it (glass_capture.cpp); then the frames are counted, the first one logged, what the display showed noted every
 // five seconds with stats on, the taps a check planned by frame given (input.cpp), and the ones asked for
 // (PLAYER_SHOTS="60,600,@12.5": frame numbers, and seconds from the first frame, which hold whatever the frame rate)
-// saved as PNG files in the data folder's shots/, for checks to look at.
+// saved as PNG files in the data folder's shots/, for checks to look at. Where the picture's passes run (post_pass.cpp),
+// the same frame as the game drew it is saved beside it, <name>-game.png: the passes' own work, pixel for pixel.
 #include "live.h"
 #include "player.h"
 
@@ -179,6 +180,11 @@ void glass_frame(EGLDisplay display, EGLSurface surface);
 void glass_context_destroyed(EGLContext context);
 void glass_stats();
 
+// The name of the shot the frame about to be shown is due for (PLAYER_SHOTS), "" for none; `take`: live_frame saving it.
+std::string shot_due(bool take);
+// The game's own frame in `texture` (w x h) saved as <name>-game.png beside the shot: what the passes start from.
+void save_texture_shot(GLuint texture, int w, int h, const std::string& name);
+
 // The phone's start of live view: the computer's starts at its first swap, from the player's own files.
 void live_load(JavaVM*, JNIEnv*, const std::string&) {}
 
@@ -204,20 +210,74 @@ void live_frame(EGLDisplay display, EGLSurface surface) {
     if (g_stats) present_stats(display, surface);
     // What the glass's reads cost this thread, every five seconds while any glass was up.
     if (g_stats) glass_stats();
-    Shots& s = shots();
-    if (s.frames.count(n)) save_frame(display, surface, n, "frame-" + std::to_string(n));
-    if (!s.times.empty()) {
-        // Seconds from the first frame: a time that has come is saved once, as time-<seconds>.png.
-        static const double first = now_seconds();
-        const double at = *s.times.begin();
-        if (now_seconds() - first >= at) {
-            s.times.erase(s.times.begin());
-            char name[32];
-            std::snprintf(name, sizeof name, "time-%06.1f", at);
-            save_frame(display, surface, n, name);
+    // The shot this frame is due for (shot_due: the passes may have saved the game's own frame under the same name).
+    const std::string name = shot_due(true);
+    if (!name.empty()) save_frame(display, surface, n, name);
+    player::frame_shown(n);
+}
+
+std::string shot_due(bool take) {
+    // The frame about to be shown is the next one counted, and the decision for it is kept until live_frame takes it:
+    // the passes (post_pass.cpp) ask first in the same swap and get the same answer.
+    static std::uint64_t decided_for = 0;
+    static std::string decided;
+    static bool timed = false;
+    const std::uint64_t next = g_shown.load(std::memory_order_acquire) + 1;
+    if (decided_for != next) {
+        decided_for = next;
+        decided.clear();
+        timed = false;
+        Shots& s = shots();
+        if (s.frames.count(next)) {
+            decided = "frame-" + std::to_string(next);
+        } else if (!s.times.empty()) {
+            // Seconds from the first frame: a time that has come is saved once, as time-<seconds>.png.
+            static const double first = now_seconds();
+            const double at = *s.times.begin();
+            if (now_seconds() - first >= at) {
+                char name[32];
+                std::snprintf(name, sizeof name, "time-%06.1f", at);
+                decided = name;
+                timed = true;
+            }
         }
     }
-    player::frame_shown(n);
+    if (take && timed) {
+        // Taken: its time is done with.
+        Shots& s = shots();
+        if (!s.times.empty()) s.times.erase(s.times.begin());
+        timed = false;
+    }
+    return decided;
+}
+
+void save_texture_shot(GLuint texture, int w, int h, const std::string& name) {
+    // The game's own frame before the passes, read through a framebuffer of our own, whatever was bound put back.
+    auto get_int = reinterpret_cast<void (*)(GLenum, GLint*)>(arm32::gl_proc("glGetIntegerv"));
+    auto gen = reinterpret_cast<void (*)(GLsizei, GLuint*)>(arm32::gl_proc("glGenFramebuffers"));
+    auto del = reinterpret_cast<void (*)(GLsizei, const GLuint*)>(arm32::gl_proc("glDeleteFramebuffers"));
+    auto bind = reinterpret_cast<void (*)(GLenum, GLuint)>(arm32::gl_proc("glBindFramebuffer"));
+    auto attach = reinterpret_cast<void (*)(GLenum, GLenum, GLenum, GLuint, GLint)>(arm32::gl_proc("glFramebufferTexture2D"));
+    auto read = reinterpret_cast<void (*)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*)>(arm32::gl_proc("glReadPixels"));
+    auto pixel_store = reinterpret_cast<void (*)(GLenum, GLint)>(arm32::gl_proc("glPixelStorei"));
+    if (!get_int || !gen || !del || !bind || !attach || !read || !pixel_store || w <= 0 || h <= 0) return;
+    GLint was_bound = 0, was_alignment = 4;
+    get_int(GL_READ_FRAMEBUFFER_BINDING, &was_bound);
+    get_int(GL_PACK_ALIGNMENT, &was_alignment);
+    GLuint fbo = 0;
+    gen(1, &fbo);
+    bind(GL_READ_FRAMEBUFFER, fbo);
+    attach(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+    pixel_store(GL_PACK_ALIGNMENT, 1);
+    std::vector<unsigned char> rgba(static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4);
+    read(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    pixel_store(GL_PACK_ALIGNMENT, was_alignment);
+    bind(GL_READ_FRAMEBUFFER, static_cast<GLuint>(was_bound));
+    del(1, &fbo);
+    std::string dir = player::app().host_data + "/shots";
+    mkdir(dir.c_str(), 0755);
+    const std::string path = dir + "/" + name + "-game.png";
+    if (write_png(path, w, h, rgba)) arm32::log("player: the game's own frame before the passes saved to %s (%dx%d)", path.c_str(), w, h);
 }
 
 void live_context_destroyed(EGLContext context) {
