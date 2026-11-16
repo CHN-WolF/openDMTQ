@@ -138,8 +138,9 @@ Requirements:
   prepares it. What phones without 32-bit support need comes with the tools image: the builder job adds it.
 - S3-compatible object storage for the database replica.
 - A LoadBalancer implementation (MetalLB, k3s servicelb, a cloud provider) or a node port, and an
-  address phones can reach: an IPv4 address or a host name, on the router Service's port (80 unless
-  `router.service.port` says otherwise).
+  address phones can reach: an IPv4 address or a host name, on the router Service's port, the server's one port for the
+  game, the players' site, the admin pages and the API (8791 on a new install unless `router.service.port` says
+  otherwise; an upgrade keeps the port the Service has).
 
 The claim `opendmtq-data` below, made and filled from the computer where `./opendmtq import [--songs] <folder>` made
 `data/`: a pod that runs as the chart's pods do (uid 33) holds the claim while `content/` and `apk/base/` go in, then
@@ -182,7 +183,7 @@ kubectl -n opendmtq create secret generic opendmtq-s3 \
   --from-literal=LITESTREAM_ACCESS_KEY_ID=... --from-literal=LITESTREAM_SECRET_ACCESS_KEY=...
 
 helm install opendmtq oci://ghcr.io/kanggu12/charts/opendmtq -n opendmtq \
-  --set publicHost=192.168.1.50 \
+  --set publicHost=192.168.1.50:8791 \
   --set router.service.loadBalancerIP=192.168.1.50 \
   --set data.existingClaim=opendmtq-data \
   --set litestream.s3.endpoint=https://s3.example.com \
@@ -242,6 +243,7 @@ The main ones; see `values.yaml` for all.
 | `data.existingClaim` / `data.hostPath` | (one required) | Game files volume. |
 | `router.replicas` | 2 | |
 | `router.service.type` | LoadBalancer | Or NodePort (`router.service.nodePort`). |
+| `router.service.port` | (empty) | The server's one port. Empty: 8791 on a new install, the Service's own port on an upgrade. |
 | `assets.replicas` | 2 | Or `assets.autoscaling.enabled=true`. |
 | `api.failoverSeconds` | 20 | How long the api waits on an unreachable node. |
 | `litestream.enabled` | true | Off means the database is lost when the api pod is replaced. |
