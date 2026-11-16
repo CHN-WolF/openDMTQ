@@ -310,7 +310,7 @@ class Server:
         if r.returncode != 0:
             die(f"the database could not be prepared (see {os.path.join(LOGS, 'programs.log')})")
         # The song list and the client's tables, from what was imported and added.
-        tool("songs", values=self.values, found=self.found)
+        tool("songs", values=self.values, found=self.found, to_log=True)
         # The live view's window starts empty; the recordings stay.
         live = os.path.join(DATA, "state", "live")
         shutil.rmtree(live, ignore_errors=True)
@@ -456,7 +456,7 @@ def check_address(values):
     now = env.detect_host()
     if not env.is_lan_only(values["PUBLIC_HOST"]) or not now or now == host or env.check_host(now) or env.has_address(host):
         return
-    say("")
+    # After the setup's summary, which ends with a blank line: none more before it.
     warn(f"this computer's address is now {now}, but the players' app calls {host}. To move the server, run "
          f"{CLI} host {env.join(now, port)} (the app is built again; players install it over the old one). A fixed "
          "address for this computer in the router's settings (a DHCP reservation) keeps it from changing.")

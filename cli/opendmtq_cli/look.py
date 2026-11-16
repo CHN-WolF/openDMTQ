@@ -5,6 +5,7 @@ wordmark only on a terminal at all, plain lines everywhere else."""
 
 import logging
 import os
+import re
 import shutil
 import sys
 import textwrap
@@ -28,8 +29,18 @@ LIME = ["#f0ffe0", "#c4f78f", "#8cf23d", "#8cf23d"]
 # Columns between letters, and how far the top row starts right of the bottom one (the lean).
 GAP, LEAN = "  ", 3
 
-# What every line starts with, so the wordmark, the state words and the blocks share one left edge.
+# The one left edge: every line starts this far in (the wordmark, the state words, the headings and what stands under
+# them, the sentences); only a wrapped line goes further, under its own text. Blocks are apart by exactly one blank
+# line.
 INDENT = "  "
+
+# The one right edge: as far from the window's right side as INDENT is from its left (a line that fills the last column
+# makes some consoles add an empty line after it, too), and within this many columns, a comfortable line to read. The
+# headings' lines end there too.
+READ_WIDTH = 80
+
+# A colour or style code, which takes no room on the screen.
+_CODE = re.compile(r"\033\[[0-9;]*m")
 
 # Whether the terminal was set up for colour already (Windows' virtual terminal), and the answer, per stream.
 _decided = {}
@@ -151,14 +162,59 @@ def wordmark(version="", stream=None):
 _shown = []
 
 
-def banner(version="", stream=None):
-    """Prints the wordmark once per run, with a blank line under it."""
+def banner(version="", stream=None, gap=True):
+    """Prints the wordmark once per run, with the blank line under it unless what follows brings its own (gap=False).
+    True when it printed."""
     if _shown:
-        return
+        return False
     _shown.append(True)
     out = stream or sys.stdout
-    for line in wordmark(version, stream) + [""]:
+    for line in wordmark(version, stream) + ([""] if gap else []):
         print(line, file=out, flush=True)
+    return True
+
+
+def room(stream=None):
+    """The most columns a line takes: the terminal's width (READ_WIDTH at most) less the margin on the right, the same as
+    the one on the left."""
+    return min(width(stream), READ_WIDTH) - len(INDENT)
+
+
+def visible(text):
+    """How many columns text takes on the screen: its colour codes take none."""
+    return len(_CODE.sub("", text))
+
+
+def _wrap(text, columns, first, rest):
+    """text in lines of at most columns, the first after first spaces, the others after rest; a URL or a path never cut.
+    A word or two alone on the last line reads as a mistake: a little narrower brings more of the text down to it, as
+    long as that adds no line."""
+    def wrapped(width):
+        return textwrap.wrap(text, width, initial_indent=" " * first, subsequent_indent=" " * rest,
+                             break_on_hyphens=False, break_long_words=False) or [" " * first]
+    lines = wrapped(columns)
+    for narrower in range(columns - 4, max(columns - 40, rest + 20), -4):
+        if len(lines) < 2 or len(lines[-1].strip()) >= 16:
+            break
+        tried = wrapped(narrower)
+        if len(tried) == len(lines):
+            lines = tried
+    return lines
+
+
+def hang(text, first, indent, stream=None):
+    """text after first (the start of its first line, colour codes and all) and, when it is longer than room(), wrapped
+    with each further line indent columns in, under the text's own start: a long line never runs back to the window's
+    first column. Lines of its own (a newline in text) stay lines. As it is, after first, anywhere that is not a terminal."""
+    if not is_terminal(stream):
+        return first + text
+    lead = visible(first)
+    out = []
+    for n, part in enumerate(text.split("\n")):
+        # Spaces stand in for first while wrapping, so its colour codes are not counted as columns.
+        out += _wrap(part, room(stream), lead if n == 0 else indent, indent)
+    out[0] = first + out[0][lead:]
+    return "\n".join(out)
 
 
 def tag(kind, stream=None):
@@ -169,25 +225,31 @@ def tag(kind, stream=None):
 
 
 def state_line(kind, msg, stream=None):
-    """One state line: the tag, then the message, on the common left edge."""
-    return f"{INDENT}{tag(kind, stream)}{msg}"
+    """One state line: the tag, then the message, on the common left edge; on a terminal a long message goes on under
+    its own start, not under the tag."""
+    return hang(msg, f"{INDENT}{tag(kind, stream)}", len(INDENT) + 6, stream)
 
 
 def rows(pairs, stream=None, indent=INDENT):
     """Label and value lines, the values in one column after the longest label; labels in quiet grey. A value may be a
     (text, role) pair to colour it by its state."""
     pairs = [(label, value) for label, value in pairs if value is not None]
-    room = max((len(label) for label, _ in pairs), default=0) + 2
+    column = max((len(label) for label, _ in pairs), default=0) + 2
     out = []
     for label, value in pairs:
-        text = paint(value[0], value[1], stream) if isinstance(value, tuple) else str(value)
-        out.append(indent + paint(label.ljust(room), "dim", stream) + text)
+        head = indent + paint(label.ljust(column), "dim", stream)
+        if isinstance(value, tuple):
+            # A state word: short, in its colour.
+            out.append(head + paint(value[0], value[1], stream))
+        else:
+            # A long value goes on under the values' column.
+            out.append(hang(str(value), head, len(indent) + column, stream))
     return out
 
 
 def rule(title="", stream=None):
-    """A section's heading: its title, then a line to a comfortable width (shorter on a narrow terminal)."""
-    span = min(width(stream) - len(INDENT) - 1, 72)
+    """A section's heading: its title, then a line to the one right edge (room())."""
+    span = room(stream) - len(INDENT)
     head = f"{title} " if title else ""
     line = "─" * max(span - len(head), 4)
     if not is_terminal(stream):
@@ -201,22 +263,12 @@ def para(text, stream=None):
     run back to the first column; as it is anywhere else."""
     if not is_terminal(stream):
         return [text]
-    room = min(width(stream), 110) - len(INDENT) - 1
+    return _wrap(text, room(stream), len(INDENT), len(INDENT))
 
-    def wrapped(columns):
-        # The text in lines of at most this many columns, URLs and paths never cut.
-        return textwrap.wrap(text, columns, initial_indent=INDENT, subsequent_indent=INDENT, break_on_hyphens=False,
-                             break_long_words=False) or [""]
-    lines = wrapped(room)
-    # A word or two alone on the last line reads as a mistake: a little narrower brings more of the sentence down to it,
-    # as long as that adds no line.
-    for narrower in range(room - 4, max(room - 40, 30), -4):
-        if len(lines) < 2 or len(lines[-1].strip()) >= 16:
-            break
-        tried = wrapped(narrower)
-        if len(tried) == len(lines):
-            lines = tried
-    return lines
+
+def item(number, text, stream=None):
+    """One step of a numbered list, one indent step in, a long one going on under its own text."""
+    return hang(text, f"{INDENT}{number}. ", len(INDENT) + len(f"{number}. "), stream)
 
 
 def address_block(site, admin, user, password=None, where=None, stream=None, title="Addresses"):
@@ -227,7 +279,8 @@ def address_block(site, admin, user, password=None, where=None, stream=None, tit
         pairs.append(("Password", password + (f"  ({where})" if where else "")))
     elif where:
         pairs.append(("Password", where))
-    lines = [rule(title, stream)] + rows(pairs, stream, indent=INDENT + "  ")
+    # The rows on the same left edge as their heading and every other line: one indent for everything.
+    lines = [rule(title, stream)] + rows(pairs, stream)
     # A closing line on a terminal; nothing more in a pipe or a log.
     return lines + ([rule("", stream)] if is_terminal(stream) else [])
 
@@ -245,4 +298,10 @@ class ConsoleFormatter(logging.Formatter):
             return super().format(record)
         when = paint(self.formatTime(record, "%H:%M:%S"), "dim", self.stream)
         kind = "error" if record.levelno >= logging.ERROR else "note" if record.levelno >= logging.WARNING else None
-        return f"{INDENT}{when}  " + (tag(kind, self.stream) if kind else "") + record.getMessage()
+        first = f"{INDENT}{when}  " + (tag(kind, self.stream) if kind else "")
+        # A long line goes on under the message's own start, not under the time.
+        shown = hang(record.getMessage(), first, visible(first), self.stream)
+        if record.exc_info:
+            # A traceback as Python wrote it, one indent step further in: its lines are code, not to be wrapped.
+            shown += "\n" + "\n".join(INDENT * 2 + line for line in self.formatException(record.exc_info).splitlines())
+        return shown

@@ -786,8 +786,10 @@ def cmd_deploy(args):
 
 
 def cmd_setup(args):
-    look.banner(system.code_version())
+    # The wordmark, its blank line from the first step's heading (step() brings one).
+    look.banner(system.code_version(), gap=False)
     if env.windows_drive(ROOT):
+        print()
         warn("this repository is on a Windows drive: the database is slow there and file owners cannot be "
              "set. Clone it inside WSL instead (for example ~/openDMTQ)")
     step("1/5  Address phones will use")
@@ -861,24 +863,28 @@ def cmd_setup(args):
     where = "same Wi-Fi" if lan else "anywhere"
     # Only a server set up for the internet sends the browser to HTTPS, and only there does the browser ask about the
     # server's own certificate: what it shows then, said where it applies.
-    https = "" if lan else (f"\n     The page opens on HTTPS with the server's own certificate, which browsers warn about once (a phone "
+    https = "" if lan else (f" The page opens on HTTPS with the server's own certificate, which browsers warn about once (a phone "
                             f"that installs http://{host}/ca.crt does not).")
-    print()
-    for line in address_lines(host, env.load(ENV_FILE)):
+    for line in setup_end_lines(host, where, https, env.load(ENV_FILE)):
         print(line)
-    print(f"""
-Done. The site and the app download open to accounts you make: on the admin pages, under Accounts, make one for
-each player.
-
-On the phone ({where}):
-  1. Open  http://{host}/  in the browser, or scan the code below, and sign in.{https}
-  2. Tap "Download app (.apk)" and install it (allow installs from the browser when asked).
-     Other servers' apps and the original game can stay installed next to it.
-     Later updates install over this one, which keeps the device's account.
-  3. Start the game.
-""")
     system.tool("qr", f"http://{host}/")
     return 0
+
+
+def setup_end_lines(host, where, https, values):
+    """What the setup ends with, before the QR code: the addresses block, what is done and the phone's steps, each block
+    one blank line from the next, every line on the common left edge (look.py)."""
+    lines = [""] + address_lines(host, values) + [""]
+    lines += look.para("Done. The site and the app download open to accounts you make: on the admin pages, under "
+                       "Accounts, make one for each player.")
+    lines += [""] + look.para(f"On the phone ({where}):")
+    steps = [f"Open http://{host}/ in the browser, or scan the code below, and sign in.{https}",
+             'Tap "Download app (.apk)" and install it (allow installs from the browser when asked). Other servers\' '
+             "apps and the original game can stay installed next to it. Later updates install over this one, which keeps "
+             "the device's account.",
+             "Start the game."]
+    lines += [look.item(n, text) for n, text in enumerate(steps, 1)]
+    return lines + [""]
 
 
 # ----------------------------------------------------------------------------- entry point

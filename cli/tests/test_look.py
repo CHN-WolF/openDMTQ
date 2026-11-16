@@ -201,5 +201,169 @@ class LookTest(unittest.TestCase):
             close(tty)
 
 
+
+# What a line is, for the spacing rules below: its kind from its first characters once its left edge is taken off.
+KINDS = [("state", re.compile(r"^(ok|note|warn|error|FAIL|missing) ")), ("log", re.compile(r"^\d\d:\d\d:\d\d  ")),
+         ("item", re.compile(r"^\d+\. ")), ("closing", re.compile(r"^─+$")), ("heading", re.compile(r"^\S.* ─+$")),
+         ("wordmark", re.compile(r"[█▀▄━]"))]
+
+
+def kind_of(line):
+    """The kind of a line of the window: one of KINDS, or a sentence (a label and its value too)."""
+    text = line.strip()
+    for name, pattern in KINDS:
+        if pattern.search(text):
+            return name
+    return "sentence"
+
+
+def spacing_problems(lines, columns):
+    """What is wrong with the room around the window's lines (colour codes taken off), at a terminal this many columns
+    wide: a line into the window's edge or on its first column, a line in from the left that does not stand under the
+    text of the line above (a wrapped line), blocks of different kinds touching, a heading, a closing line or the
+    wordmark without its blank line, and two blank lines where one is the gap."""
+    problems = []
+    lines = [plain(line) for line in lines]
+    for n, line in enumerate(lines):
+        above = lines[n - 1] if n else ""
+        if not line.strip():
+            if n and not above.strip():
+                problems.append(f"line {n}: two blank lines")
+            continue
+        if len(line) > columns - 1:
+            problems.append(f"line {n}: {len(line)} columns, into the edge of {columns}: {line!r}")
+        # One right edge for text and headings' lines: the reading width, or the window's when narrower, less a margin as
+        # wide as the left one.
+        edge = min(columns, look.READ_WIDTH) - len(look.INDENT)
+        if len(line) > edge and kind_of(line) != "wordmark":
+            problems.append(f"line {n}: past the right edge at {edge}: {line!r}")
+        if kind_of(line) in ("heading", "closing") and len(line) != edge:
+            problems.append(f"line {n}: a heading's line ending at {len(line)}, not at the right edge {edge}")
+        indent = len(line) - len(line.lstrip())
+        if indent < len(look.INDENT):
+            problems.append(f"line {n}: on the window's first column: {line!r}")
+        kind = kind_of(line)
+        if kind == "wordmark":
+            # Its lean is its own; the line after its last row is blank.
+            if n + 1 < len(lines) and lines[n + 1].strip() and kind_of(lines[n + 1]) != "wordmark":
+                problems.append(f"line {n + 1}: touches the wordmark")
+            continue
+        if indent != len(look.INDENT):
+            # A wrapped line: under the start of a word of the line above.
+            if not (above.strip() and len(above) > indent and above[indent - 1] == " " and above[indent] != " "):
+                problems.append(f"line {n}: {indent} columns in, under nothing of the line above: {line!r}")
+            # Its last line not a word or two alone (unless the whole of it is that short).
+            last = n + 1 >= len(lines) or len(lines[n + 1]) - len(lines[n + 1].lstrip()) != indent
+            if last and len(line.strip()) < 16:
+                problems.append(f"line {n}: a word alone at a wrapped line's end: {line!r}")
+            continue
+        if kind == "heading" and above.strip():
+            problems.append(f"line {n}: a heading without a blank line above: {line!r}")
+        if kind == "closing" and n + 1 < len(lines) and lines[n + 1].strip():
+            problems.append(f"line {n + 1}: touches the closing line: {lines[n + 1]!r}")
+        if above.strip():
+            # Lines of one block, a heading and what stands under it, a sentence that leads into its list, a block and
+            # its closing line; nothing else touches.
+            together = {("sentence", "item"), ("item", "item"), ("sentence", "sentence"), ("state", "state"),
+                        ("log", "log"), ("sentence", "closing")}
+            # The line above may be the wrapped end of a longer one: the kind of where that began.
+            back = n - 1
+            while back > 0 and len(lines[back]) - len(lines[back].lstrip()) != len(look.INDENT) and lines[back].strip():
+                back -= 1
+            above_kind = kind_of(lines[back])
+            if (above_kind, kind) not in together and above_kind not in ("wordmark", "heading"):
+                problems.append(f"line {n}: a {kind} touching a {above_kind} above: {line!r}")
+    return problems
+
+
+class WindowSpacingTest(unittest.TestCase):
+    """The start window, the status and the setup's end, as the real code prints them on a terminal of 80 columns and
+    of the Windows console's 120: one indent step, one blank line between blocks, nothing into the window's edge."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(ROOT, "host"))
+        try:
+            from opendmtq_host import commands, server, setup
+        finally:
+            sys.path.pop(0)
+        cls.commands, cls.server, cls.setup = commands, server, setup
+        from opendmtq_cli import app, system
+        cls.app, cls.system = app, system
+
+    def window(self, columns):
+        """Every line the flows print at a terminal this many columns wide."""
+        tty = terminal()
+        self.addCleanup(close, tty)
+        look._decided.clear()
+        printed = []
+        values = {"PUBLIC_HOST": "192.168.1.10:8791", "LISTEN_PORT": "8791", "ADMIN_PASSWORD": "Xk3vQ9pLm2Rt7wZa"}
+        record = lambda level, msg: logging.LogRecord("x", level, __file__, 1, msg, None, None)
+        logs = look.ConsoleFormatter(tty)
+        with mock.patch.object(sys, "stdout", tty), mock.patch.object(look, "width", lambda stream=None: columns), \
+                mock.patch.object(look, "_shown", []), \
+                mock.patch("builtins.print", lambda *a, **k: printed.extend(str(a[0] if a else "").split("\n"))), \
+                mock.patch.object(self.setup, "programs", lambda: {}), mock.patch.object(self.setup, "WINDOWS", True), \
+                mock.patch.object(self.commands, "WINDOWS", True), mock.patch.object(self.commands, "tool", lambda *a, **k: 0), \
+                mock.patch.object(self.commands, "installer_offered", lambda: True), \
+                mock.patch.object(self.setup, "ROOT", "C:\\Users\\someone\\Desktop\\OpenDMTQ"):
+            # The Windows window: the setup's start, the settings it wrote, its summary, the running server's lines.
+            self.setup.opening()
+            for key in ("PUBLIC_HOST=192.168.1.10:8791", "LISTEN_PORT=8791", "ADMIN_PASSWORD=(made, see below)"):
+                self.setup.ok(f"{key} written to .env")
+            self.setup.summary(values)
+            for line in (logs.format(record(logging.INFO, "keeper started (pid 344)")),
+                         logs.format(record(logging.INFO, "serving http://192.168.1.10:8791/")),
+                         logs.format(record(logging.WARNING, "no answer from the server after 60 s, still waiting. The first "
+                                                             "start can be slow while an antivirus checks Apache; the "
+                                                             "details are in C:\\Users\\someone\\OpenDMTQ\\data\\state\\logs\\server.log"))):
+                print(line)
+            print("")
+            # A long note, then status.
+            self.setup.warn("this computer's address is now 192.168.1.11, but the players' app calls 192.168.1.10. To move "
+                            "the server, run OpenDMTQ.exe host 192.168.1.11:8791 (the app is built again; players install "
+                            "it over the old one).")
+            print("")
+            with mock.patch.object(self.commands, "settings", lambda: values), \
+                    mock.patch.object(self.commands, "health", lambda v: {"game_data": True, "songs": 128, "players": 6}), \
+                    mock.patch.object(self.commands, "app_manifest", lambda: {"file": "opendmtq-192.168.1.10-8791.apk"}), \
+                    mock.patch.object(self.commands, "build_status", lambda: {}):
+                self.commands.cmd_status(None)
+            # ./opendmtq: a step with a long warning and a failed check, the end of up and of the setup.
+            self.system.step("2/5  Game files")
+            self.system.ok("client data and base APK present")
+            self.system.warn("no songs yet: the game starts with an empty song list. Add them with ./opendmtq import "
+                             "--songs <folder with your game files>, or one by one on the admin pages")
+            self.system.fail("the app download: 404")
+            print("")
+            for line in self.app.address_lines("192.168.1.10:8791", values):
+                print(line)
+            for line in self.app.setup_end_lines("203.0.113.7:8791", "anywhere", " The page opens on HTTPS with the "
+                                                 "server's own certificate, which browsers warn about once (a phone that "
+                                                 "installs http://203.0.113.7:8791/ca.crt does not).", values):
+                print(line)
+        return printed
+
+    def test_80_columns(self):
+        lines = self.window(80)
+        self.assertEqual(spacing_problems(lines, 80), [], "\n".join(plain(line) for line in lines))
+
+    def test_the_windows_consoles_120_columns(self):
+        lines = self.window(120)
+        self.assertEqual(spacing_problems(lines, 120), [], "\n".join(plain(line) for line in lines))
+
+    def test_the_rules_find_what_they_are_for(self):
+        # The check itself, on a window with each fault once.
+        bad = ["  ok    one", "Players need an account", "  Addresses ─────", "  ok    " + "x" * 90, "", "",
+               "      under nothing", "", "  note  a sentence that was wrapped", "        it)", "", "  " + "y" * 85]
+        found = "\n".join(spacing_problems(bad, 120))
+        for words in ("first column", "a heading without a blank line above", "two blank lines", "past the right edge",
+                      "under nothing of the line above", "a word alone", "not at the right edge"):
+            self.assertIn(words, found)
+        found = "\n".join(spacing_problems(bad, 80))
+        for words in ("into the edge",):
+            self.assertIn(words, found)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 """The data folders, and the environment of the server's programs and of the tools."""
 
 import functools
+import logging
 import os
 import subprocess
 import tempfile
@@ -145,14 +146,23 @@ def php_command(found):
     return [found["php"]] + (["-c", os.path.join(RUN, "php.ini")] if WINDOWS else [])
 
 
-def tool(module, *args, values=None, found=None, extra=None, check=False):
+def tool(module, *args, values=None, found=None, extra=None, check=False, to_log=False):
     """Run one of the tools (opendmtq_tools.<module>) with this install's Python, in the foreground. Returns its
-    exit status."""
+    exit status. to_log: its lines go to this program's log (the running server's window or host.log, with the time and
+    on the window's left edge) rather than straight to the terminal."""
     values = values if values is not None else settings()
     found = found or find_programs()
     e = tools_env(values, found)
     e.update(extra or {})
-    r = subprocess.run(PYTHON + ["-m", f"opendmtq_tools.{module}", *args], env=e)
+    if to_log:
+        r = subprocess.run(PYTHON + ["-m", f"opendmtq_tools.{module}", *args], env=e, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+        # Each line the tool wrote, as the server's other lines are written.
+        for line in r.stdout.splitlines():
+            if line.strip():
+                logging.info("%s", line)
+    else:
+        r = subprocess.run(PYTHON + ["-m", f"opendmtq_tools.{module}", *args], env=e)
     if check and r.returncode != 0:
         die(f"{module} failed (see above)")
     return r.returncode
