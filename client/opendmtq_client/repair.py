@@ -1,10 +1,11 @@
 """Repair of the installed program, from the package Velopack keeps beside it.
 
-Velopack leaves the package it installed in packages\\ of the install folder (OpenDMTQ.Client-<version>-full.nupkg, a
-zip), and current\\ holds exactly the files under the package's lib/app/. So a file of the program that went missing or
-changed (a cleaner, an antivirus, a disk fault) is found by comparing sizes and CRC-32s, and comes back from the
-package: no download and no installer. The launcher's settings, the servers' apps and the game's data are no part of
-the program and are never touched here.
+Velopack leaves the package it installed in packages\\ of the install folder (OpenDMTQ.Client-<version>-full.nupkg from
+the installer, opendmtq.client-<version>-full.nupkg from an update, the release's name for it; a zip), and current\\
+holds exactly the files under the package's lib/app/. So a file of the program that went missing or changed (a cleaner,
+an antivirus, a disk fault) is found by comparing sizes and CRC-32s, and comes back from the package: no download and no
+installer. The launcher's settings, the servers' apps and the game's data are no part of the program and are never
+touched here.
 
 Windows does not let a file of a running program be written over, but lets it be renamed: such a file is moved aside
 first and the aside copy goes at the next repair. What still cannot be put back is counted, and the installer's own
@@ -61,9 +62,18 @@ class Result:
 
 
 def package_path(root):
-    """The package of the installed version in the install folder; RepairError when it is not there."""
+    """The package of the installed version in the install folder; RepairError when it is not there. Its name in any
+    case: the installer's has the program's id as it is written (OpenDMTQ.Client), an update's the release's name for
+    the same file, in lower case."""
     version = installer.installed_version(root)
-    path = os.path.join(root, "packages", "%s-%s-full.nupkg" % (installed.PACKAGE_ID, version)) if version else None
+    want = ("%s-%s-full.nupkg" % (installed.PACKAGE_ID, version)).lower() if version else None
+    folder = os.path.join(root, "packages")
+    try:
+        # By the name in lower case: a folder may tell letters' cases apart (one Windows was told to).
+        found = [n for n in os.listdir(folder) if n.lower() == want] if want else []
+    except OSError:
+        found = []
+    path = os.path.join(folder, found[0]) if found else None
     if not path or not os.path.isfile(path):
         raise RepairError("the installed package is not on this PC (run OpenDMTQ-Setup.exe again)",
                           "error.repair.no_package")

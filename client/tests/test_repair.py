@@ -158,6 +158,17 @@ class Repair(Folder):
         self.assertEqual(result.restored, 0)
         self.assertFalse(os.path.exists(os.path.join(self.home, "outside.txt")))
 
+    def test_the_package_an_update_left_under_the_releases_name_in_lower_case(self):
+        # An update keeps the package under the name the release's feed gives it (DEP-58): on a disk that tells letters'
+        # cases apart (Linux here, a folder Windows was told to) it is found all the same.
+        renamed = os.path.join(self.root, "packages", "opendmtq.client-0.8.0-full.nupkg")
+        os.rename(self.package, renamed)
+        self.assertEqual(repair.package_path(self.root), renamed)
+        os.remove(self.path("current/player/opendmtq-player.exe"))
+        result = repair.run()
+        self.assertEqual((result.missing, result.restored), ([os.path.join("current", "player", "opendmtq-player.exe")], 1))
+        self.assertEqual(self.read("current/player/opendmtq-player.exe"), PROGRAM["player/opendmtq-player.exe"])
+
     def test_without_the_package(self):
         os.remove(self.package)
         with self.assertRaises(repair.RepairError) as caught:
