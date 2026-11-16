@@ -28,6 +28,11 @@ MARGIN = 1.03
 def main_display(root=None):
     """{"width", "height", "hz", "scale"} of the main display; hz None when the system does not say, scale 1.0 (100 %)
     when it cannot be told. hz is the main display's own rate in whole hertz (164.999 Hz is 165)."""
+    if os.environ.get("OPENDMTQ_DISPLAYS") is not None:
+        # Made-up displays (the tests and the pictures): the main one's size and rate, at 100 %.
+        listed = [d for d in connected() if d.get("main")]
+        if listed:
+            return {"width": listed[0]["width"], "height": listed[0]["height"], "hz": listed[0]["hz"], "scale": 1.0}
     if sys.platform == "win32":
         found = _gdi_main()
         if found is not None:

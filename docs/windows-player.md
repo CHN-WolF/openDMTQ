@@ -57,18 +57,29 @@ Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, a
 | :--- | :--- |
 | **Play** | The server and the account, the checks before a start (the player, the server, the sign-in, the app), one that is not fine with a link to the page that sees to it, how to play (keyboard play's keys first, or that it is off, with **CONTROLS** beside them), the last play, and **PLAY** |
 | **Screen** | Full screen or a window, the window's size, VSync, the frame limit, the FPS counter and its position, the render scale and its upscaler, anti-aliasing |
-| **Sound** | The volume, the device, **Shared** or **Exclusive**, the buffer |
+| **Sound** | The master, music and effects volumes, the equaliser (a preset or three bands), the device, **Shared** or **Exclusive**, the buffer |
 | **Controls** | Keyboard play: on or off, and the keys of each lane of 2, 3 and 4 LINE; what the touch screen, the mouse and the keyboard do |
 | **Online** | The servers, the sign-in, the app on this PC and a check for a newer one |
 | **Help** | The checks, what to try when something does not work, the logs, and repairing, clearing, starting over and uninstalling |
 | **Launcher** | The language, updates of the launcher, the first-start guide again |
 
+The pages are in a column down the window's left, under the wordmark and the launcher's version; the status line and
+**PLAY** are at the column's foot, and the first-start guide shows its six steps down the same column with **Back** and
+**Next** under them. A setting changed on a page changes its own row and the rows that follow from it, in place, and an
+answer (a server connected, a sign-in, a download that ended) changes its own card: the page is never drawn again
+whole. A drop-down opens the launcher's own list under its box (over it near the screen's foot), its chosen row marked,
+a long list scrolling by the wheel, the keys or a finger. Pages move by the wheel, Page Up and Page Down, or a finger
+dragged on them. The sign-in names the ID and the password over their fields, shows the password on **Show**, says what
+is wrong under the field it is about, and signs in on Enter.
+
 **PLAY** asks the server for a newer app first and downloads it when there is one; when the server cannot be asked, the
 game starts with the app this PC has. The checks ask the server too: one that does not answer is said on the **Play** and
 **Help** pages and does not stop **PLAY**. The launcher updates itself from the project's releases: **Launcher**, **Check for
-updates**. It also looks once at each start, in the background for 10 seconds at most: a newer version is said on the
-**Launcher** page and in the line at the window's foot, each with **Update to** that version; nothing is installed by
-itself, and without internet nothing is said. Without internet, the installer from the server's **Download** page
+updates**. It also looks at each start, in the background for 10 seconds at most, and again every six hours while it is open: a
+newer version is said on the **Launcher** page and in the status line, each with **Update to** that version; nothing is
+installed by itself, and without internet nothing is said. Every minute while it is on screen, the launcher also asks
+the server again: one that stops answering, a sign-in the server no longer takes, and a newer app are said as they
+come, each time they do. Without internet, the installer from the server's **Download** page
 updates it instead, once the server has a newer one; the servers and the settings stay. While the game runs the launcher steps aside, and comes back when the
 game ends.
 
@@ -89,7 +100,10 @@ or Japanese input method is off, so that a letter goes in by its place. The game
 `--set NAME=VALUE`, `--audio-devices`, `--language en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the
 window opens on its pages), `--servers` (the servers it knows, as **Online** lists them), `--open-log player|launcher`, `--play`,
 `--update`, `--forget URL`, `--reset`, `--repair`, `--clear-game-data` and `--uninstall [--delete-data]`, with `--yes`
-to answer their questions (`--help` lists them all). While the launcher's window is open, the flags that change what
+to answer their questions (`--help` lists them all, in parts). In a terminal it prints in the launcher's look: a title
+with the version, each part under its name, names and values in columns, the ready check's marks and a download's bar
+in the launcher's colours; piped to a file or a script, the same lines in plain words, as before. Started with no flag
+by a double click, it opens the launcher's window and closes the console Windows opened for it. While the launcher's window is open, the flags that change what
 it keeps are refused. `--set` takes the settings of the **Screen**, **Sound** and **Controls** pages; every `--set`
 of a line is checked before any is applied, so one the launcher does not take changes none of them:
 
@@ -98,7 +112,7 @@ of a line is checked before any is applied, so one the launcher does not take ch
 | `display` | `fullscreen`, `window` | Mode |
 | `window` | `auto` (fitted to the display), `1280x720`, `1600x900`, `1920x1080`, `2560x1440`, `3840x2160`, or any `WIDTHxHEIGHT` from 480x270 at Windows' scale (720x405 at 150 %) that fits the main display with room for the window's title bar and the taskbar, as the page offers them | Window size |
 | `vsync` | `on`, `off` | VSync |
-| `fps` | `auto` (the display's rate), `30`, `60`, `120`, `144`, `165`, `180`, `240`, `360`, `unlimited` | Frame limit |
+| `fps` | `auto` (the display's rate), `unlimited`, or any whole number from 30 to 1000; the page offers the rates up to the fastest connected display's (160, 165, 180 Hz and others) | Frame limit |
 | `show_fps` | `off`, `on` (a corner's name, as `fps_position` takes it, is on in that corner) | FPS counter |
 | `fps_position` | `bottom_right` (where it covers the least of the game), `top_left` (beside a song's pause button), `top_right`, `bottom_left`; kept while the counter is off | Position, while the counter is on |
 | `render_scale` | `100`, `85`, `75`, `67`, `50` | Render scale |
@@ -107,7 +121,11 @@ of a line is checked before any is applied, so one the launcher does not take ch
 | `audio_device` | `default` (Windows' default output), or a device's id from `--audio-devices` | Device |
 | `audio_mode` | `shared`, `exclusive` | Mode |
 | `audio_buffer` | `normal`, `low`, `safe` | Buffer |
-| `volume` | `100`, or any number from 0 to 100 | Volume |
+| `volume` | `100`, or any number from 0 to 100 | Master |
+| `music_volume` | `100`, or any number from 0 to 100, a share of the master | Music |
+| `effects_volume` | `100`, or any number from 0 to 100, a share of the master | Effects |
+| `eq` | `flat`, `bass`, `vocal`, `treble`, `custom`; a preset sets the three bands | Equaliser's preset |
+| `eq_low`, `eq_mid`, `eq_high` | `0`, or any number from -12 to 12 (dB); one set alone makes the equaliser `custom` | Low, Mid, High |
 | `keyboard` | `on`, `off` | [Keyboard play](#keyboard-play), on the **Controls** page |
 | `keys_2line` | `"F J"`: two lanes from the top separated by spaces, each lane one key or two joined by `/` (`"F/D J/K"`), each key by the name of the key a US layout has at that place: `A` to `Z`, `0` to `9`, `Space`, `Semicolon`, `Quote`, `Comma`, `Period`, `Slash`, `LeftBracket`, `RightBracket`, `Backslash`, `Minus`, `Equals`, `Grave`; a key in two lanes is refused | 2 LINE's keys, on the **Controls** page |
 | `keys_3line` | `"D F J"`, or three lanes in the same way | 3 LINE's keys |
@@ -227,7 +245,10 @@ off, says why in its log, and the game plays by touch as before.
   faster rate again 5 seconds later, goes straight back when the try falls short, and waits twice as long before the
   next try, a minute at most. Some late frames, as the page before a song shows while the song loads (up to a tenth of
   them), and a pause of a tenth of a second or more, keep the display's rate.
-- **The frame limit:** the display's rate (the default), a number, or none. With VSync on, a limit that is a whole
+- **The frame limit:** the display's rate (the default), a number, or none. The page offers every rate up to the
+  fastest connected display's, read from Windows' display configuration (a 160, 165 or 180 Hz touch screen beside a
+  60 Hz display offers its own rate), and the line under the display's rows names the main display's rate and the
+  others'. With VSync on, a limit that is a whole
   fraction of the display's rate, or within 10 % above one, keeps every frame the same length (60 or 120 on a 240 Hz
   display); another limit is held by the clock, with each frame still on a refresh (144 on a 240 Hz display).
 - **VSync off:** frames go out as soon as they are drawn, evenly at the limit, which may be above the display's rate, or
@@ -275,7 +296,13 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
   has it); other programs are silent meanwhile, and the sound is shared when Windows does not allow it.
 - **The buffer:** low (Windows' low-latency mode, where the device has a shorter period than its standard one), normal,
   or safe for a busy PC.
-- **The volume** of the game, 0 to 100. Windows' own volume still applies.
+- **The volumes:** the master, everything the game plays, 0 to 100 (Windows' own volume still applies); the music (the
+  songs and the game's background music) and the effects (key sounds, judgements and the menus' sounds), each a share
+  of the master.
+- **The equaliser:** three bands on the game's whole sound, low, mid and high, each from -12 to 12 dB: **Flat**, a preset
+  (**Bass**, **Vocal**, **Treble**), or **Custom** once a band is moved. The game's in-game menu has the same volumes and
+  equaliser: what is set there is written back into the settings file, and the launcher shows it when its window comes
+  to the front again.
 
 ## Broadcasting
 
