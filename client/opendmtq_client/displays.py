@@ -1,11 +1,21 @@
 """The PC's displays, for the Screen page: the main display's size in pixels and Windows' scale on it, so the page can
-leave out window sizes larger than it or smaller than the game's window holds there, and every connected display's
-refresh rate, so that the frame limits go up to the fastest of them (a 165 Hz or 180 Hz touch screen beside a 60 Hz
-one included).
+leave out window sizes larger than it or smaller than the game's window holds there, and each connected display's
+refresh rates, so that the frame limits go up to the fastest rate any display runs at.
 
-On Windows the rates come from Windows' own display configuration (QueryDisplayConfig: each active display's path and
-its rate as a fraction, 164.999 Hz read as 165), else from each display's current mode (EnumDisplaySettings), else from
-GDI's main display; elsewhere (development and the tests) Tk's screen size and no rate.
+A display's rate now is not what it can run at. With Windows 11's dynamic refresh rate (DRR, "Dynamic" in Advanced
+display) a 120, 165 or 180 Hz laptop or tablet panel runs at 60 Hz while the desktop is still, and Windows' current mode
+says 60 (GDI's VREFRESH, which 0.10.0 read, and EnumDisplaySettings' current mode alike); 0.10.0 then offered no frame
+limit above 60 with VSync on. So for each display this reads its modes, and takes the highest rate among the modes at
+its current resolution as the rate it runs at when a game asks (the player asks Windows for the panel's full rate):
+
+  current   the rate of the mode it is in now (Windows' display configuration, as a fraction: 179.999 is 180)
+  top       the highest rate of its modes at its current size, never below the current one
+  drr       True when Windows says its rate is divided now (dynamic refresh rate), False when it says it is not, None
+            when this Windows says nothing of it
+
+On Windows from EnumDisplayDevices and EnumDisplaySettings (each display, its current mode and all its modes) with
+QueryDisplayConfig (the current rate as a fraction, and its divider); elsewhere (development and the tests) Tk's screen
+size and no rate. OPENDMTQ_DISPLAYS makes displays up for the tests and the pictures (made_up).
 """
 
 import logging
@@ -23,32 +33,38 @@ RATES = (30, 60, 75, 90, 100, 120, 144, 160, 165, 170, 180, 200, 240, 280, 300, 
 LEAST, MOST = 30, 1000
 # A display's rate is offered up to this far above a rate in RATES: a 143.9 Hz display offers 144, never 165.
 MARGIN = 1.03
+# The most modes read of one display (a driver lists a few hundred at most; the loop ends at the first missing one).
+MODES_READ = 4096
 
 
 def main_display(root=None):
-    """{"width", "height", "hz", "scale"} of the main display; hz None when the system does not say, scale 1.0 (100 %)
-    when it cannot be told. hz is the main display's own rate in whole hertz (164.999 Hz is 165)."""
+    """{"width", "height", "hz", "top", "scale"} of the main display: hz its rate now and top the highest rate of its
+    modes at its size (None when the system does not say), scale 1.0 (100 %) when it cannot be told."""
     if os.environ.get("OPENDMTQ_DISPLAYS") is not None:
-        # Made-up displays (the tests and the pictures): the main one's size and rate, at 100 %.
+        # Made-up displays (the tests and the pictures): the main one's size and rates, at 100 %.
         listed = [d for d in connected() if d.get("main")]
         if listed:
-            return {"width": listed[0]["width"], "height": listed[0]["height"], "hz": listed[0]["hz"], "scale": 1.0}
+            main = listed[0]
+            return {"width": main["width"], "height": main["height"], "hz": main["hz"], "top": main["top"],
+                    "scale": 1.0}
     if sys.platform == "win32":
         found = _gdi_main()
         if found is not None:
-            # The main display's rate from Windows' display configuration where it says one: GDI rounds a 164.999 Hz
-            # display down to 164, and that 164 would leave its own 165 out of the frame limits.
-            listed = [d for d in connected() if d.get("main") and d.get("hz")]
+            # The main display's rates from its modes and Windows' display configuration where they say them: GDI's
+            # VREFRESH is the rate now in whole hertz (164 for 164.999, 60 for a dynamic 180 Hz panel at rest).
+            listed = [d for d in connected() if d.get("main")]
             if listed:
-                found["hz"] = listed[0]["hz"]
+                found["hz"] = listed[0]["hz"] or found["hz"]
+                found["top"] = listed[0]["top"] or found["hz"]
             return found
     if root is not None:
-        return {"width": root.winfo_screenwidth(), "height": root.winfo_screenheight(), "hz": None, "scale": 1.0}
-    return {"width": 0, "height": 0, "hz": None, "scale": 1.0}
+        return {"width": root.winfo_screenwidth(), "height": root.winfo_screenheight(), "hz": None, "top": None,
+                "scale": 1.0}
+    return {"width": 0, "height": 0, "hz": None, "top": None, "scale": 1.0}
 
 
 def _gdi_main():
-    """The main display from GDI (its own pixels, its rate, Windows' scale on it), or None without GDI."""
+    """The main display from GDI (its own pixels, its rate now, Windows' scale on it), or None without GDI."""
     try:
         import ctypes
         from ctypes import wintypes
@@ -62,7 +78,7 @@ def _gdi_main():
         try:
             # DESKTOPHORZRES, DESKTOPVERTRES and VREFRESH: the main display's own pixels, whatever the program's DPI
             # awareness (the command line has none, and HORZRES would give it the display shrunk by Windows' scaling),
-            # and its rate in whole hertz.
+            # and its rate now in whole hertz.
             width, height, hz = gdi32.GetDeviceCaps(dc, 118), gdi32.GetDeviceCaps(dc, 117), gdi32.GetDeviceCaps(dc, 116)
             # Windows' scale on it, the same with DPI awareness (the launcher's window: LOGPIXELSX is the display's dots
             # per inch) and without (the command line: LOGPIXELSX says 96, and HORZRES the display shrunk by the scale):
@@ -72,45 +88,30 @@ def _gdi_main():
             user32.ReleaseDC(None, dc)
         scale = max(logical_dpi / 96.0 if logical_dpi > 0 else 1.0, width / float(logical_width) if logical_width > 0 else 1.0)
         # 0 and 1 mean the hardware's default rate, which says nothing.
-        return {"width": width, "height": height, "hz": hz if hz > 1 else None, "scale": round(max(1.0, scale), 3)}
+        hz = hz if hz > 1 else None
+        return {"width": width, "height": height, "hz": hz, "top": hz, "scale": round(max(1.0, scale), 3)}
     except (AttributeError, OSError):
         # No GDI to ask (a stripped-down Windows).
         return None
 
 
 def connected():
-    """Every active display as [{"width", "height", "hz", "main"}], hz in whole hertz or None, the main one first; []
-    where the system does not say (not Windows, or nothing to ask). Never raises: a display that cannot be read is left
-    out, and the page then offers what it offers without a rate."""
+    """Every active display as [{"name", "width", "height", "hz", "top", "drr", "main"}] (the module's words say what
+    each is), the main one first; [] where the system does not say (not Windows, or nothing to ask). Never raises: a
+    display that cannot be read is left out, and the page then offers what it offers without a rate."""
     named = os.environ.get("OPENDMTQ_DISPLAYS")
     if named is not None:
-        # Made-up displays for the tests and the pictures, as "2560x1440@165*,1920x1080@60" (* the main one).
+        # Made-up displays for the tests and the pictures.
         return made_up(named)
     if sys.platform != "win32":
         return []
-    for reader in (_display_config, _display_settings):
-        try:
-            found = reader()
-        except (AttributeError, OSError, ValueError):
-            # This way of asking is missing or refused (an older Windows, Wine without it): the next one.
-            log.debug("could not read the displays by %s", reader.__name__, exc_info=True)
-            continue
-        if found:
-            # The main display first: the page's words about "this display" are about it.
-            return sorted(found, key=lambda d: not d["main"])
-    return []
-
-
-def made_up(text):
-    """Displays written as "2560x1440@165*,1920x1080@60" (each WIDTHxHEIGHT@HZ, * after the main one) as connected()
-    lists them, the main one first; a part that is not one is left out."""
-    found = []
-    for part in text.split(","):
-        match = re.match(r"^\s*(\d+)x(\d+)@(\d+(?:\.\d+)?)(\*?)\s*$", part)
-        if match:
-            hz = whole_hz(float(match.group(3)) * 1000, 1000)
-            found.append({"width": int(match.group(1)), "height": int(match.group(2)), "hz": hz,
-                          "main": bool(match.group(4))})
+    try:
+        found = _windows_displays()
+    except (AttributeError, OSError, ValueError):
+        # A Windows (or a Wine) without these calls: nothing said of the displays, as off Windows.
+        log.debug("could not read the displays", exc_info=True)
+        return []
+    # The main display first: the page's words about "this display" are about it.
     return sorted(found, key=lambda d: not d["main"])
 
 
@@ -123,9 +124,103 @@ def whole_hz(numerator, denominator):
     return int(round(hz)) if hz > 1.5 else None
 
 
+def summarise(name, width, height, current, modes, divider=None, main=False):
+    """One display as connected() lists it, from what Windows says of it: its size now, its rate now (`current`, in hertz,
+    a fraction allowed), its modes [(width, height, hertz)], and the divider of its rate now (None where Windows says
+    nothing of it). Its top rate is the highest of its modes at its size now, never below the rate now."""
+    now = whole_hz(int(round(float(current) * 1000)), 1000) if current else None
+    at_size = [whole_hz(int(round(float(hz) * 1000)), 1000) for w, h, hz in modes if (w, h) == (width, height) and hz]
+    rates = [rate for rate in at_size + [now] if rate]
+    top = max(rates) if rates else None
+    drr = None if not divider else divider > 1
+    return {"name": name, "width": int(width), "height": int(height), "hz": now, "top": top, "drr": drr,
+            "main": bool(main)}
+
+
+def made_up(text):
+    """Displays written as "2560x1600@60~180d*,1920x1080@60" as connected() lists them, the main one first: each
+    WIDTHxHEIGHT@HZ (its rate now, a fraction allowed), then ~TOP (the highest rate of its modes at that size, when it is
+    more), then d or f (dynamic refresh rate on or off; neither: not said), then * after the main one. A part that is
+    not one is left out."""
+    found = []
+    for i, part in enumerate(text.split(",")):
+        match = re.match(r"^\s*(\d+)x(\d+)@(\d+(?:\.\d+)?)(?:~(\d+(?:\.\d+)?))?([df]?)(\*?)\s*$", part)
+        if not match:
+            continue
+        width, height = int(match.group(1)), int(match.group(2))
+        current, top = float(match.group(3)), match.group(4)
+        modes = [(width, height, current)] + ([(width, height, float(top))] if top else [])
+        divider = {"d": 2, "f": 1}.get(match.group(5))
+        found.append(summarise("\\\\.\\DISPLAY%d" % (i + 1), width, height, current, modes, divider,
+                               main=bool(match.group(6))))
+    return sorted(found, key=lambda d: not d["main"])
+
+
+def _windows_displays():
+    """The active displays as Windows says them: each attached display device (EnumDisplayDevices), its current mode
+    and every mode it lists (EnumDisplaySettings), and from Windows' display configuration (QueryDisplayConfig) its rate
+    now as a fraction and that rate's divider, matched by the device's name."""
+    import ctypes
+    from ctypes import wintypes
+
+    class Device(ctypes.Structure):
+        _fields_ = (("size", wintypes.DWORD), ("name", wintypes.WCHAR * 32), ("string", wintypes.WCHAR * 128),
+                    ("flags", wintypes.DWORD), ("id", wintypes.WCHAR * 128), ("key", wintypes.WCHAR * 128))
+
+    class DevMode(ctypes.Structure):
+        # DEVMODEW as far as the display's fields reach (the printer's union laid out as the display's: position,
+        # orientation and output), then its rate, then the rest of its 220 bytes.
+        _fields_ = (("device_name", wintypes.WCHAR * 32), ("spec_version", wintypes.WORD),
+                    ("driver_version", wintypes.WORD), ("size", wintypes.WORD), ("driver_extra", wintypes.WORD),
+                    ("fields", wintypes.DWORD), ("x", wintypes.LONG), ("y", wintypes.LONG),
+                    ("orientation", wintypes.DWORD), ("output", wintypes.DWORD), ("color", ctypes.c_short),
+                    ("duplex", ctypes.c_short), ("y_resolution", ctypes.c_short), ("tt_option", ctypes.c_short),
+                    ("collate", ctypes.c_short), ("form_name", wintypes.WCHAR * 32), ("log_pixels", wintypes.WORD),
+                    ("bits_per_pel", wintypes.DWORD), ("width", wintypes.DWORD), ("height", wintypes.DWORD),
+                    ("display_flags", wintypes.DWORD), ("frequency", wintypes.DWORD), ("rest", wintypes.DWORD * 8))
+
+    # Windows' own sizes for these: a mismatch would read garbage, so it is refused before any call.
+    if ctypes.sizeof(DevMode) != 220 or ctypes.sizeof(Device) != 840:
+        raise ValueError("display structures of unexpected size")
+    user32 = ctypes.WinDLL("user32")
+    attached, primary = 0x1, 0x4                        # DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, _PRIMARY_DEVICE
+    current_settings = -1                               # ENUM_CURRENT_SETTINGS
+    fractions = _display_config()
+    found, index = [], 0
+    while True:
+        device = Device()
+        device.size = ctypes.sizeof(Device)
+        if not user32.EnumDisplayDevicesW(None, index, ctypes.byref(device), 0):
+            break
+        index += 1
+        if not device.flags & attached:
+            # A display adapter's output with nothing on it.
+            continue
+        mode = DevMode()
+        mode.size = ctypes.sizeof(DevMode)
+        if not user32.EnumDisplaySettingsW(device.name, current_settings, ctypes.byref(mode)):
+            continue
+        # Every mode the display lists, its size and rate (the same size at other rates among them).
+        modes, number = [], 0
+        while number < MODES_READ:
+            listed = DevMode()
+            listed.size = ctypes.sizeof(DevMode)
+            if not user32.EnumDisplaySettingsW(device.name, number, ctypes.byref(listed)):
+                break
+            modes.append((int(listed.width), int(listed.height), int(listed.frequency)))
+            number += 1
+        # The rate now as a fraction and its divider, from the display configuration where it names this device.
+        fraction, divider = fractions.get(device.name, (None, None))
+        current = fraction or (mode.frequency if mode.frequency > 1 else None)
+        found.append(summarise(device.name, mode.width, mode.height, current, modes, divider,
+                               main=bool(device.flags & primary)))
+    return found
+
+
 def _display_config():
-    """The active displays from Windows' display configuration (QueryDisplayConfig with QDC_ONLY_ACTIVE_PATHS): each
-    path's target rate as a fraction, its source mode's size and place (the main display stands at 0,0)."""
+    """{GDI device name: (rate now in hertz as a fraction, its divider or None)} from Windows' display configuration
+    (QueryDisplayConfig with QDC_ONLY_ACTIVE_PATHS, each path's source named by DisplayConfigGetDeviceInfo); {} where
+    Windows has none of it (an older one, Wine without it)."""
     import ctypes
     from ctypes import wintypes
 
@@ -148,129 +243,104 @@ def _display_config():
     class Path(ctypes.Structure):
         _fields_ = (("source", PathSource), ("target", PathTarget), ("flags", ctypes.c_uint32))
 
-    class SourceMode(ctypes.Structure):
-        _fields_ = (("width", ctypes.c_uint32), ("height", ctypes.c_uint32), ("format", ctypes.c_uint32),
-                    ("x", ctypes.c_long), ("y", ctypes.c_long))
-
     class Signal(ctypes.Structure):
+        # DISPLAYCONFIG_VIDEO_SIGNAL_INFO: its "standard" is a union whose bits 16 to 21 are, on Windows 11, the divider
+        # of the rate the display runs at now (vSyncFreqDivider).
         _fields_ = (("pixel_rate", ctypes.c_uint64), ("h_sync", Rational), ("v_sync", Rational),
                     ("active", ctypes.c_uint32 * 2), ("total", ctypes.c_uint32 * 2), ("standard", ctypes.c_uint32),
                     ("scan_order", ctypes.c_uint32))
 
     class ModeUnion(ctypes.Union):
         # The target's signal is the largest member (48 bytes): the union is that size whatever the mode is.
-        _fields_ = (("target", Signal), ("source", SourceMode), ("room", ctypes.c_byte * 48))
+        _fields_ = (("target", Signal), ("room", ctypes.c_byte * 48))
 
     class Mode(ctypes.Structure):
         _fields_ = (("kind", ctypes.c_uint32), ("id", ctypes.c_uint32), ("adapter", Luid), ("mode", ModeUnion))
 
+    class Header(ctypes.Structure):
+        _fields_ = (("type", ctypes.c_uint32), ("size", ctypes.c_uint32), ("adapter", Luid), ("id", ctypes.c_uint32))
+
+    class SourceName(ctypes.Structure):
+        _fields_ = (("header", Header), ("name", wintypes.WCHAR * 32))
+
     # The sizes Windows lays these out in: a mismatch would read garbage, so it is refused before any call.
-    if ctypes.sizeof(Path) != 72 or ctypes.sizeof(Mode) != 64:
-        raise ValueError("display configuration structures of unexpected size")
-    user32 = ctypes.WinDLL("user32")
+    if ctypes.sizeof(Path) != 72 or ctypes.sizeof(Mode) != 64 or ctypes.sizeof(SourceName) != 84:
+        return {}
+    try:
+        user32 = ctypes.WinDLL("user32")
+        query, sizes, info = user32.QueryDisplayConfig, user32.GetDisplayConfigBufferSizes, user32.DisplayConfigGetDeviceInfo
+    except (AttributeError, OSError):
+        return {}
     only_active = 2                                     # QDC_ONLY_ACTIVE_PATHS
     paths_n, modes_n = ctypes.c_uint32(), ctypes.c_uint32()
     for _ in range(3):
         # The counts can grow between the two calls (a display plugged in): asked again then.
-        if user32.GetDisplayConfigBufferSizes(only_active, ctypes.byref(paths_n), ctypes.byref(modes_n)):
-            raise OSError("GetDisplayConfigBufferSizes failed")
+        if sizes(only_active, ctypes.byref(paths_n), ctypes.byref(modes_n)):
+            return {}
         paths, modes = (Path * paths_n.value)(), (Mode * modes_n.value)()
-        status = user32.QueryDisplayConfig(only_active, ctypes.byref(paths_n), paths, ctypes.byref(modes_n), modes,
-                                           None)
+        status = query(only_active, ctypes.byref(paths_n), paths, ctypes.byref(modes_n), modes, None)
         if status == 0:
             break
         if status != 122:                               # ERROR_INSUFFICIENT_BUFFER: asked again
-            raise OSError("QueryDisplayConfig failed with %d" % status)
+            return {}
     else:
-        raise OSError("QueryDisplayConfig kept changing")
-    found = []
+        return {}
+    found = {}
     for path in paths[:paths_n.value]:
-        hz = whole_hz(path.target.rate.numerator, path.target.rate.denominator)
+        source = SourceName()
+        source.header.type = 1                          # DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME
+        source.header.size = ctypes.sizeof(SourceName)
+        source.header.adapter = path.source.adapter
+        source.header.id = path.source.id
+        if info(ctypes.byref(source.header)) != 0:
+            continue
+        rate = path.target.rate
+        hz = rate.numerator / float(rate.denominator) if rate.denominator else None
+        divider = None
         target_mode = path.target.mode_index
-        if hz is None and target_mode < modes_n.value and modes[target_mode].kind == 2:
-            # No rate on the path itself: the target mode's vertical sync (DISPLAYCONFIG_MODE_INFO_TYPE_TARGET).
-            v_sync = modes[target_mode].mode.target.v_sync
-            hz = whole_hz(v_sync.numerator, v_sync.denominator)
-        width = height = 0
-        main = False
-        source_mode = path.source.mode_index
-        if source_mode < modes_n.value and modes[source_mode].kind == 1:
-            # DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE: the display's desktop size, and its place (0,0 for the main one).
-            source = modes[source_mode].mode.source
-            width, height, main = source.width, source.height, source.x == 0 and source.y == 0
-        found.append({"width": int(width), "height": int(height), "hz": hz, "main": main})
-    return found
-
-
-def _display_settings():
-    """The active displays from each one's current mode (EnumDisplayDevices, EnumDisplaySettings): whole hertz only."""
-    import ctypes
-    from ctypes import wintypes
-
-    class Device(ctypes.Structure):
-        _fields_ = (("size", wintypes.DWORD), ("name", wintypes.WCHAR * 32), ("string", wintypes.WCHAR * 128),
-                    ("flags", wintypes.DWORD), ("id", wintypes.WCHAR * 128), ("key", wintypes.WCHAR * 128))
-
-    class DevMode(ctypes.Structure):
-        # DEVMODEW as far as the display's fields reach (the printer's union laid out as the display's: position,
-        # orientation and output), then its rate.
-        _fields_ = (("device_name", wintypes.WCHAR * 32), ("spec_version", wintypes.WORD),
-                    ("driver_version", wintypes.WORD), ("size", wintypes.WORD), ("driver_extra", wintypes.WORD),
-                    ("fields", wintypes.DWORD), ("x", wintypes.LONG), ("y", wintypes.LONG),
-                    ("orientation", wintypes.DWORD), ("output", wintypes.DWORD), ("color", ctypes.c_short),
-                    ("duplex", ctypes.c_short), ("y_resolution", ctypes.c_short), ("tt_option", ctypes.c_short),
-                    ("collate", ctypes.c_short), ("form_name", wintypes.WCHAR * 32), ("log_pixels", wintypes.WORD),
-                    ("bits_per_pel", wintypes.DWORD), ("width", wintypes.DWORD), ("height", wintypes.DWORD),
-                    ("display_flags", wintypes.DWORD), ("frequency", wintypes.DWORD), ("rest", wintypes.DWORD * 8))
-
-    user32 = ctypes.WinDLL("user32")
-    attached, primary = 0x1, 0x4                        # DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, _PRIMARY_DEVICE
-    found, index = [], 0
-    while True:
-        device = Device()
-        device.size = ctypes.sizeof(Device)
-        if not user32.EnumDisplayDevicesW(None, index, ctypes.byref(device), 0):
-            break
-        index += 1
-        if not device.flags & attached:
-            # A display adapter's output with nothing on it.
-            continue
-        mode = DevMode()
-        mode.size = ctypes.sizeof(DevMode)
-        # ENUM_CURRENT_SETTINGS: the mode the display is in now.
-        if not user32.EnumDisplaySettingsW(device.name, -1, ctypes.byref(mode)):
-            continue
-        hz = mode.frequency if mode.frequency > 1 else None
-        found.append({"width": int(mode.width), "height": int(mode.height), "hz": hz,
-                      "main": bool(device.flags & primary)})
+        if target_mode < modes_n.value and modes[target_mode].kind == 2:
+            # DISPLAYCONFIG_MODE_INFO_TYPE_TARGET: its signal, the divider of its rate now where Windows says one.
+            signal = modes[target_mode].mode.target
+            divider = (signal.standard >> 16) & 0x3F or None
+            if not hz and signal.v_sync.denominator:
+                hz = signal.v_sync.numerator / float(signal.v_sync.denominator)
+        found[source.name] = (hz if hz and hz > 1.5 else None, divider)
     return found
 
 
 def highest_rate(found):
-    """The highest refresh rate among `found` (connected()'s list), or None when none says its rate."""
-    rates = [d["hz"] for d in found if d.get("hz")]
+    """The highest rate any of `found` (connected()'s list) runs at when a game asks: its top rate, or None when none
+    says its rate."""
+    rates = [d.get("top") or d.get("hz") for d in found]
+    rates = [rate for rate in rates if rate]
     return max(rates) if rates else None
 
 
 def frame_limits(found):
     """The frame limits offered for the displays `found` (connected()'s list), as numbers in their order: every rate of
-    RATES up to the highest display's rate (with MARGIN), and each display's own rate, so that a 160 Hz, 165 Hz or
-    180 Hz display is offered its own. With no rate known, RATES up to 240."""
+    RATES up to the highest rate any display runs at (with MARGIN), and each display's own rates, now and at its top, so
+    that a 160, 165 or 180 Hz panel is offered its own even while Windows runs it at 60. With no rate known, RATES up to
+    240."""
     top = highest_rate(found)
     if top is None:
         return [rate for rate in RATES if rate <= 240]
     offered = {rate for rate in RATES if rate <= top * MARGIN}
-    # Each display's own rate, within the player's range.
-    offered.update(d["hz"] for d in found if d.get("hz") and LEAST <= d["hz"] <= MOST)
+    # Each display's own rates, within the player's range.
+    for d in found:
+        offered.update(rate for rate in (d.get("hz"), d.get("top")) if rate and LEAST <= rate <= MOST)
     return sorted(offered)
 
 
 def describe(found):
-    """The displays as one line for the launcher's log: "2560 x 1440 at 165 Hz (main), 1920 x 1080 at 60 Hz"."""
+    """The displays for the launcher's log, one a line: "\\\\.\\DISPLAY1 (main): 2560 x 1600, now 60 Hz, up to 180 Hz at
+    this size, dynamic refresh rate on"."""
     if not found:
-        return "none listed by Windows"
-    parts = []
+        return ["none listed by Windows"]
+    lines = []
     for d in found:
-        rate = " at %d Hz" % d["hz"] if d.get("hz") else " at an unknown rate"
-        parts.append("%d x %d%s%s" % (d["width"], d["height"], rate, " (main)" if d.get("main") else ""))
-    return ", ".join(parts)
+        now = "now %d Hz" % d["hz"] if d.get("hz") else "now at a rate not said"
+        top = "up to %d Hz at this size" % d["top"] if d.get("top") else "no other rate listed"
+        drr = {True: "dynamic refresh rate on", False: "dynamic refresh rate off", None: "dynamic refresh rate not said"}
+        lines.append("%s%s: %d x %d, %s, %s, %s" % (d.get("name") or "a display", " (main)" if d.get("main") else "",
+                                                   d["width"], d["height"], now, top, drr[d.get("drr")]))
+    return lines

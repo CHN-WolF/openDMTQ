@@ -40,6 +40,9 @@ FPS_POSITION = ("top_left", "top_right", "bottom_left", "bottom_right")
 # The corner every launcher before 0.9.3 wrote into its settings file whether or not the player chose it: read as no
 # choice (the default above) unless the file says the player chose it.
 OLD_FPS_POSITION = "top_left"
+# Defaults earlier launchers kept in their files whether or not the player chose them: read as no choice (today's
+# default) unless the file says the player chose it (0.10.0's plain stretch).
+OLD_DEFAULTS = {"upscaler": "bilinear"}
 # The sound shared with the PC's other sound, or the device alone (less latency).
 AUDIO_MODE = ("shared", "exclusive")
 # How much sound is kept ahead of the device: less latency, or fewer breaks on a busy PC.
@@ -95,7 +98,9 @@ DEFAULTS = {
     "vsync": "on",
     "fps": "auto",
     "render_scale": "100",
-    "upscaler": "bilinear",
+    # Below 100 % only: NVIDIA Image Scaling, the nearest to the native picture of the three as the player measured
+    # them (the sharpest without halos, the least error), each under 0.2 ms a frame; the plain stretch is visibly softer.
+    "upscaler": "nis",
     "anti_aliasing": "off",
     "show_fps": "off",
     "fps_position": "bottom_right",

@@ -494,7 +494,8 @@ def screen_rows(app, parent, full=True):
         widgets.label(slot.body, ui, displays_line(w, display, found), font=ui.fonts.small, fg=theme.MUTED,
                       wrap_margin=0).pack(fill="x")
     # The frame limits: the display's own rate, every rate up to the fastest display's, and no limit (fps_options).
-    hz = display.get("hz")
+    # The main display's rate as it runs a game (game_rate), for the hints when the displays are not listed.
+    hz = game_rate(display)
     card = _card(parent, ui, w("screen.frames"), last=not full)
     frames = widgets.RowList(card.body, ui)
     frames.pack(fill="x")
@@ -568,26 +569,42 @@ def screen_rows(app, parent, full=True):
     return follow
 
 
+def game_rate(display):
+    """The rate a display runs a game at: the highest of its modes at its size (Windows runs a panel with a dynamic
+    refresh rate at 60 Hz while the desktop is still, and at its full rate once a game asks, as the player does), unless
+    Windows says its rate is not dynamic, when the rate it is set to now is the one."""
+    if display.get("drr") is False and display.get("hz"):
+        return display["hz"]
+    return display.get("top") or display.get("hz")
+
+
 def displays_line(w, display, found):
-    """The line under the display's rows: the main display's size and rate, then the other displays' rates when there
-    are others ("Other displays: 180 Hz")."""
-    hz = display.get("hz")
-    line = w("screen.main", w=display["width"], h=display["height"]) + (w("screen.main.hz", hz=hz) if hz else "")
+    """The line under the display's rows: the main display's size and the rate it runs a game at (with its highest when
+    it is set lower), then the other displays' rates when there are others ("Other displays: 180 Hz")."""
+    rate = game_rate(display)
+    line = w("screen.main", w=display["width"], h=display["height"]) + (w("screen.main.hz", hz=rate) if rate else "")
+    top = display.get("top")
+    if rate and top and top > rate:
+        # Set lower than it can run: what it can run at too.
+        line += w("screen.main.up_to", top=top)
     others = [d for d in found if not d.get("main")]
     if others:
-        rates = ", ".join("%d Hz" % d["hz"] for d in others if d.get("hz"))
+        rates = ", ".join("%d Hz" % game_rate(d) for d in others if game_rate(d))
         if rates:
             line += " · " + w("screen.others", rates=rates)
     return line
 
 
 def single_rate(found, hz):
-    """The one refresh rate the hints can name: the main display's when no other display has another rate, else None
-    (the game may play on either, and its rate follows the display it is on)."""
-    rates = {d["hz"] for d in found if d.get("hz")}
+    """The one rate the hints can name: the main display's game rate (game_rate) when no other display runs at another,
+    else None (the game may play on either, and its rate follows the display it is on). `hz` is the main display's when
+    the displays are not listed (no Windows to ask)."""
+    rates = {game_rate(d) for d in found if game_rate(d)}
     if len(rates) > 1:
         return None
-    return hz or (rates.pop() if rates else None)
+    if rates:
+        return rates.pop()
+    return hz
 
 
 def fps_choices(found, current):

@@ -32,9 +32,10 @@ class Values(unittest.TestCase):
                 choices.normalize({name: value})
 
     def test_upscaler_and_anti_aliasing(self):
-        # The plain stretch and no anti-aliasing by default: a start as before these were offered.
+        # NVIDIA Image Scaling below 100 % by default (the nearest to the native picture as the player measured the
+        # three), and no anti-aliasing (the game's picture as it draws it).
         filled = choices.normalize({})
-        self.assertEqual((filled["upscaler"], filled["anti_aliasing"]), ("bilinear", "off"))
+        self.assertEqual((filled["upscaler"], filled["anti_aliasing"]), ("nis", "off"))
         # Each offered value is kept, in any case; the temporal ones and FXAA are not offered.
         self.assertEqual(choices.normalize({"upscaler": "FSR1"})["upscaler"], "fsr1")
         self.assertEqual(choices.normalize({"anti_aliasing": "SMAA"})["anti_aliasing"], "smaa")
@@ -170,7 +171,9 @@ class Values(unittest.TestCase):
         # Made-up displays as the tests and the pictures name them.
         found = displays.made_up("1920x1080@60,2560x1440@164.999*,bad")
         self.assertEqual([(d["hz"], d["main"]) for d in found], [(165, True), (60, False)])
-        self.assertEqual(displays.describe(found), "2560 x 1440 at 165 Hz (main), 1920 x 1080 at 60 Hz")
+        self.assertEqual(displays.describe(found), [
+            "\\\\.\\DISPLAY2 (main): 2560 x 1440, now 165 Hz, up to 165 Hz at this size, dynamic refresh rate not said",
+            "\\\\.\\DISPLAY1: 1920 x 1080, now 60 Hz, up to 60 Hz at this size, dynamic refresh rate not said"])
         # The hints name one rate only when every display has it.
         self.assertEqual(pages.single_rate(found, 165), None)
         self.assertEqual(pages.single_rate(found[:1], 165), 165)
@@ -186,6 +189,75 @@ class Values(unittest.TestCase):
         options = dict(pages.fps_options(w, found[:1], 165, "auto"))
         self.assertEqual(options["auto"], w("screen.fps.auto.hz", hz=165))
         self.assertEqual(dict(pages.fps_options(w, found, 165, "auto"))["auto"], w("screen.fps.auto"))
+
+    def test_a_panel_is_offered_its_highest_rate_not_its_rate_now(self):
+        # Windows 11's dynamic refresh rate runs a 180 Hz panel at 60 Hz while the desktop is still, and its current
+        # mode says 60: 0.10.0 read that rate (GDI's VREFRESH, whole hertz) and, VSync on by default, offered no limit
+        # above it. Each display's highest rate among its modes at its size is what is offered now. Made-up mode lists:
+        # (size now, rate now, modes, the divider of the rate now or None, the top rate it must be offered).
+        from opendmtq_client import displays, i18n, pages
+        old_list = ("auto", "30", "60", "120", "144", "165", "180", "240", "360", "unlimited")
+
+        def old_offered(gdi_rate):
+            # 0.10.0's Screen page: its fixed list, and with VSync on none above the main display's GDI rate.
+            return [f for f in old_list if not choices.above_rate(gdi_rate, f)]
+
+        def numbers(offered):
+            return [int(f) for f in offered if f.isdigit()]
+
+        cases = (
+            # A dynamic refresh rate panel at rest: 60 now, modes up to 180 at its size (a 240 Hz mode at another size
+            # is no rate it runs at here).
+            ("dynamic 180", (2560, 1600), 60, [(2560, 1600, 60), (2560, 1600, 120), (2560, 1600, 180),
+                                              (1920, 1200, 240)], 2, 180),
+            ("160 panel", (2560, 1600), 160, [(2560, 1600, 60), (2560, 1600, 160)], 1, 160),
+            ("165 panel", (2560, 1440), 165, [(2560, 1440, 60), (2560, 1440, 144), (2560, 1440, 165)], None, 165),
+            ("180 panel", (1920, 1080), 180, [(1920, 1080, 60), (1920, 1080, 180)], None, 180),
+            ("240 panel", (2560, 1440), 240, [(2560, 1440, 60), (2560, 1440, 240)], 1, 240),
+            ("179.999", (2560, 1600), 179.999, [(2560, 1600, 59.94), (2560, 1600, 179.999)], None, 180),
+            ("59.94", (1920, 1080), 59.94, [(1920, 1080, 59.94)], None, 60),
+        )
+        w = i18n.Words("en")
+        for name, (width, height), now, modes, divider, top in cases:
+            d = displays.summarise("\\\\.\\DISPLAY1", width, height, now, modes, divider, main=True)
+            self.assertEqual(d["top"], top, name)
+            offered = pages.fps_choices([d], "auto")
+            # Every rate up to its top, its top among them, nothing above it.
+            self.assertIn(str(top), offered, name)
+            self.assertEqual(max(numbers(offered)), top, name)
+            # The display's rate as the page names it is the rate it runs a game at.
+            self.assertEqual(dict(pages.fps_options(w, [d], None, "auto"))["auto"], w("screen.fps.auto.hz", hz=top), name)
+            # 0.10.0's logic, from the rate now as GDI says it (whole hertz, cut): what it did not offer.
+            gdi = int(now)
+            if top > gdi * displays.MARGIN or top not in numbers(old_offered(gdi)) or gdi != top:
+                # The top rate missing, or the display's rate named wrong (59 for 59.94 Hz, 179 for 179.999 Hz).
+                self.assertTrue(top not in numbers(old_offered(gdi)) or gdi != top, name)
+            else:
+                # A plain panel 0.10.0 offered its rate to: the rates under it it did not have (160 for 165 Hz up).
+                self.assertTrue(set(numbers(offered)) - set(numbers(old_offered(gdi))), name)
+        # The dynamic panel: 0.10.0 offered nothing above 60 there; now up to 180, with VSync on too.
+        self.assertEqual(max(numbers(old_offered(60))), 60)
+        drr = displays.summarise("\\\\.\\DISPLAY1", 2560, 1600, 60, [(2560, 1600, 60), (2560, 1600, 180)], 2, main=True)
+        self.assertEqual((drr["hz"], drr["top"], drr["drr"]), (60, 180, True))
+        self.assertEqual(max(numbers(pages.fps_choices([drr], "auto"))), 180)
+        # Two displays: a 60 Hz main beside a dynamic 180 Hz panel; up to 180, and the hints name no one rate.
+        plain = displays.summarise("\\\\.\\DISPLAY2", 1920, 1080, 60, [(1920, 1080, 60)], 1, main=True)
+        both = [plain, dict(drr, main=False)]
+        self.assertEqual(max(numbers(pages.fps_choices(both, "auto"))), 180)
+        self.assertIsNone(pages.single_rate(both, 60))
+        # A panel Windows says is not dynamic, set to 60 of its 180: it runs a game at 60 (its rate is the one set), the
+        # page says what it can run at too, and every limit up to 180 is still offered.
+        fixed = displays.summarise("\\\\.\\DISPLAY1", 2560, 1600, 60, [(2560, 1600, 60), (2560, 1600, 180)], 1, main=True)
+        self.assertEqual((pages.game_rate(fixed), fixed["drr"]), (60, False))
+        self.assertEqual(max(numbers(pages.fps_choices([fixed], "auto"))), 180)
+        main = {"width": 2560, "height": 1600, "hz": 60, "top": 180, "drr": False}
+        self.assertEqual(pages.displays_line(w, main, [fixed]), "Main display: 2560 × 1600 at 60 Hz (up to 180 Hz)")
+        # What the launcher's log says of each at its start: the rate now, the top, and the dynamic rate.
+        self.assertEqual(displays.describe([drr]), [
+            "\\\\.\\DISPLAY1 (main): 2560 x 1600, now 60 Hz, up to 180 Hz at this size, dynamic refresh rate on"])
+        # Made up for the pictures the same way: 60 now, up to 180, dynamic.
+        listed = displays.made_up("2560x1600@60~180d*")
+        self.assertEqual([(d["hz"], d["top"], d["drr"], d["main"]) for d in listed], [(60, 180, True, True)])
 
     def test_the_sound_settings(self):
         # Master, music and effects from 0 to 100, all at 100 at first; the equaliser flat, its bands at 0 dB.

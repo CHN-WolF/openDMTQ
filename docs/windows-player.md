@@ -122,7 +122,7 @@ of a line is checked before any is applied, so one the launcher does not take ch
 | `show_fps` | `off`, `on` (a corner's name, as `fps_position` takes it, is on in that corner) | FPS counter |
 | `fps_position` | `bottom_right` (where it covers the least of the game), `top_left` (beside a song's pause button), `top_right`, `bottom_left`; kept while the counter is off | Position, while the counter is on |
 | `render_scale` | `100`, `85`, `75`, `67`, `50` | Render scale |
-| `upscaler` | `bilinear`, `fsr1`, `nis` | Upscaler, below 100 % |
+| `upscaler` | `nis`, `fsr1`, `bilinear` | Upscaler, below 100 % |
 | `anti_aliasing` | `off`, `cmaa2`, `smaa` | Anti-aliasing |
 | `audio_device` | `default` (Windows' default output), or a device's id from `--audio-devices` | Device |
 | `audio_mode` | `shared`, `exclusive` | Mode |
@@ -252,9 +252,11 @@ off, says why in its log, and the game plays by touch as before.
   next try, a minute at most. Some late frames, as the page before a song shows while the song loads (up to a tenth of
   them), and a pause of a tenth of a second or more, keep the display's rate.
 - **The frame limit:** the display's rate (the default), a number, or none. The page offers every rate up to the
-  fastest connected display's, read from Windows' display configuration (a 160, 165 or 180 Hz touch screen beside a
-  60 Hz display offers its own rate), and the line under the display's rows names the main display's rate and the
-  others'. With VSync on, a limit that is a whole
+  highest any connected display runs at: each display's highest rate among its modes at its current size, never only
+  the rate it is in now, as Windows 11's dynamic refresh rate runs a 120, 165 or 180 Hz laptop or tablet panel at 60 Hz
+  while the desktop is still and says 60 (0.10.0 read that and offered nothing above 60 with VSync on). The line under
+  the display's rows names the rate the main display runs a game at, and the others'. The launcher's log says each
+  display's rate now, its highest and whether its rate is dynamic, at each start. With VSync on, a limit that is a whole
   fraction of the display's rate, or within 10 % above one, keeps every frame the same length (60 or 120 on a 240 Hz
   display); another limit is held by the clock, with each frame still on a refresh (144 on a 240 Hz display).
 - **VSync off:** frames go out as soon as they are drawn, evenly at the limit, which may be above the display's rate, or
@@ -276,12 +278,14 @@ off, says why in its log, and the game plays by touch as before.
   lighter for the graphics card, and softer. The share keeps the window's shape exactly where its size has fine enough
   steps (1920x1080 is 120 steps of 16x9): 67 % of 1920x1080 is 1280x720, so the game lays itself out as it does at full
   size, its parts where they belong.
-- **The upscaler**, below 100 %: how the smaller picture reaches the window's size. **Bilinear** (the default) is the
-  plain stretch of the window's surface. **AMD FSR 1** (FidelityFX Super Resolution 1) enlarges it with its
-  edge-adaptive filter (EASU) and sharpens the result (RCAS, at AMD's sample's 0.25 stops). **NVIDIA NIS** (Image
-  Scaling) enlarges in one pass with its edge-adaptive filter, with no sharpening added: the SDK's default of 50 % drew
-  rims around the game's text and lines. Both are spatial: they need only the
-  finished picture. At 100 % no upscaler is used, and the row is not shown.
+- **The upscaler**, below 100 %: how the smaller picture reaches the window's size. **NVIDIA NIS** (Image Scaling, the
+  default) enlarges in one pass with its edge-adaptive filter, with no sharpening added (the SDK's default of 50 % drew
+  rims around the game's text and lines): of the three it comes nearest to the native picture. **AMD FSR 1**
+  (FidelityFX Super Resolution 1) enlarges it with its edge-adaptive filter (EASU) and sharpens the result (RCAS, at
+  AMD's sample's 0.25 stops). **Bilinear** is the plain stretch of the window's surface, the softest. NIS and FSR 1 are
+  spatial: they need only the finished picture, each in well under a millisecond a frame. At 100 % no upscaler is
+  used, and the row is not shown. A launcher before 0.11 kept Bilinear without being asked: it reads as NIS unless
+  Bilinear was chosen.
 - **Anti-aliasing** smooths the jagged edges of the game's shapes. **CMAA 2** (Intel's Conservative Morphological
   Anti-Aliasing 2) smooths them over the finished picture and keeps text and thin lines sharp; it runs on compute shaders
   (OpenGL ES 3.1), and where the graphics card has none the player uses SMAA instead and says so in its log. **SMAA**

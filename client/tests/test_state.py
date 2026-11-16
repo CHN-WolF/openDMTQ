@@ -122,6 +122,16 @@ class State(Folder):
             st.LauncherState.load()
         self.assertFalse(caught.exception.newer)
 
+    def test_an_earlier_default_not_chosen_takes_todays(self):
+        # 0.10.0 kept its plain stretch in its file whether or not the player chose it: read as no choice, today's
+        # default (NVIDIA Image Scaling); one the player chose stays.
+        os.makedirs(st.config_dir())
+        for chosen, upscaler, expected in (([], "bilinear", "nis"), (["upscaler"], "bilinear", "bilinear"),
+                                          ([], "fsr1", "fsr1")):
+            with open(st.LauncherState.path(), "w", encoding="utf-8") as f:
+                json.dump({"version": 1, "values": {"upscaler": upscaler}, "chosen": chosen}, f)
+            self.assertEqual(st.LauncherState.load().values["upscaler"], expected, (chosen, upscaler))
+
     def test_a_file_saved_again_by_notepad_is_read(self):
         # Notepad saves with a byte-order mark and Windows' line ends; a person types a language in capitals with spaces:
         # the launcher reads it as it reads its own (P4), its settings, servers and language as they were.

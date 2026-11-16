@@ -107,9 +107,11 @@ class LauncherApp:
             self.root.bind(key, self._page_key, add="+")
         # Back to the front (after a game, from another window): the sound the player's in-game menu set comes back.
         self.root.bind("<FocusIn>", lambda e: self.took_back(), add="+")
-        # The displays and their rates, once a start, in the log: what the Screen page's frame limits come from.
+        # The displays and their rates, once a start, in the log: what the Screen page's frame limits come from (each
+        # display's rate now, its highest at its size, and whether Windows runs it at a dynamic rate).
         from opendmtq_client import displays
-        log.info("displays: %s", displays.describe(displays.connected()))
+        for line in displays.describe(displays.connected()):
+            log.info("display: %s", line)
         self.root.after(50, self._pump)
         self.show()
         self._update_outcome()

@@ -93,7 +93,7 @@ class CommandLine(Folder):
         # An upscaler the launcher does not offer is refused the same way.
         code, said = self.run_main(["--set", "upscaler=dlss"])
         self.assertEqual(code, 2)
-        self.assertEqual(st.LauncherState.load().values["upscaler"], "bilinear")
+        self.assertEqual(st.LauncherState.load().values["upscaler"], "nis")
 
     def test_the_frame_counter(self):
         # On by its own name at the bottom right; its corner by fps_position; off keeps the corner for the next time; a

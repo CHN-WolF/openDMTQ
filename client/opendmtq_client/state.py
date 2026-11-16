@@ -199,6 +199,10 @@ class LauncherState:
         # it: the default now (another corner was the player's choice, and stays).
         if "fps_position" not in state.chosen and state.values["fps_position"] == choices.OLD_FPS_POSITION:
             state.values["fps_position"] = choices.DEFAULTS["fps_position"]
+        # An earlier default kept without the player choosing it: today's default (values.OLD_DEFAULTS).
+        for name, old in choices.OLD_DEFAULTS.items():
+            if name not in state.chosen and state.values[name] == old:
+                state.values[name] = choices.DEFAULTS[name]
         state.servers = [_server(entry) for entry in (data.get("servers") or [])]
         current = data.get("current")
         state.current = current if any(s["url"] == current for s in state.servers) else None
