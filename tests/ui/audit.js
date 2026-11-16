@@ -511,7 +511,13 @@ async function signInForms(contexts) {
           JSON.stringify([under, focus]));
         await page.screenshot({ path: path.join(OUT, 'shots', `forms-${form}-empty-${lang}-${width}.jpg`), type: 'jpeg', quality: 80 });
         await noFindings(page, `the sign-in with a field left empty (${at})`);
-        // Enter sends it: a wrong password, said by the server.
+        // Enter sends it: a wrong password, said by the server. Only on some of the views: each wrong password counts toward
+        // the sign-in's limit for this address (five in ten minutes on the admin pages), and the stages after this one sign
+        // in from the same address.
+        if (!(width >= 700 && lang === 'en') && !(form === 'site' && width < 700 && lang === 'ko')) {
+          await own.close();
+          continue;
+        }
         await page.type(id, who);
         await page.type(pw, 'not-the-password');
         const sent = await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).then(() => true, () => false), page.keyboard.press('Enter')]);
@@ -1401,7 +1407,7 @@ async function adminFlows(contexts) {
   await page.goto(`${A}/accounts`, { waitUntil: 'domcontentloaded' });
   await page.type('.account-form input[name=name]', 'friend1');
   await page.type('.account-form input[name=note]', 'A friend');
-  await press(page, '.account-form button');
+  await press(page, '.account-form button.btn-primary');
   const made = await textOf(page, '.account-keys code');
   check('an account is made with a password shown once', /^[a-z2-9]{10}$/.test(made) && /friend1/.test(await page.$eval('#account-message', e => e.value)), made);
   await noFindings(page, 'the accounts page with a new password');
@@ -1424,7 +1430,7 @@ async function adminFlows(contexts) {
   // and a phone's; the new password for an account of this check's own (dmtq's is the one every stage signs in with).
   await page.goto(`${A}/accounts`, { waitUntil: 'domcontentloaded' });
   await page.type('.account-form input[name=name]', 'inview');
-  await press(page, '.account-form button');
+  await press(page, '.account-form button.btn-primary');
   // The panel against the screen, and whether it has the focus.
   const panelAt = p => p.$eval('section.account-made', e => {
     const r = e.getBoundingClientRect();
