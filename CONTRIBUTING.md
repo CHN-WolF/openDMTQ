@@ -64,7 +64,7 @@ server on stand-in files and keep it running to look at:
 
 ```sh
 KEEP=1 tests/ui/run.sh         # the site at http://127.0.0.1:18801/ (site account dmtq), the admin pages at
-                               # http://127.0.0.1:18802/opendmtq/admin/ (admin), both with the password smoke-pass
+                               # http://127.0.0.1:18801/opendmtq/admin/ (admin), both with the password smoke-pass
 KEEP=1 tests/game/protocol.sh  # the game server alone, at http://127.0.0.1:18701/
 ```
 
