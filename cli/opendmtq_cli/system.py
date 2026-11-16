@@ -475,6 +475,16 @@ def firewall_rule_present(port, internet):
     return scope == ("Any" if internet else "LocalSubnet")
 
 
+def firewall_rule_exists(port):
+    """True when Windows has this server's rule for the port (in any scope), False when not, None when unknown. Read
+    without administrator rights: only a rule that is there is then removed with them."""
+    r = powershell(f"if (Get-NetFirewallRule -DisplayName {_ps_text(firewall_rule_name(port))} -EA SilentlyContinue) "
+                   "{ 'yes' } else { 'no' }")
+    if r is None or r.returncode != 0:
+        return None
+    return r.stdout.strip() == "yes"
+
+
 def firewall_command(port=80, internet=False, remove=False, replaces=None):
     """cli/firewall.ps1 as one PowerShell command, with its parameters: the script as a script block, called with them as
     -File would pass them (its param() block takes them, its exit codes end the PowerShell that runs it). Its comment and

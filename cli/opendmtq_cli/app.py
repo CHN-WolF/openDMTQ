@@ -752,7 +752,8 @@ def cmd_uninstall(args):
         # An image another copy still uses stays: docker refuses it.
         if subprocess.run(["docker", "image", "rm", image], capture_output=True).returncode == 0:
             ok(f"removed the image {image}")
-    if env.is_wsl() and values.get("PUBLIC_HOST"):
+    # The Windows firewall rule the setup made under WSL, when there is one: Windows asks for permission to remove it.
+    if env.is_wsl() and values.get("PUBLIC_HOST") and system.firewall_rule_exists(env.listen_port(values)):
         problem = system.run_firewall_script(port=env.listen_port(values), remove=True)
         if problem:
             warn(f"the Windows firewall rule stays: {problem}")
