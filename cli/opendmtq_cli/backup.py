@@ -199,7 +199,9 @@ def listing():
     """Backup file names, newest first."""
     if not os.path.isdir(BACKUPS):
         return []
-    return sorted((f for f in os.listdir(BACKUPS) if f.endswith(".tar.gz")), reverse=True)
+    # By the time in the name, then the name: the names from 0.11.0 on sort before the older ones letter by letter.
+    return sorted((f for f in os.listdir(BACKUPS) if f.endswith(".tar.gz")),
+                  key=lambda f: (m.group(0) if (m := re.search(r"\d{8}-\d{6}", f)) else "", f), reverse=True)
 
 
 def restore(name, with_key=False):

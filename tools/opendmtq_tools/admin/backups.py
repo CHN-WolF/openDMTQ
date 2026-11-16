@@ -106,8 +106,13 @@ def made_backups(names):
     """The backups among names that this server made (not one brought in by hand, which stays until deleted by hand),
     oldest first by the time in their names, whichever way they are named."""
     made = [n for n in names if n.lower().startswith("opendmtq-") and n.endswith(".tar.gz") and not n.endswith("-uploaded.tar.gz")]
-    # By the stamp, not the whole name: the new names sort before the old ones letter by letter.
-    return sorted(made, key=lambda n: (re.search(r"\d{8}-\d{6}", n) or re.search("", n)).group(0) or n)
+    return by_stamp(made)
+
+
+def by_stamp(names):
+    """Backups' names oldest first by the time in them (20261117-120000): the names from 0.11.0 on sort before the older
+    ones letter by letter, so the whole name would put a new backup first in line to go."""
+    return sorted(names, key=lambda n: (m.group(0) if (m := re.search(r"\d{8}-\d{6}", n)) else "", n))
 
 
 def new_backup_path(reason):
@@ -621,7 +626,7 @@ def auto_backup_once():
         name = make_backup("auto")
     finally:
         _restoring.release()
-    autos = sorted(b[0] for b in backup_files() if b[0].endswith("-auto.tar.gz"))
+    autos = by_stamp(b[0] for b in backup_files() if b[0].endswith("-auto.tar.gz"))
     for old in autos[:-KEEP_AUTO_BACKUPS]:
         os.remove(os.path.join(core.BACKUPS, old))
     return name

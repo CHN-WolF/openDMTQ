@@ -216,6 +216,14 @@ class NamesTest(unittest.TestCase):
                          ["opendmtq-20261101-120000-manual.tar.gz", "OpenDMTQ-Server-Backup-20261110-120000-manual.tar.gz",
                           "opendmtq-20261116-120000-daily.tar.gz", "OpenDMTQ-Server-Backup-20261117-120000-daily.tar.gz"])
 
+    def test_the_daily_ones_kept_are_the_newest_whichever_way_they_are_named(self):
+        # Seven daily backups named before 0.11.0 and one named since, as the daily backup prunes them (by_stamp): the
+        # oldest old one is first to go, the new one last.
+        old = [f"opendmtq-202611{d:02d}-030000-auto.tar.gz" for d in range(1, 8)]
+        new = "OpenDMTQ-Server-Backup-20261117-030000-auto.tar.gz"
+        ordered = admin.backups.by_stamp(old + [new])
+        self.assertEqual((ordered[0], ordered[-1]), (old[0], new))
+
     def test_the_players_file(self):
         with Install() as inst:
             # A server's database with its players, as the safety checks make one.
