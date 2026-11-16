@@ -19,6 +19,7 @@
 #include "overlay_motion.h"
 #include "overlay_scale.h"
 #include "player.h"
+#include "refresh_meter.h"
 #include "typed_text.h"
 
 #include <cmath>
@@ -851,6 +852,72 @@ void keyboard_play_checks() {
 
 }  // namespace
 
+// The display's refreshes as the refresh thread meets them (refresh_meter.h): a display at `hz` whose wakes come every
+// `wake_ns` (its own refreshes, or a fraction of them), late by a varying amount, some missed, for `seconds`, with the
+// interval in use starting at `hz`'s and taking each interval the meter finds, as refresh_loop does. What it ends at, and
+// when it first changed (-1: never).
+struct Followed {
+    long long interval;
+    double changed_at;
+};
+Followed follow_refreshes(double hz, double wake_ns, double seconds, int miss_every = 0, long long late_most = 300000) {
+    player::RefreshMeter meter;
+    long long interval = std::llround(1e9 / hz);
+    Followed out{interval, -1};
+    // A fixed sequence of lateness (no clock, no random device): the same run each time.
+    unsigned seed = 12345;
+    for (long long i = 0;; ++i) {
+        const double ideal = 1e6 + static_cast<double>(i) * wake_ns;
+        if (ideal > seconds * 1e9) break;
+        seed = seed * 1103515245u + 12345u;
+        if (miss_every && i % miss_every == miss_every - 1) continue;
+        const long long t = std::llround(ideal) + static_cast<long long>((seed >> 8) % static_cast<unsigned>(late_most + 1));
+        if (const long long found = meter.wake(t, interval)) {
+            interval = found;
+            if (out.changed_at < 0) out.changed_at = ideal / 1e9;
+        }
+    }
+    out.interval = interval;
+    return out;
+}
+
+void refresh_meter_checks() {
+    // A display that keeps the rate it gives: never another interval, the thread on time or a little late.
+    const Followed steady = follow_refreshes(240.084, 1e9 / 240.084, 30);
+    check(steady.changed_at < 0, "a 240.084 Hz display waking at its rate keeps its interval");
+    // Some wakes missed (the thread late past a refresh now and then): still its own rate.
+    const Followed missed = follow_refreshes(240.084, 1e9 / 240.084, 30, 7);
+    check(missed.changed_at < 0, "a 240 Hz display with every 7th wake missed keeps its interval");
+    const Followed missed160 = follow_refreshes(160, 1e9 / 160, 30, 3, 900000);
+    check(missed160.changed_at < 0, "a 160 Hz display with every 3rd wake missed and wakes up to 0.9 ms late keeps its interval");
+    // A display whose rate the system gave in whole hertz (59 for 59.94): its measured interval.
+    const Followed whole = follow_refreshes(59, 1e9 / 59.94, 30);
+    check(whole.changed_at >= 0 && std::llabs(whole.interval - 16683350) < 20000, "a 59 Hz display waking at 59.94 Hz follows 59.94 Hz");
+    // Dynamic refresh rate: the mode says 160, 180 or 240 Hz, the wakes come at 60 until the program is boosted. Its
+    // wakes' 60 Hz within a few seconds, not the mode's rate with every frame waiting for a refresh three times as long.
+    for (const double hz : {120.0, 160.0, 165.0, 180.0, 240.0}) {
+        const Followed drr = follow_refreshes(hz, 1e9 / 60.0, 10);
+        char what[160];
+        std::snprintf(what, sizeof what, "a %.0f Hz display waking at 60 Hz follows 60 Hz within 3 s (at %.1f s, %.3f ms)", hz, drr.changed_at,
+                      static_cast<double>(drr.interval) / 1e6);
+        check(drr.changed_at >= 0 && drr.changed_at <= 3 && std::llabs(drr.interval - 16666667) < 50000, what);
+    }
+    // And boosted after that: the wakes at the panel's own rate again, followed as fast.
+    {
+        player::RefreshMeter meter;
+        long long interval = std::llround(1e9 / 60.0);
+        double changed = -1;
+        for (long long i = 0; i < 180 * 10; ++i) {
+            const long long t = 1000000 + i * 5555556 + (i * 7919 % 200000);
+            if (const long long found = meter.wake(t, interval)) {
+                interval = found;
+                if (changed < 0) changed = static_cast<double>(t) / 1e9;
+            }
+        }
+        check(changed >= 0 && changed <= 3 && std::llabs(interval - 5555556) < 20000, "a display at 60 Hz boosted to 180 Hz follows 180 Hz within 3 s");
+    }
+}
+
 int main() {
     // A file of its own beside the program's current folder.
     const std::string path = "settingstest.txt";
@@ -1007,6 +1074,8 @@ int main() {
     overlay_motion_checks();
     // Keyboard play's rules.
     keyboard_play_checks();
+    // The display's refreshes as the refresh thread follows them.
+    refresh_meter_checks();
     if (g_failed) {
         std::printf("%d of %d checks FAILED\n", g_failed, g_checks);
         return 1;

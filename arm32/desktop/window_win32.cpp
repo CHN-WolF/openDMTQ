@@ -31,6 +31,7 @@
 #include "overlay_scale.h"
 #include "overlay_win32.h"
 #include "post_pass.h"
+#include "refresh_meter.h"
 #include "offscreen.h"
 #include "pacing.h"
 
@@ -160,6 +161,8 @@ constexpr double kNarrowest = 4.0 / 3.0, kWidest = 21.0 / 9.0;
 
 // The display the frame is on, for its refresh rate and refreshes, and a display's mode change for the refresh thread.
 std::atomic<HMONITOR> g_monitor{nullptr};
+// The refresh rate that display's mode gives (watch_display), for the log when its refreshes keep another.
+std::atomic<double> g_monitor_hz{0};
 std::atomic<bool> g_displays_changed{false};
 
 // android.view.Surface: the window it stands for.
@@ -249,8 +252,10 @@ void place_game() {
 }
 
 // The refresh rate of a display: exact from the display configuration (240084/1000 Hz), else GDI's whole hertz; 0 when
-// neither says.
-double monitor_rate(HMONITOR m, MONITORINFOEXW& mi) {
+// neither says. `signal` gets the rate of the signal the display is sent, from the same configuration's target mode (0:
+// not given): the log says it where it differs, as a display on Windows 11's dynamic refresh rate may.
+double monitor_rate(HMONITOR m, MONITORINFOEXW& mi, double* signal = nullptr) {
+    if (signal) *signal = 0;
     mi.cbSize = sizeof mi;
     if (!GetMonitorInfoW(m, &mi)) return 0;
     UINT32 np = 0, nm = 0;
@@ -268,6 +273,12 @@ double monitor_rate(HMONITOR m, MONITORINFOEXW& mi) {
                 if (DisplayConfigGetDeviceInfo(&source.header) != ERROR_SUCCESS) continue;
                 if (std::wcscmp(source.viewGdiDeviceName, mi.szDevice) != 0) continue;
                 const DISPLAYCONFIG_RATIONAL& r = paths[i].targetInfo.refreshRate;
+                // The target mode's vertical rate, when the path names its mode.
+                const UINT32 mode = paths[i].targetInfo.modeInfoIdx;
+                if (signal && mode < nm && modes[mode].infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET) {
+                    const DISPLAYCONFIG_RATIONAL& v = modes[mode].targetMode.targetVideoSignalInfo.vSyncFreq;
+                    if (v.Numerator && v.Denominator) *signal = static_cast<double>(v.Numerator) / static_cast<double>(v.Denominator);
+                }
                 if (r.Numerator && r.Denominator) return static_cast<double>(r.Numerator) / static_cast<double>(r.Denominator);
             }
         }
@@ -286,7 +297,9 @@ void watch_display(bool changed) {
     HMONITOR m = MonitorFromWindow(g_frame, MONITOR_DEFAULTTONEAREST);
     if (m == g_monitor.load() && !changed) return;
     MONITORINFOEXW mi{};
-    const double hz = monitor_rate(m, mi);
+    double signal = 0;
+    const double hz = monitor_rate(m, mi, &signal);
+    g_monitor_hz.store(hz);
     // A rate below 20 Hz, or none, is no display's to pace by: frames then go as they would without one.
     const double rate = app().refresh_set ? static_cast<double>(app().refresh) : hz;
     arm32::g_display_interval.store(rate >= 20 ? std::llround(1e9 / rate) : 0);
@@ -298,8 +311,11 @@ void watch_display(bool changed) {
         SetWindowPos(g_frame, nullptr, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top,
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
-    jvm::log("player: the window is on %s, %ldx%ld at %.3f Hz%s", narrow(mi.szDevice).c_str(), mi.rcMonitor.right - mi.rcMonitor.left,
-             mi.rcMonitor.bottom - mi.rcMonitor.top, hz, app().refresh_set ? " (the rate given is used)" : "");
+    // The signal's rate too where it is not the mode's (a dynamic refresh rate's display, perhaps).
+    char sent[64] = "";
+    if (signal > 0 && std::fabs(signal - hz) > hz * 0.002) std::snprintf(sent, sizeof sent, " (its signal at %.3f Hz)", signal);
+    jvm::log("player: the window is on %s, %ldx%ld at %.3f Hz%s%s", narrow(mi.szDevice).c_str(), mi.rcMonitor.right - mi.rcMonitor.left,
+             mi.rcMonitor.bottom - mi.rcMonitor.top, hz, sent, app().refresh_set ? " (the rate given is used)" : "");
 }
 
 // DXGI's output that shows a display, or null (a remote session's, or one gone).
@@ -320,13 +336,64 @@ IDXGIOutput* output_for(IDXGIFactory1* factory, HMONITOR m) {
     return nullptr;
 }
 
+// Windows 11's dynamic refresh rate (a laptop's or tablet's panel set to "Dynamic" in the display's settings, 60 Hz or
+// 120, 144, 165, 180, 240 Hz): the panel runs at 60 Hz unless a program asks for its boost, and DXGI shows every program
+// a steady 60 Hz from it (v-blank virtualization), its refreshes and its swaps alike, so that a game on such a panel ran
+// at 60 whatever its mode said, with vsync on or off. The player sees the real refreshes (once, before any swap chain
+// or wait for a refresh: DXGIDisableVBlankVirtualization) and asks for the boost while its window is shown
+// (DCompositionBoostCompositorClock), and lets it go while minimised. Both from Windows 11 (build 22502) on, looked up
+// by name: an older Windows has neither and no dynamic refresh rate either. Said in the log, as they were taken.
+// A check's switch (PLAYER_DRR): "novirt" keeps the virtualization, "noboost" asks for no boost, "off" both.
+bool drr_skips(const char* what) {
+    const char* v = std::getenv("PLAYER_DRR");
+    return v && (std::strcmp(v, "off") == 0 || std::strcmp(v, what) == 0);
+}
+
+void see_real_refreshes() {
+    if (drr_skips("novirt")) {
+        jvm::log("player: dynamic refresh rate: v-blank virtualization kept (PLAYER_DRR)");
+        return;
+    }
+    HMODULE dxgi = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    using Disable = HRESULT(WINAPI*)();
+    const auto disable = reinterpret_cast<Disable>(dxgi ? GetProcAddress(dxgi, "DXGIDisableVBlankVirtualization") : nullptr);
+    if (!disable) {
+        jvm::log("player: dynamic refresh rate: no v-blank virtualization to turn off on this Windows");
+        return;
+    }
+    const HRESULT hr = disable();
+    jvm::log("player: dynamic refresh rate: v-blank virtualization %s (0x%08lx)", SUCCEEDED(hr) ? "off: the display's real refreshes" : "kept",
+             static_cast<unsigned long>(hr));
+}
+
+void boost_refreshes(bool on) {
+    // Asked once each way: the system counts each request, and one taken back is one let go.
+    static bool boosted = false;
+    if (on == boosted || drr_skips("noboost")) return;
+    static HMODULE dcomp = LoadLibraryExW(L"dcomp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    using Boost = HRESULT(WINAPI*)(BOOL);
+    static const auto boost = reinterpret_cast<Boost>(dcomp ? GetProcAddress(dcomp, "DCompositionBoostCompositorClock") : nullptr);
+    static bool said_none = false;
+    if (!boost) {
+        if (!said_none) jvm::log("player: dynamic refresh rate: no boost to ask for on this Windows");
+        said_none = true;
+        return;
+    }
+    const HRESULT hr = boost(on ? TRUE : FALSE);
+    if (SUCCEEDED(hr)) boosted = on;
+    jvm::log("player: dynamic refresh rate: the boost %s (0x%08lx)", on ? (SUCCEEDED(hr) ? "asked for" : "not given") : "let go",
+             static_cast<unsigned long>(hr));
+}
+
 // The display's refreshes, as the runtime paces by them (pacing.h's g_display_vblank): DXGI wakes this thread at each
 // one. A wake comes a little after its refresh and by a varying amount, so the time kept follows the wakes slowly (an
 // eighth of each one's difference from where the last refreshes put it), and the refreshes in between are whole
 // intervals. A wake far off that grid is not followed alone: three such in a row (the display changed its timing) start
 // the grid over from the last of them. A wait that comes back at once (a display asleep, a remote session) is no refresh
-// and leaves the time as it was; failures in a row look for the output again. The intervals the wakes keep are measured
-// too: a display whose rate the system gave in whole hertz only (59 for 59.94) gets its measured interval instead.
+// and leaves the time as it was; failures in a row look for the output again (refresh_meter.h keeps the grid). The
+// interval the wakes keep is measured each second, from the wakes themselves: a display whose rate the system gave in
+// whole hertz only (59 for 59.94) gets its measured interval instead, and so does one whose mode says 160 or 180 Hz while
+// its refreshes come at 60 (a dynamic refresh rate not boosted), and again when they come back up.
 void refresh_loop() {
     name_thread("refreshes");
     // Woken on time: the thread waits for a refresh and does almost nothing else.
@@ -334,8 +401,10 @@ void refresh_loop() {
     IDXGIFactory1* factory = nullptr;
     IDXGIOutput* output = nullptr;
     HMONITOR current = nullptr;
-    std::int64_t phase = 0, last = 0, measured_from = 0, measured_wakes = 0;
-    int off_grid = 0, failures = 0;
+    // Where the refreshes fall and the interval they keep (refresh_meter.h), and the last wake.
+    RefreshMeter meter;
+    std::int64_t last = 0;
+    int failures = 0;
     for (;;) {
         HMONITOR want = g_monitor.load();
         if (want != current || g_displays_changed.exchange(false) || failures >= 20) {
@@ -350,11 +419,13 @@ void refresh_loop() {
                 jvm::log("player: the display's refreshes %s", output ? "are followed" : "cannot be followed: frames go by its rate");
             }
             current = want;
-            phase = last = measured_from = measured_wakes = 0;
-            off_grid = failures = 0;
+            meter.restart();
+            last = 0;
+            failures = 0;
             arm32::g_display_vblank.store(0);
         }
-        const std::int64_t interval = arm32::g_display_interval.load();
+        // Not const: the swap below that takes a measured interval only from this one names it.
+        std::int64_t interval = arm32::g_display_interval.load();
         if (!output || interval <= 0 || FAILED(output->WaitForVBlank())) {
             ++failures;
             Sleep(50);
@@ -369,40 +440,16 @@ void refresh_loop() {
         }
         failures = 0;
         last = t;
-        if (phase) {
-            // Where the refreshes so far put this one, and the wake's difference from it.
-            const std::int64_t k = (t - phase + interval / 2) / interval;
-            const std::int64_t predicted = phase + k * interval;
-            const std::int64_t off = t - predicted;
-            if (std::llabs(off) < interval / 4) {
-                phase = predicted + off / 8;
-                off_grid = 0;
-            } else if (++off_grid >= 3) {
-                phase = t;
-                off_grid = 0;
-                measured_from = measured_wakes = 0;
-            }
-        } else {
-            phase = t;
-        }
-        arm32::g_display_vblank.store(phase);
-        // The interval the wakes keep, over some seconds: one off the rate the system gave by more than a few in a
-        // thousand is the display's real one.
-        if (!measured_from) {
-            measured_from = phase;
-            measured_wakes = 0;
-        } else if (++measured_wakes >= 4 * 240) {
-            const std::int64_t refreshes = (phase - measured_from + interval / 2) / interval;
-            if (refreshes > 0) {
-                const std::int64_t real = (phase - measured_from) / refreshes;
-                if (std::llabs(real - interval) * 1000 > interval * 3 && arm32::g_display_interval.load() == interval) {
-                    arm32::g_display_interval.store(real);
-                    jvm::log("player: the display refreshes every %.4f ms, not the %.4f ms its rate says: %.3f Hz from now on",
-                             static_cast<double>(real) / 1e6, static_cast<double>(interval) / 1e6, 1e9 / static_cast<double>(real));
-                }
-            }
-            measured_from = phase;
-            measured_wakes = 0;
+        const std::int64_t real = meter.wake(t, interval);
+        arm32::g_display_vblank.store(meter.phase());
+        // The interval the wakes keep, when it is not the one in use: the display's real one (a rate the system gave in
+        // whole hertz; a dynamic refresh rate's 60 Hz on a faster panel, or its boost back up). Taken only while nothing
+        // else changed the interval meanwhile (the window moved to another display).
+        const std::int64_t was = interval;
+        if (real && arm32::g_display_interval.compare_exchange_strong(interval, real)) {
+            const double mode = g_monitor_hz.load();
+            jvm::log("player: the display refreshes every %.4f ms, not the %.4f ms in use: %.3f Hz from now on (its mode says %.3f Hz)",
+                     static_cast<double>(real) / 1e6, static_cast<double>(was) / 1e6, 1e9 / static_cast<double>(real), mode);
         }
     }
 }
@@ -1032,11 +1079,15 @@ LRESULT CALLBACK frame_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
             // The lane keys of keyboard play let go at once: a key held as the window goes plays no lane after.
             keyplay_let_go("the window was minimised");
             overlay::minimised(true);
+            // Nothing of it shown: the panel may go back to its low rate meanwhile.
+            boost_refreshes(false);
             return 0;
         }
         if (g_minimised) jvm::log("player: back from minimised");
         g_minimised = false;
         overlay::minimised(false);
+        // Shown (again): the panel's boost, for frames at its full rate.
+        boost_refreshes(true);
         place_game();
         overlay::place();
         return 0;
@@ -1419,6 +1470,8 @@ bool window_unlisted() {
 }
 
 bool open_window(const std::string& title) {
+    // The display's real refreshes, before ANGLE makes a swap chain or the refresh thread waits for one.
+    see_real_refreshes();
     // The screen's own pixels on every monitor: Windows 10's per-monitor awareness, where it has it.
     if (HMODULE user = GetModuleHandleW(L"user32.dll")) {
         using SetContext = BOOL(WINAPI*)(HANDLE);
