@@ -127,6 +127,7 @@ stage() {
   local status=0
   docker run --rm --name "$NAME_PREFIX-uitest-browser" --network host --cpus "$BROWSER_CPUS" --memory 3g \
     -e SITE="http://127.0.0.1:$SITE_PORT" -e ADMIN="http://127.0.0.1:$ADMIN_PORT" -e PASSWORD="$PASSWORD" -e OUT=/out \
+    -e SHOTS_ALL="${SHOTS_ALL:-}" \
     -v "$UI:/usr/src/app/ui:ro" -v "$REPORT:/out" --entrypoint node "$BROWSER_IMAGE" ui/audit.js "$1" 2>&1 \
     | tee "$REPORT/last.txt" >> "$REPORT/results.txt" || status=$?
   if [ "$status" -ne 0 ]; then
