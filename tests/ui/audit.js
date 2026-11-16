@@ -296,7 +296,7 @@ async function broadcastsOff(contexts, held) {
     /Broadcasts are off/.test(await textOf(page, '#broadcasts')) && (await page.$('#broadcasts button[value="broadcasts-on"]')) !== null);
   if (held) {
     await page.goto(`${A}/players`, { waitUntil: 'domcontentloaded' });
-    check("and the Players page that the switches wait for them", /Broadcasts are off for the whole server/.test(await textOf(page, 'main')) && /Switched on/.test(await textOf(page, 'main')));
+    check("and the Players page that the switches wait for them", /Broadcasts are off for the whole server/.test(await textOf(page, 'main')) && /On · server off/.test(await textOf(page, 'main')));
   }
   await page.close();
 }
