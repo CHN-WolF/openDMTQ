@@ -35,7 +35,7 @@ class Values(unittest.TestCase):
         # NVIDIA Image Scaling below 100 % by default (the nearest to the native picture as the player measured the
         # three), and no anti-aliasing (the game's picture as it draws it).
         filled = choices.normalize({})
-        self.assertEqual((filled["upscaler"], filled["anti_aliasing"]), ("nis", "off"))
+        self.assertEqual((filled["upscaler"], filled["anti_aliasing"]), ("fsr1", "off"))
         # Each offered value is kept, in any case; the temporal ones and FXAA are not offered.
         self.assertEqual(choices.normalize({"upscaler": "FSR1"})["upscaler"], "fsr1")
         self.assertEqual(choices.normalize({"anti_aliasing": "SMAA"})["anti_aliasing"], "smaa")

@@ -124,10 +124,10 @@ class State(Folder):
 
     def test_an_earlier_default_not_chosen_takes_todays(self):
         # 0.10.0 kept its plain stretch in its file whether or not the player chose it: read as no choice, today's
-        # default (NVIDIA Image Scaling); one the player chose stays.
+        # default (AMD FSR 1); one the player chose stays.
         os.makedirs(st.config_dir())
-        for chosen, upscaler, expected in (([], "bilinear", "nis"), (["upscaler"], "bilinear", "bilinear"),
-                                          ([], "fsr1", "fsr1")):
+        for chosen, upscaler, expected in (([], "bilinear", "fsr1"), (["upscaler"], "bilinear", "bilinear"),
+                                          ([], "nis", "nis")):
             with open(st.LauncherState.path(), "w", encoding="utf-8") as f:
                 json.dump({"version": 1, "values": {"upscaler": upscaler}, "chosen": chosen}, f)
             self.assertEqual(st.LauncherState.load().values["upscaler"], expected, (chosen, upscaler))

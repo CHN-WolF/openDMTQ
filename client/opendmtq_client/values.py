@@ -98,9 +98,10 @@ DEFAULTS = {
     "vsync": "on",
     "fps": "auto",
     "render_scale": "100",
-    # Below 100 % only: NVIDIA Image Scaling, the nearest to the native picture of the three as the player measured
-    # them (the sharpest without halos, the least error), each under 0.2 ms a frame; the plain stretch is visibly softer.
-    "upscaler": "nis",
+    # Below 100 % only: AMD FSR 1, as the player's own default. Measured on the game's words against 100 %, FSR 1 and
+    # NIS keep them as sharp where the plain stretch loses a tenth to a fifth; FSR 1 is as near at 67 % and nearer at
+    # 50 %, the scales a slow graphics card needs most; each under 0.1 ms a frame.
+    "upscaler": "fsr1",
     "anti_aliasing": "off",
     "show_fps": "off",
     "fps_position": "bottom_right",
