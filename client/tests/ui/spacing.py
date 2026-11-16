@@ -25,6 +25,11 @@ LEAST_TEXT_GAP = 4
 # A card's padding: its words and boxes this far inside its edges, at the sides and at its top and foot (widgets.Card's
 # 24 and 24 - 4 logical pixels).
 CARD_SIDES, CARD_ENDS = 24, 20
+# The menu column's padding: its room either side (widgets.Rail.EDGE), and above and under what it holds (its foot
+# stands 20 above the window's foot, the wordmark 22 under its top).
+RAIL_SIDES, RAIL_ENDS = 18, 18
+# Any other band of its own colour: words at least this far from its edges (logical pixels).
+BAND_SIDES, BAND_ENDS = 8, 4
 # A pixel either way: Tk rounds a scaled size to whole pixels.
 SLACK = 1
 
@@ -104,6 +109,33 @@ def _all(root):
             found.append(child)
             stack.append(child)
     return found
+
+
+def _surface(widget, page_fields):
+    """The visible box `widget`'s words sit on, and what it is: ("card"), the menu column ("rail", its foot measured with
+    it), the page's field outside any card ("page"), or a band whose colour differs from what is round it ("band");
+    (None, None) for words on the window itself."""
+    rail = getattr(widgets, "Rail", None)
+    parent = widget.master
+    while parent is not None:
+        if isinstance(parent, widgets.Card):
+            return parent, "card"
+        if rail is not None and isinstance(parent, rail):
+            return parent, "rail"
+        foot = getattr(parent, "odq_foot", None)
+        if foot is not None and not isinstance(foot, bool):
+            # The column's foot lies over the column: its words keep the column's padding.
+            return foot, "rail"
+        if parent in page_fields:
+            return parent, "page"
+        try:
+            colour, round_it = str(parent.cget("bg")).lower(), str(parent.master.cget("bg")).lower()
+        except (tk.TclError, AttributeError):
+            colour = round_it = None
+        if parent.master is not None and colour and round_it and colour != round_it and parent.winfo_class() == "Frame":
+            return parent, "band"
+        parent = parent.master
+    return None, None
 
 
 def _inside(child, parent):
@@ -232,6 +264,29 @@ def check(root, ui, name):
         between = [o for o in others if o[1] >= a[3] and o[3] <= b[1] and o[0] < a[2] and a[0] < o[2]]
         if not between:
             problems.append("%s: two faint lines in a row (%d px apart), nothing between them" % (name, b[1] - a[3]))
+    # ---- words inside the padding of the visible box they sit in, whatever box it is: a card, the menu column (its foot
+    # with it), the page's own field outside any card (no words belong there: the page's title and the line under it
+    # are drawn on its picture, everything else in a card), or any band whose colour differs from what is round it.
+    page_fields = {area.inner for area in _all(root) if isinstance(area, widgets.ScrollArea)}
+    for text, _kind_t, box_t in texts:
+        surface, kind = _surface(text, page_fields)
+        if surface is None:
+            continue
+        if kind == "page":
+            problems.append("%s: the words %s lie on the page's field, outside any card" % (name, _name(text)))
+            continue
+        if kind == "card":
+            # A card's own words are measured with the rest of what it holds, below.
+            continue
+        sides, ends = {"rail": (RAIL_SIDES, RAIL_ENDS), "band": (BAND_SIDES, BAND_ENDS)}[kind]
+        whole = _whole(surface, origin) if kind != "band" else _raw(surface, origin)
+        room = (whole[0] + ui.px(sides), whole[1] + ui.px(ends), whole[2] - ui.px(sides), whole[3] - ui.px(ends))
+        short = [room[0] - box_t[0], room[1] - box_t[1], box_t[2] - room[2], box_t[3] - room[3]]
+        edges = [side for side, by in zip(("left", "top", "right", "foot"), short) if by > SLACK]
+        if edges:
+            problems.append("%s: the words %s are closer to the %s of the %s they sit in than its padding (%s px)" % (
+                name, _name(text), "/".join(edges), {"rail": "menu column", "band": "band"}[kind],
+                "/".join(str(by) for by in short if by > SLACK)))
     # ---- what a card holds, inside its padding.
     for card, kind, card_box in found:
         if kind != "card":

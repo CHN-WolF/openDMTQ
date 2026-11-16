@@ -19,6 +19,9 @@ LEADS = {"power": "guide.power.text", "server": "guide.server.text", "login": "g
 # What Next waits for on the steps that make it wait, said while it does (waits_for).
 NEEDS = {"server": "guide.need.server", "login": "guide.need.login", "download": "guide.need.download"}
 
+# The room over that line at the foot of the step's card (logical pixels: a row's gap, as the forms keep between parts).
+NEED_GAP = 16
+
 
 def waits_for(step, can, busy=False):
     """The words' key of the line that says what Next waits for on `step`, or None: none once Next can go on (`can`),
@@ -93,9 +96,9 @@ class Guide:
         # server, a sign-in, a download that ended change their own card, never the step drawn again.
         self.sections = pages.Sections(content, app.ui)
         getattr(self, "_" + key)(content)
-        # What Next waits for, under the step's cards (packed by _update_next while it waits).
-        self.need = widgets.Said(content, app.ui)
-        self.need_room = app.ui.px(pages.CARD_GAP)
+        # What Next waits for is said at the foot of the step's last card, inside it with the card's own padding
+        # (_update_next makes the line there, again when the card is made anew).
+        self.content = content
         # One column for the names of the step's settings, as a page has (pages.ROWS_THAT_COME names the guide's own as
         # "guide:<step>", apart from the pages' names).
         widgets.fit_names(content, app.ui, pages.rows_that_come("guide:" + key))
@@ -151,16 +154,39 @@ class Guide:
         key = STEPS[self.index]
         busy = self.checking if key == "server" else (self.app.download is not None if key == "download" else False)
         need = waits_for(key, can, busy)
-        line = getattr(self, "need", None)
-        if line is not None and line.winfo_exists():
+        line = self._need_line(make=bool(need))
+        if line is not None:
             if need:
                 line.set(self.app.words(need))
                 if not line.winfo_manager():
-                    line.pack(fill="x", pady=(self.need_room, 0))
+                    # The last thing in the card, a row's gap under what is over it.
+                    line.pack(fill="x", pady=(self.app.ui.px(NEED_GAP), 0))
             elif line.winfo_manager():
                 line.pack_forget()
         # The last step's PLAY lit when the ready check lets it go, dark and still otherwise.
         self.play_slab.set("ready" if can else "waiting")
+
+    def _need_line(self, make):
+        """The line that says what Next waits for, at the foot of the step's last card: the one there, or a new one when
+        `make` (the card was made anew since, or the step just showed). None when the step has no card."""
+        content = getattr(self, "content", None)
+        if content is None or not content.winfo_exists():
+            return None
+        found, cards = [content], []
+        while found:
+            widget = found.pop(0)
+            if isinstance(widget, widgets.Card):
+                cards.append(widget)
+                continue
+            found.extend(widget.winfo_children())
+        if not cards:
+            return None
+        # The last card down the step.
+        card = max(cards, key=lambda c: (c.winfo_y() + c.master.winfo_y(), cards.index(c)))
+        line = getattr(card, "odq_need", None)
+        if (line is None or not line.winfo_exists()) and make:
+            line = card.odq_need = widgets.Said(card.body, self.app.ui)
+        return line if line is not None and line.winfo_exists() else None
 
     def next(self):
         if self.index == len(STEPS) - 1:

@@ -216,6 +216,8 @@ class LauncherApp:
         foot = tk.Frame(self.root, bg=theme.STRIP)
         foot.place(in_=rail, x=px(widgets.Rail.EDGE), rely=1.0, y=-px(FOOT_UNDER), anchor="sw",
                    width=rail.inner_width())
+        # What it is to the UI checks (tests/ui/spacing.py): the column's foot, measured with the column round it.
+        foot.odq_foot = rail
         return foot
 
     def make_page(self, parent):
