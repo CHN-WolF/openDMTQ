@@ -281,6 +281,11 @@ def C(route, method, path, status, code=None, token="owner", setup=None, check=N
     return {"route": route, "method": method, "path": path, "status": status, "code": code, "token": token, "setup": setup, "check": check, "kw": kw}
 
 
+def port_free_host(inst):
+    """A host install whose every other port is free (lifecycle.port_free asks the machine itself)."""
+    return host_install(inst) + [mock.patch.object(admin.lifecycle, "port_free", lambda port: True)]
+
+
 def no_rebuild(inst):
     return [mock.patch.object(admin.songs, "rebuild")]
 
@@ -478,6 +483,10 @@ def CASES():
         C("server_restart", "POST", "/server/restart", 202, setup=host_install,
           check=lambda t, inst, r: t.assertTrue(os.path.exists(inst.path("run/restart.request")))),
         C("server_restart", "POST", "/server/restart", 404, "host_only"),
+        # A move to another port: from the next start on a host install (its .env), the command line's elsewhere.
+        C("server_port", "POST", "/server/port", 200, setup=port_free_host, json={"port": 8792},
+          check=lambda t, inst, r: t.assertIn("LISTEN_PORT=8792", open(inst.path(".env"), encoding="utf-8").read())),
+        C("server_port", "POST", "/server/port", 409, "by_command", json={"port": 8792}),
         C("server_repair", "POST", "/server/repair", 202, setup=no_rebuild),
         C("server_repair", "POST", "/server/repair", 403, "read_only", token="reader"),
         C("server_data_get", "GET", "/server/data", 200,
@@ -1884,6 +1893,7 @@ PAGE_ACTIONS = {
     # A repair or a deletion of the page's, followed while it runs.
     "server_page?job": ["job_get"],
     "server_restart": ["server_restart"],
+    "server_port": ["server_port"],
     "server_repair": ["server_repair"],
     "server_delete": ["server_data_delete"],
     "server_uninstall": ["server_uninstall"],
