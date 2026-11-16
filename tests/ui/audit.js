@@ -856,7 +856,7 @@ async function formsLook(contexts) {
         if (name === 'Make an account') await page.screenshot({ path: path.join(OUT, 'shots', `patterns-form-account-${lang}-${width}.jpg`), type: 'jpeg', quality: 80 });
       }
       // The search boxes: each marked as one (its magnifier) and named for screen readers.
-      for (const [name, url, box] of [['players', `${A}/players`, '#player-search'], ['songs', `${A}/songs`, 'input.search'], ["the site's songs", `${P}/songs.php`, 'input[type=search]']]) {
+      for (const [name, url, box] of [['players', `${A}/players`, '#player-search'], ['songs', `${A}/songs`, 'input.search'], ["site's songs", `${P}/songs.php`, 'input[type=search]']]) {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
         const look = await page.$eval(box, b => ({ icon: getComputedStyle(b).backgroundImage, named: !!(b.getAttribute('aria-label') || (b.labels && b.labels.length)) })).catch(() => null);
         check(`the ${name} search box shows a magnifier and has a name (${at})`, !!look && /url\(/.test(look.icon) && look.named, JSON.stringify(look));
