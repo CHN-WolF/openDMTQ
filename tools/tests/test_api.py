@@ -467,6 +467,26 @@ def CASES():
         C("maintenance_clear", "DELETE", "/maintenance", 403, "read_only", token="reader"),
         C("server_stop", "POST", "/server/stop", 202, setup=host_install, check=lambda t, inst, r: t.assertTrue(os.path.exists(inst.path("run/stop.request")))),
         C("server_stop", "POST", "/server/stop", 404, "host_only"),
+        # The Server page: its state, restart, repair, data and uninstall (lifecycle.py).
+        C("server_get", "GET", "/server", 200, check=lambda t, inst, r: t.assertEqual((r.get_json()["install"], r.get_json()["commands"]["repair"]),
+                                                                                      ("docker", "./opendmtq repair"))),
+        C("server_get", "GET", "/server", 200, setup=host_install, check=lambda t, inst, r: t.assertTrue(r.get_json()["runs_itself"])),
+        C("server_get", "GET", "/server", 401, "no_token", token=None),
+        C("server_restart", "POST", "/server/restart", 202, setup=host_install,
+          check=lambda t, inst, r: t.assertTrue(os.path.exists(inst.path("run/restart.request")))),
+        C("server_restart", "POST", "/server/restart", 404, "host_only"),
+        C("server_repair", "POST", "/server/repair", 202, setup=no_rebuild),
+        C("server_repair", "POST", "/server/repair", 403, "read_only", token="reader"),
+        C("server_data_get", "GET", "/server/data", 200,
+          check=lambda t, inst, r: t.assertEqual([p["part"] for p in r.get_json()["items"]], ["database", "recordings", "songs", "apps", "backups", "logs", "game"])),
+        C("server_data_get", "GET", "/server/data", 401, "bad_token", token="odq_000000000000_" + "a" * 43),
+        C("server_data_delete", "POST", "/server/data/delete", 202, json={"parts": ["logs"], "backup": False, "confirm": "delete"}),
+        C("server_data_delete", "POST", "/server/data/delete", 400, "not_confirmed", json={"parts": ["logs"], "confirm": "yes"}),
+        C("server_data_delete", "POST", "/server/data/delete", 400, "no_parts", json={"parts": ["everything"], "confirm": "delete"}),
+        C("server_uninstall", "POST", "/server/uninstall", 202, setup=host_install, json={"keep_data": True, "confirm": "uninstall"},
+          check=lambda t, inst, r: t.assertEqual(json.load(open(inst.path("run/uninstall.request"), encoding="utf-8")), {"keep_data": True})),
+        C("server_uninstall", "POST", "/server/uninstall", 400, "not_confirmed", setup=host_install, json={"confirm": "no"}),
+        C("server_uninstall", "POST", "/server/uninstall", 404, "host_only", json={"confirm": "uninstall"}),
         C("players_list", "GET", "/players", 200, check=lambda t, inst, r: t.assertEqual([p["name"] for p in r.get_json()["items"]], ["Sena", "Yuna", "Player 9"])),
         C("players_download", "GET", "/players/download", 200, check=lambda t, inst, r: t.assertTrue(r.data.startswith(b"\xef\xbb\xbfid,name"))),
         C("player_get", "GET", "/players/7", 200),
@@ -1854,6 +1874,13 @@ PAGE_ACTIONS = {
     "maintenance_page:on": ["maintenance_set"],
     "maintenance_page:off": ["maintenance_clear"],
     "server_stop": ["server_stop"],
+    "server_page": ["server_get", "server_data_get"],
+    # A repair or a deletion of the page's, followed while it runs.
+    "server_page?job": ["job_get"],
+    "server_restart": ["server_restart"],
+    "server_repair": ["server_repair"],
+    "server_delete": ["server_data_delete"],
+    "server_uninstall": ["server_uninstall"],
     "players_page": ["players_list"],
     "players_page?csv": ["players_download"],
     "player_action": ["player_get"],
@@ -1957,7 +1984,8 @@ SITE_LIBRARIES = {"lib.php", "live_lib.php", "ranking_lib.php", "auth.php", "str
 # The page each template is, for its forms without an address of their own (they post to the page).
 TEMPLATE_PAGES = {"accounts.html": "accounts_page", "app.html": "app_page", "backups.html": "backups_page", "dashboard.html": "dashboard",
                   "logs.html": "logs_page", "maintenance.html": "maintenance_page", "players.html": "players_page",
-                  "recordings.html": "recordings_page", "setup.html": "setup_page", "songs.html": "songs_page", "login.html": "login"}
+                  "recordings.html": "recordings_page", "setup.html": "setup_page", "songs.html": "songs_page", "login.html": "login",
+                  "server.html": "server_page"}
 
 # The arguments of an address that make a page show another of its views (a tab, a step, a file), or follow a job.
 VARIANTS = ("tab", "step", "csv", "watch", "dir", "page", "player", "built", "job", "host")
@@ -1973,6 +2001,8 @@ GET_ARGS = {
     "app_page?host": ("body", "builds_start", "host"),
     # A backup, a restore or a change to the songs that its page follows.
     "backups_page?job": ("path", "job_get", "job"),
+    # The Server page: a repair or a deletion to follow.
+    "server_page?job": ("path", "job_get", "job"),
     "songs_page?job": ("path", "job_get", "job"),
     # The Players page's spreadsheet.
     "players_page?csv": ("view", "players_download"),

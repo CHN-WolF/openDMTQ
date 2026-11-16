@@ -619,7 +619,7 @@ Refusals:
 
 Restarts the server, as the Server page's Restart does. A host install and the Windows bundle only. Every part stops and starts again with the settings in .env as they are now, the API too: the answer comes first, and `GET /status` answers again within seconds.
 
-Answer: `202` with [Restarting](#restarting).
+Answer: `202` with [ServerRestarting](#serverrestarting).
 
 Refusals:
 
@@ -1682,10 +1682,10 @@ A refusal.
 
 #### Job
 
-Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made or a change to the songs.
+Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made, a change to the songs, a repair or a deletion of the server's data.
 
 - `id` (string): Its id, for GET /jobs/{job}.
-- `kind` (string): What it does. One of `build`, `import`, `restore`, `backup`, `songs`.
+- `kind` (string): What it does. One of `build`, `import`, `restore`, `backup`, `songs`, `repair`, `delete-data`.
 - `state` (string): Where it is. One of `running`, `done`, `failed`.
 - `started` (integer): When it started (Unix time).
 - `log` (list of string): Its last 200 lines of output.
@@ -1693,6 +1693,7 @@ Work that runs in the background: an app build, an import, a restore, and on the
 - `host` (string, optional): A build's address.
 - `path` (string, optional): An import's folder or file on the server PC.
 - `backup` (string, optional): A restore's backup.
+- `parts` (list of string, optional): A deletion's parts of the server's data.
 
 #### JobAnswer
 
@@ -2056,13 +2057,11 @@ The server's data.
 
 - `items` (list of [DataPart](#datapart)): Every part, in the Server page's order.
 
-#### Restarting
+#### ServerRestarting
 
-A new address, the server starting again for it.
+A restart asked for.
 
-- `address` (string): The new address.
-- `restarting` (boolean): True: every program starts again within seconds, and the app is built for the address.
-- `instance` (string): This run of the admin service: GET /status gives another once the new one answers.
+- `restarting` (boolean): True: every part stops and starts again within seconds, this API with it.
 
 #### Uninstalling
 
@@ -2489,6 +2488,14 @@ What a file or folder is to the import.
 - `path` (string): The path.
 - `ok` (boolean): True when the import can take it.
 - `text` (string): What it is, in words.
+
+#### Restarting
+
+A new address, the server starting again for it.
+
+- `address` (string): The new address.
+- `restarting` (boolean): True: every program starts again within seconds, and the app is built for the address.
+- `instance` (string): This run of the admin service: GET /status gives another once the new one answers.
 
 #### SiteSong
 

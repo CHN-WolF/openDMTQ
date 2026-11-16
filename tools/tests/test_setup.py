@@ -973,12 +973,12 @@ class AddressTest(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class StopTest(unittest.TestCase):
-    """Stopping the server from the admin pages (Maintenance)."""
+    """Stopping the server from the admin pages (the Server page; until 0.11.0 the foot of Maintenance)."""
 
     def test_on_this_pc_the_page_asks_the_program_to_stop_and_says_how_to_start_again(self):
         with HostInstall() as inst:
             inst.sign_in()
-            page = inst.page(BASE + "/maintenance")
+            page = inst.page(BASE + "/server")
             self.assertIn("Stop the server", page)
             self.assertIn('data-ask="', page)
             r = inst.client.post(BASE + "/server/stop", data={"csrf": inst.csrf()})
@@ -1009,7 +1009,7 @@ class StopTest(unittest.TestCase):
     def test_in_containers_the_page_names_the_command_instead(self):
         with HostInstall(host_install=False) as inst:
             inst.sign_in()
-            page = inst.page(BASE + "/maintenance")
+            page = inst.page(BASE + "/server")
             self.assertIn("./opendmtq down", page)
             self.assertNotIn("Stop the server", page)
             self.assertEqual(inst.client.post(BASE + "/server/stop", data={"csrf": inst.csrf()}).status_code, 404)

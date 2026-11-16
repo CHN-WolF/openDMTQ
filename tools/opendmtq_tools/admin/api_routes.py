@@ -100,17 +100,18 @@ SHAPES = {
         Field("message", "string", "The same in an English sentence, for a person."),
         Field("nearest", "string", "With 404 cannot_open from GET /setup/folder: the folder the setup's picker opens instead, "
               "the nearest one above that can be read.", optional=True)]),
-    "Job": Shape("Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made "
-                 "or a change to the songs.", [
+    "Job": Shape("Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made, "
+                 "a change to the songs, a repair or a deletion of the server's data.", [
         Field("id", "string", "Its id, for GET /jobs/{job}."),
-        Field("kind", "string", "What it does.", enum=["build", "import", "restore", "backup", "songs"]),
+        Field("kind", "string", "What it does.", enum=["build", "import", "restore", "backup", "songs", "repair", "delete-data"]),
         Field("state", "string", "Where it is.", enum=["running", "done", "failed"]),
         Field("started", "integer", "When it started (Unix time)."),
         Field("log", "[string]", "Its last 200 lines of output."),
         Field("why", "string", "Why it failed, when that can be said in words.", nullable=True),
         Field("host", "string", "A build's address.", optional=True),
         Field("path", "string", "An import's folder or file on the server PC.", optional=True),
-        Field("backup", "string", "A restore's backup.", optional=True)]),
+        Field("backup", "string", "A restore's backup.", optional=True),
+        Field("parts", "[string]", "A deletion's parts of the server's data.", optional=True)]),
     "JobAnswer": Shape("A job.", [Field("job", "Job", "The job.")]),
     "JobList": Shape("The jobs this service keeps.", [Field("items", "[Job]", "The last twenty, and every one running, newest first.")]),
     # The Status page.
@@ -301,7 +302,7 @@ SHAPES = {
         Field("bytes", "integer", "How much it holds."),
         Field("can_delete", "boolean", "True when this API can delete it here (with Docker Compose the game files are the command line's).")]),
     "DataParts": Shape("The server's data.", [Field("items", "[DataPart]", "Every part, in the Server page's order.")]),
-    "Restarting": Shape("A restart asked for.", [Field("restarting", "boolean", "True: every part stops and starts again within seconds, this API with it.")]),
+    "ServerRestarting": Shape("A restart asked for.", [Field("restarting", "boolean", "True: every part stops and starts again within seconds, this API with it.")]),
     "Uninstalling": Shape("An uninstall asked for.", [
         Field("uninstalling", "boolean", "True: the server stops, then its program removes itself."),
         Field("keep_data", "boolean", "True when the data folder and .env stay.")]),
@@ -793,7 +794,7 @@ ROUTES = [
     Route("POST", "/server/restart", "write", "server_restart", "Server", "Restarts the server, as the Server page's Restart does.",
           "A host install and the Windows bundle only. Every part stops and starts again with the settings in .env as they are "
           "now, the API too: the answer comes first, and `GET /status` answers again within seconds.",
-          answer="Restarting", status=202,
+          answer="ServerRestarting", status=202,
           errors=[(404, "host_only", "Not a host install: ./opendmtq restart, or Kubernetes' rollout restart."),
                   (500, "restart_failed", "The restart could not be asked for (the message says why).")]),
     Route("POST", "/server/repair", "write", "server_repair", "Server", "Checks and repairs the server, as the Server page's Check and repair does.",
