@@ -7,27 +7,31 @@ the admin pages, the API can do the same way: each route calls the same code as 
 
 ## Where it is
 
-Beside the admin pages, at `/opendmtq/api/v1/`, and only where they are:
+Beside the admin pages, at `/opendmtq/api/v1/` on the server's one port (8791 on a new install), and only where they
+are:
 
 | Install | Address |
 |:---|:---|
 | Docker Compose, on the server PC | The admin pages' address `./opendmtq setup` gives at its end, with `/opendmtq/api/v1/` in place of `/opendmtq/admin/`; `http://localhost:<port>/opendmtq/api/v1/` stays on plain HTTP |
-| Docker Compose, from the local network | `https://<server>:<port>/opendmtq/api/v1/`, with port 8791 `https://<server>:8791/opendmtq/api/v1/`. A request over plain HTTP is refused while HTTPS works (`403 use_https`, with that address) |
-| Docker Compose, exposed to the internet | Only on the server PC, unless `./opendmtq expose --admin-public`: then over HTTPS from anywhere |
-| Host install and Windows | The admin pages' address `./opendmtq status` shows, and on Windows the server's window, with `/opendmtq/api/v1/` in place of `/opendmtq/admin/`, on the server's one port |
+| Docker Compose, from the local network | `https://<server>:<port>/opendmtq/api/v1/` (`https://<server>:8791/opendmtq/api/v1/` on a new install). A request over plain HTTP is refused while HTTPS works (`403 use_https`, with that address) |
+| Docker Compose, exposed to the internet | Only on the server PC, unless `./opendmtq expose --admin-public`: then over HTTPS from anywhere. Under Docker Desktop and rootless Docker, which pass every visit to the server from one address, only with `--admin-public` |
+| Host install and Windows | The admin pages' address `./opendmtq status` shows, and on Windows the server's window, with `/opendmtq/api/v1/` in place of `/opendmtq/admin/`: from anywhere for a local network address, and for an internet one on the server PC only, `http://localhost:<port>/opendmtq/api/v1/` |
 | Kubernetes | Through the router when `admin.onPublicPort` allows it, else `kubectl port-forward` to port 8000 of the api pod ([kubernetes.md](kubernetes.md)) |
 
 The same settings open it or keep it closed as for the admin pages ([admin.md](admin.md), [internet.md](internet.md)):
 `ADMIN_ON_PUBLIC_PORT`, `./opendmtq expose --admin-public`, `admin.onPublicPort`. Where the admin pages are not open,
-the API is not either: the address answers `404`, or `403` with the reason. Without a password for the admin pages
+the API is not either: the address answers `404`, or `403` with the reason. A request that comes through a proxy on the
+server PC, with any of the headers a proxy adds to say whom it passes on (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`,
+`X-Forwarded-Host`, `X-Forwarded-Proto`, `Via`), is not the server PC's own. Without a password for the admin pages
 (`ADMIN_PASSWORD`) the API is off as well.
 
-Send every request to the HTTPS address from the start. Over plain HTTP the token travels in clear, and where HTTPS
-works the server answers such a request `403 use_https` and passes nothing on. With Docker Compose the HTTPS door uses
-the server's own certificate: give curl the server's authority, which the plain door offers at
-`http://<server>:<port>/ca.crt` (`curl --cacert ca.crt https://...`, [internet.md](internet.md#https)). In Kubernetes,
-`router.tls.secretName` names a Secret of type `kubernetes.io/tls` that holds a certificate of your own
-([kubernetes.md](kubernetes.md)).
+Where the server has HTTPS (Docker Compose, and Kubernetes' router with a certificate), send every request to the HTTPS
+address from the start. Over plain HTTP the token travels in clear, and where HTTPS works the server answers such a
+request `403 use_https` and passes nothing on. A host install and the Windows bundle have no HTTPS: off the server PC
+their API answers on a local network address alone. With Docker Compose the HTTPS door uses the server's own
+certificate: give curl the server's authority, which the plain door offers at `http://<server>:<port>/ca.crt`
+(`curl --cacert ca.crt https://...`, [internet.md](internet.md#https)). In Kubernetes, `router.tls.secretName` names a
+Secret of type `kubernetes.io/tls` that holds a certificate of your own ([kubernetes.md](kubernetes.md)).
 
 ## Tokens
 
@@ -121,9 +125,9 @@ still belongs to the player you saw.
 ## Jobs
 
 What takes longer than a request answers `202` with the job: an app build (`POST /builds`, `POST /setup/build`), an
-import (`POST /setup/import`), a restore (`POST /backups/{backup}/restore`), a repair (`POST /server/repair`) and a
-deletion of the server's data (`POST /server/data/delete`). Ask `GET /jobs/{job}` until its state is
-`done` or `failed`. Its `log` holds the last 200 lines of its output, and `why` says why it failed when that can be said
+import (`POST /setup/import`), a restore (`POST /backups/{backup}/restore`), a repair (`POST /server/repair`), a
+deletion of the server's data (`POST /server/data/delete`) and Play on this PC (`POST /app/play-here`). Ask
+`GET /jobs/{job}` until its state is `done` or `failed`. Its `log` holds the last 200 lines of its output, and `why` says why it failed when that can be said
 in words. A backup made, or a change to the songs, on the admin pages is a job there too (`backup`, `songs`), which
 `GET /jobs` lists; through the API the same is done when it answers.
 
@@ -249,6 +253,16 @@ hook=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: appli
   | python3 -c 'import json, sys; print(json.load(sys.stdin)["webhook"]["id"])')
 curl -s -X POST -H "Authorization: Bearer $TOKEN" "$API/webhooks/$hook/test"
 curl -s -H "Authorization: Bearer $TOKEN" "$API/webhooks"
+```
+
+Check and repair the server, then move it to another port and start it again there (a host install or the Windows
+bundle; with Docker Compose `./opendmtq port` and `./opendmtq restart` do it). The app is built again for the new
+address, and the site's download page tells players to install it over the old one:
+
+```sh
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$API/server/repair"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"port": 8800}' "$API/server/port"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$API/server/restart"
 ```
 
 On Windows, in PowerShell on the server PC of the Windows bundle or a host install there: the status, then a backup kept
