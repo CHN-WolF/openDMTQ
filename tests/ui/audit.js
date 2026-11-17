@@ -918,6 +918,7 @@ async function formsLook(contexts) {
     ['Make token', `${A}/accounts`, '#tokens form', 'input[name=token_name]', '', '#tokens form button:not([type=button])'],
     ["the setup's account", `${A}/setup?step=players`, 'form[action$="/setup/player"]', 'input[name=name]', '!', 'form[action$="/setup/player"] button'],
     ["the recordings' limits", `${A}/recordings`, '.rec-limits', 'input[name=cap_gb]', '0', '.rec-limits button'],
+    ['Add a webhook', `${A}/maintenance`, '.hook-new', 'input[name=url]', 'not an address', '.hook-new button:not([type=button])'],
   ];
   for (const [width, height] of [[360, 740], [1280, 800]]) {
     for (const lang of ['en', 'ko']) {
@@ -959,6 +960,65 @@ async function formsLook(contexts) {
       await page.close();
     }
   }
+}
+
+// The Notices page's Discord and Slack card (ADM-123): the two webhooks run.sh added, one whose messages went through to the
+// stand-in chat (chat.py) and one its chat deleted, said in red with why; a third added pointing at the chat, its address
+// masked, never whole; its test sent and arriving in the chat; its deletion asking first; the card whole at a phone's
+// width and a laptop's, in both languages.
+async function webhookFlows(contexts) {
+  const page = await contexts.signed.newPage();
+  const errors = watch(page, `${A}/maintenance`);
+  await page.setViewport({ width: 1280, height: 900 });
+  const hooks = () => page.$$eval('#hooks .hook', all => all.map(h => ({ text: h.textContent.replace(/\s+/g, ' ').trim(), bad: !!h.querySelector('.lamp.bad'), sent: !!h.querySelector('.lamp.on') })));
+  // Each sends a test now, whatever the stages before sent them (the server's plays, broadcasts and maintenance).
+  await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+  await press(page, '#hooks .hook:nth-child(1) button[value=test]');
+  await press(page, '#hooks .hook:nth-child(2) button[value=test]');
+  check('a test to a chat that deleted its webhook says why', /did not go through: the chat says this webhook is not there/.test(await textOf(page, '.bar .flash, main .flash')),
+    await textOf(page, '.bar .flash, main .flash'));
+  await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+  let listed = await hooks();
+  check('the card lists the two webhooks, the one that went through with when, the one its chat deleted in red with why',
+    listed.length === 2 && listed[0].sent && /Sent/.test(listed[0].text) && listed[1].bad && /not there/.test(listed[1].text), JSON.stringify(listed));
+  check('their addresses masked, never whole', !(await page.content()).includes('ui-secret-'), '');
+  await noFindings(page, 'the Notices page with a webhook that works and one that fails');
+  // A third: the chat's address typed, the page's language, what it hears of as the form comes.
+  await page.type('.hook-new input[name=url]', `${process.env.CHAT}/api/webhooks/77/ui-secret-7777`);
+  await press(page, '.hook-new button:not([type=button])');
+  listed = await hooks();
+  check('a webhook added on the card is there, masked', listed.length === 3 && /••••7777/.test(listed[2].text) && /Nothing sent yet/.test(listed[2].text)
+    && !(await page.content()).includes('ui-secret-7777'), JSON.stringify(listed[2] || null));
+  await press(page, '#hooks .hook:last-child button[value=test]');
+  check('Send a test says it was sent', /Test message sent/.test(await textOf(page, '.bar .flash, main .flash')), await textOf(page, '.bar .flash, main .flash'));
+  const got = await (await fetch(`${process.env.CHAT_LOCAL}/got`)).json();
+  const test = got.filter(m => m.path === '/api/webhooks/77/ui-secret-7777');
+  check('and the chat got it, its words and the site\'s link', test.length === 1 && /^Test message: /.test(test[0].body.text)
+    && /\/opendmtq\//.test(JSON.stringify(test[0].body.blocks)), JSON.stringify(test).slice(0, 300));
+  listed = await hooks();
+  check('the card says when it went', listed.length === 3 && listed[2].sent && /Sent just now/.test(listed[2].text), JSON.stringify(listed[2] || null));
+  // Deleting asks first, in the page's own question; then it is gone.
+  await page.click('#hooks .hook:last-child button[value=delete]');
+  await page.waitForSelector('#ask[open]');
+  check('deleting a webhook asks first', /Delete this webhook/.test(await textOf(page, '#ask p')), await textOf(page, '#ask p'));
+  await settle(page, () => page.click('#ask [value=yes]'));
+  check('and then it is gone', (await hooks()).length === 2);
+  // The card at a phone's width, in Korean too.
+  await page.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
+  for (const lang of ['ko', 'en']) {
+    await page.setCookie({ name: 'opendmtq_lang', value: lang, url: ADMIN });
+    await page.goto(`${A}/maintenance#hooks`, { waitUntil: 'domcontentloaded' });
+    await noFindings(page, `the Discord and Slack card on a phone (${lang})`);
+    await page.$eval('#hooks', e => e.scrollIntoView());
+    await page.screenshot({ path: path.join(OUT, 'shots', `flows-hooks-${lang}-360.jpg`), type: 'jpeg', quality: 80, fullPage: true });
+  }
+  check('the card in Korean says why in Korean', /채팅방에 이 웹후크가 없습니다/.test(await (async () => {
+    await page.setCookie({ name: 'opendmtq_lang', value: 'ko', url: ADMIN });
+    await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+    return textOf(page, '#hooks');
+  })()));
+  check('no failed request or script error on the card', errors.length === 0, errors.slice(0, 4).join(' ; '));
+  await page.close();
 }
 
 async function portalFlows(contexts) {
@@ -2390,8 +2450,7 @@ async function myPage(contexts) {
     // have none of the items run.sh's stand-in catalog gives a player's page.
     await gameFlows(contexts);
     await adminFlows(contexts);
-  } else if (stage === 'mine') {
-    await myPage(contexts);
+    await webhookFlows(contexts);
   } else if (stage === 'patterns') {
     await hoverOnly(contexts);
     await inPlace(contexts);

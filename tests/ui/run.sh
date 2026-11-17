@@ -22,6 +22,10 @@ SITE=$NAME_PREFIX-uitest-site
 ADMIN=$NAME_PREFIX-uitest-admin
 SITE_PORT=${SITE_PORT:-18801}
 ADMIN_PORT=${ADMIN_PORT:-18802}
+# A stand-in chat for the webhooks of the Notices page (chat.py), beside the admin service; the browser reads what it got on
+# this port of the loopback.
+CHAT=$NAME_PREFIX-uitest-chat
+CHAT_PORT=${CHAT_PORT:-18803}
 # The owner's admin password and the site account's (an account's has six letters at least).
 PASSWORD=smoke-pass
 # The browser's share of the machine: four processors at most, or what there is (GitHub gives a private repository two).
@@ -34,7 +38,7 @@ FEED_PID=
 # What the containers wrote belongs to their user: removed from inside an image.
 cleanup() {
   if [ -n "$FEED_PID" ]; then kill "$FEED_PID" 2>/dev/null || true; fi
-  docker rm -f "$SITE" "$ADMIN" "$ADMIN-pc" >/dev/null 2>&1 || true
+  docker rm -f "$SITE" "$ADMIN" "$CHAT" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker run --rm -u 0 -v "$DATA:/d" --entrypoint sh "opendmtq-server:$TAG" -c 'rm -rf /d/* /d/.[!.]*' >/dev/null 2>&1 || true
   rmdir "$DATA" 2>/dev/null || true
@@ -94,6 +98,11 @@ docker run -d --name "$ADMIN" --network "$NET" --cpus 2 --memory 1g -u 33:33 --r
   -v "$DATA/content:/srv/content:ro" -p "127.0.0.1:$ADMIN_PORT:8000" \
   --entrypoint gunicorn "opendmtq-tools:$TAG" -w 1 --threads 4 -b 0.0.0.0:8000 opendmtq_tools.admin:app >/dev/null
 
+# The stand-in chat, on the same network: the admin service sends it the webhooks' messages, and nothing leaves the network.
+docker rm -f "$CHAT" >/dev/null 2>&1 || true
+docker run -d --name "$CHAT" --network "$NET" --cpus 0.5 --memory 128m -u 33:33 --read-only -v "$UI:/ui:ro" \
+  -p "127.0.0.1:$CHAT_PORT:8080" --entrypoint python3 "opendmtq-tools:$TAG" -I /ui/chat.py 8080 >/dev/null
+
 # Until both answer, or give up with their logs.
 for _ in $(seq 1 90); do
   if curl -sf -m 3 -o /dev/null "http://127.0.0.1:$SITE_PORT/opendmtq/health.php" \
@@ -129,6 +138,13 @@ curl -sf -m 10 -b "$JAR" -o /dev/null --data-urlencode "csrf=$CSRF" --data-urlen
   --data-urlencode scope=write "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts"
 curl -sf -m 10 -b "$JAR" -o /dev/null --data-urlencode "csrf=$CSRF" --data-urlencode action=token \
   --data-urlencode "token_name=health monitor on the living-room PC" --data-urlencode scope=read "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts"
+# Two webhooks to the stand-in chat, added as the owner adds them on the Notices page: one in English that hears of
+# everything, one in Korean whose chat deleted it (its messages fail, and the card says so).
+curl -sf -m 10 -b "$JAR" -o /dev/null --data-urlencode "csrf=$CSRF" --data-urlencode "url=http://$CHAT:8080/services/T01/B02/ui-secret-5432" \
+  --data-urlencode language=en --data-urlencode event=live_on --data-urlencode event=live_off --data-urlencode event=chart_top \
+  --data-urlencode event=month_top --data-urlencode event=maint_on --data-urlencode event=maint_off "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/webhooks"
+curl -sf -m 10 -b "$JAR" -o /dev/null --data-urlencode "csrf=$CSRF" --data-urlencode "url=http://$CHAT:8080/gone/ui-secret-0404" \
+  --data-urlencode language=ko --data-urlencode event=chart_top --data-urlencode event=maint_on "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/webhooks"
 rm -f "$JAR"
 
 # One stage in the browser; goes on after a failure, so that the report has everything. No network of its own beyond the
@@ -144,6 +160,7 @@ stage() {
   local status=0
   docker run --rm --name "$NAME_PREFIX-uitest-browser" --network host --cpus "$BROWSER_CPUS" --memory 3g \
     -e SITE="http://127.0.0.1:$SITE_PORT" -e ADMIN="http://127.0.0.1:$ADMIN_PORT" -e PASSWORD="$PASSWORD" -e OUT=/out \
+    -e CHAT="http://$CHAT:8080" -e CHAT_LOCAL="http://127.0.0.1:$CHAT_PORT" \
     -e SHOTS_ALL="${SHOTS_ALL:-}" \
     -v "$UI:/usr/src/app/ui:ro" -v "$REPORT:/out" --entrypoint node "$BROWSER_IMAGE" ui/audit.js "$1" 2>&1 \
     | tee "$REPORT/last.txt" >> "$REPORT/results.txt" || status=$?
