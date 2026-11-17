@@ -409,6 +409,13 @@ docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -
   grep -q \"keyboard play: 2 LINE lane 2 box 2 took Q ('A' on this keyboard)\" \"\$LOCAL\"/OpenDMTQ/client/logs/launcher.log \\
     || { echo 'FAIL: the key that prints A on a French layout did not go in as Q with its A'; exit 1; }
   echo 'keyboard play: the Controls page took the keys by their places'
+  # The last game's sound as the player measured it, written beside the settings file the launcher gave it, and read back
+  # by the launcher: --status's Sound part says it as the Sound page's Last game card does.
+  grep -q '^mode=' \"\$LOCAL\"/OpenDMTQ/client/last-game-sound.txt 2>/dev/null \\
+    || { echo 'FAIL: the player left no last game sound result beside its settings'; exit 1; }
+  grep -qE 'last game: (Shared|Exclusive|No sound device)' /out/status.txt \\
+    || { echo 'FAIL: --status did not say the last game sound the player wrote'; exit 1; }
+  echo \"sound: \$(grep 'last game: ' /out/status.txt | head -n 1)\"
   # The sound devices as the Sound page asks the player for them (Wine's own, here).
   wine \"\$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe\" --audio-devices 2>&1 | tr -d '\r' >> /out/status.txt
   cat /out/status.txt

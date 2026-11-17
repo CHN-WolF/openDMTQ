@@ -8,24 +8,10 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ### Added
 
-- Play on this PC, on the admin pages' App page and the setup's last step, for a visit from the server PC itself: on
-  the Windows bundle it installs the PC client set up for the server, quietly, and opens its launcher with the owner's
-  ID filled in to sign in (or opens it when it is installed); on Linux and macOS the page says how to play from a
-  Windows PC. Never for a visit from another PC. Its API route is `POST /app/play-here`.
-- The PC client's connection test: **Test connection** on the **Online** page, and from the **Play** page's Server row
-  while the server does not answer, follows the way to the server step by step (the address, the name, the port, the
-  OpenDMTQ server and its HTTPS certificate, the version, the sign-in, the game server, the broadcast state, the
-  downloads by their headers, the round trip), each with what it found and how long it took, in a card that fills in as
-  it goes, with **Copy**. When the port does not answer, a server on 8791 or the ports after it is found and one press
-  away (servers updated to 0.11.0 left port 80). `OpenDMTQ-cmd.exe --test-server [ADDRESS]` does the same.
-- A report for whoever helps: the PC client's **Help**, **Save a report** (and `OpenDMTQ-cmd.exe --report FILE`) puts the
-  launcher's logs, the end of the game's log, the settings, the displays, the sound devices, Windows, the graphics cards,
-  the versions and the last connection test in one zip, with the user's name, the site IDs, the servers' addresses,
-  the sign-ins, tokens and this PC's player id left out, and says what was left out.
-- **My page on the site** on the PC client's **Play** page opens the player's page in the browser, signed in already by a
-  one-time link the server makes for the launcher's sign-in (it works once, within a minute; `POST /site/link` makes one
-  through the API for the token's admin), and **My records** lists the player's latest plays and best records from the
-  server, with the place on each chart and the keyboard's mark.
+- The PC client's Sound page says how the last game's sound went, as the player measured it: shared or exclusive, the
+  device's period, the time from the game's sound to the device's output by the device's own clock, and any gaps (the
+  device running dry, or the game's sound falling behind). `--status` prints the same line. The player writes it beside
+  its settings file, `last-game-sound.txt`.
 - A Server page on the admin pages for the server's whole life: its state and its one address; Restart and Stop the
   server where the install can do them (the Windows bundle, Linux and macOS), with a page after a stop that says when the
   server has stopped and when it runs again; Check and repair (the folders, the database's integrity, the owner's sign-in
@@ -63,6 +49,10 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ### Changed
 
+- The PC client's sound buffer is **Low** by default: Windows' shortest period for the device in its low-latency mode,
+  or a 10 ms buffer on a device that has no shorter period than its standard one. Measured through whole songs on
+  Windows, the sound reaches the device about 8 ms sooner than with **Normal** when shared and 21 ms sooner when
+  exclusive, with no gap.
 - One port for everything. The players' site, the admin pages (`/opendmtq/admin/`) and the API (`/opendmtq/api/v1/`)
   answer on the server's one port, `LISTEN_PORT`: 8791 on a new install, the first free port after it when it is taken,
   on the Windows bundle, a host install, Docker Compose and the Helm chart alike. An exposed server's admin pages stay on
@@ -121,6 +111,9 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ### Fixed
 
+- On a PC the game mixed its sound at 22,050 Hz, which cut everything above 11 kHz from every song. It mixes at
+  44,100 Hz now, as on a phone: from 11 to 17 kHz a song is within 2 dB of its own samples, where it was about 35 dB
+  down.
 - The ID and password the server's window and `.env` named did not open the players' site, the page the server's own
   address shows, only the admin pages: signing in there failed every time.
 - A player's menu on the admin Players page opened under the next card or was cut off by its own on a short list.

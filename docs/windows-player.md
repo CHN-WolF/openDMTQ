@@ -66,7 +66,7 @@ Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, a
 | :--- | :--- |
 | **Play** | The server and the account with **My page on the site**, the checks before a start (the player, the server, the sign-in, the app), one that is not fine with a link to the page that sees to it (a server that does not answer, to its connection test), how to play (keyboard play's keys first, or that it is off, with **CONTROLS** beside them), the last play, **My records** under them, and **PLAY** |
 | **Screen** | Full screen or a window, the window's size, VSync, the frame limit, the FPS counter and its position, the render scale and its upscaler, anti-aliasing |
-| **Sound** | The master, music and effects volumes, the equaliser (a preset or three bands), the device, **Shared** or **Exclusive**, the buffer |
+| **Sound** | The master, music and effects volumes, the equaliser (a preset or three bands), the device, **Shared** or **Exclusive**, the buffer, and how the last game's sound went |
 | **Controls** | Keyboard play: on or off, and the keys of each lane of 2, 3 and 4 LINE; what the touch screen, the mouse and the keyboard do |
 | **Online** | The servers, the [connection test](#testing-the-connection), the sign-in, the app on this PC and a check for a newer one |
 | **Help** | The checks, what to try when something does not work, the logs, [a report](#a-report-for-whoever-helps) to send, and repairing, clearing, starting over and uninstalling |
@@ -184,14 +184,13 @@ The window says which of those it found; `about.txt` in the zip lists them with 
 ### The command line
 
 `OpenDMTQ-cmd.exe`, in `%LOCALAPPDATA%\OpenDMTQ.Client\current`, does the same from the command line: `--status` (exit 0
-when PLAY can go; its last line is the launcher's version, and a newer one when there is), `--test-server [ADDRESS]`
-(the connection test of the server PLAY plays on or of ADDRESS, each step as it ends; exit 0 when every step passed, 1
-when one failed), `--server URL`, `--sign-in ID` (the password from standard input), `--sign-out`, `--app`, `--set
-NAME=VALUE`, `--audio-devices`, `--language en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the window
-opens on its pages), `--servers` (the servers it knows, as **Online** lists them), `--open-log player|launcher`,
-`--report FILE` (Help's report, into FILE, or into a folder under its own name), `--play`, `--update`, `--forget URL`,
-`--reset`, `--repair`, `--clear-game-data` and `--uninstall [--delete-data]`, with `--yes` to answer their questions
-(`--help` lists them all, in parts). In a terminal it prints in the launcher's look: a title with the version, each part under its
+when PLAY can go; under **Sound** the last game's sound as the Sound page says it; its last line is the launcher's
+version, and a newer one when there is), `--server URL`, `--sign-in
+ID` (the password from standard input), `--sign-out`, `--app`, `--set NAME=VALUE`, `--audio-devices`, `--language
+en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the window opens on its pages), `--servers` (the servers
+it knows, as **Online** lists them), `--open-log player|launcher`, `--play`, `--update`, `--forget URL`, `--reset`,
+`--repair`, `--clear-game-data` and `--uninstall [--delete-data]`, with `--yes` to answer their questions (`--help`
+lists them all, in parts). In a terminal it prints in the launcher's look: a title with the version, each part under its
 name, names and values in columns, the ready check's marks and a download's bar in the launcher's colours; piped to a
 file or a script, the same lines in plain words, as before. Started with no flag by a double click, it opens the
 launcher's window and closes the console Windows opened for it. While the launcher's window is open, the flags that
@@ -211,7 +210,7 @@ change what it keeps are refused. `--set` takes the settings of the **Screen**, 
 | `anti_aliasing` | `off`, `cmaa2`, `smaa` | Anti-aliasing |
 | `audio_device` | `default` (Windows' default output), or a device's id from `--audio-devices` | Device |
 | `audio_mode` | `shared`, `exclusive` | Mode |
-| `audio_buffer` | `normal`, `low`, `safe` | Buffer |
+| `audio_buffer` | `low`, `normal`, `safe` | Buffer |
 | `volume` | `100`, or any number from 0 to 100 | Master |
 | `music_volume` | `100`, or any number from 0 to 100, a share of the master | Music |
 | `effects_volume` | `100`, or any number from 0 to 100, a share of the master | Effects |
@@ -426,8 +425,30 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
 - **Shared or Exclusive.** Shared plays alongside other programs' sound. Exclusive (WASAPI's exclusive mode) takes the
   device for the game alone and has the least delay, with buffers of the device's own period (3 ms on a device that
   has it); other programs are silent meanwhile, and the sound is shared when Windows does not allow it.
-- **The buffer:** low (Windows' low-latency mode, where the device has a shorter period than its standard one), normal,
-  or safe for a busy PC.
+- **The buffer:** low, the default (Windows' low-latency mode at the shortest period the device has, else a 10 ms
+  buffer), normal (20 ms) or safe (50 ms). Measured through whole songs on Windows with a 192 kHz device while the PC
+  was busy with other work, the time from the game's sound to the device's output, by the device's own clock:
+
+  | Mode | Low | Normal | Safe |
+  | :--- | :--- | :--- | :--- |
+  | Shared | 29 to 36 ms (a 7 ms period) | 37 to 43 ms (10 ms) | 73 to 78 ms (10 ms, 50 ms buffered) |
+  | Exclusive | 10 ms (a 3 ms period) | 31 ms (10 ms) | 61 ms (20 ms) |
+
+  Two whole songs each, with no gap in any of them, neither the device running dry nor the game's sound falling
+  behind.
+
+  Before that, the game's OpenAL mixes 20 ms at a time into a buffer of 20 ms, which adds 20 to 40 ms. Where the notes
+  and their sounds do not meet, the game's own calibration in its options moves one against the other; the player adds
+  no offset of its own.
+- **Last game**, under the output's choices: how the last game's sound went as the player measured it, how it had the
+  device (shared, shared at Windows' shortest period, or exclusive), the device's period, the time from the game's sound
+  to the device's output, and the gaps (the device running dry, or the game's own sound falling behind), with a lime
+  light when there were none and a yellow ring when there were. The player writes it beside the settings file
+  (`last-game-sound.txt`) every five seconds and when the game ends; `--status` prints the same line.
+- **The game's sound at a phone's rate.** The game mixes its sounds at 44.1 kHz, as every phone does: its OpenAL's
+  OpenSL ES device sets that rate on a phone, and on a PC, which has no OpenSL ES, the player asks its other device for
+  it, which would mix at 22.05 kHz and cut everything above 11 kHz. Measured on a song under Wine: from 11 to 17 kHz
+  within 2 dB of the song's own sample against its 1 to 4 kHz, where 0.10.0's was about 35 dB down.
 - **Master**, the volume of the game, 0 to 100. Windows' own volume still applies.
 - **Music** and **Effects**, each a share of the master, 0 to 100: the music is a song's background, the game's menu
   music and a song's preview; the effects are the sounds of the notes the player plays, and the menus' and the
@@ -519,11 +540,9 @@ broadcast has stopped, and when the server answers again on air, that it is back
 - **The videos are black and silent:** see the Media Feature Pack above.
 - **It cannot reach the server:** the PC has to reach the server's address, as a phone does: on the same network, or
   over the internet when the server is set up for it
-  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)). The
-  [connection test](#testing-the-connection) says where the way to it stops, and finds a server that moved to 8791.
-- **Someone helps with a problem:** **Help**, **Save a report** gives them the logs and this PC's details in one zip
-  ([a report](#a-report-for-whoever-helps)).
-- **The sound breaks up:** choose the **Safe** buffer on the **Sound** page, or **Shared** instead of **Exclusive**.
+  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)).
+- **The sound breaks up:** the **Sound** page's **Last game** says whether the last game had gaps; choose the **Normal**
+  or **Safe** buffer there, or **Shared** instead of **Exclusive**.
 
 The rest is the server's: [what to tell its owner](play.md#when-something-does-not-work).
 

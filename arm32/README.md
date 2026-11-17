@@ -344,6 +344,10 @@ properties of an Android 9 phone of no particular make. In place of Android's Ja
 small Java VM of its own (`jvm/`) with the classes the game calls. On Windows a thin layer (`src/win`) gives the core
 Linux's system calls (files, memory, threads and futexes, signals as interruptions, sockets); the player draws through
 ANGLE (OpenGL ES on Direct3D 11), plays its sound through WASAPI and decodes video with Media Foundation. The game's
+OpenAL tries OpenSL ES first, as on a phone, where its OpenSL ES device mixes at 44.1 kHz whatever it is asked; with no
+OpenSL ES on a computer it opens its `android.media.AudioTrack` device, which mixes at the rate the game's context asks
+for, else at 22.05 kHz, and the game asks for none: the player asks that context for 44.1 kHz
+(`desktop/openal_rate.h`), so the game's sound keeps the octave above 11 kHz as on a phone. The game's
 window sits in a frame that keeps it between 4:3 and 21:9, the shapes the game lays itself out for, and tells the game of
 a new size as Android does (`surfaceChanged`). The mouse is a finger, its wheel a finger's drag, and Escape the phone's
 Back key. CI runs the Windows tests under Wine and on Windows itself (`test_windows.ps1`).
