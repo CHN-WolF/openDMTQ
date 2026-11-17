@@ -19,7 +19,8 @@ then plays against the server as it does on a phone.
    installer (.exe)**. The file it gives, `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`, is set up for
    that server.
 2. Run it: its page says what goes where (the program in your user folder, shortcuts on the desktop and in the Start
-   menu, no administrator rights, the server it plays on). Choose **Install**: the bar follows the files as they land,
+   menu, no administrator rights, the server it plays on). Its window has no Windows title bar: its top moves it, and
+   its own buttons at the top right minimise it and close it. Choose **Install**: the bar follows the files as they land,
    and the last page says what was done, with **Open OpenDMTQ**. If Windows says it protected your PC from an unknown
    app: **More info**, then **Run anyway**. The installer is not signed by a publisher Windows knows. Windows 11's
    Smart App Control, when it is on, blocks unsigned programs, this one among them, and has no **Run anyway**.

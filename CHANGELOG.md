@@ -151,6 +151,8 @@ the PC client a Sound page, a connection test, signed updates from its own serve
   their old names; from 0.11.0 on a server fetches them from its own version's release by the new ones. One of 0.10.0
   that needs either again (its own copy gone) gets them by updating to 0.11.0 first.
 - The launcher's menu is a column on the left again, and the first start's steps run down its side.
+- The PC client's installer draws its own header, without Windows' title bar: its top moves the window, and its own
+  minimise and close buttons sit at the top right.
 - A setting changed in the launcher changes its own row only: no page is drawn again whole, and nothing flashes. The
   launcher's drop-down lists are in OpenDMTQ's design, open over everything else and close when the window moves.
 - The launcher's sign-in forms work as the site's: labels, Show inside the password field (by the keyboard too), what is
