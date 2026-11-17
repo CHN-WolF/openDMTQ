@@ -240,7 +240,8 @@ The server's own life in one place, a card each:
   and the program's own files against the install's list of them, put back from its release where it can be.
 - **The server's data,** part by part with its size (players, scores and accounts; recordings; songs added; apps built;
   backups; logs; game files): the parts ticked are deleted once the word *delete* is typed, after a backup (ticked as
-  the page comes, and kept). With Docker Compose the game files go on the command line (`./opendmtq delete-data game`).
+  the page comes, and kept). A part the page cannot delete (with Docker Compose, the game files) names the command that
+  does it on the server PC, as `./opendmtq delete-data game`.
 - **Uninstall:** what it takes away on this install (its folder, or all but `data` and `.env` with **Keep the data**,
   the start with the computer, the command on the PATH, and on Windows the firewall rules for its programs and its
   shortcut in the Startup folder), once the word *uninstall* is typed.
