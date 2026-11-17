@@ -12,7 +12,7 @@ import tarfile
 
 from flask import flash, redirect, render_template, request, url_for
 
-from . import backups, charts, core, insights, recordings
+from . import backups, charts, core, insights, recordings, webhooks
 from .core import Refused, ago, app, BASE, changed, db, same_text, t, tp, why
 
 # What a row's forms do, by their action.
@@ -188,9 +188,8 @@ def act(pid, action, seen, name=""):
                 pass
             if action == "delete":
                 con.execute("DELETE FROM Member WHERE CAST(guid AS INTEGER) = ?", (pid,))
-                # Their game state and a ban go with them: a new phone that gets the number back starts as a new player.
-                from . import game
-                game.forget(con, pid)
+            # The charts whose #1 the Discord and Slack messages knew as theirs: held by the next now.
+            webhooks.refresh_tops(con, pid)
             if action == "delete":
                 # No switch or video left behind for a player who is gone.
                 try:

@@ -295,6 +295,38 @@ class RulesTest(unittest.TestCase):
                 webhooks.detect()
             self.assertEqual([(d["name"], d["first"]) for _, k, d, _ in inst.queued()], [("Yuna", True)])
 
+    def test_a_first_place_holder_reset_leaves_the_place_to_the_next(self):
+        # Sena held chart 11; her records reset on the Players page: Yuna, second, holds it now, and Riku takes it from her.
+        with Server() as inst:
+            inst.hook(events=["chart_top"])
+            webhooks.detect()
+            inst.play(8, 11, 850000)
+            webhooks.detect()
+            with admin.app.test_request_context():
+                admin.players.act(7, "reset", None)
+            inst.play(9, 11, 870000)
+            webhooks.detect()
+            self.assertEqual([(k, d["name"], d["before"]) for _, k, d, _ in inst.queued()], [("chart_top", "Riku", "Yuna")])
+
+    def test_plays_under_ids_the_log_gave_again_are_read(self):
+        # The newest plays deleted (a player's records reset), the next ones saved under the same ids again (the log
+        # gives the next id after its highest): read all the same.
+        with Server() as inst:
+            inst.hook(events=["chart_top"])
+            webhooks.detect()
+            inst.play(9, 21, 500000)
+            inst.play(9, 12, 100)
+            webhooks.detect()
+            con = sqlite3.connect(admin.core.DB)
+            con.execute("DELETE FROM PlayLog WHERE user_id = 9")
+            con.execute("DELETE FROM Play WHERE user_id = 9")
+            con.commit()
+            con.close()
+            webhooks.detect()
+            inst.play(8, 11, 950000)
+            webhooks.detect()
+            self.assertEqual([(k, d["name"], d["before"]) for _, k, d, _ in inst.queued()], [("chart_top", "Yuna", "Sena")])
+
     def test_a_first_clear_a_tie_and_a_hidden_song_are_no_news(self):
         with Server() as inst:
             inst.hook(events=["chart_top"])

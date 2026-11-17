@@ -589,6 +589,43 @@ def month_leader(con, start):
     return site.month_players(con, start, 2 ** 63 - 1, shown=2)
 
 
+def mark_of(con, cursor):
+    """The play under the id cursor as a look leaves it (when, who, which chart), or None for none: the next look sees by it
+    whether the log changed under the cursor (that play deleted, its id given again to a newer one)."""
+    row = con.execute("SELECT played_at, user_id, pattern_id FROM PlayLog WHERE id = ?", (cursor,)).fetchone() if cursor else None
+    return [row[0], row[1], row[2]] if row else None
+
+
+def read_plays(con, state):
+    """The plays since the last look, in the order they were saved, BATCH at most. By their ids after the cursor; but when
+    the play the last look read last is gone or another (the newest plays deleted, a player's records reset or a year-old
+    log emptied, and the log giving their ids again to newer plays), by their time: those saved since the last look."""
+    if not has_playlog(con):
+        return []
+    cursor, mark = int(state.get("cursor") or 0), state.get("mark")
+    if cursor and mark is not None and mark_of(con, cursor) != mark:
+        # A little before the last look, for a clock a second apart: a play read twice makes no second message (each
+        # event's key is its own).
+        return con.execute("SELECT id, user_id, pattern_id, score, played_at FROM PlayLog WHERE played_at >= ? ORDER BY id LIMIT ?",
+                           (int(state.get("at") or 0) - 2, BATCH)).fetchall()
+    return con.execute("SELECT id, user_id, pattern_id, score, played_at FROM PlayLog WHERE id > ? ORDER BY id LIMIT ?",
+                       (cursor, BATCH)).fetchall()
+
+
+def refresh_tops(con, guid):
+    """A player's best scores gone (reset or deleted on the Players page, in con's transaction): every chart whose #1 the
+    loop knew as theirs knows its #1 as it is now, so that the next to take it is told of as taking it from that one."""
+    if not con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'WebhookTop'").fetchone():
+        return
+    for (pattern,) in con.execute("SELECT pattern_id FROM WebhookTop WHERE user_id = ?", (int(guid),)).fetchall():
+        top = con.execute(TOP_OF, (core.CHECK_UDID, pattern)).fetchone()
+        if top is None:
+            con.execute("DELETE FROM WebhookTop WHERE pattern_id = ?", (pattern,))
+        else:
+            con.execute("UPDATE WebhookTop SET user_id = ?, score = ?, judgement = ? WHERE pattern_id = ?",
+                        (int(top["user_id"]), int(top["score"] or 0), top["judgement"], pattern))
+
+
 def present(con, now):
     """The state of things now, for the loop's first look: how far the play log goes, this month's #1, who is on air, the
     maintenance notice; and every chart's #1 (returned beside it)."""
@@ -597,8 +634,8 @@ def present(con, now):
     board = month_leader(con, start)
     air = {str(g): broadcast(p, now) for g, p in on_air(con, now).items()}
     tops = [tuple(r) for r in con.execute(ALL_TOPS, (core.CHECK_UDID,))]
-    state = {"rev": 0, "cursor": int(cursor), "month": {"start": start, "leader": board[0]["id"] if board else None},
-             "air": air, "maint": maintenance_now()}
+    state = {"rev": 0, "cursor": int(cursor), "mark": mark_of(con, int(cursor)) if cursor else None, "at": int(now),
+             "month": {"start": start, "leader": board[0]["id"] if board else None}, "air": air, "maint": maintenance_now()}
     return state, tops
 
 
@@ -620,11 +657,13 @@ def look(con, state, now):
     the charts' #1s to keep. Each event's key is the same whoever looks, so that a message is queued once."""
     events, tops = [], {}
     new = json.loads(json.dumps(state))
-    # The plays since the last look, in the order they were saved.
-    plays = con.execute("SELECT id, user_id, pattern_id, score, played_at FROM PlayLog WHERE id > ? ORDER BY id LIMIT ?",
-                        (state["cursor"], BATCH)).fetchall() if has_playlog(con) else []
+    # The plays since the last look, in the order they were saved; the cursor and its mark at the last of them.
+    plays = read_plays(con, state)
     if plays:
         new["cursor"] = int(plays[-1]["id"])
+        new["mark"] = [plays[-1]["played_at"], plays[-1]["user_id"], plays[-1]["pattern_id"]]
+    # When this look was: the next reads by time from here when the log changed under its cursor.
+    new["at"] = int(now)
     # The charts they were on, with who played each.
     touched = {}
     for p in plays:
