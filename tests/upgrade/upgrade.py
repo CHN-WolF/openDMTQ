@@ -117,6 +117,23 @@ def reads(guid, puid):
     return {method: call(method, params) for method, params in asked}
 
 
+def same_reads(old, new):
+    """Whether a phone reads what it read before: every reply the same, but for the one change 0.11.0 makes on purpose.
+    The server keeps each player's experience since 0.11.0, and a player of before starts at their level's own by the
+    game's table, where 0.10.0 said 0 with level 99: the level the same, the experience that level's or more."""
+    if old.keys() != new.keys():
+        return False
+    for method in old:
+        a, b = old[method], new[method]
+        if method == "game.getUserAsset" and isinstance(a, dict) and isinstance(b, dict):
+            rest = lambda reply: {k: v for k, v in reply.items() if k != "exp"}
+            if rest(a) != rest(b) or int(b.get("exp") or 0) < int(a.get("exp") or 0):
+                return False
+        elif a != b:
+            return False
+    return True
+
+
 def changed(old, new):
     """The requests of reads() whose replies differ, with both replies, for a failed check's line."""
     return "; ".join(f"{m}: {json.dumps(old[m])[:150]} before, {json.dumps(new[m])[:150]} now" for m in old if old[m] != new[m])
@@ -370,7 +387,7 @@ def after():
     check("a phone is the player it was", phone("upgrade-phone-1") == (guid, puid) and phone("upgrade-phone-2")[0] == other)
     for who, old in sorted(kept["reads"].items()):
         new = reads(int(who), puid if int(who) == guid else kept["other_puid"])
-        check(f"player {who} reads the same records, achievements, items, transfer code, name and rankings", old == new, changed(old, new))
+        check(f"player {who} reads the same records, achievements, items, transfer code, name and rankings", same_reads(old, new), changed(old, new))
 
     # The owner's side: the same password opens the pages, and they show what was there.
     admin = owner()
@@ -434,7 +451,7 @@ def after():
     well = health()
     check("after it the server is well, with the two players of the backup", well.get("ok") is True and well.get("players") == 2, well)
     old, new = kept["reads"][str(guid)], reads(guid, puid)
-    check("the player's records are those of the backup", old == new, changed(old, new))
+    check("the player's records are those of the backup", same_reads(old, new), changed(old, new))
     check("broadcasts are still on, and the switch flipped since stays as it is today", state("upgrade-phone-1")["on"] is True
           and state("upgrade-phone-2")["on"] is True and broadcasts(admin) is True)
     check("the token made before still works after the restore", api(token, "/players")[0] == 200)

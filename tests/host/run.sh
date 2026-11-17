@@ -36,6 +36,14 @@ is() { [ "$(code "$2")" = "$1" ]; }
 # The admin service's own port starts from $ADMIN here, within this test's ports: on the computer's own network the
 # usual one (18791) would be another program's to use.
 inside() { docker exec -u player -w /home/player -e OPENDMTQ_ADMIN_SERVICE_PORT="$ADMIN" "$NAME" bash -lc "$1"; }
+# Waits up to five minutes for the app build the server runs at its start to end (its build.json no longer building).
+builder_done() {
+  local _
+  for _ in $(seq 300); do
+    inside "grep -q '\"state\": *\"building\"' OpenDMTQ/data/apk/out/build.json 2>/dev/null" || return 0
+    sleep 1
+  done
+}
 
 cleanup() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
@@ -399,6 +407,9 @@ expect "and answers" is 200 "http://127.0.0.1:$PORT/opendmtq/health.php"
 # the test's own copy (as for the install), which the server's programs get from the start's environment.
 inside "opendmtq stop" >/dev/null || true
 inside "OPENDMTQ_TARBALL=file:///tmp/release.tar.gz opendmtq start" >/dev/null || true
+# The app build the server runs at its start ends first (data/apk/out/build.json): a repair waits for any build, as the
+# page says when it refuses one while it runs, and a person presses again after it.
+builder_done
 inside "rm OpenDMTQ/server/portal/robots.txt && echo changed >> OpenDMTQ/docs/faq.md && rm -rf OpenDMTQ/data/backups OpenDMTQ/data/state/owner.pass"
 signed_in
 went=$(web "$admin" -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf=$(web "$admin" "$A/server" | token)" "$A/server/repair")
@@ -408,7 +419,8 @@ expect "the program file that was gone is back" inside "test -s OpenDMTQ/server/
 expect "the one that was changed is as the release has it" inside "! grep -q '^changed$' OpenDMTQ/docs/faq.md"
 expect "the data folder is there again" inside "test -d OpenDMTQ/data/backups"
 expect "and the owner's sign-in for the site" inside "test -s OpenDMTQ/data/state/owner.pass"
-# The same from the command line.
+# The same from the command line, once the build of the repair's own restart has ended.
+builder_done
 inside "rm OpenDMTQ/server/portal/robots.txt"
 expect "opendmtq repair puts a program file back too" inside "OPENDMTQ_TARBALL=file:///tmp/release.tar.gz opendmtq repair > /tmp/repair.log 2>&1 && test -s OpenDMTQ/server/portal/robots.txt"
 inside "tail -n 4 /tmp/repair.log" || true
