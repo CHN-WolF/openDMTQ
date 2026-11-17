@@ -483,6 +483,36 @@ class HostPortsTest(unittest.TestCase):
         with mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": port != 8791):
             self.assertEqual(self.settings.choose_port(), 8792)
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux's own rule for a closed connection's port")
+    def test_a_port_a_stopped_server_answered_on_is_free(self):
+        # A server that answered on a port and stopped leaves the connections it closed (TIME_WAIT, about a minute): the
+        # port is free for the next start, as Apache and the admin service bind it; a program listening there holds it.
+        import socket
+        import threading
+        server = socket.socket()
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("0.0.0.0", 0))
+        server.listen()
+        port = server.getsockname()[1]
+
+        def answer():
+            # The server closes first, as an HTTP server does after its answer.
+            visit, _ = server.accept()
+            visit.recv(100)
+            visit.sendall(b"HTTP/1.0 200 OK\r\n\r\n")
+            visit.close()
+        serving = threading.Thread(target=answer)
+        serving.start()
+        with socket.create_connection(("127.0.0.1", port)) as visitor:
+            visitor.sendall(b"GET / HTTP/1.0\r\n\r\n")
+            visitor.recv(100)
+            serving.join()
+        # Still listening: held.
+        self.assertFalse(self.settings.bindable(port))
+        server.close()
+        # Stopped: free, though its closed connection lingers.
+        self.assertTrue(self.settings.bindable(port))
+
     def test_the_admin_service_never_takes_the_servers_port(self):
         # Its own port is chosen at the start and kept in the run folder, never read from .env: an install from before
         # 0.11.0 has ADMIN_PORT=8791 there, where nothing answers any more (its admin pages are on the one port).

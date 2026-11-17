@@ -5,7 +5,7 @@ import secrets
 import socket
 
 from opendmtq_cli import env
-from .paths import ADMIN_PORT, CLI, DATA, DEFAULT_PORT, ENV_FILE, RUN, WINDOWS
+from .paths import ADMIN_PORT, CLI, DATA, DEFAULT_PORT, ENV_FILE, MAC, RUN, WINDOWS
 from .output import die, ok, tell
 
 
@@ -100,6 +100,11 @@ def bindable(port, address="0.0.0.0"):
         # Windows lets a second program take a port another holds unless this is set.
         if WINDOWS:
             s.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_EXCLUSIVEADDRUSE", 0), 1)
+        # On Linux as Apache and the admin service bind it: a connection closed a moment ago (TIME_WAIT, a minute after
+        # a server that stopped answered on the port) does not hold it, a program listening there does. (macOS would
+        # then let the address of all take a port one address listens on: it keeps the plain bind.)
+        elif not MAC:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind((address, port))
             return True

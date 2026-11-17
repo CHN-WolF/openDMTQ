@@ -471,6 +471,8 @@ class LauncherApp:
         if self.state.values != sound and self.page_follow is not None and not followed:
             # The sound the in-game menu set, on the page on show (the Sound page, the guide's step), in place.
             self.page_follow()
+        # The game's plays are on the server now: PLAY's records asked for again.
+        self.refresh_records(force=True)
 
     def open_player_log(self):
         """Show the player's log for the current server's app (Explorer, the file selected); the Help page when there

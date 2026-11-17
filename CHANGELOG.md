@@ -141,6 +141,21 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`, `opendmtq-phone-app-<date>-android-<address>.apk`,
   `opendmtq-server-backup-<time>-<why>.tar.gz` (backups named before still count), the players' and plays' files, the
   request log and recordings.
+- The launcher's menu is a column on the left again, and the first start's steps run down its side.
+- A setting changed in the launcher changes its own row only: no page is drawn again whole, and nothing flashes. The
+  launcher's drop-down lists are in OpenDMTQ's design, open over everything else and close when the window moves.
+- The launcher's sign-in forms work as the site's: labels, Show inside the password field (by the keyboard too), what is
+  missing said under its field, the ID kept, Enter sends.
+- The launcher's pages and lists scroll by dragging with a finger. Its notices come at every change (a newer launcher, a
+  sign-in that ended, a server that stopped answering), and the files it reads are read the same after Notepad saved them
+  (a byte order mark, Windows line ends, spaces, quotes).
+- The upscaler, used below a render scale of 100 % only, is AMD FSR 1 by default: in the player's measurements it is as
+  sharp as the game's own picture and nearest to it at 50 %. A PC client that kept the earlier default without choosing
+  it takes FSR 1. SMAA is the highest anti-aliasing preset.
+- The player asks the server for broadcast notices every 5 s (every 15 s before).
+
+- A server takes the PC client's installer from the release of its own version when there is one, else from the latest
+  release, so that the installer and the updates it hands out are of one version.
 - The words in the product say what is, and what a person must do to go on: no advice on how to set or use the game,
   whom to ask or which address is best. Korean says 다운로드 for getting the app or a file again, and one word for each
   thing across the admin pages, the site, the launcher and the game. The launcher's About page, its installer and the
@@ -149,6 +164,23 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   wordmark and headings' lines in plain characters of the same width, which that console does not draw two columns wide.
 - The site's download page has one main button, the app's.
 - `./opendmtq up --no-firewall` leaves the Windows firewall alone under WSL, as `setup` and `expose` do with it.
+
+### Security
+
+- Each release's checksums are signed with the OpenDMTQ project's Ed25519 key (`opendmtq-<version>-sha256sums.txt.sig`).
+  A PC client takes an update only from a release whose checksums the project signed, wherever it comes from (its
+  server's plain HTTP, GitHub), and checks what it downloads against them in a folder of its own before anything goes
+  into the program's folder: a tampered package or checksums signed by another key are refused, said in words, and
+  nothing changes. The server checks the runtime for newer phones, the installer and the PC clients' updates against the
+  same before it uses or hands out any, and the admin pages say what it refused. A PC client of 0.10.0 or older checks
+  no signature: it updates to this release from GitHub as before, over HTTPS, and every update after that is checked.
+  The install guide has the public key, and how to check a release by hand.
+- An exposed server's admin pages and API take a visit as the server PC's own only when it carries none of the headers
+  a proxy adds to say whom it passes on (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Host`,
+  `X-Forwarded-Proto`, `Via`): a reverse proxy on the server PC no longer passes visits from elsewhere to them. No
+  header exempts a visit from the limit on sign-in tries. Rootless Docker counts as Docker Desktop, whose port driver
+  hands the server every visit from one address: there an exposed server's admin pages are off without
+  `--admin-public`.
 
 ### Fixed
 
@@ -166,6 +198,14 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   home page's broadcasts did not come back on a page left open.
 - `.env` as Notepad saves it (a byte order mark, Windows line ends, spaces around `=`) is read the same everywhere.
 - A sign-in refused for too many tries is in the log of changes; an account without admin rights is told so.
+- On a display that Windows 11 runs slower while nothing moves (dynamic refresh rate), such as a 180 Hz panel shown as
+  60 Hz, the launcher offered no frame limit above 60 and VSync held the game at 60. The launcher now offers every rate up
+  to each display's highest at its size, and the player asks Windows for the panel's full rate, measures the refreshes
+  and follows them.
+- A window resized or switched to full screen after the game had started kept the game's first size and stretched its
+  layout; the game now lays itself out again at the new size.
+- Pulling the bar over the game down with a mouse could show the whole bar for a moment; the bar follows the pointer and
+  settles where it is let go. The player's refresh meter no longer miscounts on a PC whose timing is unsteady.
 - The sound set in the game's own menu during a game went back to the launcher's at the next PLAY: it is kept now, also
   when the launcher's window was closed during the game.
 - A repair, an update or an uninstall in the launcher no longer names `OpenDMTQ-Setup.exe`, a file players never have:
@@ -179,15 +219,6 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - `GET /server` gives the uninstall card's list and the download page's notice of a move, as the pages show them; its
   next address is a URL; `POST /server/restart` answers with the run's instance; a deletion naming a part the server
   cannot delete is refused.
-
-### Security
-
-- An exposed server's admin pages and API take a visit as the server PC's own only when it carries none of the headers
-  a proxy adds to say whom it passes on (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Host`,
-  `X-Forwarded-Proto`, `Via`): a reverse proxy on the server PC no longer passes visits from elsewhere to them. No
-  header exempts a visit from the limit on sign-in tries. Rootless Docker counts as Docker Desktop, whose port driver
-  hands the server every visit from one address: there an exposed server's admin pages are off without
-  `--admin-public`.
 
 ## [0.10.0] - 2026-11-13
 
