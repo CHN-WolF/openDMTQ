@@ -345,6 +345,19 @@ TEXT = {
     "sound.buffer.hint.normal": ("A short delay that suits most PCs.", "대부분의 PC에 맞는 짧은 지연입니다."),
     "sound.buffer.hint.safe": ("More sound kept ahead: no breaks on a busy PC, a little more delay.",
                                "소리를 더 앞서 준비해 바쁜 PC에서도 끊기지 않습니다. 지연이 조금 늘어납니다."),
+    # The last game's sound as the player measured it (player.last_sound): how it had the device, the device's period,
+    # the time from the game's sound to the device's output, and the gaps.
+    "sound.last": ("Last game", "지난 플레이"),
+    "sound.last.none": ("No game yet.", "아직 플레이 기록이 없습니다."),
+    "sound.last.mode.shared": ("Shared", "공유"),
+    "sound.last.mode.shared-low": ("Shared (low latency)", "공유(저지연)"),
+    "sound.last.mode.exclusive": ("Exclusive", "독점"),
+    "sound.last.mode.none": ("No sound device", "소리 장치 없음"),
+    "sound.last.period": ("{ms} ms period", "주기 {ms} ms"),
+    "sound.last.out": ("{ms} ms out", "출력 지연 {ms} ms"),
+    "sound.last.no_gaps": ("no gaps", "끊김 없음"),
+    "sound.last.gap": ("1 gap", "끊김 1번"),
+    "sound.last.gaps": ("{n} gaps", "끊김 {n}번"),
 
     # ----------------------------------------------------------------------------------------- controls
     "controls.sub": ("The keys that play the lanes, the mouse, a touch screen and the keyboard.",

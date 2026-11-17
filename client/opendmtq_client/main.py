@@ -463,6 +463,12 @@ def _status(state):
     _show(console.heading("Settings"))
     items = ["%s=%s" % (k, state.values[k]) for k in choices.NAMES]
     _say("settings: " + ", ".join(items), shown=console.words(items))
+    # The last game's sound as the player measured it, as the Sound page's Last game card says it (the command line's
+    # words are English).
+    said = player.sound_words(i18n.Words("en"), player.last_sound())
+    last = "%s, %s" % (said[1], said[2]) if said else "none yet"
+    # Gaps marked as the window's lamp marks them (a ring there, a warning's mark here).
+    _part("Sound", [("last game", last, None if not said or said[0] == "ok" else "warn")])
     # Where the logs are, as Help's Open buttons show them.
     _part("Logs", [("%s log" % name, path or "none yet (no app on this PC)") for name, path in _log_paths(state).items()])
     # The launcher's version, and a newer one when the look found it (nothing more without a network or an answer in

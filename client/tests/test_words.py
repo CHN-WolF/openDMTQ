@@ -69,6 +69,10 @@ class Words(unittest.TestCase):
                     "screen.fps.hint.free", "sound.mode.hint.shared", "sound.mode.hint.exclusive",
                     "sound.buffer.hint.low", "sound.buffer.hint.normal", "sound.buffer.hint.safe"):
             self.assertIn(key, i18n.TEXT)
+        # The last game's sound: each way the player can have had the device.
+        from opendmtq_client import player
+        for mode in player.RESULT_MODES:
+            self.assertIn("sound.last.mode." + mode, i18n.TEXT)
 
     def test_a_key_with_no_words_is_an_error_in_a_test(self):
         # The tests reach every page and dialog: a word left out stops them, where a player would see the raw key.

@@ -818,6 +818,38 @@ def decibels(w, n):
     return w("sound.db", sign="+" if n > 0 else "-" if n < 0 else "", n=abs(n))
 
 
+def last_sound_card(app, parent):
+    """The Sound page's Last game: how the last game's sound went as the player measured it, its gaps marked by the
+    row's lamp; "No game yet." before the first. Returns follow(), which says it again when the result changed (a game
+    that ended while the page is on show)."""
+    ui, w = app.ui, app.words
+    card = _card(parent, ui, w("sound.last"), last=True)
+    # The row's own frame under the card's title (the title is in the card's body too): made again alone.
+    box = tk.Frame(card.body, bg=theme.PANEL)
+    box.pack(fill="x")
+    shown = {"result": object()}
+
+    def follow():
+        """The row as the result file says it now, made again only when that changed."""
+        if not box.winfo_exists():
+            return
+        result = player.last_sound()
+        if result == shown["result"]:
+            return
+        shown["result"] = result
+        for child in box.winfo_children():
+            child.destroy()
+        row = player.sound_words(w, result)
+        if row is None:
+            widgets.label(box, ui, w("sound.last.none"), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+            return
+        state, words, gaps = row
+        widgets.check_line(box, ui, state, words, value=gaps).pack(fill="x")
+
+    follow()
+    return follow
+
+
 def sound_rows(app, parent, full=True):
     """The Sound page's settings in their cards, which the guide's SOUND CHECK shows too (full=False: the volumes
     alone). Made once: a choice changes its own control and the hints and controls that follow from it, in place (an
@@ -881,7 +913,7 @@ def sound_rows(app, parent, full=True):
                                                 most=most, step=1, say=lambda n: decibels(w, n)))
         rows[name].pack(fill="x")
 
-    card = _card(parent, ui, w("sound.output"), last=True)
+    card = _card(parent, ui, w("sound.output"))
     output = widgets.RowList(card.body, ui)
     output.pack(fill="x")
     device_slot = output.add()
@@ -931,7 +963,15 @@ def sound_rows(app, parent, full=True):
                                             ("safe", w("sound.buffer.safe"))], v["audio_buffer"], setter("audio_buffer")),
         w("sound.buffer.hint." + v["audio_buffer"]))
     rows["buffer"].pack(fill="x")
-    return follow
+    # Under the output's choices, how the last game's sound went with them, as the player measured it.
+    follow_last = last_sound_card(app, parent)
+
+    def follow_all():
+        """The settings' controls, then the Last game card, as they are now."""
+        follow()
+        follow_last()
+
+    return follow_all
 
 
 def build_sound(app, parent):

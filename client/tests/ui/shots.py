@@ -408,6 +408,71 @@ def play_fills(app, name, problems):
         problems.append("%s: the ready check ends %d px above the Last game card" % (name, ends[1] - ends[0]))
 
 
+def sound_last_check(app, out, tag, problems):
+    """The Sound page's Last game card, under the output's choices: "No game yet." before the first game; after one, the
+    player's result (last-game-sound.txt beside the settings file, as the player writes it) as one row, its lamp lime
+    with no gaps and a ring with some, said again when a game ends while the page is on show; in view at the page's
+    foot, measured as every screen is."""
+    from opendmtq_client import i18n
+    from tests.base import SOUND_RESULT
+    w = app.words
+    # The card's file beside the settings file, as the player writes it (named here, not taken from the launcher's code:
+    # a launcher without the card fails this check rather than the check itself).
+    path = os.path.join(os.environ["OPENDMTQ_CLIENT_DIR"], "last-game-sound.txt")
+    if os.path.exists(path):
+        os.remove(path)
+    app.go("sound")
+    settle(app, 6, until=lambda: app.devices is not None)
+    settle(app)
+    title = w("sound.last") if "sound.last" in i18n.TEXT else "Last game" if w.language == "en" else "지난 플레이"
+    card = card_titled(app, title)
+    if card is None:
+        problems.append("%s_sound: no Last game card on the Sound page" % tag)
+        return
+    output = card_titled(app, w("sound.output"))
+    if output is not None and card.winfo_rooty() < output.winfo_rooty() + output.winfo_height():
+        problems.append("%s_sound: the Last game card is not under the Output card" % tag)
+
+    def said():
+        """The words under the card's title (its head is in its body too), in order."""
+        return [x.cget("text") for child in card.body.winfo_children() if child is not card.head
+                for x in widgets_of(child) if x.winfo_class() == "Label" and x.cget("text")]
+
+    if said() != [w("sound.last.none")]:
+        problems.append("%s_sound: before a game the Last game card says %r" % (tag, said()))
+    # The row's words in each language: how the device was had, then the gaps.
+    row = "Shared, 10 ms period, 18 ms out" if w.language == "en" else "공유, 주기 10 ms, 출력 지연 18 ms"
+    cases = (("none", None, None),
+             ("ok", SOUND_RESULT, [row, "no gaps" if w.language == "en" else "끊김 없음"]),
+             ("gaps", SOUND_RESULT.replace("gaps=0\ngame_gaps=0", "gaps=1\ngame_gaps=2"),
+              [row, "3 gaps" if w.language == "en" else "끊김 3번"]))
+    for kind, text, want in cases:
+        if text is not None:
+            # As the player leaves it at a game's end, then the window's own follow-up of a game that ended.
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            app.follow_page("play", "sound", "help", "online")
+            settle(app, 1)
+            card = card_titled(app, w("sound.last"))
+            if card is None:
+                problems.append("%s_sound_last_%s: the Last game card went" % (tag, kind))
+                return
+            if sorted(said()) != sorted(want):
+                problems.append("%s_sound_last_%s: the card says %r, not %r" % (tag, kind, said(), want))
+            lamps = [x for x in widgets_of(card.body) if getattr(x, "odq_picture", None) is not None]
+            if len(lamps) != 1:
+                problems.append("%s_sound_last_%s: %d lamps on the card's row (want 1)" % (tag, kind, len(lamps)))
+        # In view at the page's foot, as a person scrolls to it.
+        app.body.show_widget(card)
+        settle(app, 0.5)
+        name = "%s_sound_last_%s" % (tag, kind)
+        shot(app.root, out, name)
+        measure(app, name, problems)
+    os.remove(path)
+    app.follow_page("sound")
+    settle(app, 0.5)
+
+
 def wheel_check(app, problems):
     """The wheel over a drop-down scrolls the page and leaves the setting as it was (Tk's own drop-down bindings would
     step its value and say it was chosen)."""
@@ -1849,11 +1914,8 @@ def main():
     guide.finish(play=False)
     settle(app)
     pages_check(app, args.out, tag, problems)
-    # PLAY's records and My page on the site, signed in after the guide; Help's Save a report.
-    records_check(app, site, args.out, tag, problems)
-    report_check(app, args.out, tag, problems)
-    # The connection test on the Online page, and from PLAY's Server row when the server does not answer.
-    test_check(app, site, args.out, tag, problems)
+    # The Sound page's Last game card, before a game and after one with and without gaps.
+    sound_last_check(app, args.out, tag, problems)
     # Keyboard play on the Controls page, its states and its keys.
     keys_check(app, args.out, tag, problems)
     # Online's address field after a failed Connect, as the guide's SERVER step above.

@@ -25,6 +25,29 @@ FAKE_PLAYER = textwrap.dedent('''\
 ''')
 
 
+# The last game's sound as the player writes it beside the settings file (arm32/desktop/mixer.cpp, Mixer::result), its
+# lines and notes as they are, with made-up values: shared, a 10 ms period, 18.4 ms from the mix to the device's output.
+SOUND_RESULT = textwrap.dedent('''\
+    # The last game's sound as the player measured it: how it had the device, the device's period and buffer, the time
+    # from the mix to the device's output (its own clock's), and the gaps: the device running dry, and the game's own
+    # sound falling behind. The PC client's Sound page shows it.
+    time=2026-11-17T09:30:12
+    output=WASAPI
+    mode=shared
+    asked=shared low
+    rate=48000
+    period_ms=10.00
+    buffer_ms=22.0
+    latency_ms=18.4
+    latency_min_ms=16.9
+    latency_max_ms=21.2
+    latency_measures=31204
+    seconds=183.2
+    gaps=0
+    game_gaps=0
+''')
+
+
 class Folder(unittest.TestCase):
     """A test with its own launcher folder (OPENDMTQ_CLIENT_DIR), its own user folder, and the stand-in player."""
 

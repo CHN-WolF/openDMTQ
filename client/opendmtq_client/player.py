@@ -26,6 +26,11 @@ log = logging.getLogger("opendmtq_client")
 
 EXE = "OpenDMTQ-Player.exe"
 SETTINGS = "player-settings.txt"
+# The last game's sound as the player measured it, which it writes beside the settings file (arm32/desktop/mixer.cpp,
+# Mixer::write_result): the Sound page's Last game card and --status show it.
+RESULT = "last-game-sound.txt"
+# How the player had the device: shared, the engine's shortest period shared, the device alone, or none at all.
+RESULT_MODES = ("shared", "shared-low", "exclusive", "none")
 # How long the player may take to list the sound devices.
 DEVICES_TIMEOUT = 10
 # Windows: start a console program without a console window of its own (CREATE_NO_WINDOW).
@@ -100,6 +105,63 @@ def write_settings(values, language=None):
             f.write("language=%s\n" % language)
     os.replace(tmp, path)
     return path
+
+
+def result_path():
+    """The last game's sound result, beside the settings file."""
+    return os.path.join(st.config_dir(), RESULT)
+
+
+def last_sound(path=None):
+    """The last game's sound as the player wrote it: its keys, the numbers as numbers (period_ms, buffer_ms, latency_ms
+    and its extremes, seconds; rate, latency_measures, gaps, game_gaps), with "mode" one of RESULT_MODES. None when
+    there is no file, or it is not one the player wrote (no mode it knows, a number that is none)."""
+    try:
+        with open(path or result_path(), encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+    values = {}
+    for line in text.splitlines():
+        line = line.strip()
+        # Its notes, and anything that is no key=value line.
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    if values.get("mode") not in RESULT_MODES:
+        return None
+    try:
+        for key in ("period_ms", "buffer_ms", "latency_ms", "latency_min_ms", "latency_max_ms", "seconds"):
+            values[key] = float(values.get(key, 0))
+        for key in ("rate", "latency_measures", "gaps", "game_gaps"):
+            values[key] = int(values.get(key, 0))
+    except ValueError:
+        return None
+    return values
+
+
+def milliseconds(n):
+    """A time the Last game card says in milliseconds: whole from 10 up and when it is whole (18, 10), else to a tenth
+    (2.7)."""
+    return "%d" % round(n) if n >= 10 or abs(n - round(n)) < 0.05 else "%.1f" % n
+
+
+def sound_words(w, result):
+    """The last game's sound as the Sound page's Last game card and --status say it (`w`: the words of a language),
+    from the player's result (last_sound): (its state, "ok" with no gaps else "change"; its words: how the device was
+    had, the device's period, the time to the device's output where its clock measured it; the gaps, the device's and
+    the game's own together). None without a result."""
+    if not result:
+        return None
+    words = [w("sound.last.mode." + result["mode"])]
+    if result["period_ms"] > 0:
+        words.append(w("sound.last.period", ms=milliseconds(result["period_ms"])))
+    if result["latency_measures"] > 0:
+        words.append(w("sound.last.out", ms=milliseconds(result["latency_ms"])))
+    gaps = result["gaps"] + result["game_gaps"]
+    said = w("sound.last.no_gaps") if gaps == 0 else w("sound.last.gap") if gaps == 1 else w("sound.last.gaps", n=gaps)
+    return ("ok" if gaps == 0 else "change", ", ".join(words), said)
 
 
 class NotAPackage(errors.Worded):

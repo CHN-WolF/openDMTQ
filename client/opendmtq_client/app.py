@@ -20,9 +20,10 @@ log = logging.getLogger("opendmtq_client")
 
 # The menu, left to right, in English in both languages as the site's and the game's menus are.
 NAV = ("play", "screen", "sound", "controls", "online", "help", "about")
-# The pages that show what a game changes (the last game, the player's log, the app PLAY got first): drawn again when a
-# game ends while one of them is on show. The others show settings, which a game leaves as they were.
-GAME_PAGES = ("play", "help", "online")
+# The pages that show what a game changes (the last game, the last game's sound, the player's log, the app PLAY got
+# first): drawn again when a game ends while one of them is on show. The others show settings, which a game leaves as
+# they were.
+GAME_PAGES = ("play", "sound", "help", "online")
 # The room under the column's foot (PLAY, the guide's buttons) to the window's edge, and how far a lamp sits down to stand
 # on the status's first line (logical pixels).
 FOOT_UNDER, STATUS_LAMP_DROP = 20, 3
