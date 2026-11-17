@@ -133,6 +133,19 @@ class DashesTest(unittest.TestCase):
                     self.assertNotRegex(line, "[\u2013\u2014]", f"{os.path.relpath(path, ROOT)}:{n}")
 
 
+class DownloadWordTest(unittest.TestCase):
+    def test_the_owners_word_for_getting_the_app(self):
+        # Getting the app or a file is "다운로드" in every Korean string, the site's, the admin pages', the launcher's and
+        # the player's (the owner's word, "앱 다운로드"; 내려받기 had taken its place in 48 of them).
+        paths = [os.path.join(ROOT, *p.split("/")) for p in (
+            "server/portal/strings.php", "tools/opendmtq_tools/strings.py", "client/opendmtq_client/i18n.py")]
+        paths += glob.glob(os.path.join(ROOT, "arm32", "desktop", "*.cpp")) + glob.glob(os.path.join(ROOT, "arm32", "desktop", "*.h"))
+        for path in paths:
+            with open(path, encoding="utf-8") as f:
+                for n, line in enumerate(f, 1):
+                    self.assertNotIn("내려받", line, f"{os.path.relpath(path, ROOT)}:{n}")
+
+
 class PlayerRateTest(unittest.TestCase):
     def test_the_readme_says_the_players_own_limit(self):
         # The player takes any frame limit up to its own most (arm32/desktop/settings.cpp) and follows the display's

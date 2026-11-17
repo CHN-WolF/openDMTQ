@@ -176,7 +176,7 @@ bool unpack_libraries(const std::string& apk_name, const std::string& libs, std:
     struct stat st {};
     if (stat(app().host_apk.c_str(), &st) != 0) {
         error = say("The app is not beside the player: unzip the download again, whole, and start the player in its folder.",
-                    "플레이어 옆에 앱이 없습니다. 내려받은 파일을 다시 통째로 압축 풀고, 그 폴더에서 플레이어를 실행하세요.") +
+                    "플레이어 옆에 앱이 없습니다. 다운로드한 파일을 다시 통째로 압축 풀고, 그 폴더에서 플레이어를 실행하세요.") +
                 "\n(" + apk_name + ")";
         return false;
     }

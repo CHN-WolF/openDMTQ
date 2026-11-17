@@ -70,6 +70,7 @@ it runs ([testing.md](testing.md)):
 | PAGE-80 | The download page after the server moved to another address, in English and Korean | Phones and tablets alike in both languages, and what a Windows PC does: the installer from this page puts the launcher on the new address (main said phones in English, phones and tablets in Korean, and nothing to PC players) | `tests/game/moved.php#and what PCs do` | unit |
 | PAGE-81 | An empty value on the site and the admin pages (a player's average with no chart, a broadcast's size before its video, a request's size, a recording's songs, a song's plays) | A plain mark, no en or em dash anywhere in the pages and their words (main showed an en dash in those five places) | `cli/tests/test_repo.py#test_no_dash_on_the_pages` | unit |
 | PAGE-82 | The download page at a computer's width with the installer for Windows on offer | One lime button, the app's; the installer's as large in quiet metal (main lit both) | `tests/ui/audit.js#the download page has one lime button, the app` | ui |
+| PAGE-83 | Getting the app or a file in Korean: the site, the admin pages, the launcher and the player | "다운로드" in every string ("앱 다운로드", "다운로드 페이지", "CSV 다운로드"), the owner's word, never 내려받기 (main had it in 48 strings) | `cli/tests/test_repo.py#test_the_owners_word_for_getting_the_app` | unit |
 
 ## TS-LIVE: broadcasts and replays
 
