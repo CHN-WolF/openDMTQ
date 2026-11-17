@@ -239,11 +239,11 @@ public:
     }
     const char* name() const override { return "WASAPI"; }
     int rate() const override { return rate_; }
-    double buffer_ms() const override { return buffer_ms_; }
+    double buffer_ms() const override { return buffer_ms_.load(); }
     std::size_t period() const override { return period_; }
     // How the device was last had, and the period its sound is made in then (the last game's result).
-    const char* mode() const override { return mode_key_; }
-    double period_ms() const override { return period_ms_; }
+    const char* mode() const override { return mode_key_.load(); }
+    double period_ms() const override { return period_ms_.load(); }
     Latency take_latency() override {
         std::lock_guard<std::mutex> l(latency_lock_);
         const Latency out = latency_;
@@ -437,7 +437,7 @@ private:
         mode_key_ = "shared";
         // The audio engine's own period for the device: what its sound is made in, shared.
         REFERENCE_TIME engine = 0, least = 0;
-        period_ms_ = SUCCEEDED(client_->GetDevicePeriod(&engine, &least)) && engine > 0 ? static_cast<double>(engine) / 1e4 : 0;
+        period_ms_ = SUCCEEDED(client_->GetDevicePeriod(&engine, &least)) && engine > 0 ? static_cast<double>(engine) / 1e4 : 0.0;
         return ready();
     }
     // The device alone, in the first format it takes at the mixer's rate, with the period the buffer setting asks for.
@@ -555,12 +555,12 @@ private:
         REFERENCE_TIME latency = 0, engine = 0, shortest = 0;
         client_->GetStreamLatency(&latency);
         if (latency > 0) {
-            jvm::log("player: WASAPI: %s, %u frames buffered (%.1f ms), stream latency %.1f ms", mode_, frames_, buffer_ms_, static_cast<double>(latency) / 1e4);
+            jvm::log("player: WASAPI: %s, %u frames buffered (%.1f ms), stream latency %.1f ms", mode_, frames_, buffer_ms_.load(), static_cast<double>(latency) / 1e4);
         } else if (SUCCEEDED(client_->GetDevicePeriod(&engine, &shortest)) && engine > 0) {
             jvm::log("player: WASAPI: %s, %u frames buffered (%.1f ms), the audio engine's period %.1f ms (Windows gives no stream latency)", mode_,
-                     frames_, buffer_ms_, static_cast<double>(engine) / 1e4);
+                     frames_, buffer_ms_.load(), static_cast<double>(engine) / 1e4);
         } else {
-            jvm::log("player: WASAPI: %s, %u frames buffered (%.1f ms)", mode_, frames_, buffer_ms_);
+            jvm::log("player: WASAPI: %s, %u frames buffered (%.1f ms)", mode_, frames_, buffer_ms_.load());
         }
         started_ = false;
         pending_.clear();
@@ -619,13 +619,15 @@ private:
     Format format_;
     bool exclusive_ = false;
     const char* mode_ = "shared";
-    // The same for the result file (Output::mode), and the period the device's sound is made in.
-    const char* mode_key_ = "shared";
-    double period_ms_ = 0;
+    // The same for the result file (Output::mode), and the period the device's sound is made in: set on the mixer's
+    // thread at a (re)start, read by the reporter's.
+    std::atomic<const char*> mode_key_{"shared"};
+    std::atomic<double> period_ms_{0};
     // Alone: the mixer's frames not yet in a whole buffer.
     std::vector<float> pending_;
     int rate_ = 48000;
-    double buffer_ms_ = 20;
+    // The device's buffer in milliseconds: set at a (re)start, read by the reporter's thread too.
+    std::atomic<double> buffer_ms_{20};
     bool started_ = false, thread_ready_ = false, named_missing_logged_ = false;
     Clock::time_point retry_at_{};
 };

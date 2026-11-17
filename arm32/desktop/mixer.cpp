@@ -503,7 +503,14 @@ std::string Mixer::result() {
     for (const auto& s : closed_) game_gaps += s->underruns();
     const std::time_t now = std::time(nullptr);
     char when[32] = "";
-    if (const std::tm* local = std::localtime(&now)) std::strftime(when, sizeof when, "%Y-%m-%dT%H:%M:%S", local);
+    // The local time by the calls that keep their own copy (this runs on the reporter's thread beside the game's).
+    std::tm local{};
+#ifdef _WIN32
+    const bool known = localtime_s(&local, &now) == 0;
+#else
+    const bool known = localtime_r(&now, &local) != nullptr;
+#endif
+    if (known) std::strftime(when, sizeof when, "%Y-%m-%dT%H:%M:%S", &local);
     const Options& asked = options();
     char text[1024];
     std::snprintf(text, sizeof text,
