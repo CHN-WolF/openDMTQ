@@ -362,12 +362,20 @@ private:
         LARGE_INTEGER now{}, frequency{};
         QueryPerformanceCounter(&now);
         QueryPerformanceFrequency(&frequency);
-        // The performance counter now in the 100-nanosecond units GetPosition gives its moment in.
+        // The performance counter now in the 100-nanosecond units GetPosition gives its moment in, and the time since
+        // that moment: a moment that is none (0, ahead of now, or a second and more ago, which Wine's gives) leaves the
+        // position as of now, which it was read a moment ago.
         const double now_100ns = static_cast<double>(now.QuadPart) * 1e7 / static_cast<double>(frequency.QuadPart);
-        const double played = static_cast<double>(position) / static_cast<double>(clock_rate_) + (now_100ns - static_cast<double>(at)) / 1e7;
+        double since = (now_100ns - static_cast<double>(at)) / 1e7;
+        if (!at || since < 0 || since > 1) since = 0;
+        const double played = static_cast<double>(position) / static_cast<double>(clock_rate_) + since;
         const double written = static_cast<double>(frames_in_) / rate_;
+        const double ms = 1000.0 * (written - played);
+        // A clock that says what cannot be (its position past what was written, or more than ten seconds behind) is
+        // not counted.
+        if (ms < 0 || ms > 10000) return;
         std::lock_guard<std::mutex> l(latency_lock_);
-        latency_.add(1000.0 * (written - played));
+        latency_.add(ms);
     }
     // The device to play on: the named one while it is there, else Windows' default output.
     bool find_device() {
