@@ -181,7 +181,11 @@ curl -sf -m 10 -b "$JAR" -c "$JAR" -L --data-urlencode "csrf=$CSRF" --data-urlen
 rm -f "$JAR"
 # MY PAGE's account changes inside the server, on accounts of the check's own (tests/ui/account.php): its lines with the
 # stages', what failed said here.
-docker exec -i "$SITE" php < "$UI/account.php" > "$REPORT/account.txt" || FAILED=1
+if ! docker exec -i "$SITE" php < "$UI/account.php" > "$REPORT/account.txt" 2>&1; then
+  FAILED=1
+  # Stopped before its end (a page's code missing or broken): said as a failure of its own, with the server's words in the file.
+  grep -q '^FAIL' "$REPORT/account.txt" || echo "FAIL account: the checks stopped before their end (account.txt says why)" >> "$REPORT/account.txt"
+fi
 cat "$REPORT/account.txt" >> "$REPORT/results.txt"
 grep '^FAIL' "$REPORT/account.txt" || true
 echo "stage account: $(grep -c '^PASS' "$REPORT/account.txt") passed, $(grep -c '^FAIL' "$REPORT/account.txt") failed"

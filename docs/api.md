@@ -287,6 +287,7 @@ A change answers `{"done": "<what>", "account": {...}}` with the account as it i
 | 400 | `missing_field`, `bad_password`, `password_mismatch`, `bad_id`, `bad_json` | A field empty, a password not 6 to 64 characters (10 to 64 for an account with admin rights), the two new ones not the same, an ID not 3 to 20 Latin letters, digits and `. _ -`, a body that is no JSON object |
 | 401 | `wrong_password` | Not the account's current password. It counts toward the sign-in's limit, and takes a second |
 | 403 | `signin`, `cross_site` | No cookie that signs in; a change sent from another site's page |
+| 404 | `unknown` | A change it does not know: `do` is `password`, `id` or `signout` |
 | 409 | `id_taken`, `same_id`, `owner_account` | Another account's ID in any letter case, or the owner's; the ID it has; the server's own account, whose password is changed on the admin pages' Server page |
 | 429 | `throttled` | Too many wrong passwords from this address lately, as at the sign-in (`Retry-After: 600`) |
 | 503 | `not_saved` | The server could not write its database just then |
