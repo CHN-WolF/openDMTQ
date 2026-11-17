@@ -1010,7 +1010,8 @@ ROUTES = [
           errors=[(400, "missing_password", "No password."),
                   (400, "bad_password", "Not 10 to 64 characters, or with a space, a quote, $, #, \\ or `."),
                   (403, "owner_only", "The token is not the owner's: only the owner changes the owner's password."),
-                  (409, "by_command", "Docker Compose or Kubernetes: the command line changes it (the message names the commands).")]),
+                  (409, "by_command", "Docker Compose or Kubernetes: the command line changes it (the message names the commands)."),
+                  (500, "password_failed", ".env or the players' site's copy of the password could not be written: nothing changed (the message says which).")]),
     Route("POST", "/server/repair", "write", "server_repair", "Server", "Checks and repairs the server, as the Server page's Check and repair does.",
           "Its folders, the database's integrity, the owner's sign-in for the players' site, the song list, the site's look kept here, "
           "the phone app (built again when it is missing or for another address) and the program's own files against the install's "

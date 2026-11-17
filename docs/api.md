@@ -291,7 +291,7 @@ A change answers `{"done": "<what>", "account": {...}}` with the account as it i
 | 401 | `wrong_password` | Not the account's current password. It counts toward the sign-in's limit, and takes a second |
 | 403 | `signin`, `cross_site` | No cookie that signs in; a change sent from another site's page |
 | 404 | `unknown` | A change it does not know: `do` is `password`, `id` or `signout` |
-| 409 | `id_taken`, `same_id`, `owner_account` | Another account's ID in any letter case, or the owner's; the ID it has; the server's own account, whose password is changed on the admin pages' Server page |
+| 409 | `id_taken`, `same_id`, `owner_account` | Another account's ID in any letter case, or the owner's (said only after the right password, and counted toward the sign-in's limit as a wrong one); the ID it has; the server's own account, whose password is changed on the admin pages' Server page |
 | 429 | `throttled` | Too many wrong passwords from this address lately, as at the sign-in (`Retry-After: 600`) |
 | 503 | `not_saved` | The server could not write its database just then |
 
@@ -834,6 +834,7 @@ Refusals:
 - `400 bad_password`: Not 10 to 64 characters, or with a space, a quote, $, #, \ or `.
 - `403 owner_only`: The token is not the owner's: only the owner changes the owner's password.
 - `409 by_command`: Docker Compose or Kubernetes: the command line changes it (the message names the commands).
+- `500 password_failed`: .env or the players' site's copy of the password could not be written: nothing changed (the message says which).
 
 #### `POST /server/repair`
 

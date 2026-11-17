@@ -673,8 +673,20 @@ def address_parts(address):
     return (host, int(port)) if sep and port.isdigit() else (address, 80)
 
 
+# One change of .env at a time in this service (the Server page's port and password, the setup's address): two at once
+# would each write the file as it read it, and one change would be lost.
+_env_lock = threading.Lock()
+
+
 def save_env(updates):
-    """Set keys in .env, keeping every other line as it is (as cli/opendmtq_cli/env.save does)."""
+    """Set keys in .env, keeping every other line as it is (as cli/opendmtq_cli/env.save does). One at a time (_env_lock),
+    through a file of this writer's own, swapped in whole."""
+    with _env_lock:
+        _save_env(updates)
+
+
+def _save_env(updates):
+    """save_env()'s work, with the lock held."""
     try:
         # Without a byte order mark in front (Notepad's), which would join the first line's key; written back without it.
         with open(ENV_FILE, encoding="utf-8-sig") as f:
@@ -689,11 +701,20 @@ def save_env(updates):
             lines[i] = f"{key}={updates[key]}"
             done.add(key)
     lines += [f"{k}={v}" for k, v in updates.items() if k not in done]
-    # The passwords live here: readable by its owner only, as the command line writes it, and through a sibling swapped
-    # in, so an interrupted write never leaves half a file.
-    with core.private_file(ENV_FILE + ".tmp", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    os.replace(ENV_FILE + ".tmp", ENV_FILE)
+    # The passwords live here: readable by its owner only, as the command line writes it, and through a sibling of this
+    # writer's own swapped in, so an interrupted write never leaves half a file and two writers never share one.
+    temp = f"{ENV_FILE}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with core.private_file(temp, encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        os.replace(temp, ENV_FILE)
+    except OSError:
+        # .env stays as it was; this writer's half-written file goes, and the caller hears why.
+        try:
+            os.remove(temp)
+        except OSError:
+            pass
+        raise
 
 
 # ------------------------------------------------------------------------------ the one-time sign-in
@@ -734,7 +755,8 @@ def sign_in_owner():
     session.clear()
     session.permanent = True
     sid = auth.session_begin()
-    session.update(ok=True, sid=sid, csrf=secrets.token_urlsafe(24), who=core.ADMIN_USER, stamp="owner")
+    # With the stamp of the owner's password, as the sign-in page's: a new password ends this sign-in too.
+    session.update(ok=True, sid=sid, csrf=secrets.token_urlsafe(24), who=core.ADMIN_USER, stamp="owner", pw=auth.owner_stamp())
 
 
 def from_this_pc():

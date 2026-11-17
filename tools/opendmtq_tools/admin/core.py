@@ -44,7 +44,52 @@ PYTHON = [sys.executable, "-I", "-X", "utf8"]
 BACKUPS = os.environ.get("OPENDMTQ_BACKUPS", "/backups")
 SERVER_URL = os.environ.get("SERVER_URL", "http://server:8080")
 PUBLIC_HOST = os.environ.get("PUBLIC_HOST", "")
-PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+
+def env_file_value(name):
+    """A setting as the server PC's own install keeps it in .env (OPENDMTQ_ENV_FILE, on a host install and the Windows
+    bundle), read as Docker Compose and the command line read the file: the last line that sets it, quotes and an inline
+    comment taken off. None without such a file, or without the setting in it."""
+    path = os.environ.get("OPENDMTQ_ENV_FILE", "")
+    if os.environ.get("OPENDMTQ_HOST_INSTALL") != "yes" or not path:
+        return None
+    try:
+        # Notepad's byte order mark in front is no part of the first key.
+        with open(path, encoding="utf-8-sig") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+    found = None
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        # export KEY=value is the same setting.
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, sep, value = line.partition("=")
+        if not sep or key.strip() != name:
+            continue
+        value = value.strip()
+        # Matching outer quotes are no part of the value; an unquoted one ends at " #".
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        elif " #" in value:
+            value = value.split(" #", 1)[0].rstrip()
+        found = value
+    return found
+
+
+def configured_password():
+    """The owner's password at this service's start. On the server PC's own install, .env's as it is now: the host program
+    hands this service the settings it read at its own start, and one it starts again after a crash would bring back a
+    password changed since on the Server page (the owner's sign-in for the site with it). Elsewhere, what the service was
+    started with (Docker Compose and Kubernetes start it anew with .env's or the Secret's)."""
+    kept = env_file_value("ADMIN_PASSWORD")
+    return kept if kept is not None else os.environ.get("ADMIN_PASSWORD", "")
+
+
+PASSWORD = configured_password()
 CHECK_UDID = "opendmtq-check"
 
 # One row per player: scores are saved under the guid, and a transfer code gives a second phone's

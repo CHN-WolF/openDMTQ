@@ -150,16 +150,35 @@ def owner_stamp():
     return hmac.new(core.app.secret_key, core.PASSWORD.encode("utf-8", "replace"), hashlib.sha256).hexdigest()[:20]
 
 
+def _session_began():
+    """When this browser's sign-in to these pages began: its end less the sessions' life. Called with the lock held."""
+    return _sessions.get(session.get("sid"), 0) - core.app.permanent_session_lifetime.total_seconds()
+
+
+def owner_signed_out_at():
+    """The moment the owner pressed Sign out everywhere else on the site's MY PAGE (owner-signed-out beside the database,
+    which the site writes: the owner has no row in the accounts' table), or None."""
+    try:
+        with open(os.path.join(os.path.dirname(core.DB), "owner-signed-out"), encoding="ascii") as f:
+            at = f.read().strip()
+    except OSError:
+        return None
+    return int(at) if at.isdigit() else None
+
+
 def _owner_session_current():
-    """True while an owner's session was made with the owner's password as it is now. One from before sessions kept that
-    (an older version's) counts until the password is changed after it began: its start is its end less the sessions'
-    life. Called with the sessions' lock held."""
+    """True while an owner's session was made with the owner's password as it is now, and began after the owner's last Sign
+    out everywhere else. One from before sessions kept the password's stamp (an older version's) counts until the password
+    is changed after it began. Called with the sessions' lock held."""
+    began = _session_began()
+    cut = owner_signed_out_at()
+    if cut and began < cut:
+        return False
     kept = session.get("pw")
     if kept is not None:
         return same_text(str(kept), owner_stamp())
     changed_at = core.settings().get("owner_password_at")
-    until = _sessions.get(session.get("sid"), 0)
-    return not changed_at or until - core.app.permanent_session_lifetime.total_seconds() >= changed_at
+    return not changed_at or began >= changed_at
 
 
 def signed_in():
@@ -172,8 +191,13 @@ def signed_in():
         # their password, at the next page they open.
         if session.get("stamp") == "owner":
             return _owner_session_current()
+        began = _session_began()
     row = account_find(session.get("who", ""))
-    return bool(row and row["admin"] and not row["off"] and same_text(account_stamp(row["pass"]), session.get("stamp", "")))
+    if not (row and row["admin"] and not row["off"] and same_text(account_stamp(row["pass"]), session.get("stamp", ""))):
+        return False
+    # The account's Sign out everywhere else on the site's MY PAGE ends its sign-ins to these pages made before it too.
+    cut = row["signed_out_at"] if "signed_out_at" in row.keys() else None
+    return not (cut and began < cut)
 
 
 def _account_ended():
@@ -403,8 +427,24 @@ def owner_file_write():
     return owner.write_file(owner_file(), core.ADMIN_USER, core.PASSWORD, account_hash, account_pass_ok)
 
 
+def owner_file_at_start():
+    """owner_file_write() as this service starts. Written over one that was there: the owner's password changed in .env
+    since the last start (the command line's password, or .env edited by hand), and the owner's sign-ins to these pages
+    from before the change end with it, as the Server page's change ends them: those without the password's stamp too (the
+    moment of the change, owner_password_at). Returns what owner_file_write() did."""
+    existed = os.path.exists(owner_file())
+    done = owner_file_write()
+    if done == "written" and existed:
+        try:
+            core.save_settings(owner_password_at=int(time.time()))
+        except OSError:
+            # The stamped sign-ins end anyway (their stamp is of the old password).
+            pass
+    return done
+
+
 # At start: the owner signs in to the site with what .env says from the first page on.
-owner_file_write()
+owner_file_at_start()
 
 
 @app.route(BASE + "/login", methods=["GET", "POST"])

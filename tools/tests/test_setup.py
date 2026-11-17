@@ -99,6 +99,19 @@ def game_folder(root):
 class OneTimeSignInTest(unittest.TestCase):
     """The host program opens the browser signed in: a key in the run folder, taken once, from this PC only."""
 
+    def test_its_sign_in_ends_with_a_new_password(self):
+        # The sign-in it makes keeps the stamp of the owner's password, as the sign-in page's does: a new password (the
+        # command line's, taken at the service's next start) ends it. Before, it kept none and lasted.
+        with HostInstall() as inst:
+            inst.client.get(BASE + f"/setup/start?key={inst.key()}")
+            self.assertEqual(inst.client.get(BASE + "/setup").status_code, 200)
+            with inst.client.session_transaction(BASE + "/") as s:
+                self.assertEqual(s.get("pw"), admin.auth.owner_stamp())
+            with mock.patch.object(admin.core, "PASSWORD", "a-new-one-12"):
+                r = inst.client.get(BASE + "/setup")
+            self.assertEqual(r.status_code, 302)
+            self.assertIn("/login", r.headers["Location"])
+
     def test_the_key_signs_in_once(self):
         with HostInstall() as inst:
             key = inst.key()

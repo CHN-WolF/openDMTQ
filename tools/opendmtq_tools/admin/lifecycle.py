@@ -233,11 +233,28 @@ def change_owner_password(new, again, owner):
         raise Refused(400, "bad_password", t("pw.bad"))
     if again != new:
         raise Refused(400, "password_mismatch", t("acc.mismatch"))
-    setup.save_env({"ADMIN_PASSWORD": new})
+    old = core.PASSWORD
+    try:
+        setup.save_env({"ADMIN_PASSWORD": new})
+    except OSError as e:
+        # .env as it was: nothing changed.
+        raise Refused(500, "password_failed", t("pw.not_saved", why=core.why(e)))
     core.PASSWORD = new
-    # When it changed: an owner's sign-in from before sessions kept their password's stamp ends with it too.
-    core.save_settings(owner_password_at=int(time.time()))
-    auth.owner_file_write()
+    # The site's copy of it (owner.pass): without it the site would keep the old password while these pages took the new
+    # one, so what was is put back and the change is refused in words.
+    if auth.owner_file_write() == "failed":
+        core.PASSWORD = old
+        try:
+            setup.save_env({"ADMIN_PASSWORD": old})
+        except OSError:
+            app.logger.warning("the owner's password: .env could not be put back")
+        raise Refused(500, "password_failed", t("pw.site_failed"))
+    # When it changed: an owner's sign-in from before sessions kept their password's stamp ends with it too. Without the
+    # settings' file the change stands all the same (the stamped sign-ins end anyway).
+    try:
+        core.save_settings(owner_password_at=int(time.time()))
+    except OSError:
+        app.logger.warning("the owner's password: the moment of its change could not be noted")
     changed("server:password", core.ADMIN_USER)
 
 

@@ -32,11 +32,12 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   was earned, their places overall and this month, their broadcasts, and every play and best record a page at a time.
   The account tab shows everything the site keeps about the account and changes the password and the ID (with the
   current password, under the sign-in's limit; the plays and the API tokens stay with the account) and signs out
-  everywhere else; each change is in the admin pages' log of changes. Its JSON twin, `me.php?json`, for a script with the
-  site's cookie.
+  everywhere else; each of the three ends the account's other sign-ins, to the admin pages too, and each is in the admin
+  pages' log of changes. Its JSON twin, `me.php?json`, for a script with the site's cookie.
 - The owner's password on the admin pages' Server page, by the owner alone: it works at once for the admin pages and the
-  players' site, and the owner's other sign-ins end. On the command line, also the way in when it is lost,
-  `./opendmtq password` (`OpenDMTQ.exe password` on Windows); the API's `POST /server/password`.
+  players' site, and the owner's other sign-ins end (also after a change on the command line, at the admin pages' next
+  start). On the command line, also the way in when it is lost, `./opendmtq password` (`OpenDMTQ.exe password` on
+  Windows); the API's `POST /server/password`.
 
 ### Changed
 

@@ -25,7 +25,8 @@ admin pages, where the owner sets up and runs the server. What players do on the
 - **MY PAGE:** the signed-in player's own page, from their name and badge at the top of every page: their profile as the
   game shows it (shown only), their achievements and places, every play and best record a page at a time, their
   broadcasts, and their account, where they change their password and ID and sign out everywhere else
-  ([playing](play.md#my-page)). Nobody else sees it.
+  ([playing](play.md#my-page)). Nobody else sees it. For an account that opens these pages each of the three ends its
+  sign-ins here too, and for the owner Sign out everywhere else does.
 
 A score played with the keyboard of the PC client's player has a small keyboard before it wherever the site shows it: on
 a song's leaderboards, a player's recent plays and best records, and the home page's newest records (Keyboard play when

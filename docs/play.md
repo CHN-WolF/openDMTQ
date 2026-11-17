@@ -101,7 +101,8 @@ Your name or badge at the top of every page of the site opens **MY PAGE**. Only 
     game player, not the ID. An account's API tokens go with it;
   - **Sign out everywhere else.**
 
-  After any of the three, every other browser and the PC client sign in again; this browser stays signed in. Wrong
+  After any of the three, every other browser and the PC client sign in again; this browser stays signed in. An account
+  that opens the admin pages signs in to them again too, in this browser as well. Wrong
   current passwords count as wrong sign-ins do: after ten from one place in ten minutes, the next waits. Each change is
   in the owner's log of changes.
 - **The server's own account,** the owner's ID and password from `.env`, changes its password on the admin pages'

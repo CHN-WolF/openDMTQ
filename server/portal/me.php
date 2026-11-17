@@ -361,7 +361,7 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
     <?php $said_here = ($form === 'password' && is_array($said)) ? $said : []; ?>
     <section class="card" id="password">
       <h2><?= t('me.pw') ?></h2>
-      <p class="lead"><?= t('me.pw_lead') ?></p>
+      <p class="lead"><?= t($account['admin'] ? 'me.pw_lead_admin' : 'me.pw_lead') ?></p>
       <?php if ($said_here && $said_here[0] === ''): ?><p class="error" role="alert"><?= t($said_here[1]) ?></p><?php endif; ?>
       <form method="post" action="/opendmtq/me.php?tab=account&amp;do=password" class="me-form" novalidate>
         <?php // The ID for the browser's password manager, which keeps the new password under it. ?>
@@ -396,7 +396,8 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
   <?php // Every other sign-in of the account ended; this browser's stays. ?>
   <section class="card" id="signout">
     <h2><?= t('me.out') ?></h2>
-    <p class="lead"><?= t('me.out_lead') ?></p>
+    <?php // An account that opens the admin pages: its sign-ins to them end too (tools/opendmtq_tools/admin/auth.py). ?>
+    <p class="lead"><?= t($account['admin'] ? 'me.out_lead_admin' : 'me.out_lead') ?></p>
     <?php if ($form === 'signout' && is_array($said)): ?><p class="error" role="alert"><?= t($said[1]) ?></p><?php endif; ?>
     <form method="post" action="/opendmtq/me.php?tab=account&amp;do=signout"><div class="btn-line"><button class="btn"><?= t('me.out_button') ?></button></div></form>
   </section>
