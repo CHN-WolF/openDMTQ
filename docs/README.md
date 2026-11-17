@@ -35,7 +35,8 @@ quick start for each way to run a server, and [Questions and answers](faq.md) co
 | [The API](api.md) | All the admin pages show and do, and what the players' site shows, as JSON |
 | [Troubleshooting](troubleshooting.md#for-server-owners) | When a phone cannot connect, the app does not install or build, or the server does not start |
 | [Questions and answers](faq.md) | What it needs, which phones, playing from outside your home, what leaves your computer |
-| [License and notice](notice.md) | What the project is, its license, the third-party parts |
+| [License and notice](notice.md) | What the project is, its license, what it asks of whoever runs a server |
+| [Third-party notices](THIRD_PARTY_NOTICES.md) | The libraries, fonts and programs OpenDMTQ brings with it, and their licenses |
 
 <a id="working-on-the-code"></a>
 

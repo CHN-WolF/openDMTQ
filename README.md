@@ -189,13 +189,10 @@ Accounts, scores and recordings stay in `data/` on your computer ([privacy](docs
 Report a bug or ask for a feature in [Issues](https://github.com/kanggu12/openDMTQ/issues/new/choose); see what changed
 in [CHANGELOG.md](CHANGELOG.md), and report security problems through [SECURITY.md](.github/SECURITY.md).
 
-## Credits and license
+## License
 
-Earlier DMTQ servers documented what the game requests. The web pages follow the look of the DJMAX Technika "Platinum Crew"
-site with original artwork and fonts cut down from Saira and Pretendard; live video plays with hls.js; the runtime is
-built on Dynarmic.
+OpenDMTQ's own code and documentation are under the MIT License ([LICENSE](LICENSE)). The libraries, fonts and programs
+it brings with it are listed with their licenses in [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
 
-OpenDMTQ's own code and documentation are under the MIT License ([LICENSE](LICENSE)); the parts it brings with it are
-listed in [the notice](docs/notice.md#license). The license does not cover the game or its files, which are not in this
-repository. DJMAX and TECHNIKA Q are trademarks of NEOWIZ. If the copyright holder requests it through the issues, this
-project may be made private or shut down, in whole or in part ([notice](docs/notice.md)).
+The license does not cover the game, and DJMAX and TECHNIKA Q are trademarks of NEOWIZ. OpenDMTQ contains no game data.
+If the copyright holder requests it, this project may be made private or shut down ([notice](docs/notice.md)).

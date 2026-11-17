@@ -351,4 +351,4 @@ Back key. CI runs the Windows tests under Wine and on Windows itself (`test_wind
 `build.sh` fetches Dynarmic at a fixed commit and the 32-bit system libraries from Google's AOSP
 system image (checksum checked) into `_work/arm32`, which is not tracked. Those libraries are open source and unchanged, and
 their licenses go with them (`NOTICES.txt`, `libc++-LICENSE.txt`, and the image's own notices): see
-[License and notice](../docs/notice.md).
+[Third-party notices](../docs/THIRD_PARTY_NOTICES.md).

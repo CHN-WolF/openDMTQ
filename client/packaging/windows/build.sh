@@ -3,9 +3,8 @@
 #   1. pictures, the version and the update address (Linux Python with Pillow, the UI test image)
 #   2. PyInstaller under Wine with a Windows Python -> one folder with OpenDMTQ.exe and OpenDMTQ-cmd.exe
 #   3. the player for Windows (opendmtq-player-windows.zip, arm32/bundle_windows.sh) into that folder as player\, and
-#      the licence texts of what the program carries into its licenses\ (docs/notice.md)
-#   4. Velopack's vpk (.NET) -> Velopack's setup and the update packages: the whole package, and a delta package from
-#      the previous release's when it is given (previous.py: a launcher of that version then downloads what changed)
+#      the licence texts of what the program carries into its licenses\ (docs/THIRD_PARTY_NOTICES.md)
+#   4. Velopack's vpk (.NET) -> Velopack's setup and the update packages
 #   5. PyInstaller again -> OpenDMTQ-Setup.exe: the installer's dialogs with Velopack's setup inside
 # Usage: [OPENDMTQ_UPDATE_SOURCE=<where releases are published>] [PLAYER_ZIP=<zip>]
 #        [OPENDMTQ_PREVIOUS_RELEASE=<package or folder>] [OPENDMTQ_TEST_UPDATE_KEY=<public key>]

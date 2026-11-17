@@ -582,8 +582,19 @@ class LicenseTest(unittest.TestCase):
         self.assertIn('THE SOFTWARE IS PROVIDED "AS IS"', text)
 
     def test_every_place_that_names_it_says_the_same(self):
-        for path in ("README.md", "docs/notice.md", "arm32/NOTICES.txt"):
+        # The README's License section, the notice, the third-party list and the runtime's own notices name it alike.
+        for path in ("README.md", "docs/notice.md", "docs/THIRD_PARTY_NOTICES.md", "arm32/NOTICES.txt"):
             self.assertIn("MIT License", self.read(path), path)
+
+    def test_the_readme_license_section_keeps_the_owners_sentence(self):
+        # The README's License section carries the sentence the site's footers carry, word for word.
+        text = self.read("README.md")
+        section = text.split("\n## License\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("OpenDMTQ contains no game data. If the copyright holder requests it, this project may be made "
+                      "private or shut down", " ".join(section.split()))
+        # The third-party parts are listed in the file the README points at, which exists.
+        self.assertIn("docs/THIRD_PARTY_NOTICES.md", section)
+        self.assertTrue(os.path.exists(os.path.join(ROOT, "docs", "THIRD_PARTY_NOTICES.md")))
         self.assertIn("MIT License", self.read("server/portal/strings.php"))
 
     def test_the_site_shows_the_same_text(self):
