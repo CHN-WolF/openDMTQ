@@ -241,6 +241,15 @@ public:
     int rate() const override { return rate_; }
     double buffer_ms() const override { return buffer_ms_; }
     std::size_t period() const override { return period_; }
+    // How the device was last had, and the period its sound is made in then (the last game's result).
+    const char* mode() const override { return mode_key_; }
+    double period_ms() const override { return period_ms_; }
+    Latency take_latency() override {
+        std::lock_guard<std::mutex> l(latency_lock_);
+        const Latency out = latency_;
+        latency_ = {};
+        return out;
+    }
     bool write(const float* data, std::size_t frames) override {
         if (!thread_ready_) {
             // The mixer's thread: in COM's shared apartment, and scheduled as audio by Windows.
@@ -309,9 +318,11 @@ private:
             put_frames(format_, data + done * kChannels, n, out);
             render_->ReleaseBuffer(n, 0);
             done += n;
+            frames_in_ += n;
         }
         // Playing once the first buffer is in, so that it starts with sound and not with an underrun.
         if (!started_) begin();
+        measure();
         return true;
     }
     // Alone: the device plays whole buffers of its own size, one after each event that says it took the last. The mixer's
@@ -334,10 +345,29 @@ private:
             put_frames(format_, pending_.data(), frames_, out);
             render_->ReleaseBuffer(frames_, 0);
             pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(frames_) * kChannels);
+            frames_in_ += frames_;
             // Started once the first buffer is in, as the device alone wants it.
             if (!started_) begin();
+            measure();
         }
         return true;
+    }
+    // The latency now, from the device's own clock: the time from what was just written to the moment it plays, which
+    // is everything written less what the device has played by now (its position as of a moment, and the time since).
+    // Not in the first half second after a start, while the device fills its own buffers.
+    void measure() {
+        if (!clock_ || !clock_rate_ || !started_ || Clock::now() - started_at_ < std::chrono::milliseconds(500)) return;
+        UINT64 position = 0, at = 0;
+        if (FAILED(clock_->GetPosition(&position, &at))) return;
+        LARGE_INTEGER now{}, frequency{};
+        QueryPerformanceCounter(&now);
+        QueryPerformanceFrequency(&frequency);
+        // The performance counter now in the 100-nanosecond units GetPosition gives its moment in.
+        const double now_100ns = static_cast<double>(now.QuadPart) * 1e7 / static_cast<double>(frequency.QuadPart);
+        const double played = static_cast<double>(position) / static_cast<double>(clock_rate_) + (now_100ns - static_cast<double>(at)) / 1e7;
+        const double written = static_cast<double>(frames_in_) / rate_;
+        std::lock_guard<std::mutex> l(latency_lock_);
+        latency_.add(1000.0 * (written - played));
     }
     // The device to play on: the named one while it is there, else Windows' default output.
     bool find_device() {
@@ -396,6 +426,10 @@ private:
         format_ = Format{};
         period_frames_ = 0;
         mode_ = "shared";
+        mode_key_ = "shared";
+        // The audio engine's own period for the device: what its sound is made in, shared.
+        REFERENCE_TIME engine = 0, least = 0;
+        period_ms_ = SUCCEEDED(client_->GetDevicePeriod(&engine, &least)) && engine > 0 ? static_cast<double>(engine) / 1e4 : 0;
         return ready();
     }
     // The device alone, in the first format it takes at the mixer's rate, with the period the buffer setting asks for.
@@ -459,6 +493,9 @@ private:
         client_->GetBufferSize(&frames);
         period_frames_ = frames;
         mode_ = "alone";
+        mode_key_ = "exclusive";
+        // The device alone plays whole buffers of this size, one an event: its period.
+        period_ms_ = 1000.0 * frames / rate_;
         jvm::log("player: WASAPI: the device alone, %d channels of %d-bit %s, %u frames a buffer", format_.channels, format_.valid_bits,
                  format_.floats ? "floats" : "integers", frames);
         return true;
@@ -485,6 +522,9 @@ private:
         }
         period_frames_ = shortest;
         mode_ = "shared, low latency";
+        mode_key_ = "shared-low";
+        // The engine's shortest period, which this stream is made in.
+        period_ms_ = 1000.0 * shortest / rate_;
         jvm::log("player: WASAPI: low-latency shared mode, %u frames a period (the standard one %u)", shortest, standard);
         return true;
     }
@@ -498,6 +538,10 @@ private:
             return fail("no render client");
         }
         buffer_ms_ = 1000.0 * frames_ / rate_;
+        // The device's clock, for the latency's measure: frames counted from this start.
+        frames_in_ = 0;
+        clock_rate_ = 0;
+        if (SUCCEEDED(client_->GetService(__uuidof(IAudioClock), reinterpret_cast<void**>(&clock_))) && FAILED(clock_->GetFrequency(&clock_rate_))) clock_rate_ = 0;
         // What Windows adds after the buffer: the stream's latency where the driver gives it; where it gives none (0), the
         // period the audio engine mixes in, which is what it adds then.
         REFERENCE_TIME latency = 0, engine = 0, shortest = 0;
@@ -517,6 +561,7 @@ private:
     // The device, closed: its client and its event.
     void close() {
         if (client_) client_->Stop();
+        release(clock_);
         release(render_);
         release(client_);
         release(device_);
@@ -542,6 +587,7 @@ private:
     void begin() {
         client_->Start();
         started_ = true;
+        started_at_ = Clock::now();
     }
     IMMDeviceEnumerator* devices_ = nullptr;
     Watch* watch_ = nullptr;
@@ -549,6 +595,13 @@ private:
     IMMDevice* device_ = nullptr;
     IAudioClient* client_ = nullptr;
     IAudioRenderClient* render_ = nullptr;
+    // The device's clock (its position as it plays) and its units a second; the frames written since this start, and
+    // when it started; the latency measured since the last look (take_latency, from another thread too).
+    IAudioClock* clock_ = nullptr;
+    UINT64 clock_rate_ = 0, frames_in_ = 0;
+    Clock::time_point started_at_{};
+    std::mutex latency_lock_;
+    Latency latency_;
     HANDLE event_ = nullptr;
     // The device's buffer in frames, and the frames the output takes at a time from this start's mode (0: any number),
     // which the first start sets for the mixer (period_).
@@ -558,6 +611,9 @@ private:
     Format format_;
     bool exclusive_ = false;
     const char* mode_ = "shared";
+    // The same for the result file (Output::mode), and the period the device's sound is made in.
+    const char* mode_key_ = "shared";
+    double period_ms_ = 0;
     // Alone: the mixer's frames not yet in a whole buffer.
     std::vector<float> pending_;
     int rate_ = 48000;

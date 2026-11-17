@@ -9,6 +9,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <sys/prctl.h>
 
@@ -403,11 +406,41 @@ void Mixer::close(const std::shared_ptr<Stream>& stream) {
     if (closed_.size() > 32) closed_.erase(closed_.begin());
 }
 
+namespace {
+
+// The latency of `more` added to `into`: the counts and sums, the extremes of both.
+void merge(Latency& into, const Latency& more) {
+    if (!more.count) return;
+    into.min_ms = into.count ? std::min(into.min_ms, more.min_ms) : more.min_ms;
+    into.max_ms = into.count ? std::max(into.max_ms, more.max_ms) : more.max_ms;
+    into.sum_ms += more.sum_ms;
+    into.count += more.count;
+}
+
+// Where the last game's sound result goes (set_result_path), "" for nowhere.
+std::mutex g_result_lock;
+std::string g_result_path;
+
+}  // namespace
+
+void set_result_path(const std::string& path) {
+    std::lock_guard<std::mutex> l(g_result_lock);
+    g_result_path = path;
+}
+
 void Mixer::report() {
     std::lock_guard<std::mutex> l(lock_);
+    // The output's latency since the last look, into the game's.
+    const Latency stretch = output_->take_latency();
+    merge(latency_, stretch);
     jvm::log("audio: %s at %d Hz: %.1f s in periods of %.2f ms, %llu late", output_->name(), rate_,
              static_cast<double>(periods_.load() * period_) / rate_, 1000.0 * static_cast<double>(period_) / rate_,
              static_cast<unsigned long long>(late_.load()));
+    if (stretch.count) {
+        jvm::log("audio: %s %s, the device's period %.2f ms: %.1f ms out (%.1f to %.1f) over %llu writes, %.1f ms over the game", output_->name(),
+                 output_->mode(), output_->period_ms(), stretch.mean_ms(), stretch.min_ms, stretch.max_ms,
+                 static_cast<unsigned long long>(stretch.count), latency_.mean_ms());
+    }
     // Seconds, whatever each stream's rate.
     auto line = [](const Stream& s, const char* state) {
         jvm::log("audio: %s at %d Hz (%s): %.1f s written, %.1f s played, %llu underruns (%.1f ms short)", s.name().c_str(), s.rate(),
@@ -422,6 +455,60 @@ void Mixer::report() {
         jvm::log("audio: the equaliser took %.2f us a period (%.3f %% of the mixer's time) over %llu periods", static_cast<double>(ns) / 1e3 / static_cast<double>(ran),
                  100.0 * static_cast<double>(ns) / (static_cast<double>(ran) * 1e9 * static_cast<double>(period_) / rate_), static_cast<unsigned long long>(ran));
     }
+}
+
+std::string Mixer::result() {
+    std::lock_guard<std::mutex> l(lock_);
+    merge(latency_, output_->take_latency());
+    // The game's own streams' short periods: its threads behind the device, which the player hears as gaps too.
+    std::uint64_t game_gaps = 0;
+    for (const auto& s : streams_) game_gaps += s->underruns();
+    for (const auto& s : closed_) game_gaps += s->underruns();
+    const std::time_t now = std::time(nullptr);
+    char when[32] = "";
+    if (const std::tm* local = std::localtime(&now)) std::strftime(when, sizeof when, "%Y-%m-%dT%H:%M:%S", local);
+    const Options& asked = options();
+    char text[1024];
+    std::snprintf(text, sizeof text,
+                  "# The last game's sound as the player measured it: how it had the device, the device's period and buffer, the time\n"
+                  "# from the mix to the device's output (its own clock's), and the gaps: the device running dry, and the game's own\n"
+                  "# sound falling behind. The PC client's Sound page shows it.\n"
+                  "time=%s\noutput=%s\nmode=%s\nasked=%s %s\nrate=%d\nperiod_ms=%.2f\nbuffer_ms=%.1f\nlatency_ms=%.1f\nlatency_min_ms=%.1f\n"
+                  "latency_max_ms=%.1f\nlatency_measures=%llu\nseconds=%.1f\ngaps=%llu\ngame_gaps=%llu\n",
+                  when, output_->name(), output_->mode(), asked.exclusive ? "exclusive" : "shared",
+                  asked.buffer == 0 ? "low" : asked.buffer == 2 ? "safe" : "normal", rate_, output_->period_ms(), output_->buffer_ms(),
+                  latency_.mean_ms(), latency_.min_ms, latency_.max_ms, static_cast<unsigned long long>(latency_.count),
+                  static_cast<double>(periods_.load() * period_) / rate_, static_cast<unsigned long long>(late_.load()),
+                  static_cast<unsigned long long>(game_gaps));
+    return text;
+}
+
+void Mixer::write_result() {
+    std::string path;
+    {
+        std::lock_guard<std::mutex> l(g_result_lock);
+        path = g_result_path;
+    }
+    if (path.empty()) return;
+    const std::string text = result();
+    // The path is UTF-8 (a Windows user's folder may have any letters): as such into the file system's own.
+    const auto utf8 = [](const std::string& p) { return std::filesystem::path(std::u8string(p.begin(), p.end())); };
+    // A temporary file beside it, then a rename over it (which replaces it, on Windows too): the PC client reads the old
+    // file or the new one, never half.
+    const std::filesystem::path temp = utf8(path + ".player.tmp"), final_path = utf8(path);
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        out << text;
+        out.close();
+        if (!out) {
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return;
+        }
+    }
+    std::error_code error;
+    std::filesystem::rename(temp, final_path, error);
+    if (error) std::filesystem::remove(temp, error);
 }
 
 namespace {
@@ -495,6 +582,9 @@ void Mixer::run() {
     const char* stats = std::getenv("ARM32_STATS");
     const bool report_often = stats && std::atoi(stats) > 0;
     Clock::time_point next_report = Clock::now() + std::chrono::seconds(5);
+    // The last game's result for the PC client, every five seconds too: a game that ends without the player's own end
+    // (a crash, the process ended) still leaves its sound's result.
+    Clock::time_point next_result = Clock::now() + std::chrono::seconds(5);
     // The level's trace (a check's): its sums over the second so far.
     const char* trace = std::getenv("PLAYER_TRACE_AUDIO");
     const bool trace_level = trace && *trace == '1';
@@ -505,6 +595,10 @@ void Mixer::run() {
         if (report_often && Clock::now() >= next_report) {
             report();
             next_report += std::chrono::seconds(5);
+        }
+        if (Clock::now() >= next_result) {
+            write_result();
+            next_result += std::chrono::seconds(5);
         }
         std::fill(buf.begin(), buf.end(), 0.0f);
         {

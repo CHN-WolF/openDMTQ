@@ -9,7 +9,9 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -116,6 +118,47 @@ private:
     bool open_;
     std::vector<float> frames_;
 };
+
+// An output as WASAPI reports itself for the last game's result: shared, a 10 ms engine period, 22 ms buffered, and
+// latencies of 17, 18 and 22 ms measured (its clock's); a period's time a write, as a device keeps it.
+class Measured : public Output {
+public:
+    const char* name() const override { return "WASAPI"; }
+    int rate() const override { return 48000; }
+    double buffer_ms() const override { return 22; }
+    const char* mode() const override { return "shared"; }
+    double period_ms() const override { return 10; }
+    Latency take_latency() override {
+        std::lock_guard<std::mutex> l(lock_);
+        Latency out = latency_;
+        latency_ = {};
+        return out;
+    }
+    bool write(const float*, std::size_t frames) override {
+        std::this_thread::sleep_for(std::chrono::microseconds(static_cast<long long>(frames) * 1000000 / 48000));
+        std::lock_guard<std::mutex> l(lock_);
+        // Three measures once, then none: the result's mean and extremes are known.
+        if (!measured_) {
+            for (double ms : {17.0, 18.0, 22.0}) latency_.add(ms);
+            measured_ = true;
+        }
+        return true;
+    }
+
+private:
+    std::mutex lock_;
+    Latency latency_;
+    bool measured_ = false;
+};
+
+// A key's value in a result's text ("" when it has none).
+std::string value_of(const std::string& text, const std::string& key) {
+    const std::string at = "\n" + key + "=";
+    const std::size_t i = text.find(at);
+    if (i == std::string::npos) return "";
+    const std::size_t from = i + at.size(), end = text.find('\n', from);
+    return text.substr(from, end == std::string::npos ? std::string::npos : end - from);
+}
 
 }  // namespace
 
@@ -428,6 +471,53 @@ int main() {
         const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / 1000;
         std::snprintf(what, sizeof what, "the equaliser costs %.2f us for a 5 ms period (want under 100 us: 2 %% of the period)", us);
         check(us < 100 && std::isfinite(static_cast<float>(sink)), what);
+    }
+
+    // The last game's sound result (Mixer::result, write_result): how the device was had, its period and buffer, the
+    // latency its clock measured, the gaps of the device and of the game's own streams; written beside the settings as
+    // the PC client reads it, by a temporary file then a rename.
+    {
+        Mixer mixer(std::make_unique<Measured>());
+        auto track = mixer.open(48000, 2, Encoding::F32, 960, "AudioTrack 1");
+        std::vector<float> some(960 * kChannels, 0.1f);
+        track->write(some.data(), 960);
+        track->play();
+        // The track's 20 ms play out and nothing more comes: the game's stream falls behind once it was fed.
+        for (int k = 0; k < 100 && track->underruns() == 0; ++k) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        const std::string text = mixer.result();
+        std::snprintf(what, sizeof what, "the result says shared, a 10 ms period, 22 ms buffered, at 48000 Hz (%s %s %s %s)", value_of(text, "mode").c_str(),
+                      value_of(text, "period_ms").c_str(), value_of(text, "buffer_ms").c_str(), value_of(text, "rate").c_str());
+        check(value_of(text, "mode") == "shared" && value_of(text, "period_ms") == "10.00" && value_of(text, "buffer_ms") == "22.0" &&
+                  value_of(text, "rate") == "48000" && value_of(text, "output") == "WASAPI",
+              what);
+        std::snprintf(what, sizeof what, "the result's latency: the mean of 17, 18 and 22 ms is 19.0, from 17.0 to 22.0, 3 measures (%s, %s to %s, %s)",
+                      value_of(text, "latency_ms").c_str(), value_of(text, "latency_min_ms").c_str(), value_of(text, "latency_max_ms").c_str(),
+                      value_of(text, "latency_measures").c_str());
+        check(value_of(text, "latency_ms") == "19.0" && value_of(text, "latency_min_ms") == "17.0" && value_of(text, "latency_max_ms") == "22.0" &&
+                  value_of(text, "latency_measures") == "3",
+              what);
+        std::snprintf(what, sizeof what, "the result's gaps: the device's %s, the game's own stream's %s (want 0 and 1 or more)", value_of(text, "gaps").c_str(),
+                      value_of(text, "game_gaps").c_str());
+        check(value_of(text, "gaps") == "0" && std::atoi(value_of(text, "game_gaps").c_str()) >= 1, what);
+        check(value_of(text, "asked") == "shared normal" && value_of(text, "time").size() == 19, "the result says what the settings asked and when");
+        // Beside the settings, by its own name, read back as written; no temporary file left.
+        const std::string path = std::string("audiotest-") + kResultFile;
+        std::remove(path.c_str());
+        set_result_path(path);
+        mixer.write_result();
+        std::string back;
+        if (std::FILE* f = std::fopen(path.c_str(), "rb")) {
+            char buf[2048];
+            const std::size_t n = std::fread(buf, 1, sizeof buf, f);
+            back.assign(buf, n);
+            std::fclose(f);
+        }
+        std::FILE* temp = std::fopen((path + ".player.tmp").c_str(), "rb");
+        check(value_of(back, "mode") == "shared" && value_of(back, "latency_ms") == "19.0" && !temp, "the result's file reads back as written, no temporary file left");
+        if (temp) std::fclose(temp);
+        set_result_path("");
+        std::remove(path.c_str());
+        mixer.close(track);
     }
 
     // The game's OpenAL context (openal_rate.h): on its AudioTrack device, the one the player has, a phone's rate where the

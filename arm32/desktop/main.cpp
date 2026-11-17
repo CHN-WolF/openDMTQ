@@ -326,6 +326,10 @@ int main(int argc, char** argv) {
         std::error_code ec;
         const std::u8string u = std::filesystem::absolute(player::utf8_path(settings_path), ec).u8string();
         player::settings_path() = ec ? settings_path : std::string(u.begin(), u.end());
+        // The last game's sound result beside it, in the PC client's folder, for its Sound page.
+        const std::string& kept = player::settings_path();
+        const std::size_t slash = kept.find_last_of("/\\");
+        player::audio::set_result_path((slash == std::string::npos ? std::string() : kept.substr(0, slash + 1)) + player::audio::kResultFile);
     }
     const player::Settings& st = player::settings();
     if (!size_given && st.window_w) {

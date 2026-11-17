@@ -6,6 +6,7 @@
 // game falling behind), and the mixer the times it came back to the output too late (the output running dry).
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
@@ -155,6 +156,21 @@ private:
     std::atomic<float> peak_{0.0f};
 };
 
+// The output's latency as the device's own clock measures it: from a write to the moment the last frame written plays,
+// over the writes measured (none: no clock to ask).
+struct Latency {
+    std::uint64_t count = 0;
+    double sum_ms = 0, min_ms = 0, max_ms = 0;
+    double mean_ms() const { return count ? sum_ms / static_cast<double>(count) : 0; }
+    // One more measure.
+    void add(double ms) {
+        min_ms = count ? std::min(min_ms, ms) : ms;
+        max_ms = count ? std::max(max_ms, ms) : ms;
+        sum_ms += ms;
+        ++count;
+    }
+};
+
 // The computer's sound output, as the mixer writes to it.
 class Output {
 public:
@@ -163,6 +179,14 @@ public:
     virtual int rate() const = 0;
     // How much the output holds ahead of what is playing, in milliseconds: a mixer away longer than that let it run dry.
     virtual double buffer_ms() const = 0;
+    // How the output has the device now, for the last game's result (Mixer::write_result): "shared", "shared-low" (the
+    // engine's shortest period, shared), "exclusive" (the device alone), "none" (no device: the time kept alone).
+    virtual const char* mode() const { return "none"; }
+    // The period the device's sound is made in, in milliseconds: the audio engine's for a shared device, the device's own
+    // alone; 0 where the output cannot tell.
+    virtual double period_ms() const { return 0; }
+    // The latency measured so far (Latency), and from now on only from here: each report says its own stretch.
+    virtual Latency take_latency() { return {}; }
     // The frames the output takes at a time, which the mixer then makes a period of (0: the mixer's own 5 ms): a device
     // held alone plays whole buffers of its own size.
     virtual std::size_t period() const { return 0; }
@@ -194,6 +218,10 @@ public:
     int rate() const { return rate_; }
     // The counters in the log: the output's, and each stream's.
     void report();
+    // The game's sound so far as the PC client's Sound page shows it (write_result's file).
+    std::string result();
+    // Writes result() to the file set_result_path named (by a temporary file then a rename); nothing without one.
+    void write_result();
     // The player's sound controls from now on (sound_mix.h): the master at once, the equaliser from the next period.
     void set_levels(const Levels& levels);
     // A period's length, unless the output takes another (Output::period): what the mixer makes at a time.
@@ -222,8 +250,16 @@ private:
     std::vector<std::shared_ptr<Stream>> closed_;
     std::atomic<bool> running_{true};
     std::atomic<std::uint64_t> periods_{0}, late_{0};
+    // The output's latency over the whole game (each report adds its stretch), under lock_.
+    Latency latency_;
     std::thread thread_;
 };
+
+// Where the mixer writes the last game's sound result (Mixer::write_result): the PC client's folder, beside the settings
+// file it gave (main.cpp); "" for nowhere. Set before the game's first sound.
+void set_result_path(const std::string& path);
+// The result's file name, beside the settings file.
+constexpr const char* kResultFile = "last-game-sound.txt";
 
 // The player's sound controls (sound_mix.h) from now on, as the in-game panel changes them: the master and the
 // equaliser on the mix (the mixer's, once it is started), the effects' share on Unity's own sound (the stream named FMOD:

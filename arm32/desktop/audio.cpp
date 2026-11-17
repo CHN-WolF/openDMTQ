@@ -275,7 +275,11 @@ void define_audio() {
 }
 
 void report_audio() {
-    if (audio::Mixer* m = audio::Mixer::started()) m->report();
+    if (audio::Mixer* m = audio::Mixer::started()) {
+        m->report();
+        // The game's last word on its sound for the PC client.
+        m->write_result();
+    }
 }
 
 }  // namespace player
