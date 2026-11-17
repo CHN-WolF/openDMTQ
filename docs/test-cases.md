@@ -125,6 +125,7 @@ it runs ([testing.md](testing.md)):
 | LIVE-47 | A player switched on, then off, while broadcasts are off for the server, through the server | No key; the notices that it waits for the server, then that it stays off | `tests/live/smoke.py#off for the server: a player switched on gets no key, and is told it waits for the server`, `tests/live/smoke.py#switched off again while the server's are off: told it stays off` | qa |
 | LIVE-48 | A player's switch off and on again before the phone looked, then off and on again | The newest change's notice each time, numbered higher | `tests/live/smoke.py#off and on again before the phone looked: told it is on, with a new number`, `tests/live/smoke.py#every change after that a notice of its own, numbered higher each time` | qa |
 | LIVE-49 | Broadcasts for the server on, off, and on again under a player switched on, then the player switched off | On, ended, on: a notice every time; nothing for a player switched off when the server's come on | `tests/live/smoke.py#broadcasts on again with the switch on: told again`, `tests/live/smoke.py#and off again: told again`, `tests/live/smoke.py#and nothing more once broadcasts are on again: nothing changed for a player switched off` | qa |
+| LIVE-50 | A player's own switch turned on in Korean while the server's broadcasts are off | The notice says what the switch is now: 내 방송이 켜졌어요 (main said 방송을 켜 두었어요) | `tests/live/smoke.py#내 방송이 켜졌어요` | qa |
 
 ## TS-ADMIN: the owner's pages
 
