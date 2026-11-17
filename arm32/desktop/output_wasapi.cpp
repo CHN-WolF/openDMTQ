@@ -32,6 +32,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -417,7 +418,10 @@ private:
         const int buffer = std::clamp(options().buffer, 0, 2);
         exclusive_ = false;
         if (options().exclusive && start_alone(buffer)) return ready();
-        if (buffer == 0 && start_low()) return ready();
+        // The low-latency mode where the device has one; a check's PLAYER_WASAPI_LOW=off asks for the short shared buffer
+        // a device without it gets, to measure that on one that has it.
+        const char* low_mode = std::getenv("PLAYER_WASAPI_LOW");
+        if (buffer == 0 && !(low_mode && std::strcmp(low_mode, "off") == 0) && start_low()) return ready();
         // Shared: stereo 32-bit floats at the mixer's rate; Windows maps two channels to the device's own.
         if (!activate()) {
             close();
