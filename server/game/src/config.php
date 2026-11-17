@@ -183,3 +183,18 @@ function odq_address_moved(?string $dir = null, ?string $now = null): ?array
     return time() - $m['at'] < ODQ_MOVED_DAYS * 86400 ? $m : null;
 }
 
+/* The owner's notice while it is up, as the admin pages keep it beside the database (notice.json, written by their Notices
+   page, admin/notice.py): its one line, or null when there is none or its end has come. The site shows it above every page
+   (portal/lib.php site_notice()), the game in the lobby's news (src/user.php). Read once per request. */
+function odq_owner_notice(): ?string
+{
+    static $notice = false;
+    if ($notice === false) {
+        $kept = json_decode((string)@file_get_contents(odq_state_dir() . '/notice.json'), true);
+        // Its words, one line as the admin pages keep them, and its end when it has one (a whole number): past it, none.
+        $text = is_array($kept) && is_string($kept['text'] ?? null) ? trim($kept['text']) : '';
+        $until = is_array($kept) && is_int($kept['until'] ?? null) ? $kept['until'] : null;
+        $notice = $text !== '' && ($until === null || $until > time()) ? $text : null;
+    }
+    return $notice;
+}

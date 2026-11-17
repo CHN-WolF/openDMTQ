@@ -1798,4 +1798,20 @@ table.board.parts td.name a::after { content: none; }
 
 /* ---------------------------------------------------------------------- the owner's notice (lib.php, page_header()) */
 
+/* One quiet line under the bar on every page: a plain surface, as it marks no state (maintenance and a server in trouble
+   have their colours above it), its word in the menus' face, and the cross that closes it for this visit (tips.js). */
+.site-notice { background: var(--deck); border-bottom: 1px solid var(--seam); color: var(--chalk); font-size: var(--t-sm); }
+.notice-in { display: flex; align-items: center; gap: 14px; padding-block: 4px; }
+/* The word as the bar's state words are: the menus' face, small, in the ash of quiet text. */
+.notice-tag { flex: none; font: 800 var(--t-xs)/1 var(--display); letter-spacing: 0.08em; color: var(--ash); }
+.notice-text { flex: 1 1 auto; min-width: 0; margin: 0; padding-block: 6px; line-height: 1.45; overflow-wrap: anywhere; }
+/* The cross: a round key as big as a finger needs, quiet until a pointer or the focus is on it. */
+.notice-close { flex: none; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; color: var(--ash); background: transparent; border: 0; border-radius: 50%; cursor: pointer; transition: color var(--quick), background-color var(--quick); }
+.notice-close:hover { color: #fff; background: var(--rail); }
+.notice-close:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.notice-close svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+@media (pointer: coarse) { .notice-close { width: 44px; height: 44px; } }
+/* On a phone the word goes, and the line has the width. */
+@media (max-width: 480px) { .notice-tag { display: none; } }
+
 /* ---------------------------------------------------------------------- MY PAGE (me.php) */

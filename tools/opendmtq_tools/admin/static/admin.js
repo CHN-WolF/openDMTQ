@@ -22,7 +22,8 @@
 // fields of the row stay in line. A field that is not in a labelled box of its own is said just above its form.
 document.addEventListener('submit', e => {
   const form = e.target;
-  if (!form.noValidate) return;
+  // A button that needs none of the fields (formnovalidate: taking a notice down) sends the form unchecked.
+  if (!form.noValidate || (e.submitter && e.submitter.formNoValidate)) return;
   // A field that must say what another says (a password typed again, data-same names the other): different, it breaks its
   // rule, with its own words for that (data-same-bad).
   for (const f of form.querySelectorAll('[data-same]')) {

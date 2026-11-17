@@ -3037,8 +3037,8 @@ class FormChecksTest(unittest.TestCase):
     """A form's own checks are the page's (admin.js), in its look and its language: the browser's bubble would show in the
     browser's language, outside the design. The server checks the same again."""
 
-    # A field the browser would check: one it must have, a pattern, a least value or length, a date or a number.
-    RULE = re.compile(r'\brequired\b|\bpattern="|\bmin="|\bminlength="|type="(?:date|number)"')
+    # A field the browser would check: one it must have, a pattern, a least value or length, a date (with a time) or a number.
+    RULE = re.compile(r'\brequired\b|\bpattern="|\bmin="|\bminlength="|type="(?:date|datetime-local|number)"')
 
     def test_every_field_with_a_rule_is_checked_by_the_page_in_its_words(self):
         templates = os.path.join(os.path.dirname(admin.__file__), "templates")
@@ -3055,9 +3055,9 @@ class FormChecksTest(unittest.TestCase):
                     self.assertIn("novalidate", form.group(1), f"{name}: {field}")
                     self.assertRegex(field, r"""data-bad="\{\{ tp\('[\w.]+'\) \}\}\"""", f"{name}: {field}")
         # The sign-in's two, the account's ID and passwords, a token's name, the setup's ID, the other address, the two
-        # files, the recordings' limits, the plays' days and the Server page's new port; a player's currency, level,
-        # experience and ban reason, and what a new player starts with: none of them left out.
-        self.assertEqual(checked, 22)
+        # files, the recordings' limits, the plays' days, the Server page's new port, and the site's notice with its end:
+        # none of them left out.
+        self.assertEqual(checked, 17)
 
     def test_the_sign_in_and_the_password_fields_are_labelled_with_show_and_the_kept_id(self):
         with Install() as inst:

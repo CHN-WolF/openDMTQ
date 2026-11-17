@@ -366,14 +366,41 @@ function maintenance_notice(): ?string
     return $notice;
 }
 
+/* The owner's notice while it is up (the admin pages' Notices page writes notice.json beside the database, notice.py):
+   ['text' => one line, 'id' => twelve hex digits of its words], or null when there is none or its end has come. The id
+   is the words' own: a visitor who closed it sees it again when the words change. */
+function site_notice(): ?array
+{
+    // The game server's own reader (config.php), which the lobby's news reads too: one notice for both.
+    $text = odq_owner_notice();
+    return $text === null ? null : ['text' => $text, 'id' => substr(hash('sha256', $text), 0, 12)];
+}
+
 /* The site's state as the bar and the sentence under it show it (page_header()): ok, down (no database), or maint-<a sign of
-   the notice's words> while the maintenance notice is on, so that a new message is a new state. The pages that look again
-   by themselves (home, live) get it with every look (X-Site-State) and put the bar's word and the sentence in place when
-   it is not the one they were drawn with (thumbs.js siteState()): they come and go with it, every time. */
+   the notice's words> while the maintenance notice is on, so that a new message is a new state; and after it the owner's
+   notice while one is up (-n<its id>). The pages that look again by themselves (home, live) get it with every look
+   (X-Site-State) and put the bar's word, the sentence and the notice in place when it is not the one they were drawn with
+   (thumbs.js siteState()): they come and go with it, every time. */
 function site_state(?SQLite3 $db): string
 {
     $notice = maintenance_notice();
-    return $notice !== null ? 'maint-' . substr(md5($notice), 0, 8) : ($db ? 'ok' : 'down');
+    $own = site_notice();
+    return ($notice !== null ? 'maint-' . substr(md5($notice), 0, 8) : ($db ? 'ok' : 'down')) . ($own ? '-n' . $own['id'] : '');
+}
+
+/* The owner's notice above the page, for a visitor who has signed in (page_header()): its word, its line, and the cross that
+   closes it for this visit (tips.js keeps that in the tab's own storage, by the words' id); '' when there is none. */
+function notice_band(): string
+{
+    $notice = site_notice();
+    if ($notice === null) {
+        return '';
+    }
+    // The cross: two strokes, its name in the page's language for a screen reader.
+    $cross = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg>';
+    return '<div class="site-notice" role="status" data-notice="' . h($notice['id']) . '"><div class="wrap notice-in">'
+        . '<span class="notice-tag" aria-hidden="true">NOTICE</span><p class="notice-text">' . h($notice['text']) . '</p>'
+        . '<button type="button" class="notice-close" aria-label="' . h(tp('notice.close')) . '">' . $cross . '</button></div></div>';
 }
 
 /* Number of songs the server offers (added ones included, hidden ones not). */
@@ -629,7 +656,14 @@ function page_header(string $title, string $active = '', string $refresh = '', s
     }
     // A page just arriving: what it measures fills in once and the player's own row glows once (style.css,
     // "motion"). The class goes after 1.6 s, so that nothing the page redraws later moves again.
-    echo '<script>document.documentElement.classList.add("arriving");setTimeout(()=>document.documentElement.classList.remove("arriving"),1600)</script></head>';
+    echo '<script>document.documentElement.classList.add("arriving");setTimeout(()=>document.documentElement.classList.remove("arriving"),1600)</script>';
+    // The owner's notice this visitor closed in this tab (tips.js keeps its id): not drawn at all, before the page shows.
+    $own = $inside ? site_notice() : null;
+    if ($own) {
+        echo '<script>try{document.documentElement.dataset.noticeClosed=sessionStorage.getItem("opendmtq-notice")||""}catch(e){}</script>'
+            . '<style>html[data-notice-closed="' . h($own['id']) . '"] .site-notice{display:none}</style>';
+    }
+    echo '</head>';
     // With the state it was drawn with (site_state()), for the pages that look again by themselves.
     echo '<body data-section="' . h($active) . '"' . ($inside ? ' data-site="' . h(site_state($db)) . '"' : ' class="signed-out"')
         . '><div class="facets" aria-hidden="true"></div>';
@@ -645,6 +679,8 @@ function page_header(string $title, string $active = '', string $refresh = '', s
         $says = $state === 'down' ? t('state.down_long') : ($own ? t('home.maint_own', ['notice' => $notice]) : t('home.maint'));
         echo '<div class="site-alert ' . $state . '" role="status"><p class="wrap">' . $says . '</p></div>';
     }
+    // The owner's notice, under what is wrong with the server: for those signed in, as every page's content is.
+    echo $inside ? notice_band() : '';
     // The page's name as its top heading, for screen readers and outlines; what shows is the masthead or the stage.
     echo '<h1 class="page-title">' . h($title) . '</h1>' . $stage . '<main class="wrap">';
 }

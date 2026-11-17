@@ -11,6 +11,8 @@
 //   node audit.js quiet    broadcasts off for the server with everything in place: nothing of them on the site
 //   node audit.js patterns nothing said only under a mouse pointer, switches that change the page in place, the owner's
 //                          forms saying what is wrong under the field
+//   node audit.js notice   the owner's notice on the site: put up by the Notices page's card, on every page whole at every
+//                          width, closed for a visit, shown again with new words, and coming and going on pages left open
 //   node audit.js notices  the site's pages left open while the owner begins, changes and ends maintenance, twice: the bar's
 //                          word and the sentence under it come and go by themselves each time
 //   node audit.js away     the owner's pages left open while the game server stops and starts again, twice (run.sh does
@@ -162,6 +164,20 @@ const DOWN = [
   ['admin-backups', `${A}/backups`],
   ['admin-maintenance', `${A}/maintenance`],
   ['admin-requests', `${A}/logs`],
+];
+// The owner's notice up, its words long enough to wrap on a phone: every page of the site has it under the bar, and the
+// Notices page its card.
+const NOTICE = [
+  ['home', `${P}/`],
+  ['rankings', `${P}/ranking.php`],
+  ['songs', `${P}/songs.php`],
+  ['song', `${P}/song.php?id=1`],
+  ['player', `${P}/player.php?id=1`],
+  ['live', `${P}/live.php`, { settle: 800 }],
+  ['download', `${P}/download.php`],
+  ['licenses', `${P}/licenses.php`],
+  ['not-found', `${SITE}/nope`, { status: 404 }],
+  ['admin-notices', `${A}/maintenance`],
 ];
 // Asked for and not there, on purpose: the jacket of song 26 (the page must go on without it).
 const MISSING_ON_PURPOSE = /\/fixture26\.(png|jpg)$/;
@@ -2164,40 +2180,101 @@ async function adminFlows(contexts) {
   await out.close();
 }
 
-// The admin pages from the server PC itself (the browser on the admin service's own network: its loopback): Play on this
-// PC on the App page and the setup's last step, as the Windows bundle shows it (WINDOWS=1: the button that installs the PC
-// client here) or a host install on Linux (how to play from a Windows PC), swept at every width in both languages; on the
-// bundle, pressed, its job followed on the page to its end, which says what came of it (no Windows program runs here).
-async function thisPc(contexts) {
-  const windows = process.env.WINDOWS === '1';
-  const kind = windows ? 'the Windows bundle' : 'a host install on Linux';
-  const page = await contexts.signed.newPage();
-  for (const [where, url] of [['the App page', `${A}/app`], ["the setup's last step", `${A}/setup?step=app`]]) {
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    const words = await textOf(page, '#this-pc');
-    check(`${kind}: ${where}, from the server PC, has Play on this PC`, windows
-      ? (await page.$('#this-pc button')) !== null && /Installs the PC client on this PC/.test(words)
-      : /Play on a Windows PC/.test(words) && /download\.php/.test(words) && (await page.$('#this-pc button')) === null, words.slice(0, 200));
+// PAGE-65..68: the owner's notice on the site (the Notices page's first card, admin/notice.py; lib.php notice_band()). Put up
+// by the owner's own form with words that wrap on a phone: under the bar on every page for those signed in, never for a
+// stranger; every page whole with it at every width in both languages; closed for this visit by its cross, back on the next
+// visit and with new words; on the pages left open it comes, changes and goes by itself. Before: there was no notice.
+async function ownersNotice(contexts) {
+  const LONG = 'Tonight the server stays open until 1 AM. Three new songs come on Friday, and the monthly ranking starts again on the first at nine.';
+  const owner = await contexts.signed.newPage();
+  await owner.setViewport({ width: 1280, height: 900 });
+  // The card's Show, with these words and no end.
+  const putUp = async text => {
+    await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+    await owner.$eval('#notice input[name=text]', (e, v) => { e.value = v; }, text);
+    await press(owner, '#notice button[name=action][value=show]');
+  };
+  // The card's Take down.
+  const takeDown = async () => {
+    await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+    await press(owner, '#notice button[name=action][value=clear]');
+  };
+  await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+  check('the Notices page has the notice card first, saying there is none', /No notice/.test(await textOf(owner, '#notice'))
+    && await owner.evaluate(() => document.querySelector('#notice').compareDocumentPosition(document.querySelector('#maintenance')) === Node.DOCUMENT_POSITION_FOLLOWING));
+  await putUp(LONG);
+  check("the owner's form puts it up, and the card says so in place", /Shown on the site/.test(await textOf(owner, '#notice')), await textOf(owner, '#notice .auto-line'));
+  // Under the bar on the site, for someone signed in; nothing of it for a stranger at the sign-in.
+  const site = await contexts.signed.newPage();
+  await site.setViewport({ width: 1280, height: 900 });
+  await site.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
+  check('PAGE-65: every page of the site has it under the bar, its words whole', await textOf(site, 'body > .site-notice .notice-text') === LONG
+    && await site.evaluate(() => document.querySelector('body > .site-notice').compareDocumentPosition(document.querySelector('body > h1.page-title')) === Node.DOCUMENT_POSITION_FOLLOWING));
+  const stranger = await contexts.anon.newPage();
+  await stranger.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
+  check('PAGE-65: a stranger at the sign-in sees nothing of it', (await stranger.$('.site-notice')) === null && !(await stranger.content()).includes('Three new songs'));
+  await stranger.close();
+  // Every page with it, at every width, in both languages: nothing cut off, touching or under another box.
+  await sweep(contexts, NOTICE, ALL_WIDTHS);
+  // Its cross: a key a finger can hit, named in the page's language.
+  check('PAGE-66: its cross is named for what it does', await site.$eval('.notice-close', b => b.getAttribute('aria-label')) === 'Close the notice');
+  await site.setCookie({ name: 'opendmtq_lang', value: 'ko', url: `${P}/` });
+  await site.goto(`${P}/songs.php`, { waitUntil: 'domcontentloaded' });
+  check('PAGE-66: and in Korean in Korean', await site.$eval('.notice-close', b => b.getAttribute('aria-label')) === '공지 닫기');
+  await site.setCookie({ name: 'opendmtq_lang', value: 'en', url: `${P}/` });
+  // Closed: gone at once, and for the rest of this visit (this tab) before it is ever drawn; back on the next visit.
+  await site.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
+  await site.click('.notice-close');
+  check('PAGE-66: its cross closes it at once', (await site.$('body > .site-notice')) === null);
+  await site.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
+  check('PAGE-66: and it stays closed on the next page of the visit, never drawn', await site.$eval('body > .site-notice', b => getComputedStyle(b).display).catch(() => 'gone') === 'none');
+  await site.reload({ waitUntil: 'domcontentloaded' });
+  check('PAGE-66: and after a reload', await site.$eval('body > .site-notice', b => getComputedStyle(b).display).catch(() => 'gone') === 'none');
+  const next = await contexts.signed.newPage();
+  await next.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
+  check('PAGE-66: the next visit shows it again', !['none', 'gone'].includes(await next.$eval('body > .site-notice', b => getComputedStyle(b).display).catch(() => 'gone')));
+  await next.close();
+  // New words: shown again where the old ones were closed.
+  await putUp('Open late tonight.');
+  await site.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
+  check('PAGE-67: new words show again where the old were closed', await textOf(site, 'body > .site-notice .notice-text') === 'Open late tonight.'
+    && await site.$eval('body > .site-notice', b => getComputedStyle(b).display) !== 'none');
+  await site.close();
+  // PAGE-68: the home page and the live page left open (both look at the server by themselves): a notice put up, given new
+  // words and taken down comes, changes and goes there by itself, the page not opened anew.
+  await takeDown();
+  const open = [];
+  for (const url of [`${P}/`, `${P}/live.php`]) open.push(await openAlone(contexts, url));
+  const says = words => {
+    const band = document.querySelector('body > .site-notice');
+    return words === null ? !band : !!band && band.textContent.includes(words) && getComputedStyle(band).display !== 'none';
+  };
+  const all = async (words, name) => {
+    const came = [];
+    for (const page of open) came.push(await until(page, says, words) && await keptOpen(page));
+    check(name, came.every(Boolean), came.join(' '));
+  };
+  await putUp('The server is open all night.');
+  await all('The server is open all night.', 'PAGE-68: put up, the pages left open show it by themselves');
+  // The order under the bar when maintenance comes too: the sentence of what is wrong first, the notice under it.
+  await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+  await pressAndConfirm(owner, '#maintenance button[name=action][value=on]');
+  const ordered = [];
+  for (const page of open) {
+    ordered.push(await until(page, () => {
+      const alert = document.querySelector('body > .site-alert'), band = document.querySelector('body > .site-notice');
+      return !!alert && !!band && alert.compareDocumentPosition(band) === Node.DOCUMENT_POSITION_FOLLOWING;
+    }));
   }
-  await page.close();
-  const variant = windows ? 'windows' : 'linux';
-  await sweep(contexts, [[`app-here-${variant}`, `${A}/app`], [`setup-here-${variant}`, `${A}/setup?step=app`]], ALL_WIDTHS);
-  if (!windows) return;
-  const pressed = await contexts.signed.newPage();
-  await pressed.setViewport({ width: 1280, height: 900 });
-  // In English, as its picture's name says: the sweep above left the browser on the last language it swept.
-  await pressed.setCookie({ name: 'opendmtq_lang', value: 'en', url: ADMIN });
-  await pressed.goto(`${A}/app`, { waitUntil: 'networkidle2' });
-  await Promise.all([pressed.waitForNavigation({ waitUntil: 'domcontentloaded' }), pressed.click('#this-pc button')]);
-  // Followed while it runs, then the page with what it said.
-  await until(pressed, () => !document.querySelector('#here-log'), null, 60000);
-  await pressed.waitForSelector('.flash', { timeout: 30000 }).catch(() => {});
-  const said = await textOf(pressed, '.flash');
-  check('pressed on the Windows bundle, Play on this PC says what came of it, its button there again', /PC client/.test(said)
-    && (await pressed.$('#this-pc button:not([disabled])')) !== null, said.slice(0, 200));
-  await noFindings(pressed, 'Play on this PC after a press');
-  await pressed.screenshot({ path: path.join(OUT, 'shots', 'thispc-pressed-en-1280.jpg'), type: 'jpeg', quality: 72, fullPage: true });
-  await pressed.close();
+  check('PAGE-68: with maintenance begun, its sentence comes above the notice', ordered.every(Boolean), ordered.join(' '));
+  await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
+  await press(owner, '#maintenance button[name=action][value=off]');
+  await putUp('Back to normal hours tomorrow.');
+  await all('Back to normal hours tomorrow.', 'PAGE-68: new words, the pages left open say them by themselves');
+  await takeDown();
+  await all(null, 'PAGE-68: taken down, it goes from the pages left open by themselves');
+  for (const page of open) await page.browserContext().close();
+  await owner.close();
 }
 
 (async () => {
@@ -2288,6 +2365,8 @@ async function thisPc(contexts) {
     await hoverOnly(contexts);
     await inPlace(contexts);
     await formsLook(contexts);
+  } else if (stage === 'notice') {
+    await ownersNotice(contexts);
   } else if (stage === 'notices') {
     // PAGE-55..57: the home page and the live page left open (both look at the server by themselves) while the owner
     // begins maintenance, gives it a new message, ends it, and begins and ends it again: each time the bar's word and the

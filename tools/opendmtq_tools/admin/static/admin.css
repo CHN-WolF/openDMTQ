@@ -858,6 +858,9 @@ table.data-parts .runtime { font-weight: 400; }
 /* The stopped page's state, its light beside the heading as on the Server page. */
 .server-state .setup-state { color: var(--chalk); }
 /* The Notices page's cards. The site's notice (notice_card.html). */
+/* The end beside the words: as wide as a date and a time, the words take the rest; on a phone the row stands as a column. */
+.notice-until { flex: 0 1 240px; }
+@media (max-width: 600px) { .notice-until { flex: none; } }
 
 /* Discord and Slack (webhooks_card.html). */
 

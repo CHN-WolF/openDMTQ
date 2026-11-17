@@ -47,6 +47,9 @@ Songs download the first time you play them. The app is the game's own Android a
 so nothing else on the phone changes: no DNS, proxy or certificate. The same site has the rankings, the songs, each
 player's page and the broadcasts, in English and Korean (**KOR** / **ENG** at the top).
 
+A line under the site's top bar is the server's owner's notice, on every page while it is up. Its **×**
+closes it until your next visit; new words from the owner show again.
+
 ## On a Windows PC
 
 The PC client plays the same app on Windows:

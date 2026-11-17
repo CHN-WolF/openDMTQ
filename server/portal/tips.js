@@ -131,3 +131,17 @@
   }, { passive: true, capture: true });
   addEventListener('resize', () => { if (shown) hide(); }, { passive: true });
 })();
+
+// The owner's notice above every page (lib.php notice_band()): its cross closes it for this visit. The tab keeps the
+// notice's id (its words'), so another page of the visit opens without it (the page's head reads it before drawing), and a
+// notice with other words shows again. Here, in the one script every page has: a page that looks again by itself puts a
+// new notice in place without loading anything else (thumbs.js siteState()).
+document.addEventListener('click', e => {
+  const cross = e.target.closest && e.target.closest('.site-notice .notice-close');
+  if (!cross) return;
+  const band = cross.closest('.site-notice');
+  // Kept where the tab can keep it; a browser that keeps nothing closes it on this page alone.
+  try { sessionStorage.setItem('opendmtq-notice', band.dataset.notice); } catch (_) { /* Nowhere to keep it. */ }
+  document.documentElement.dataset.noticeClosed = band.dataset.notice;
+  band.remove();
+});

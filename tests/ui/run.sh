@@ -259,6 +259,8 @@ fi
 stage notices
 
 stage maint
+# The owner's notice on the site: put up, on every page, closed for a visit, new words, and the pages left open.
+stage notice
 stage flows
 # Nothing said only under a mouse pointer, switches that change the page where it is, the forms' words under their fields.
 stage patterns

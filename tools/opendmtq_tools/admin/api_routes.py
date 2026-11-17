@@ -314,6 +314,12 @@ SHAPES = {
               "first. The game's notice page is asked for under it, and players in the game are told of each change once."),
         Field("changed_at", "integer", "When that change was made (Unix time); null before the first.", nullable=True)]),
     # The Notices page's notice on the site (notice.py).
+    "SiteNotice": Shape("The notice on the site: one line at the top of every page of the players' site, for everyone signed in.", [
+        Field("text", "string", "What it says; empty when there is none."),
+        Field("shown", "boolean", "True while it is up: there is one, and its end has not come."),
+        Field("until", "integer", "When it ends by itself (Unix time); null for no end.", nullable=True),
+        Field("set_at", "integer", "When it was set (Unix time); null when there is none.", nullable=True),
+        Field("by", "string", "Who set it: the admin, or through the API the admin whose token it was.", nullable=True)]),
     # The Notices page's Discord and Slack (webhooks.py).
     # The owner's password on the Server page (lifecycle.py).
     "Stopping": Shape("A stop asked for.", [Field("stopping", "boolean", "True: the server stops within a few seconds, these pages and the API with it.")]),
@@ -775,6 +781,7 @@ TAGS = [
     ("Songs", "The Songs page."),
     ("Maintenance", "The Notices page's maintenance card: the in-game notice."),
     # The Notices page's notice on the site (notice.py).
+    ("Notice", "The Notices page's notice on the site: one line at the top of every page of the players' site."),
     # The Notices page's Discord and Slack (webhooks.py).
     ("Server", "The Server page: the server's state, stopping and restarting it, the repair, its data, and uninstalling it."),
     ("Players", "The Players page."),
@@ -896,6 +903,20 @@ ROUTES = [
     Route("DELETE", "/maintenance", "write", "maintenance_clear", "Maintenance", "Turns the notice off.",
           "Players in the game are told between songs that it is over.", answer="Notice"),
     # The Notices page's notice on the site (notice.py).
+    Route("GET", "/notice", "read", "notice_get", "Notice", "The notice on the site: what it says, whether it is up, when it ends.",
+          answer="SiteNotice"),
+    Route("PUT", "/notice", "write", "notice_set", "Notice", "Puts the notice up, or gives it new words or a new end.",
+          "Everyone signed in sees it at the top of every page of the site at once. A visitor who closed it sees it again on "
+          "their next visit, and when its words change. Its whitespace, line breaks too, becomes single spaces.",
+          body=[Field("text", "string", "What it says: one line of up to 200 characters."),
+                Field("until", "integer", "When it ends by itself (Unix time). Null or left out: no end.", nullable=True, optional=True)],
+          answer="SiteNotice",
+          errors=[(400, "notice_empty", "No words, or only spaces."),
+                  (400, "notice_too_long", "Longer than 200 characters."),
+                  (400, "notice_not_text", "Characters that cannot be shown (control or formatting characters)."),
+                  (400, "notice_end_past", "The end has come already.")]),
+    Route("DELETE", "/notice", "write", "notice_clear", "Notice", "Takes the notice down.",
+          "No notice to take down is no error: the answer says there is none.", answer="SiteNotice"),
     # The Notices page's Discord and Slack (webhooks.py).
     # The Server page (lifecycle.py): the state, stop and restart (setup.stop_server, lifecycle.restart_server), the repair,
     # the data, the uninstall.

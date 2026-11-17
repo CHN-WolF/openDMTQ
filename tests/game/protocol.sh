@@ -65,7 +65,8 @@ if ! curl -sf -m 3 -o /dev/null "http://127.0.0.1:$PORT/opendmtq/health.php"; th
   exit 1
 fi
 failed=0
-PROTOCOL_HIDDEN_SONG="$HIDDEN_SONG" python3 "$ROOT/tests/game/protocol.py" "http://127.0.0.1:$PORT" || failed=1
+# The server's state folder too, for the owner's notice the admin pages keep there (the lobby's news).
+PROTOCOL_HIDDEN_SONG="$HIDDEN_SONG" PROTOCOL_STATE="$DATA/state" python3 "$ROOT/tests/game/protocol.py" "http://127.0.0.1:$PORT" || failed=1
 # Storing achievements while another writer holds the database, on the same database, beside the running server.
 docker run --rm -u 33:33 -v "$DATA/state:/data" -v "$ROOT/tests/game:/t:ro" --entrypoint php "opendmtq-server:$TAG" \
   /t/lock.php /data/dmtq.db3 || failed=1

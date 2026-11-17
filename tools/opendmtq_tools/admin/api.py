@@ -21,7 +21,9 @@ from flask import g, jsonify, request, send_file
 from werkzeug.exceptions import HTTPException
 
 from .. import server_data, songs
-from . import accounts, api_routes, apps, auth, backups, core, game, insights, jobs, lifecycle, logs, players, recordings, setup, site, site_links, song_pages, this_pc, tokens
+from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, tokens
+# The site's notice by another name: notice() here is the maintenance notice's answer.
+from . import notice as site_notice
 # The status page's module by another name: the route's handler is called status.
 from . import status as status_page
 from .core import Refused, app, changed, db, json_error, plain, tp
@@ -591,6 +593,24 @@ def maintenance_clear(args):
 
 
 # ------------------------------------------------------------------------------ the site's notice (notice.py)
+
+@handler
+def notice_get(args):
+    """GET /notice: the Notices page's notice card."""
+    return site_notice.view()
+
+
+@handler
+def notice_set(args):
+    """PUT /notice: the notice card's Show, with its words and its end (notice.put, which refuses what the card refuses)."""
+    return site_notice.view(site_notice.put(args["text"], args.get("until"), core.acting_who()))
+
+
+@handler
+def notice_clear(args):
+    """DELETE /notice: the notice card's Take down; none up is no error."""
+    site_notice.clear()
+    return site_notice.view()
 
 
 # ------------------------------------------------------------------------------ Discord and Slack (webhooks.py)

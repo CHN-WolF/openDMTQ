@@ -29,9 +29,9 @@
   let denied = false;
 
   // The site's state as a look at the server found it (X-Site-State, lib.php site_state()) against the one the page was
-  // drawn with: when they differ, the bar's word and the sentence under the bar come again from the page itself, put in
-  // place without opening it anew (a broadcast being watched goes on). So maintenance begun, a new message, its end and the
-  // database gone or back show on a page left open, every time.
+  // drawn with: when they differ, the bar's word, the sentence under the bar and the owner's notice come again from the page
+  // itself, put in place without opening it anew (a broadcast being watched goes on). So maintenance begun, a new message,
+  // its end, the database gone or back and a notice put up, changed or taken down show on a page left open, every time.
   let siteAsking = false;
   const siteState = r => {
     const now = r.headers.get('X-Site-State');
@@ -49,11 +49,21 @@
         else if (word) end.prepend(word);
         else if (was) was.remove();
       }
-      // The sentence under the bar, where the page puts it: before the page's heading.
-      const said = document.querySelector('body > .site-alert'), says = page.querySelector('body > .site-alert');
+      // The owner's notice, where the page puts it: right before the page's heading. One this visitor closed in this tab
+      // stays closed (tips.js keeps its id); one with other words comes.
       const heading = document.querySelector('body > h1.page-title');
+      const band = document.querySelector('body > .site-notice'), fresh = page.querySelector('body > .site-notice');
+      let closed = '';
+      try { closed = sessionStorage.getItem('opendmtq-notice') || ''; } catch (_) { /* Nothing kept: none closed. */ }
+      const keep = fresh && fresh.dataset.notice !== closed ? fresh : null;
+      if (band && keep) band.replaceWith(keep);
+      else if (keep && heading) heading.before(keep);
+      else if (band) band.remove();
+      // The sentence under the bar, where the page puts it: before the notice, else before the page's heading.
+      const said = document.querySelector('body > .site-alert'), says = page.querySelector('body > .site-alert');
+      const after = document.querySelector('body > .site-notice') || heading;
       if (said && says) said.replaceWith(says);
-      else if (says && heading) heading.before(says);
+      else if (says && after) after.before(says);
       else if (said) said.remove();
       document.body.dataset.site = page.body.dataset.site;
     }).catch(() => { /* The next look. */ }).finally(() => { siteAsking = false; });
