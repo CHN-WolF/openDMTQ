@@ -325,7 +325,7 @@ if [ -n "${CLIENT:-}" ]; then
   web "$A/jobs/$job" | python3 -c 'import json, sys; print("\n".join(json.load(sys.stdin)["log"][-40:]))' > /tmp/build.log 2>&1 || true
   grep -E "base |code |skipped|signing|adding|done|error" /tmp/build.log | head -20
   expect "the app's build ends well ($state)" test "$state" = "done"
-  built=$(ls -t data/apk/out/OpenDMTQ-*.apk 2>/dev/null | head -n 1 || true)
+  built=$(ls -t data/apk/out/opendmtq-phone-app-*.apk 2>/dev/null | head -n 1 || true)
   expect "the app is there (${built:-none})" test -n "$built"
   if [ -n "$built" ]; then
     list=$(python3 -m zipfile -l "$built" | awk '{print $1}')
