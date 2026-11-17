@@ -215,7 +215,7 @@ def update_launcher(app, result):
         except Exception as e:  # noqa: BLE001  (shown, never swallowed)
             # Velopack's own words, with where they came from, go to the log; the dialog says the failure by its kind.
             log.exception("the update failed")
-            app.post(lambda text=str(e): failed(text))
+            app.post(lambda error=e: failed(error))
             return
         log.info("closing for the update to %s", result.version)
         app.post(done)
@@ -224,13 +224,18 @@ def update_launcher(app, result):
         app.keep_open = False
         app.close()
 
-    def failed(text):
+    def failed(error):
         app.keep_open = False
         if app.dialog is not None:
             app.dialog.close(None)
             app.dialog = None
-        # What failed, and under it why when its kind is known (i18n Words.fault): nothing of Velopack's own words.
-        dialogs.tell(app, "error", w("about.update_failed.title"), w("about.apply_failed"), w.fault(text) or None)
+        if isinstance(error, updates.UpdateError):
+            # Refused or not downloaded (updates.py): its own words, and why when a download failed by a kind of its own.
+            detail = i18n.sentences(w.error(error), w.fault(error.__cause__) if error.__cause__ is not None else "")
+        else:
+            # What failed, and under it why when its kind is known (i18n Words.fault): nothing of Velopack's own words.
+            detail = w.fault(str(error)) or None
+        dialogs.tell(app, "error", w("about.update_failed.title"), w("about.apply_failed"), detail)
 
     threading.Thread(target=work, daemon=True, name="update").start()
     return True

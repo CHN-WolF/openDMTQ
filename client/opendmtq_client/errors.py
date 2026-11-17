@@ -21,7 +21,8 @@ class Worded(Exception):
 
 
 # Each kind of failure a person can do something about, by the marks of it in the words a program gives: Windows' error
-# numbers as Velopack and Python write them ("os error 112", "[WinError 5]"), Windows' and Linux's own sentences
+# numbers as Velopack and Python write them ("os error 112", "[WinError 5]", the launcher's own downloads' "[Errno 11001]
+# getaddrinfo failed" with no network), Windows' and Linux's own sentences
 # (Wine says Windows' numbers, the tests Linux's), and Velopack's and its web library's (ureq) names. The first kind
 # whose marks are found is the one; the order puts the disk and the files before the network, as a full disk during a
 # download is still a full disk.
@@ -35,6 +36,7 @@ FAULTS = (
     ("denied", re.compile(r"(os|win)\s?error\]? 5\b|errno (1|13)\b|access is denied|permission denied"
                           r"|operation not permitted", re.I)),
     ("network", re.compile(r"(os|win)\s?error\]? (11001|11002|11003|11004|10050|10051|10065)\b"
+                           r"|errno (11001|11002|11003|11004)\b|getaddrinfo failed"
                            r"|host not found|no such host|name or service not known|name resolution"
                            r"|nodename nor servname|network is unreachable|failed to lookup address", re.I)),
     ("no_answer", re.compile(r"(os|win)\s?error\]? (10060|10061)\b|timed out|timeout|connection refused"

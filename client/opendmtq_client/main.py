@@ -274,14 +274,20 @@ def _update(yes):
     # The window's English words for a failure: what failed and, by its kind, why (Velopack's own are in the log).
     w = i18n.Words("en")
     result = updates.check()
+    # The server PLAY plays on is named when the answer is its own (updates.py: the server first, GitHub second).
+    server = result.source is not None and result.source.kind == "server"
+    source = result.source.label() if result.source is not None else ""
     if result.kind != "available":
         said = {"not_installed": "Updates work in the launcher installed by OpenDMTQ-Setup.exe.",
                 "no_source": "No update address is set for this build.",
-                "uptodate": "This is the newest version (%s)." % updates.shown_version(),
-                "failed": w.failed("about.update_failed", result.error)}
-        _say(said.get(result.kind, result.kind), error=result.kind == "failed")
+                "uptodate": ("This is the newest version for %s (%s)." % (source, updates.shown_version()) if server
+                             else "This is the newest version (%s)." % updates.shown_version()),
+                "failed": w.failed("about.update_failed", result.error),
+                "refused": w("about.refused", source=source)}
+        _say(said.get(result.kind, result.kind), error=result.kind in ("failed", "refused"))
         return 0 if result.kind == "uptodate" else 2
-    _say("OpenDMTQ %s is available (this is %s)." % (result.version, updates.shown_version()))
+    _say("OpenDMTQ %s is available%s (this is %s)." % (result.version, " from %s" % source if server else "",
+                                                       updates.shown_version()))
     from opendmtq_client import playing
     if playing.running():
         # The update replaces the player's files: a game playing from them would lose them mid-song.
@@ -291,9 +297,14 @@ def _update(yes):
         _say("Nothing changed.")
         return 1
     try:
-        # Downloads, then hands over to Velopack, which waits for this process to end, puts the update in and starts
-        # the new launcher.
-        updates.apply(result)
+        # Downloads and checks it, then hands over to Velopack, which waits for this process to end, puts the update in
+        # and starts the new launcher. When the delta package does not give the package signed, the whole one comes.
+        updates.apply(result, tell=lambda what: _say("The whole update is downloading."))
+    except updates.UpdateError as e:
+        # Refused or not downloaded: the window's words for it, and why when a download failed by a kind of its own.
+        log.exception("--update failed")
+        _say(i18n.sentences(w.error(e), w.fault(e.__cause__) if e.__cause__ is not None else ""), error=True)
+        return 2
     except Exception as e:  # noqa: BLE001  (shown and logged, never swallowed)
         # Velopack's own words, with where they came from, in the log; on the console the window's words.
         log.exception("--update failed")
@@ -416,8 +427,8 @@ def _status(state):
     look at its start, with the same time limit); 0 when PLAY can go. Laid out in parts, each under its name, the
     names and values in columns (console.py); the log has each line as words."""
     from opendmtq_client import updates
-    # Started first, so that it asks the release feed while the server is asked: the two waits overlap.
-    look = updates.Look()
+    # Started first, so that it asks for updates while the server is asked: the two waits overlap.
+    look = updates.Look(state=state)
     this = updates.shown_version()
     _show(console.title(this))
     server = state.server()

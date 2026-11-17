@@ -497,7 +497,8 @@ class LauncherApp:
         from opendmtq_client import updates
 
         def work():
-            found = updates.Look().newer()
+            # The window's own settings: the server PLAY plays on is asked first (updates.check).
+            found = updates.Look(state=self.state).newer()
             if found is not None and (self.update_found is None or found.version != self.update_found.version):
                 # A newer one than the one said before, or the first: said (each newer version once it comes).
                 self.post(lambda: self._update_on_offer(found))

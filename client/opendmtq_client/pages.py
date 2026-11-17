@@ -1811,7 +1811,8 @@ def _updates_card(app, parent):
             slot.pack(fill="x")
 
         def work():
-            result = updates.check()
+            # The window's own settings: the server PLAY plays on is asked first.
+            result = updates.check(app.state)
             app.post(lambda: show(result))
 
         threading.Thread(target=work, daemon=True, name="updates").start()
@@ -1820,15 +1821,20 @@ def _updates_card(app, parent):
         checking["now"] = False
         if not answer.winfo_exists():
             return
+        # The server PLAY plays on is named when the answer is its own: what it hands out, or its version as the newest.
+        server = result.source is not None and result.source.kind == "server"
+        source = result.source.label() if result.source is not None else ""
         text = {
             "not_installed": w("about.not_installed"),
             "no_source": w("about.no_source"),
-            "uptodate": w("about.uptodate"),
-            # What failed and, by its kind, why: Velopack's own words are in the launcher's log (updates.check).
+            "uptodate": w("about.uptodate.from", source=source) if server else w("about.uptodate"),
+            # What failed and, by its kind, why: the words for the log are in the launcher's log (updates.check).
             "failed": w.failed("about.update_failed", result.error),
-            "available": w("about.available", v=result.version),
+            "refused": w("about.refused", source=source),
+            "available": w("about.available.from", v=result.version, source=source) if server
+            else w("about.available", v=result.version),
         }[result.kind]
-        answer.configure(text=text, fg=theme.BAD if result.kind == "failed" else theme.MUTED)
+        answer.configure(text=text, fg=theme.BAD if result.kind in ("failed", "refused") else theme.MUTED)
         if result.kind == "available":
             main_button(app, slot, w("about.update_now", v=result.version), lambda: update(result)).pack(
                 anchor="w", pady=(ui.px(10), 0))

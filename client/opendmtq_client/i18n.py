@@ -412,6 +412,12 @@ TEXT = {
     "about.check": ("Check for updates", "업데이트 확인"),
     "about.checking": ("Checking...", "확인하는 중..."),
     "about.available": ("OpenDMTQ {v} is available.", "OpenDMTQ {v} 버전이 나왔습니다."),
+    # Where the update comes from, when it is the server PLAY plays on (updates.py: the server first, GitHub second).
+    "about.available.from": ("OpenDMTQ {v} is available from {source}.", "{source}에서 OpenDMTQ {v} 버전을 받을 수 있습니다."),
+    "about.uptodate.from": ("This is the newest version for {source}.", "{source}에 맞는 최신 버전입니다."),
+    # An update whose release is not signed by the project (updates.py, signing.py): a fact, and what the launcher does.
+    "about.refused": ("The update from {source} is not signed by the OpenDMTQ project, so the launcher does not install it.",
+                      "{source}의 업데이트는 OpenDMTQ 프로젝트가 서명한 것이 아니어서 설치하지 않습니다."),
     "about.update_now": ("Update to {v}", "{v} 버전으로 업데이트"),
     "about.uptodate": ("This is the newest version.", "최신 버전입니다."),
     "about.not_installed": ("Updates work in the launcher installed by OpenDMTQ-Setup.exe.",
@@ -689,6 +695,9 @@ TEXT = {
                           "이 PC의 앱에 올바른 패키지 이름이 없어 게임을 시작하지 않습니다. ONLINE 페이지에서 앱을 다시 받으세요."),
     "error.repair.not_installed": ("Repair works in the launcher installed by OpenDMTQ-Setup.exe.",
                                    "복구는 OpenDMTQ-Setup.exe로 설치한 런처에서 됩니다."),
+    "error.update.unsigned": ("The update to {v} from {source} is not signed by the OpenDMTQ project, so it was not installed.",
+                              "{source}의 {v} 업데이트는 OpenDMTQ 프로젝트가 서명한 것이 아니어서 설치하지 않았습니다."),
+    "error.update.download": ("The update to {v} could not be downloaded.", "{v} 업데이트를 내려받지 못했습니다."),
     "error.repair.no_package": ("The installed package is not on this PC. Run OpenDMTQ-Setup.exe again and choose Repair.",
                                 "설치된 패키지가 이 PC에 없습니다. OpenDMTQ-Setup.exe를 다시 실행해 복구를 고르세요."),
     "error.repair.package": ("The installed package cannot be read. Run OpenDMTQ-Setup.exe again and choose Repair.",

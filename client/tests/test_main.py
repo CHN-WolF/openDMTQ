@@ -430,37 +430,62 @@ class CommandLine(Folder):
         self.assertIn("the updates thread failed", logged)
         self.assertIn("RuntimeError: the disk went away", logged)
 
-    def test_an_update_answer_without_its_release_is_a_failed_check(self):
-        # Velopack's answer read where its errors are caught: said as a check that failed, as the Launcher page says
-        # it, never an error that ends the check with the page still waiting.
+    def test_an_update_answer_of_no_shape_foreseen_is_a_failed_check(self):
+        # Whatever the feed's answer is, the check ends: said as a check that failed, as the Launcher page says it,
+        # never an error that ends the check with the page still waiting.
         from opendmtq_client import updates
-        answer = types.SimpleNamespace()
         velopack = types.SimpleNamespace(UpdateManager=lambda source: types.SimpleNamespace(
-            check_for_updates=lambda: answer, get_current_version=lambda: "0.8.0"))
+            get_current_version=lambda: "0.8.0"))
         with mock.patch.dict(sys.modules, {"velopack": velopack}), \
-                mock.patch.object(updates, "UPDATE_SOURCE", "http://updates.test/"):
+                mock.patch.object(updates, "UPDATE_SOURCE", "http://updates.test/kanggu12/openDMTQ"), \
+                mock.patch.object(updates, "_latest_tag", side_effect=AttributeError("no such field")):
             self.assertEqual(updates.check().kind, "failed")
             code, said = self.run_main(["--update"])
         self.assertEqual(code, 2)
         self.assertIn("Could not check for updates", said)
 
     def test_an_update_check_that_fails_is_said_by_its_kind(self):
-        # Velopack's own words (here as Wine gave them with no network) stay in the log; the console says what the
-        # Launcher page says in English: what failed, and why by its kind.
+        # Python's own words for no network, as Windows gives them (getaddrinfo's 11001), stay in the log; the console
+        # says what the Launcher page says in English: what failed, and why by its kind.
+        import socket
+        import urllib.error
         from opendmtq_client import updates
-
-        def offline():
-            raise RuntimeError("Network error: Http error: io: Nonauthoritative host not found. (os error 11002)")
-
+        offline = urllib.error.URLError(socket.gaierror(11001, "getaddrinfo failed"))
         velopack = types.SimpleNamespace(UpdateManager=lambda source: types.SimpleNamespace(
-            check_for_updates=offline, get_current_version=lambda: "0.8.0"))
+            get_current_version=lambda: "0.8.0"))
         with mock.patch.dict(sys.modules, {"velopack": velopack}), \
-                mock.patch.object(updates, "UPDATE_SOURCE", "http://updates.test/"):
+                mock.patch.object(updates, "UPDATE_SOURCE", "http://updates.test/kanggu12/openDMTQ"), \
+                mock.patch.object(updates, "_latest_tag", side_effect=offline):
             code, said = self.run_main(["--update"])
         self.assertEqual(code, 2)
         self.assertEqual(said.strip(), "Could not check for updates. This PC cannot reach the internet.")
         with open(st.launcher_log(), encoding="utf-8") as f:
-            self.assertIn("Nonauthoritative host not found. (os error 11002)", f.read())
+            self.assertIn("[Errno 11001] getaddrinfo failed", f.read())
+
+    def test_update_names_its_server_and_says_a_refusal(self):
+        # CLI-40: --update as the Launcher page: the server PLAY plays on first, named when the update is its own, and a
+        # release its project did not sign said in the window's words, with nothing put in.
+        from opendmtq_client import updates
+        self.run_main(["--server", self.site.url])
+        server = st.LauncherState.load().server()
+        source = updates.Source("server", server["url"], server)
+        velopack = types.SimpleNamespace(UpdateManager=lambda source: types.SimpleNamespace(
+            get_current_version=lambda: "0.8.0"))
+        with mock.patch.dict(sys.modules, {"velopack": velopack}), \
+                mock.patch.object(updates, "release", side_effect=updates.Refused("not signed")):
+            code, said = self.run_main(["--update"])
+        self.assertEqual(code, 2)
+        self.assertIn("is not signed by the OpenDMTQ project, so the launcher does not install it.", said)
+        self.assertIn(source.label(), said)
+        offer = updates.Result("available", version="9.9.9", source=source)
+        with mock.patch.object(updates, "check", return_value=offer), \
+                mock.patch.object(updates, "apply", side_effect=updates.UpdateError(
+                    "x", "error.update.unsigned", v="9.9.9", source=source.label())):
+            code, said = self.run_main(["--update", "--yes"])
+        self.assertEqual(code, 2)
+        self.assertIn("OpenDMTQ 9.9.9 is available from %s" % source.label(), said)
+        self.assertIn("The update to 9.9.9 from %s is not signed by the OpenDMTQ project, so it was not installed."
+                      % source.label(), said)
 
     def test_version(self):
         out = io.StringIO()
