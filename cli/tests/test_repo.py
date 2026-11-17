@@ -251,6 +251,58 @@ class DesignTest(unittest.TestCase):
         missing = {name: files for name, files in admin_pages.items() if name not in rules and name not in self.HANDLES}
         self.assertEqual(missing, {}, "the admin pages")
 
+    # Where a glow belongs to the site's own forms: the timeline's bright bar sweeping the front page, and its copy
+    # crossing a song's jacket under the pointer (the game's Technika timeline, with its blue light).
+    GLOWS_OF_THE_GAME = (".sweep", ".song-pic::after")
+
+    @staticmethod
+    def shadows(path):
+        """Each shadow a stylesheet casts: (selector, the shadow's own words, inset or not, its numbers)."""
+        with open(os.path.join(ROOT, path), encoding="utf-8") as f:
+            css = re.sub(r"/\*.*?\*/", "", f.read(), flags=re.S)
+        found = []
+        for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+            for value in re.findall(r"(?:box|text)-shadow\s*:\s*([^;]+)", body):
+                # One shadow after another, split at the commas that are no colour's own (rgba(...), color-mix(...)).
+                depth, part, parts = 0, "", []
+                for ch in value:
+                    depth += {"(": 1, ")": -1}.get(ch, 0)
+                    if ch == "," and depth == 0:
+                        parts.append(part)
+                        part = ""
+                    else:
+                        part += ch
+                parts.append(part)
+                for shadow in (p.strip() for p in parts if p.strip()):
+                    words = re.sub(r"\([^)]*\)", "()", shadow).split()
+                    numbers = [float(w[:-2] if w.endswith("px") else w) for w in words
+                               if re.fullmatch(r"-?[\d.]+(px)?", w)]
+                    found.append((selector.strip(), shadow, "inset" in words, numbers))
+        return found
+
+    def test_no_glow_round_a_state_and_no_stripe_along_a_box(self):
+        # The site's and the admin pages' look without what reads as made by rote: a light of a state's colour blurred
+        # round a dot, a field, a letter, a frame or a knob (0 0 and a blur: the dot's colour says the state), a wide
+        # faint ring standing for one round a field with the focus (0 0 0 and 4 px or more: the field's own edge says
+        # it), and a stripe of colour along a box's left edge (inset Npx 0 0: the box's own words say what it is).
+        glows, stripes = [], []
+        for path in ("server/portal/style.css", "tools/opendmtq_tools/admin/static/admin.css"):
+            for selector, shadow, inset, numbers in self.shadows(path):
+                blurred = len(numbers) >= 3 and numbers[0] == 0 and numbers[1] == 0 and numbers[2] > 0
+                # A ring's colour as faint as a glow's: a mix of 30 % or less with nothing, or an alpha of .3 or less
+                # (a ring drawn apart from a badge, at full strength, is the badge's own edge).
+                mix = re.search(r"(\d+)%\s*,\s*transparent\)", shadow)
+                alpha = re.search(r"rgba\([^)]*,\s*([\d.]+)\s*\)", shadow)
+                faint = (mix is not None and int(mix.group(1)) <= 30) or (alpha is not None and float(alpha.group(1)) <= 0.3)
+                haloed = (not inset and faint and len(numbers) >= 4 and numbers[0] == 0 and numbers[1] == 0
+                          and numbers[2] == 0 and numbers[3] >= 4)
+                if (blurred or haloed) and not any(form in selector for form in self.GLOWS_OF_THE_GAME):
+                    glows.append("%s: %s { %s }" % (os.path.basename(path), selector, shadow))
+                if inset and len(numbers) >= 2 and numbers[0] >= 2 and numbers[1] == 0 and (len(numbers) < 3 or numbers[2] == 0):
+                    stripes.append("%s: %s { %s }" % (os.path.basename(path), selector, shadow))
+        self.assertEqual(glows, [], "glows round a state")
+        self.assertEqual(stripes, [], "stripes along a box's edge")
+
 
 class FreshCloneTest(unittest.TestCase):
     """What a new clone runs before anything has made its .env."""

@@ -41,7 +41,7 @@
   /* Frosted glass: nearly opaque, a little of what lies behind coming through, a bright rim along its top. */
   --glass: rgba(27, 33, 40, 0.86);
   --glass-up: rgba(36, 43, 51, 0.88);
-  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0, rgba(255, 255, 255, 0.012) 110px, transparent 240px);
   --glass-blur: none;
   /* The game's LIFE gauge, on what is the very best. */
@@ -240,15 +240,16 @@ img { max-width: 100%; }
 .nav > a.on::after { content: ""; position: absolute; inset: auto 8px -1px; height: 3px; background: var(--accent); }
 /* Who is on air: a small red count on LIVE, everywhere. */
 .onair { display: inline-flex; align-items: center; gap: 3px; font: 700 var(--t-2xs)/1 var(--display); color: var(--bad); }
-.onair::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 6px var(--bad); }
+.onair::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--bad); }
 
 /* The bar's right end: how the server is, the language, signing in. */
 .bar-end { display: flex; align-items: center; gap: 14px; flex: none; margin-left: auto; }
 .state { display: inline-flex; align-items: center; gap: 6px; font: 700 var(--t-2xs)/1 var(--wide); letter-spacing: 0.08em; color: var(--ash); white-space: nowrap; }
 .state i { width: 7px; height: 7px; border-radius: 50%; }
-.state.ok i { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
-.state.maint i { background: var(--warn); box-shadow: 0 0 7px var(--warn); }
-.state.down i { background: var(--bad); box-shadow: 0 0 7px var(--bad); }
+/* The state's colour on a plain dot: a glow round it would say nothing more. */
+.state.ok i { background: var(--ok); }
+.state.maint i { background: var(--warn); }
+.state.down i { background: var(--bad); }
 
 /* Two short keys for the language, each with the language's own name for those who cannot read the other. */
 .lang-switch { display: flex; background: var(--rail); }
@@ -553,8 +554,8 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
   outline: 2px solid var(--accent);
   outline-offset: -1px;
   border-color: transparent;
-  /* The field with the focus glows a little in the section's colour around its edge, as the sign-in's does. */
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4), 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
+  /* The section's colour along its edge says it has the focus (no glow round it). */
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4);
 }
 /* A field the form's check found wrong (forms.js, admin.js, and the server's answer): its edge in the error's red, until
    typed in. */
@@ -636,7 +637,7 @@ select.input {
     color: var(--chalk);
     background: #12171c;
     border: 1px solid var(--seam);
-    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 30px rgba(0, 0, 0, 0.55);
   }
   select.input option { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 12px; color: var(--chalk); background: transparent; }
   select.input option:hover, select.input option:focus-visible { color: #fff; background: color-mix(in srgb, var(--accent) 16%, transparent); outline: none; }
@@ -1183,9 +1184,9 @@ td.actions { width: 1%; text-align: right; }
 .grades { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; }
 .g-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font: 700 var(--t-lg)/1.5 var(--display); font-variant-numeric: tabular-nums; color: #fff; }
 
-/* Grades in the game's way: a heavy leaning letter that needs no box. S is the best, and lit. */
+/* Grades in the game's way: a heavy leaning letter that needs no box. S is the best, in the game's bright green. */
 .grade { --g: #9aa5b1; display: inline-block; min-width: 1.05em; padding-right: 0.08em; text-align: center; font: italic 800 var(--t-xl)/1 var(--wide); color: var(--g); }
-.gS { --g: #a4f55f; text-shadow: 0 0 10px rgba(140, 242, 61, 0.55); }
+.gS { --g: #a4f55f; }
 .gA { --g: #6fd6ff; }
 .gB { --g: #c491ff; }
 .gC { --g: #ffd24d; }
@@ -1195,7 +1196,8 @@ td.actions { width: 1%; text-align: right; }
 /* Beside a grade's tall letter the mark sits on its middle, not on its foot. */
 .grade + .mark { vertical-align: 0.2em; }
 .mark.ac { background: #1d5fc9; color: #fff; }
-.mark.pp { background: linear-gradient(90deg, #ff3b96, #a65cff, #2fb4ff); color: #fff; }
+/* Perfect play in the game's colours, its letters dark: white on the light blue end read at 2.3:1. */
+.mark.pp { background: linear-gradient(90deg, #ff3b96, #a65cff, #2fb4ff); color: #14081f; }
 .mark.new { background: var(--accent); color: var(--accent-ink); }
 /* A score a keyboard play made (lib.php keys_mark()): a small keyboard before it, in the shape of the site's keys (two
    corners cut), its keys on whole pixels so that it stays sharp at its own size. The quiet text colour: colour is for
@@ -1391,7 +1393,7 @@ a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; 
    the mark and the slot's edge lit in the section's colour while it has the focus. Taller than the site's other fields: on
    a phone this is the first thing anyone types into. */
 .signin-form .field input { height: 48px; padding-left: 44px; font-size: var(--t-lg); box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45); }
-.signin-form .field input:focus { box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+.signin-form .field input:focus { box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45); }
 .slot { position: relative; display: block; }
 .slot > svg { position: absolute; left: 14px; top: 50%; width: 18px; height: 18px; margin-top: -9px; fill: none; stroke: #7d8894; stroke-width: 1.7; pointer-events: none; transition: stroke var(--quick); }
 .slot:focus-within > svg { stroke: var(--accent); }
@@ -1580,8 +1582,8 @@ a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; 
 .live-ctl input.ctl-seek { position: absolute; inset: 0; width: 100%; height: 22px; margin: 0; padding: 0; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; --p: 0%; --b: 0%; }
 .ctl-seek::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(90deg, var(--accent) 0 var(--p), rgba(255, 255, 255, 0.5) var(--p) var(--b), rgba(255, 255, 255, 0.24) var(--b)); transition: height 0.1s; }
 .ctl-seek::-moz-range-track { height: 4px; background: linear-gradient(90deg, var(--accent) 0 var(--p), rgba(255, 255, 255, 0.5) var(--p) var(--b), rgba(255, 255, 255, 0.24) var(--b)); }
-.ctl-seek::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 7px var(--accent), 0 1px 2px rgba(0, 0, 0, 0.7); }
-.ctl-seek::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 7px var(--accent), 0 1px 2px rgba(0, 0, 0, 0.7); }
+.ctl-seek::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
+.ctl-seek::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
 .ctl-marks { position: absolute; left: 7px; right: 7px; top: 8px; height: 6px; pointer-events: none; }
 /* A song's part of the timeline: a thin dark cut where it begins; the part under the pointer a little higher and lit. */
 .ctl-marks i { position: absolute; top: 0; height: 6px; transition: top 0.1s, height 0.1s, background-color 0.1s; }
@@ -1608,10 +1610,10 @@ a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; 
 
 /* Live, and plain to see: a solid red mark that stays on the picture, with its pulsing light; beside it how long the
    broadcast has run, and who and what while the controls are there, over a shade of their own (the game's colours can
-   be anything). The frame around the picture is lit too. */
-.live-stage.is-live { box-shadow: 0 0 0 2px #ff3148, 0 0 34px rgba(255, 49, 72, 0.42); }
+   be anything). The frame around the picture is red too. */
+.live-stage.is-live { box-shadow: 0 0 0 2px #ff3148; }
 .live-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px 5px 10px; font: 800 var(--t-sm)/1 var(--wide); letter-spacing: 0.08em; color: #fff; background: #e4122c; }
-.live-pill i { width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px #fff; animation: live-pulse 1.4s ease-in-out infinite; }
+.live-pill i { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: live-pulse 1.4s ease-in-out infinite; }
 @keyframes live-pulse { 50% { opacity: 0.3; } }
 /* A recording's mark: the same shape, in metal, with no light. */
 .live-pill.replay { background: #47505b; }
@@ -1643,7 +1645,7 @@ a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; 
 /* Cards of those on air, like a video site's: the picture with its marks, the name, what they play. */
 .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 14px; }
 .thumb { display: block; min-width: 0; color: inherit; text-decoration: none; }
-.thumb-pic { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: radial-gradient(ellipse at 50% 0%, rgba(232, 17, 45, 0.45), transparent 70%), linear-gradient(160deg, #2a2e34, #14171b); }
+.thumb-pic { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: linear-gradient(160deg, #2a2e34, #14171b); }
 /* No picture yet, or none for a visitor who has not signed in: the name of the site, faintly. */
 .thumb-pic::before { content: "DMTQ"; position: absolute; inset: 0; display: grid; place-items: center; font: italic 800 34px/1 var(--wide); color: rgba(255, 255, 255, 0.13); }
 .thumb-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
@@ -1655,7 +1657,7 @@ a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; 
 .thumb:hover .thumb-who { color: var(--bad); }
 .thumb-what { display: block; font-size: var(--t-sm); color: var(--ash); overflow-wrap: anywhere; }
 /* The section heading's light. */
-.on-air-dot { display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: 1px; border-radius: 50%; background: #ff3148; box-shadow: 0 0 8px #ff3148; animation: live-pulse 1.4s ease-in-out infinite; }
+.on-air-dot { display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: 1px; border-radius: 50%; background: #ff3148; animation: live-pulse 1.4s ease-in-out infinite; }
 /* Video is late: the browser's own controls would show this, and they are off while live. */
 .live-stage.waiting::after { content: ""; position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border: 3px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; border-radius: 50%; animation: live-wait 0.9s linear infinite; }
 @keyframes live-wait { to { transform: rotate(360deg); } }
@@ -1735,8 +1737,8 @@ table.board.parts td.name a::after { content: none; }
 /* Everything that moves is a small help, not a necessity. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
-  .live-pill i, .on-air-dot { animation: none; }
-  .song:hover::before { animation: none; opacity: 0; }
+  .live-pill i, .on-air-dot, .watch-live.on i { animation: none; }
+  .song:hover .song-pic::after { animation: none; opacity: 0; }
   .live-stage.waiting::after { animation-duration: 3s; }
 }
 
@@ -1872,8 +1874,8 @@ html:not(.notice-closed) .site-notice ~ .stage { --bar-h: 0px; }
    while the switch is on, grey while it is off. */
 .me-state { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-weight: 700; color: #fff; }
 .me-state i { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--ash); }
-.me-state.on i { background: var(--bad); box-shadow: 0 0 7px var(--bad); }
-.me-state.wait i { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
+.me-state.on i { background: var(--bad); }
+.me-state.wait i { background: var(--ok); }
 .me-casts .meta { margin: 6px 0 0; }
 /* Everything the site keeps about the account: a name and its value on each line, a thin line between them; on a phone
    the name over its value. */
