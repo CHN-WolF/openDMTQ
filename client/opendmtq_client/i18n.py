@@ -366,7 +366,7 @@ TEXT = {
                      "게임 맨 위 가장자리에서 손가락을 아래로 쓸거나, 손잡이를 탭하거나 길게 누르면 같은 막대가 나옵니다."),
     "controls.keyboard": ("Keyboard", "키보드"),
     "controls.esc": ("Esc: back. It closes what is open; in a song, the game's pause button pauses.",
-                     "Esc: 뒤로 가기. 열린 창을 닫습니다. 곡 중에는 게임의 일시정지 단추로 멈춥니다."),
+                     "Esc: 뒤로 가기. 열린 창을 닫습니다. 곡 중에는 게임의 일시정지 버튼으로 멈춥니다."),
     "controls.menu": ("Pointer resting on the handle at the game's top centre or on its top edge, or drawn down from there: the bar, with Sound, minimise, full screen and X.",
                       "게임 맨 위 가운데 손잡이나 맨 위 가장자리에 포인터를 두거나 그곳에서 끌어내리면 사운드, 최소화, 전체 화면, X가 있는 막대가 나옵니다."),
     "controls.minimise": ("Minimised, the game holds still; the taskbar brings it back.", "최소화하면 게임이 멈추고, 작업 표시줄에서 다시 띄웁니다."),

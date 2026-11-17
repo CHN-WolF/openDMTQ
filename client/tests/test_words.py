@@ -275,9 +275,9 @@ class KoreanParticles(unittest.TestCase):
     def test_one_korean_word_for_each_thing(self):
         # One word for each thing, as the admin pages say it: a sign-in that ran out is 만료, a game that closed on its
         # own 예기치 않게 종료, this PC's id 기기 ID, the Music volume 음악 and the Custom preset 커스텀 (the in-game panel
-        # says the same).
+        # says the same), a button 버튼 as the site and the game's own pages say it.
         for key, (_en, ko) in i18n.TEXT.items():
-            for old in ("로그인이 끝났", "저절로 닫", "플레이어 ID", "배경음", "바쁜 PC", "잠시만요"):
+            for old in ("로그인이 끝났", "저절로 닫", "플레이어 ID", "배경음", "바쁜 PC", "잠시만요", "단추"):
                 self.assertNotIn(old, ko, key)
         self.assertEqual(i18n.TEXT["sound.volume.music"][1], "음악")
         self.assertEqual(i18n.TEXT["sound.eq.custom"][1], "커스텀")
