@@ -7,9 +7,10 @@ then plays against the server as it does on a phone.
 
 <p align="center">
   <img src="images/game-pc-live.jpg" alt="The game on a Windows PC through the player: notes and the judgment line over
-  the song's video, blurred in this picture; the bar of frosted glass down across the top with the OpenDMTQ wordmark,
-  minimise, full screen and the X; under it the broadcast notice, a red LIVE tag with Broadcasting your play, Watch it
-  now or later under LIVE on 192.168.1.10; the FPS counter at the bottom right" width="100%">
+  the song's video, blurred in this picture; the bar of frosted glass down across the top with the OpenDMTQ wordmark and
+  its buttons, Sound, minimise, full screen and the X; under it the broadcast notice, a red LIVE tag with Broadcasting
+  your play, Watch it now or later under LIVE on 192.168.1.10:8791; the FPS counter at 240 at the bottom right"
+  width="100%">
 </p>
 
 ## <a id="for-players"></a>Installing
@@ -30,11 +31,12 @@ The installer from the project's [releases](https://github.com/kanggu12/openDMTQ
 (`opendmtq-pc-client-<version>-windows-x64-setup.exe`) is the same program without a server: its first start asks for
 the server's address. One launcher keeps several servers, each with its own sign-in and app, and plays on the one
 chosen on the **Online** page.
-Run on a PC that has OpenDMTQ, the installer offers what to do with it: **Open OpenDMTQ**, **Repair** (every file of the
-program put back as it came), **Update** when the installer is newer (or going back to its older version), and
-**Uninstall**. While the game is open, repairing, updating and uninstalling wait for it to close and then go on.
-Either installer with `--silent` installs or updates with no window and starts the launcher (`--no-start` leaves it
-closed); while a game runs it installs nothing and ends with 3.
+
+Run again on a PC that has OpenDMTQ, either installer offers what to do with it: **Open OpenDMTQ**, **Repair** (every
+file of the program put back as it came), **Update** when the installer is newer (or going back to its older version),
+and **Uninstall**. While the game is open, repairing, updating and uninstalling wait for it to close and then go on.
+With `--silent` it installs or updates with no window and starts the launcher (`--no-start` leaves it closed); while a
+game runs it installs nothing and ends with 3.
 
 ### On Linux, with Wine
 
@@ -60,17 +62,17 @@ Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, a
 
 ## The launcher
 
-![The launcher's PLAY page: the server and the sign-in with My page on the site, the ready check, how to play with keyboard play's keys first, the last game, and PLAY](images/client-play.png)
+![The launcher's PLAY page signed in as sena on 192.168.1.10:8791: the server with My page on the site, the ready check, how to play with the keys and the bar over the game, the last game, the start of My records, and PLAY](images/client-play.png)
 
 | Page | What it has |
 | :--- | :--- |
 | **Play** | The server and the account with **My page on the site**, the checks before a start (the player, the server, the sign-in, the app), one that is not fine with a link to the page that sees to it (a server that does not answer, to its connection test), how to play (keyboard play's keys first, or that it is off, with **CONTROLS** beside them), the last play, **My records** under them, and **PLAY** |
-| **Screen** | Full screen or a window, the window's size, VSync, the frame limit, the FPS counter and its position, the render scale and its upscaler, anti-aliasing |
-| **Sound** | The master, music and effects volumes, the equaliser (a preset or three bands), the device, **Shared** or **Exclusive**, the buffer, and how the last game's sound went |
-| **Controls** | Keyboard play: on or off, and the keys of each lane of 2, 3 and 4 LINE; what the touch screen, the mouse and the keyboard do |
+| **Screen** | Full screen or a window, the window's size, VSync, the frame limit, the FPS counter and its position, the render scale and its upscaler, anti-aliasing ([the picture](#the-picture)) |
+| **Sound** | The master, music and effects volumes, the equaliser (a preset or three bands), the device, **Shared** or **Exclusive**, the buffer, and how the last game's sound went ([the sound](#the-sound)) |
+| **Controls** | Keyboard play: on or off, and the keys of each lane of 2, 3 and 4 LINE ([keyboard play](#keyboard-play)); what the touch screen, the mouse and the keyboard do |
 | **Online** | The servers, the [connection test](#testing-the-connection), the sign-in, the app on this PC and a check for a newer one |
-| **Help** | The checks, what to try when something does not work, the logs, [a report](#a-report-for-whoever-helps) to send, and repairing, clearing, starting over and uninstalling |
-| **Launcher** | The language, updates of the launcher, the first-start guide again |
+| **Help** | The checks, the game's log and the launcher's, [a report](#a-report-for-whoever-helps) to send, and repairing, clearing the game's data, starting over and uninstalling |
+| **Launcher** | The language, the launcher's [updates](#updates), the first-start guide again |
 
 The pages are in a column down the window's left, under the wordmark and the launcher's version; the status line and
 **PLAY** are at the column's foot, and the first-start guide shows its six steps down the same column with **Back** and
@@ -78,31 +80,82 @@ The pages are in a column down the window's left, under the wordmark and the lau
 answer (a server connected, a sign-in, a download that ended) changes its own card: the page is never drawn again
 whole. A drop-down opens the launcher's own list under its box (over it near the screen's foot), its chosen row marked,
 a long list scrolling by the wheel, the keys or a finger. Pages move by the wheel, Page Up and Page Down, or a finger
-dragged on them. The sign-in names the ID and the password over their fields, shows the password on **Show**, says what
-is wrong under the field it is about, and signs in on Enter.
+dragged on them. The sign-in names the ID and the password over their fields, shows the password on **Show** (by the
+keyboard too), says what is wrong under the field it is about, keeps the ID for the next time, and signs in on Enter.
+
+### PLAY and your records
 
 **PLAY** asks the server for a newer app first and downloads it when there is one; when the server cannot be asked, the
 game starts with the app this PC has. The checks ask the server too: one that does not answer is said on the **Play**
-and **Help** pages and does not stop **PLAY**. The launcher updates itself ([updates](#updates)): **Launcher**, **Check
-for updates**. It also looks at each start, in the background for 10 seconds at most, and again every six hours while it
-is open: a newer version is said on the **Launcher** page and in the status line, each with **Update to** that version;
-nothing is installed by itself, and without an answer nothing is said. Every minute while it is on screen, the launcher
-also asks the server again: one that stops answering, a sign-in the server no longer takes, and a newer app are said as
-they come, each time they do. The installer from the server's **Download** page updates it too, once the server has a
-newer one; the servers and the settings stay. While the game runs the launcher steps aside, and comes back when the game
-ends.
+and **Help** pages and does not stop **PLAY**. Every minute while it is on screen, the launcher asks the server again:
+one that stops answering, a sign-in the server no longer takes, and a newer app are said as they come, each time they
+do. While the game runs the launcher steps aside, and comes back when
+the game ends.
+
+Signed in, **My page on the site** on the **Play** page's server card opens your MY PAGE on the server's site in the
+PC's browser, signed in already: the server makes a link for the launcher's sign-in that signs the browser in to the
+same account once, within a minute. **My records**, under the page's columns, lists your three latest plays and three
+best records from the server, each with the song, the chart, when, the score (with the keyboard's mark before it when a
+keyboard played it) and the place on that chart (#2 of 5); it is asked for when the page shows and again after a game.
+An account the server's owner has not linked to a game player says so instead, and signed out the card is not there.
+
+![My records at the foot of the PLAY page: three recent plays and three best records, each with its song, chart and when, the score with the keyboard's mark before those a keyboard played, and the place on the chart; under them what the keyboard's mark means](images/client-records.png)
+
+### <a id="testing-the-connection"></a>Testing the connection
+
+**Test connection**, at the top of the **Online** page's server card (and the **Play** page's Server row while the
+server does not answer), follows the way from this PC to the server a step at a time, in a card that fills in as each
+step ends, with what it found and how long it took, under a line that says how it went; **Copy** puts the whole result
+on the clipboard:
+
+| Step | What it looks at |
+| :--- | :--- |
+| Address | The address as the launcher reads it: its scheme, host and port |
+| Name lookup | The host's name, and the addresses it leads to |
+| Port | A connection to the port: taken, refused, or no answer within 5 seconds |
+| OpenDMTQ server | Its answer as an OpenDMTQ server: its name and version, and over HTTPS whether Windows or the server's own authority vouches for its certificate |
+| Version | The server's version against the launcher's |
+| Sign-in | Whether the server still takes the launcher's sign-in (asked with it, no password) |
+| Game server | The game server's own answers: its patch, and the owner's maintenance notice as the game asks for it at its start; or what keeps it from serving the game (no client data, no database or one it cannot write, no address of its own) |
+| Broadcasts | The broadcast state the player asks for between songs |
+| Downloads | The app and the client data's list of files, by their headers alone: nothing is downloaded |
+| Round trip | Five small asks: the time in the middle, the fastest and the slowest |
+
+![The connection test of 192.168.1.10:8791 on the Online page, every step passed: address, name lookup, port, the OpenDMTQ server and its version, sign-in, game server, broadcasts, downloads and round trip, each with its time, with Copy at the card's top](images/client-test.png)
+
+A step after one that did not get through says it was not tried. When nothing answers on the address's port, the test
+also asks the same host on 8791 and the ports a new server takes when that one is taken (to 8799): an OpenDMTQ server
+found there is named, with **Use this address**, which plays on it from then on with the sign-in kept. A server updated
+to 0.11.0 moved from port 80 to 8791, and a launcher set up for port 80 finds it so. The test changes nothing else, and
+its last result goes into the report. `OpenDMTQ-cmd.exe --test-server` runs the same test on the command line.
+
+### <a id="a-report-for-whoever-helps"></a>A report for whoever helps
+
+**Help**, **Save a report** puts one zip in the Downloads folder (`opendmtq-report-<date>-<time>.zip`) and shows it
+selected in File Explorer: the launcher's logs, the end of the game's log, the settings, the displays, the sound
+devices, Windows and the graphics cards, the launcher's and the player's versions, and the last connection test. Left
+out of every file, each replaced by a word in angle brackets: the Windows user's name in paths, the site IDs, the
+servers' addresses and names, the sign-in cookies, tokens and keys, this PC's player id and what was typed in the game.
+The window says which of those it found; `about.txt` in the zip lists them with how often.
 
 ### Updates
 
+The launcher updates itself and the player: **Launcher**, **Check for updates**. It also looks at each start, in the
+background for 10 seconds at most, and again every six hours while it is open: a newer version is said on the
+**Launcher** page and in the status line, each with **Update to** that version. Nothing is installed by itself, and
+without an answer nothing is said. The installer from the server's **Download** page updates it too, once the server has
+a newer one; the servers and the settings stay.
+
 The launcher takes its updates from the server it plays on first. The server keeps the PC client's update of the version
 it hands out, the same files as the project's release, at `/updates/` on its one port, and the launcher goes no further
-than that version: a launcher stays matched to its server, on a network with no way out too. A server that keeps none (one
-older than 0.11.0) lets the launcher take the project's releases on GitHub, up to the server's own version, and with no
-server it takes GitHub's latest release. A server that does not answer sends it nowhere else. **Check for updates** says
-where an update comes from.
+than that version: a launcher stays matched to its server, on a network with no way out too. A server that keeps none
+(one older than 0.11.0) lets the launcher take the project's releases on GitHub, up to the server's own version, and
+with no server it takes GitHub's latest release. A server that does not answer sends it nowhere else. **Check for
+updates** says where an update comes from.
 
 An update goes in only when the release's checksums carry the OpenDMTQ project's signature, by the key built into the
-launcher (`8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`, [a release's files](install.md#a-releases-files)):
+launcher (`8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`,
+[a release's files](install.md#a-releases-files)):
 
 - `releases.win.json`, the update feed, names the version and its packages. It must be the file the signed checksums
   sum, or the launcher says the update is not signed by the OpenDMTQ project and installs nothing.
@@ -124,80 +177,25 @@ GitHub, over HTTPS, checking only the hash the update feed gives. So it updates 
 trusts GitHub's answer for what it puts in; from 0.11.0 on, every update a launcher takes is one the project signed,
 whoever hands it out.
 
-Signed in, **My page on the site** on the **Play** page's server card opens the player's page on the server's site in
-the PC's browser, signed in already: the server makes a link for the launcher's sign-in that signs the browser in to
-the same account once, within a minute. **My records**, under the page's columns, lists the player's three latest plays
-and three best records from the server, each with the song, the chart, when, the score (with the keyboard's mark
-before it when a keyboard played it) and the place on that chart (#2 of 5); it is asked for when the page shows and
-again after a game. An account the server's owner has not linked to a game player says so instead, and signed out the
-card is not there.
-
-![My records under the PLAY page's columns: three recent plays and three best records, each with its song, chart and when, the score with the keyboard's mark before those a keyboard played, and the place on the chart; under them what the keyboard's mark means](images/client-records.png)
-
-**Controls** sets keyboard play. **Play with keys** turns it on or off (on at first). While it is on, a table shows the
-lanes of 2, 3 and 4 LINE from the top, each with a box for its key and one for a second key: click a box (or Tab to it
-and press Enter), then press the key. The key goes in by its place on the keyboard, and is named as the US layout's key
-at that place (`Semicolon` for the key right of L), so another layout plays the same places; in grey beside the name,
-what the PC's own layout prints there when it says more (`;`, or `Ö` on a German keyboard). A key another lane, or the
-same lane, already plays, or one no lane takes (Enter, the arrows, the numpad, Shift, Backspace), is refused in words
-under the table, and the box waits for another. Esc keeps the key that was there, Delete removes one of a lane's two
-keys, and **Reset keys** puts back F J, D F J and D F J K. A key held down counts once, and while a box waits a Korean
-or Japanese input method is off, so that a letter goes in by its place. The game reads the keys at the next **PLAY**.
-
-### <a id="testing-the-connection"></a>Testing the connection
-
-**Test connection**, at the top of the **Online** page's server card (and the **Play** page's Server row while the server
-does not answer), follows the way from this PC to the server a step at a time, in a card that fills in as each step
-ends, with what it found and how long it took, under a line that says how it went; **Copy** puts the whole result on
-the clipboard:
-
-| Step | What it looks at |
-| :--- | :--- |
-| Address | The address as the launcher reads it: its scheme, host and port |
-| Name lookup | The host's name, and the addresses it leads to |
-| Port | A connection to the port: taken, refused, or no answer within 5 seconds |
-| OpenDMTQ server | Its answer as an OpenDMTQ server: its name and version, and over HTTPS whether Windows or the server's own authority vouches for its certificate |
-| Version | The server's version against the launcher's |
-| Sign-in | Whether the server still takes the launcher's sign-in (asked with it, no password) |
-| Game server | The game server's own answers: its patch, and the owner's maintenance notice as the game asks for it at its start; or what keeps it from serving the game (no client data, no database or one it cannot write, no address of its own) |
-| Broadcasts | The broadcast state the player asks for between songs |
-| Downloads | The app and the client data's list of files, by their headers alone: nothing is downloaded |
-| Round trip | Five small asks: the time in the middle, the fastest and the slowest |
-
-![The Online page's connection test: Test connection and Forget at the server card's title, then the test's card with Copy, its one-line verdict and a row for each step with its lamp, what it found and how long it took](images/client-test.png)
-
-A step after one that did not get through says it was not tried. When nothing answers on the address's port, the test
-also asks the same host on 8791 and the ports a new server takes when that one is taken (to 8799): an OpenDMTQ server
-found there is named, with **Use this address**, which plays on it from then on with the sign-in kept (a server updated
-to 0.11.0 moved from port 80 to 8791, and a launcher set up for port 80 finds it so). The test changes nothing else, and
-its last result goes into the report.
-
-### <a id="a-report-for-whoever-helps"></a>A report for whoever helps
-
-**Help**, **Save a report** puts one zip in the Downloads folder (`opendmtq-report-<date>-<time>.zip`) and shows it
-selected in File Explorer: the launcher's logs, the end of the game's log, the settings, the displays, the sound
-devices, Windows and the graphics cards, the launcher's and the player's versions, and the last connection test. Left
-out of every file, each replaced by a word in angle brackets: the Windows user's name in paths, the site IDs, the
-servers' addresses and names, the sign-in cookies, tokens and keys, this PC's player id and what was typed in the game.
-The window says which of those it found; `about.txt` in the zip lists them with how often.
-
 ### The command line
 
 `OpenDMTQ-cmd.exe`, in `%LOCALAPPDATA%\OpenDMTQ.Client\current`, does the same from the command line: `--status` (exit 0
 when PLAY can go; under **Sound** the last game's sound as the Sound page says it; its last line is the launcher's
 version, and a newer one when there is), `--test-server [ADDRESS]` (the connection test of the server PLAY plays on
 or of ADDRESS, each step as it ends; exit 0 when every step passed, 1 when one failed), `--server URL`, `--sign-in ID`
-(the password from standard input), `--sign-out`, `--app`, `--set NAME=VALUE`, `--audio-devices`, `--language
-en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the window opens on its pages), `--servers` (the servers
-it knows, as **Online** lists them), `--open-log player|launcher`, `--report FILE` (Help's report, into FILE, or into a
-folder under its own name), `--play`, `--update`, `--forget URL`, `--reset`, `--repair`, `--clear-game-data` and
-`--uninstall [--delete-data]`, with `--yes` to answer their questions (`--help` lists them all, in parts). In a
-terminal it prints in the launcher's look: a title with the version, each part under its
-name, names and values in columns, the ready check's marks and a download's bar in the launcher's colours; piped to a
-file or a script, the same lines in plain words, as before. Started with no flag by a double click, it opens the
-launcher's window and closes the console Windows opened for it. While the launcher's window is open, the flags that
-change what it keeps are refused. `--set` takes the settings of the **Screen**, **Sound** and **Controls** pages; every
-`--set` of a line is checked before any is applied, so one the launcher does not take changes none of them:
+(the password from standard input), `--sign-out`, `--app`, `--set NAME=VALUE`, `--audio-devices`,
+`--language en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the window opens on its pages), `--servers`
+(the servers it knows, as **Online** lists them), `--open-log player|launcher`, `--report FILE` (Help's report, into
+FILE, or into a folder under its own name), `--play`, `--update`, `--forget URL`, `--reset`, `--repair`,
+`--clear-game-data` and `--uninstall [--delete-data]`, with `--yes` to answer their questions (`--help` lists them all,
+in parts).
+
+In a terminal it prints in the launcher's look: a title with the version, each part under its name, names and values in
+columns, the ready check's marks and a download's bar in the launcher's colours; piped to a file or a script, the same
+lines in plain words. Started with no flag by a double click, it opens the launcher's window and closes the console
+Windows opened for it. While the launcher's window is open, the flags that change what it keeps are refused. `--set`
+takes the settings of the **Screen**, **Sound** and **Controls** pages; every `--set` of a line is checked before any is
+applied, so one the launcher does not take changes none of them:
 
 | Setting | Values (the default first) | On the page |
 | :--- | :--- | :--- |
@@ -243,53 +241,77 @@ change what it keeps are refused. `--set` takes the settings of the **Screen**, 
 
 <p align="center">
   <img src="images/overlay-bar.webp" alt="The handle at the game's top centre lights under the pointer, and the bar of
-  frosted glass slides down out of the game's top edge with the wordmark, minimise, full screen and the X, stays, then
-  slides back up" width="100%">
+  frosted glass slides down out of the game's top edge with the wordmark, Sound, minimise, full screen and the X, stays,
+  then slides back up" width="100%">
 </p>
 
-- **The bar**: a PC has no phone's buttons around the game, so a bar of frosted glass comes down across the top of the
-  game when the pointer rests a moment at the game's very top edge or on the handle with its button up; when a finger or
-  a pen taps the handle, or holds still on it or at the top edge for half a second; or when a press of a finger, a pen
-  or the mouse is drawn down from there. A press drawn down pulls the bar out with its foot at the press and, let go,
-  the bar settles down when it is out at least half way or was flicked down, and goes back up otherwise. The press that
-  brings the bar never reaches the game; a tap at the top edge beside the handle, a click of the mouse there or on the
-  handle however long it is held, and a press that moves across or up are the game's after all, from where and when they
-  came down. In a song none of this happens unless the game has had no click, touch or held note for a second and a
-  half: every tap at the top of a song plays the song at once, and a pointer on its way to the window's title bar brings
-  nothing. It also comes down by itself for 3 seconds when the game's picture first shows (not during its black start)
-  and after each switch between a window and full screen, so that a player sees where it is. It slides down out of the
-  game's top edge, its foot first, and back up into it, in about a fifth of a second each way and in step with the
-  display's refreshes, never over the window's title bar; with Windows' animation effects switched off it comes and goes
-  at once. It stays while the pointer is on it and goes up soon after the pointer leaves, so it never sits on the game's
-  own controls at the top while they are used; a pointer that comes back while it goes up turns it back from where it
-  is. On its left is the OpenDMTQ wordmark as the launcher's menu column draws it; on its right are four buttons in the
-  launcher's own shape and depth (two corners cut, raised, sunk while held): **Sound** (a speaker and the word),
+### The bar
+
+A PC has no phone's buttons around the game, so a bar of frosted glass comes down across the top of the game:
+
+- **How it comes:** when the pointer rests a moment at the game's very top edge, or on the handle with its button up;
+  when a finger or a pen taps the handle, or holds still on it or at the top edge for half a second; or when a press of
+  a finger, a pen or the mouse is drawn down from there. A press drawn down pulls the bar out with its foot at the press
+  and, let go, the bar settles down when it is out at least half way or was flicked down, and goes back up otherwise.
+  The press that brings the bar never reaches the game; a tap at the top edge beside the handle, a click of the mouse
+  there or on the handle however long it is held, and a press that moves across or up are the game's after all, from
+  where and when they came down.
+- **In a song** none of this happens unless the game has had no click, touch or held note for a second and a half:
+  every tap at the top of a song plays the song at once, and a pointer on its way to the window's title bar brings
+  nothing.
+- **By itself** it comes down for 3 seconds when the game's picture first shows (not during its black start) and after
+  each switch between a window and full screen, so that a player sees where it is.
+- **How it moves:** it slides down out of the game's top edge, its foot first, and back up into it, in about a fifth of
+  a second each way and in step with the display's refreshes, never over the window's title bar; with Windows' animation
+  effects switched off it comes and goes at once. It stays while the pointer is on it and goes up soon after the pointer
+  leaves, so it never sits on the game's own controls at the top while they are used; a pointer that comes back while it
+  goes up turns it back from where it is. The broadcast notice and an FPS counter in a top corner move down with the
+  bar's foot and back up with it. It is tall enough to cover the game's own X at the top right of its song and music
+  screens whole.
+- **What is on it:** on its left the OpenDMTQ wordmark as the launcher's menu column draws it; on its right four buttons
+  in the launcher's own shape and depth (two corners cut, raised, sunk while held): **Sound** (a speaker and the word),
   **minimise** and **full screen** (or back to a window) as secondary buttons, quiet metal with a lighter plate under
   the pointer, and the **X** that quits as the main button, in the launcher's lime from the start so that it is seen at
   once. A finger works every button as the mouse does. A button acts only when let go where it was pressed, as the bar
   stood when it was pressed: one pressed while the bar is still sliding down acts too. Minimise holds the game still,
-  and the taskbar brings it back with the bar up (nothing of what was over the game comes back that is not wanted there
-  then). The broadcast notice and an FPS counter in a top corner move down with the bar's foot and back up with it. It
-  is tall enough to cover the game's own X at the top right of its song and music screens whole.
-- **The handle**: the game's green line along its top edge at the centre, with a small tab of glass hanging from it in
-  the lean of the game's own tabs and a chevron pointing down in the tab, says that the bar comes down from here; with
-  the pointer on it the line and the chevron turn lime and the tab grows deeper. The pointer resting on it brings the
-  bar down: on its line, on its tab, or beside the tab within the room the header leaves there (12 pixels either side
-  of the centre in a 1280x720 game, down to the deeper tab's foot); the handle goes down with the bar's foot and fades,
-  and comes back up with it. The handle and the place the pointer rests on are as large as the game's own header
-  leaves room for at its top centre (the handle 26 by 19 pixels in a 1280x720 game; both in proportion to that header
-  in a game of any other size or shape), so neither covers any of the game's words or buttons on any screen. It shows
-  once the game's picture is up, and goes while the bar is down, while a notice or the question is up and while the
-  game holds still.
-- **The sound panel**: the bar's Sound button opens a card of glass under the bar at the game's right side: **Master**,
-  **Music** and **Effects** as sliders of 0 to 100 %, then the **Equaliser**'s presets (Flat, Bass, Vocal, Treble,
-  Custom) and its three bands, **Low** (120 Hz), **Mid** (1 kHz) and **High** (6 kHz), as sliders of -12 to +12 dB.
-  A slider follows the mouse or a finger from wherever its row is pressed, and every change is heard at once; moving a
-  band makes the equaliser Custom from the preset's bands. What it changes is written to the PC's settings when the
-  slider is let go, only the keys changed, so the launcher shows it next time. The bar stays down while the panel is
-  open; the Sound button again, a press on the game, minimising or the question close it. A broadcast notice shown
-  meanwhile stands beside it, and an FPS counter it would cover hides until it closes. The panel keeps within the game
-  at every window size and scale. [The sound](#the-sound) says what each control changes.
+  and the taskbar brings it back with the bar up.
+
+**The handle** is the game's green line along its top edge at the centre, with a small tab of glass hanging from it in
+the lean of the game's own tabs and a chevron pointing down in the tab: the bar comes down from here. With the pointer
+on it the line and the chevron turn lime and the tab grows deeper. The pointer resting on it brings the bar down: on its
+line, on its tab, or beside the tab within the room the header leaves there (12 pixels either side of the centre in a
+1280x720 game, down to the deeper tab's foot); the handle goes down with the bar's foot and fades, and comes back up
+with it. The handle and the place the pointer rests on are as large as the game's own header leaves room for at its top
+centre (the handle 26 by 19 pixels in a 1280x720 game; both in proportion to that header in a game of any other size or
+shape), so neither covers any of the game's words or buttons on any screen. It shows once the game's picture is up, and
+goes while the bar is down, while a notice or the question is up and while the game holds still.
+
+### The sound panel
+
+<p align="center">
+  <img src="images/game-pc-sound.jpg" alt="The sound panel open under the bar during a song, its Sound button pressed in:
+  Master, Music and Effects as sliders at 85, 80 and 90 %, the equaliser's presets with Bass chosen, and its Low, Mid
+  and High bands in decibels" width="100%">
+</p>
+
+The bar's **Sound** button opens a card of glass under the bar at the game's right side: **Master**, **Music** and
+**Effects** as sliders of 0 to 100 %, then the **Equaliser**'s presets (Flat, Bass, Vocal, Treble, Custom) and its three
+bands, **Low** (120 Hz), **Mid** (1 kHz) and **High** (6 kHz), as sliders of -12 to +12 dB. A slider follows the mouse
+or a finger from wherever its row is pressed, and every change is heard at once; moving a band makes the equaliser
+Custom from the preset's bands. What it changes is written to the PC's settings when the slider is let go, only the
+keys changed, so the launcher's **Sound** page shows it, and the next game keeps it. The bar stays down while the panel
+is open; the Sound button again, a press on the game, minimising or the question close it. A broadcast notice shown
+meanwhile stands beside it, and an FPS counter it would cover hides until it closes. The panel keeps within the game at
+every window size and scale. [The sound](#the-sound) says what each control changes.
+
+### Quitting, the window and the pointer
+
+<p align="center">
+  <img src="images/game-pc-quit.jpg" alt="The question before quitting: a card of frosted glass over the game, dimmed
+  and blurred behind it, Quit the game? with Keep playing as the main button, ringed by the keyboard's choice, and Quit
+  the game beside it" width="100%">
+</p>
+
 - **Quitting**: the X asks first, in a glass card over the game dimmed and blurred behind it: **Keep playing** as the
   launcher's main button, or **Quit the game** as its secondary, red under the pointer; so a click by mistake does not
   end a song. Its buttons too act only when let go where they were pressed; Left, Right and Tab move the choice (marked
@@ -310,12 +332,6 @@ change what it keeps are refused. `--set` takes the settings of the **Screen**, 
 
 The pieces over the game, how large they are drawn and how their glass is made: [the overlay](#the-overlay).
 
-<p align="center">
-  <img src="images/game-pc-quit.jpg" alt="The question before quitting: a card of frosted glass over the game, dimmed
-  and blurred behind it, Quit the game? with Keep playing as the main button, ringed by the keyboard's choice, and Quit
-  the game beside it" width="100%">
-</p>
-
 ### <a id="keyboard-play"></a>Keyboard play
 
 While a song is played, each of its lanes is a key: **F J** in 2 LINE, **D F J** in 3 LINE and **D F J K** in 4 LINE,
@@ -327,8 +343,7 @@ game judges the lane's next note, and the game judges it as it judges a finger, 
 - **Drags:** the key held down; the press follows the drag's curve.
 - **Repeat notes:** a press for each of their points.
 - **The keys are places on the keyboard,** named after a US keyboard's keys: on another layout the same places play
-  (AZERTY's, a Korean or a Japanese keyboard's). Each mode's keys are set on the launcher's **Controls** page, or with
-  `--set` (`keys_3line`, above); a lane can have two keys, to alternate on quick notes (`S/D F J/K`).
+  (AZERTY's, a Korean or a Japanese keyboard's). A lane can have two keys, to alternate on quick notes (`S/D F J/K`).
 - **Only while a song is played:** in the menus every key is the game's as before, and while the game asks for text (a
   new player's name) the keys type. Every lane key lets go when the window loses the keyboard or is minimised, when the
   song pauses (the game's pause button at its top left) and when the question before quitting comes; a key held
@@ -339,12 +354,23 @@ game judges the lane's next note, and the game judges it as it judges a finger, 
   site shows a keyboard beside that play, so that keyboard plays and touch plays are told apart.
 - **Off:** `keyboard=off` (the **Controls** page's switch) leaves every key the game's.
 
+The launcher's **Controls** page sets it. **Play with keys** turns it on or off (on at first). While it is on, a table
+shows the lanes of 2, 3 and 4 LINE from the top, each with a box for its key and one for a second key: click a box (or
+Tab to it and press Enter), then press the key. The key goes in by its place on the keyboard, and is named as the US
+layout's key at that place (`Semicolon` for the key right of L), so another layout plays the same places; in grey beside
+the name, what the PC's own layout prints there when it says more (`;`, or `Ö` on a German keyboard). A key another
+lane, or the same lane, already plays, or one no lane takes (Enter, the arrows, the numpad, Shift, Backspace), is
+refused in words under the table, and the box waits for another. Esc keeps the key that was there, Delete removes one
+of a lane's two keys, and **Reset keys** puts back F J, D F J and D F J K. A key held down counts once, and while a box
+waits a Korean or Japanese input method is off, so that a letter goes in by its place. The game reads the keys at the
+next **PLAY**; `--set` sets them too (`keys_3line`, above).
+
 A player that does not find the game's input where it expects it (another version of the game) leaves keyboard play
 off, says why in its log, and the game plays by touch as before.
 
 ## The picture
 
-![The launcher's Screen page: the frame limit, the FPS counter switched on with its position under it, then the render scale at 50 % with AMD FSR 1 as its upscaler, and SMAA](images/client-screen.png)
+![The Screen page on a 2560 by 1600 display that Windows runs at 60 Hz and can run at 180 Hz: VSync on, a 180 fps limit, the FPS counter at the bottom right, a 50 % render scale with AMD FSR 1, and SMAA](images/client-screen.png)
 
 - **Full screen or a window.** Full screen is a borderless window over the whole display, at the display's own pixels
   whatever its scaling. A window opens at three quarters of the display's height at 16:9, or at the size chosen. The
@@ -357,17 +383,17 @@ off, says why in its log, and the game plays by touch as before.
   seconds in a row, takes every second refresh (120 frames a second on a 240 Hz display), then every third. It tries the
   faster rate again 5 seconds later, goes straight back when the try falls short, and waits twice as long before the
   next try, a minute at most. Some late frames, as the page before a song shows while the song loads (up to a tenth of
-  them), and a pause of a tenth of a second or more, keep the display's rate. A laptop's or tablet's panel set to
-  Windows 11's dynamic refresh rate ("Dynamic" in its advanced display settings: 60 Hz, or 120, 160, 165, 180 Hz and
-  so on) runs at 60 Hz for every program that does not ask for more: the player asks Windows for the panel's boost while
-  its window is shown, sees the panel's real refreshes (DXGI's v-blank virtualization off), and follows the rate they
-  come at, measured every two seconds while they come steadily, so the game runs at the panel's full rate rather than
-  60. A display whose rate Windows gives exactly keeps it however late a busy computer wakes for its refreshes.
+  them), and a pause of a tenth of a second or more, keep the display's rate.
+- **A panel with a dynamic refresh rate.** Windows 11 runs a laptop's or tablet's panel set to its dynamic refresh rate
+  ("Dynamic" in its advanced display settings: 60 Hz, or 120, 160, 165, 180 Hz and so on) at 60 Hz for every program
+  that does not ask for more. The player asks Windows for the panel's boost while its window is shown, sees the panel's
+  real refreshes (DXGI's v-blank virtualization off), and follows the rate they come at, measured every two seconds
+  while they come steadily, so the game runs at the panel's full rate rather than 60. A display whose rate Windows gives
+  exactly keeps it however late a busy computer wakes for its refreshes.
 - **The frame limit:** the display's rate (the default), a number, or none. The page offers every rate up to the
   highest any connected display runs at: each display's highest rate among its modes at its current size, never only
-  the rate it is in now, as Windows 11's dynamic refresh rate runs a 120, 165 or 180 Hz laptop or tablet panel at 60 Hz
-  while the desktop is still and says 60 (0.10.0 read that and offered nothing above 60 with VSync on). The line under
-  the display's rows names the rate the main display runs a game at, and the others'. The launcher's log says each
+  the rate it is in now, which Windows says is 60 for a dynamic panel while the desktop is still. The line under the
+  display's rows names the rate the main display runs a game at, and the others'. The launcher's log says each
   display's rate now, its highest and whether its rate is dynamic, at each start. With VSync on, a limit that is a whole
   fraction of the display's rate, or within 10 % above one, keeps every frame the same length (60 or 120 on a 240 Hz
   display); another limit is held by the clock, with each frame still on a refresh (144 on a 240 Hz display).
@@ -421,37 +447,11 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
 
 ## The sound
 
-![The launcher's Sound page: the master, music and effects volumes, and the equaliser on Bass with its three bands](images/client-sound.png)
+![The Sound page: the equaliser on Bass with its three bands, the output on Windows' default device, Shared, with the Low buffer, and the Last game card: shared with low latency, a 7 ms period, 29 ms out, no gaps](images/client-sound.png)
 
-- **The device:** Windows' default output, which the game follows when Windows changes it mid-game, or one chosen.
-- **Shared or Exclusive.** Shared plays alongside other programs' sound. Exclusive (WASAPI's exclusive mode) takes the
-  device for the game alone and has the least delay, with buffers of the device's own period (3 ms on a device that
-  has it); other programs are silent meanwhile, and the sound is shared when Windows does not allow it.
-- **The buffer:** low, the default (Windows' low-latency mode at the shortest period the device has; a device without
-  one gets the shortest shared buffer Windows gives it, 22 ms on the device measured, as normal's), normal (20 ms) or
-  safe (50 ms). Measured through whole songs on Windows with a 192 kHz device while the PC
-  was busy with other work, the time from the game's sound to the device's output, by the device's own clock:
+The launcher's **Sound** page and the game's [sound panel](#the-sound-panel) set the same settings: a change in either
+is the other's next time it looks.
 
-  | Mode | Low | Normal | Safe |
-  | :--- | :--- | :--- | :--- |
-  | Shared | 29 to 36 ms (a 7 ms period) | 37 to 43 ms (10 ms) | 73 to 78 ms (10 ms, 50 ms buffered) |
-  | Exclusive | 10 ms (a 3 ms period) | 31 ms (10 ms) | 61 ms (20 ms) |
-
-  Two whole songs each, with no gap in any of them, neither the device running dry nor the game's sound falling
-  behind.
-
-  Before that, the game's OpenAL mixes 20 ms at a time into a buffer of 20 ms, which adds 20 to 40 ms. Where the notes
-  and their sounds do not meet, the game's own calibration in its options moves one against the other; the player adds
-  no offset of its own.
-- **Last game**, under the output's choices: how the last game's sound went as the player measured it, how it had the
-  device (shared, shared at Windows' shortest period, or exclusive), the device's period, the time from the game's sound
-  to the device's output, and the gaps (the device running dry, or the game's own sound falling behind), with a lime
-  light when there were none and a yellow ring when there were. The player writes it beside the settings file
-  (`last-game-sound.txt`) every five seconds and when the game ends; `--status` prints the same line.
-- **The game's sound at a phone's rate.** The game mixes its sounds at 44.1 kHz, as every phone does: its OpenAL's
-  OpenSL ES device sets that rate on a phone, and on a PC, which has no OpenSL ES, the player asks its other device for
-  it, which would mix at 22.05 kHz and cut everything above 11 kHz. Measured on a song under Wine: from 11 to 17 kHz
-  within 2 dB of the song's own sample against its 1 to 4 kHz, where 0.10.0's was about 35 dB down.
 - **Master**, the volume of the game, 0 to 100. Windows' own volume still applies.
 - **Music** and **Effects**, each a share of the master, 0 to 100: the music is a song's background, the game's menu
   music and a song's preview; the effects are the sounds of the notes the player plays, and the menus' and the
@@ -463,9 +463,34 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
   shelf at 120 Hz, a peak at 1 kHz an octave and a half wide and a high shelf at 6 kHz, each -12 to +12 dB. A raised
   band takes the same off the whole first, so the sound never clips where it was full; it costs about a microsecond of
   the mixer's 5 ms periods.
+- **The device:** Windows' default output, which the game follows when Windows changes it mid-game, or one chosen.
+- **Shared or Exclusive.** Shared plays alongside other programs' sound. Exclusive (WASAPI's exclusive mode) takes the
+  device for the game alone and has the least delay, with buffers of the device's own period (3 ms on a device that
+  has it); other programs are silent meanwhile, and the sound is shared when Windows does not allow it.
+- **The buffer:** low, the default (Windows' low-latency mode at the shortest period the device has; a device without
+  one gets the shortest shared buffer Windows gives it, 22 ms on the device measured, as normal's), normal (20 ms) or
+  safe (50 ms). Measured through whole songs on Windows with a 192 kHz device while the PC was busy with other work,
+  the time from the game's sound to the device's output, by the device's own clock:
 
-The launcher's sound settings and the game's sound panel set the same settings: a change in either is the other's next
-time it looks.
+  | Mode | Low | Normal | Safe |
+  | :--- | :--- | :--- | :--- |
+  | Shared | 29 to 36 ms (a 7 ms period) | 37 to 43 ms (10 ms) | 73 to 78 ms (10 ms, 50 ms buffered) |
+  | Exclusive | 10 ms (a 3 ms period) | 31 ms (10 ms) | 61 ms (20 ms) |
+
+  Two whole songs each, with no gap in any of them, neither the device running dry nor the game's sound falling
+  behind. Before that, the game's OpenAL mixes 20 ms at a time into a buffer of 20 ms, which adds 20 to 40 ms. Where
+  the notes and their sounds do not meet, the game's own calibration in its options moves one against the other; the
+  player adds no offset of its own.
+- **Last game**, at the page's foot: how the last game's sound went as the player measured it, how it had the device
+  (shared, shared at Windows' shortest period, or exclusive), the device's period, the time from the game's sound to
+  the device's output, and the gaps (the device running dry, or the game's own sound falling behind), with a lime light
+  when there were none and a yellow ring when there were. The player writes it beside the settings file
+  (`last-game-sound.txt`) every five seconds and when the game ends; `--status` prints the same line.
+
+The game mixes its sound at 44.1 kHz, as on every phone. On a phone the game's OpenAL opens its OpenSL ES device, which
+mixes at that rate. A PC has no OpenSL ES, and the game's other device would mix at 22.05 kHz, cutting everything above
+11 kHz: the player asks it for 44.1 kHz instead. Measured on a song under Wine: from 11 to 17 kHz within 2 dB of the
+song's own sample against its 1 to 4 kHz, where 0.10.0's was about 35 dB down.
 
 ## Broadcasting
 
@@ -474,10 +499,11 @@ does, with Windows' own video and sound encoders, at the quality the owner chose
 A glass card slides down at the top of the game every time the broadcast's switches change, the player's own or the
 server's: on air, off air, switched on while the server's broadcasts are off and the like, as the server words it, each
 once. The player asks the server every 5 seconds, so a switch flipped in the admin pages shows within that, or when the
-song ends for one flipped during a song: the server keeps its notices until then. On air it
-wears a red LIVE tag like the game's own tags; once over, its title says so alone, and it says where the broadcast can
-be watched. When the server stops answering while the PC broadcasts (three asks in a row, 15 seconds), the card says the
-broadcast has stopped, and when the server answers again on air, that it is back.
+song ends for one flipped during a song: the server keeps its notices until then. On air it wears a red LIVE tag like
+the game's own tags; once over, its title says so alone, and it says where the broadcast can be watched. When the server
+stops answering while the PC broadcasts (three asks in a row, 15 seconds), the card says the broadcast has stopped, and
+when the server answers again on air, that it is back. The owner's maintenance notice comes the same way, between
+songs, when it begins, at each new message and when it ends.
 
 ## What it needs, and what it keeps
 
@@ -494,9 +520,10 @@ broadcast has stopped, and when the server answers again on air, that it is back
   the videos are black and silent, and the game goes on.
 - **The language:** the launcher speaks Windows' display language, Korean or English, until one is chosen on the
   first-start guide's first step or the **Launcher** page, and the installer speaks the launcher's. The game and what
-  the player draws over it (the bar, the question before quitting, the broadcast notice, its messages) speak the
-  launcher's language once one is chosen, among the languages the game has, and Windows' display language until then;
-  the country stays Windows'. The launcher hands it over in the settings file it writes before each start (`language=`).
+  the player draws over it (the bar, the sound panel, the question before quitting, the broadcast notice, its messages)
+  speak the launcher's language once one is chosen, among the languages the game has, and Windows' display language
+  until then; the country stays Windows'. The launcher hands it over in the settings file it writes before each start
+  (`language=`).
 - **What it keeps on the PC,** per Windows user:
   - the program, in `%LOCALAPPDATA%\OpenDMTQ.Client`;
   - the launcher's settings and logs, and each server's app, in `%LOCALAPPDATA%\OpenDMTQ\client`;
@@ -511,16 +538,16 @@ broadcast has stopped, and when the server answers again on air, that it is back
   - **Clear game data** deletes what the game keeps, all but the device id: the game downloads its data again at the
     next start, and the PC stays the same player (`--clear-game-data`).
   - **Start over** forgets the servers, the sign-ins, the apps and the settings, and opens the first-start guide; the
-    game's data and the language stay (`--reset`). **Forget** on the **Online** page does that for one server (`--forget
-    URL`).
+    game's data and the language stay (`--reset`). **Forget** on the **Online** page does that for one server
+    (`--forget URL`).
   - **Uninstall** removes the program, its shortcuts and its entry in Windows' Apps (`--uninstall`). It asks whether the
     settings, sign-ins and game data stay for a later install or go too (`--uninstall --delete-data`). With them go the
     device id and the logs of the installs (the installer's in `%TEMP%`, Velopack's in `%LOCALAPPDATA%\velopack`), and a
-    later install is a new player, unless the account transfer below brings this one back. `OpenDMTQ-Setup.exe`
-    uninstalls too, and so does **Uninstall** in Windows' Settings, Apps (and Control Panel's Programs): both open the
-    installer's own uninstall, which asks whether the data stays, says each size, shows the work as it goes and ends on
-    what went and what stayed; with **Delete everything** nothing of OpenDMTQ's is left on the PC. A tool that
-    uninstalls quietly (the entry's quiet command) shows nothing and keeps the data.
+    later install is a new player, unless the account transfer below brings this one back. The installer uninstalls
+    too, and so does **Uninstall** in Windows' Settings, Apps (and Control Panel's Programs): both open the installer's
+    own uninstall, which asks whether the data stays, says each size, shows the work as it goes and ends on what went
+    and what stayed; with **Delete everything** nothing of OpenDMTQ's is left on the PC. A tool that uninstalls quietly
+    (the entry's quiet command) shows nothing and keeps the data.
 - **The account:** a PC is a player of its own, apart from the same person's phone. The server gives each new device a
   new account, and the device id the PC goes by is kept in the game's folder: deleting that folder makes this PC a new
   player. The game's own account transfer carries a player to another device: on the device that has the player,
@@ -532,24 +559,27 @@ broadcast has stopped, and when the server answers again on air, that it is back
 - **The game does not start:** the launcher says why on its bottom line, with a link to the player's log (**Open the
   game log**); **Help** opens it too. The log is `player.log` in the game's folder in `%LOCALAPPDATA%\OpenDMTQ`; the
   launcher's own is in `%LOCALAPPDATA%\OpenDMTQ\client\logs`.
+- **It cannot reach the server:** the PC has to reach the server's address, as a phone does: on the same network, or
+  over the internet when the server is set up for it
+  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)). The
+  [connection test](#testing-the-connection) says where the way to it stops, and finds a server that moved to 8791.
 - **The launcher says the server runs an older OpenDMTQ:** the PC client needs a server of 0.8 or newer.
+- **The sign-in is refused:** the ID and password are the site's. Too many wrong passwords make the server wait a while
+  before the next try. A banned player's account is refused with the reason and the ban's end, as the server's owner
+  set them.
+- **An update is refused:** the launcher installs only a release the OpenDMTQ project signed, and says so when one is
+  not; the program stays as it was. The installer from the server's site installs the server's own version.
 - **The player is missing or a file of the program is damaged:** **Help**, **Repair** puts the program's files back
   from the package it was installed from.
 - **The installer says the game is open:** finish it and close the game; installing replaces the player it plays in.
 - **The launcher stopped with an error:** its window says what happened and where its log is; **Open the log folder**
   opens the folder.
-- **The sign-in is refused:** the ID and password are the site's. Too many wrong passwords make the server wait a while
-  before the next try.
-- **Windows blocks it with no Run anyway:** Smart App Control is on (step 2 above).
+- **Windows blocks it with no Run anyway:** Smart App Control is on ([installing](#for-players), step 2).
 - **The videos are black and silent:** see the Media Feature Pack above.
-- **It cannot reach the server:** the PC has to reach the server's address, as a phone does: on the same network, or
-  over the internet when the server is set up for it
-  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)). The
-  [connection test](#testing-the-connection) says where the way to it stops, and finds a server that moved to 8791.
-- **Someone helps with a problem:** **Help**, **Save a report** gives them the logs and this PC's details in one zip
-  ([a report](#a-report-for-whoever-helps)).
 - **The sound breaks up:** the **Sound** page's **Last game** says whether the last game had gaps; choose the **Normal**
   or **Safe** buffer there, or **Shared** instead of **Exclusive**.
+- **Someone helps with a problem:** **Help**, **Save a report** gives them the logs and this PC's details in one zip
+  ([a report](#a-report-for-whoever-helps)).
 
 The rest is the server's: [what to tell its owner](play.md#when-something-does-not-work).
 
@@ -560,13 +590,13 @@ The player runs the game's own 32-bit Android code, as the app does on phones th
 calls on Windows. In place of Android's Java side, the player has its own stand-in for the classes the game calls. The
 game draws with OpenGL ES, which ANGLE runs on Direct3D 11; on a computer with two GPUs (most gaming laptops) the
 player asks NVIDIA's and AMD's drivers for the fast one, and its log names the GPU that draws the game at its first
-frame. Its sound goes out through WASAPI, and its videos are
-decoded by Media Foundation. Its requests to the server go out as a phone's do, asking for the server's answers
-compressed, which makes its lists of songs and scores many times smaller on the way.
+frame. Its sound goes out through WASAPI, and its videos are decoded by Media Foundation. Its requests to the server go
+out as a phone's do, asking for the server's answers compressed, which makes its lists of songs and scores many times
+smaller on the way.
 
 The launcher is Python with Tk, made into a Windows program with PyInstaller; Velopack installs it and updates it. The
 launcher writes the player's settings into a file and starts the player with it (`--app` names the folder of the
-server's app, `--settings` the file).
+server's app, `--settings` the file); the player writes the sound panel's changes back into the same file.
 
 ### The overlay
 
@@ -580,27 +610,27 @@ server's app, `--settings` the file).
   window of any size and shape, the counter never below the others' floor. The pointer keeps Windows' own size.
 - **Nothing of it is in the game's way**: the notice, the FPS counter and the handle let every click through to the
   game, and no piece takes the keyboard from the game's window (each is a window that never takes the focus; a click on
-  the bar or the question gives the keyboard back to the game).
-- **The glass**: the bar, the question, the broadcast notice and the FPS counter are frosted glass over the game, as
-  Windows' own acrylic is made: the game's picture behind each, blurred and a little more saturated, under a charcoal
-  tint, with a faint light at its top, a light edge and a soft shadow; in the game's own shapes, with its small corners,
-  its bevel (a line of light along the top, of shade along the foot) and its green line along the bar's and the
-  notice's foot. Their words keep 4.5:1 against the light behind them: where the game is light under the words, the
-  tint deepens there. With none of them up, the glass costs the game nothing. The words are set in Pretendard, titles
-  and buttons bold, which the player carries in its `fonts` folder with the launcher's wide face. The wordmark is a
-  picture for each of the overlay's scales from 1 to 4, drawn by the launcher's own code
+  the bar, the sound panel or the question gives the keyboard back to the game).
+- **The glass**: the bar, the sound panel, the question, the broadcast notice and the FPS counter are frosted glass over
+  the game, as Windows' own acrylic is made: the game's picture behind each, blurred and a little more saturated, under
+  a charcoal tint, with a faint light at its top, a light edge and a soft shadow; in the game's own shapes, with its
+  small corners, its bevel (a line of light along the top, of shade along the foot) and its green line along the bar's
+  and the notice's foot. Their words keep 4.5:1 against the light behind them: where the game is light under the words,
+  the tint deepens there. With none of them up, the glass costs the game nothing. The words are set in Pretendard,
+  titles and buttons bold, which the player carries in its `fonts` folder with the launcher's wide face. The wordmark is
+  a picture for each of the overlay's scales from 1 to 4, drawn by the launcher's own code
   (`arm32/desktop/assets/make_wordmark.py`) and carried in the player's `images` folder: at those scales it is drawn
   pixel for pixel, between them the next larger is drawn down, and below 1 the first one is.
 
-The bar, its handle, the question before quitting, the notice, the FPS counter and the pointer are drawn by the player
-over the game's window, each a window of its own whose picture a thread of the overlay's makes on the CPU; the UI
-thread, which stamps the game's keys and clicks, only hands the finished pictures to Windows. For their glass, the
-render thread reads the rectangles of the frame behind them as it goes to the window (after the passes), at half and
-then a quarter of their size (each pixel the mean of 4 by 4 of the frame's), into a pixel buffer that a later frame
-copies out once the graphics card is done, so nothing waits for it. It reads at most 20 times a second while a piece is
-up, and once while the game holds still; a piece waits a moment for its first read, and where none comes it is its plain
-tint, nearly solid. With the stats on, a `stats: glass` line every 5 seconds says what that took the render thread a
-frame, and a `stats: overlay` line what the pictures took their thread and the UI thread.
+The bar, its handle, the sound panel, the question before quitting, the notice, the FPS counter and the pointer are
+drawn by the player over the game's window, each a window of its own whose picture a thread of the overlay's makes on
+the CPU; the UI thread, which stamps the game's keys and clicks, only hands the finished pictures to Windows. For their
+glass, the render thread reads the rectangles of the frame behind them as it goes to the window (after the passes), at
+half and then a quarter of their size (each pixel the mean of 4 by 4 of the frame's), into a pixel buffer that a later
+frame copies out once the graphics card is done, so nothing waits for it. It reads at most 20 times a second while a
+piece is up, and once while the game holds still; a piece waits a moment for its first read, and where none comes it is
+its plain tint, nearly solid. With the stats on, a `stats: glass` line every 5 seconds says what that took the render
+thread a frame, and a `stats: overlay` line what the pictures took their thread and the UI thread.
 
 ### The picture's passes
 
