@@ -3,16 +3,20 @@
 
 The end is the server's details as JSON, their length in 4 bytes (little-endian), and OPENDMTQ-PRESET1:
 
-    <{"version": 1, "url": "https://host:port", "name": "...", "ca": "-----BEGIN ..."}><length><OPENDMTQ-PRESET1>
+    <{"version": 1, "url": "https://host:port", "name": "...", "ca": "-----BEGIN ...", "account": "..."}><length>
+    <OPENDMTQ-PRESET1>
 
 "ca" comes with an address over HTTPS when the server answers HTTPS with a certificate of its own authority: the
-launcher trusts that authority for that server alone (server.trust). The installer reads the end from its own file and
-leaves it in the launcher's folder as preset.json; the launcher takes it at its next start and plays on that server from
-then on. An installer from a release has no end and asks nothing.
+launcher trusts that authority for that server alone (server.trust). "account" comes with the installer the admin pages
+run on the server PC itself (Play on this PC): the site ID the launcher's sign-in has filled in, the owner's, never a
+password. The installer reads the end from its own file and leaves it in the launcher's folder as preset.json; the
+launcher takes it at its next start and plays on that server from then on. An installer from a release has no end and
+asks nothing.
 """
 
 import json
 import os
+import re
 import struct
 import tempfile
 
@@ -26,6 +30,8 @@ LIMIT = 64 * 1024
 FILE_NAME = "preset.json"
 # A certificate authority's certificate is two kilobytes or so: anything far larger is none.
 CA_LIMIT = 16 * 1024
+# A site ID as the site takes one (server/portal/auth.php): an account's, or the owner's from .env (up to 40 of these).
+ACCOUNT = re.compile(r"[A-Za-z0-9._-]{1,40}\Z")
 
 
 def _valid(details):
@@ -45,12 +51,16 @@ def _valid(details):
     whole = ca.startswith("-----BEGIN CERTIFICATE-----") and ca.endswith("-----END CERTIFICATE-----")
     if url.startswith("https://") and whole and len(ca) <= CA_LIMIT:
         found["ca"] = ca
+    account = details.get("account").strip() if isinstance(details.get("account"), str) else ""
+    # Only an ID the site could take: anything else is left out, and the sign-in starts empty as before.
+    if ACCOUNT.match(account):
+        found["account"] = account
     return found
 
 
 def read(path):
-    """The server an installer's file is set up for, {"url", "name"} (and "ca"), or None (none, or an end that cannot be
-    read)."""
+    """The server an installer's file is set up for, {"url", "name"} (and "ca", "account"), or None (none, or an end
+    that cannot be read)."""
     try:
         with open(path, "rb") as f:
             f.seek(0, os.SEEK_END)
@@ -72,11 +82,14 @@ def read(path):
     return _valid(details)
 
 
-def tail(url, name, ca=""):
-    """The end for a server, as the site makes it (the tests make installers with it); `ca` left out when ""."""
+def tail(url, name, ca="", account=""):
+    """The end for a server, as the site makes it (the tests make installers with it); `ca` and `account` left out when
+    ""."""
     details = {"version": FORMAT, "url": url, "name": name}
     if ca:
         details["ca"] = ca
+    if account:
+        details["account"] = account
     data = json.dumps(details, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return data + struct.pack("<I", len(data)) + MAGIC
 
@@ -87,18 +100,19 @@ def hand_over(details):
     os.makedirs(folder, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=folder, prefix=".preset-")
     kept = {"version": FORMAT, "url": details["url"], "name": details["name"]}
-    # The server's own authority goes along, for the launcher to trust.
-    if details.get("ca"):
-        kept["ca"] = details["ca"]
+    # The server's own authority goes along, for the launcher to trust; the ID the sign-in has filled in, for it to fill.
+    for key in ("ca", "account"):
+        if details.get(key):
+            kept[key] = details[key]
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(kept, f, ensure_ascii=False)
     os.replace(tmp, os.path.join(folder, FILE_NAME))
 
 
 def take():
-    """The server an installer left, once: {"url", "name"} (and "ca"), or None. The file goes either way (one it cannot
-    read would otherwise be read again at every start). A server's own authority is trusted for that server from here
-    on (server.trust), under its address as the launcher writes every address."""
+    """The server an installer left, once: {"url", "name"} (and "ca", "account"), or None. The file goes either way (one
+    it cannot read would otherwise be read again at every start). A server's own authority is trusted for that server
+    from here on (server.trust), under its address as the launcher writes every address."""
     path = os.path.join(st.config_dir(), FILE_NAME)
     try:
         # utf-8-sig: a file saved again by Notepad starts with a byte order mark, which JSON alone refuses.

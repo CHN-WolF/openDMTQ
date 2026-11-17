@@ -212,6 +212,24 @@ class CommandLine(Folder):
         self.run_main(["--server", self.site.url])
         self.assertEqual([s["url"] for s in st.LauncherState.load().servers], [self.site.url])
 
+    def test_the_id_play_on_this_pc_brings_is_filled_in_until_a_sign_in(self):
+        # The server PC's own installer (Play on this PC) brings the owner's ID with the server: the sign-in has it to
+        # fill in, --status says no sign-in yet (none ended), and the first sign-in that works takes its place.
+        preset.hand_over({"url": self.site.url, "name": "From the site", "account": stub.ACCOUNT})
+        code, said = self.run_main(["--status"])
+        self.assertIn("signed in: no\n", said + "\n")
+        self.assertNotIn("ended", said)
+        server = st.LauncherState.load().server()
+        self.assertEqual((server["fill"], server["account"]), (stub.ACCOUNT, None))
+        code, said = self.run_main(["--sign-in", stub.ACCOUNT], stdin=stub.PASSWORD + "\n")
+        self.assertEqual(code, 0, said)
+        server = st.LauncherState.load().server()
+        self.assertEqual((server["fill"], server["account"]), (None, stub.ACCOUNT))
+        # Brought again while that sign-in holds: it stays as it is.
+        preset.hand_over({"url": self.site.url, "name": "From the site", "account": "admin"})
+        self.run_main(["--status"])
+        self.assertIsNone(st.LauncherState.load().server()["fill"])
+
     def test_language_guide_and_logs(self):
         # The window's Language choice, "Show it again" and Help's log buttons, from the command line.
         code, said = self.run_main(["--language", "ko", "--guide"])

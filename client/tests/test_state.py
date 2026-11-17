@@ -222,6 +222,28 @@ class State(Folder):
             self.assertFalse(st.has_own_name(server), name)
             self.assertEqual(st.label(server), url, name)
 
+    def test_an_installers_id_fills_the_sign_in_until_one_works(self):
+        # Play on this PC brings the owner's ID: the sign-in form has it, and nothing says a sign-in ended (nobody signed
+        # in with it yet).
+        s = st.LauncherState()
+        s.add_server("http://192.168.1.10:8791", "Club")
+        self.assertTrue(s.fill_account("http://192.168.1.10:8791", "admin"))
+        server = s.server()
+        self.assertEqual((server["fill"], server["account"]), ("admin", None))
+        # The same again changes nothing; a server this launcher does not know takes nothing.
+        self.assertFalse(s.fill_account("http://192.168.1.10:8791", "admin"))
+        self.assertFalse(s.fill_account("http://other.test", "admin"))
+        # Kept across a start, as the rest of the server is.
+        s.save()
+        self.assertEqual(st.LauncherState.load().server()["fill"], "admin")
+        # A sign-in that holds stays as it is, whoever it is for: nothing to fill in there.
+        server.update(account="player1", cookie="c", expires=time.time() + 3600, fill=None)
+        self.assertFalse(s.fill_account("http://192.168.1.10:8791", "admin"))
+        self.assertIsNone(server["fill"])
+        # Once it has ended, the next ID brought fills the form again.
+        s.forget_sign_in(server)
+        self.assertTrue(s.fill_account("http://192.168.1.10:8791", "admin"))
+
     def test_the_installers_server_is_taken_once(self):
         preset.hand_over({"url": "http://example.test:8790", "name": "Club"})
         self.assertEqual(preset.take(), {"url": "http://example.test:8790", "name": "Club"})

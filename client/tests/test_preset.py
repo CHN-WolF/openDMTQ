@@ -51,6 +51,26 @@ class Preset(unittest.TestCase):
         self.assertIn('struct.pack("<I", len(data)) + MAGIC', source)
         self.assertIn('{"version": PRESET_FORMAT, "url": url, "name": name}', source)
         self.assertIn('details["ca"] = ca', source)
+        # The ID Play on this PC brings, under the same name.
+        self.assertIn('details["account"] = account', source)
+
+    def test_the_id_to_sign_in_with_comes_along(self):
+        # Play on this PC: the installer the admin pages run on the server PC brings the owner's ID, never a password.
+        self.write(preset.tail("http://192.168.1.10:8791", "Club", account="admin"))
+        self.assertEqual(preset.read(self.exe), {"url": "http://192.168.1.10:8791", "name": "Club", "account": "admin"})
+        # What the site could not take as an ID is left out, and the rest still read.
+        for bad in ("", "  ", "two words", "a" * 41, "../x", 7, None, "관리자"):
+            data = json.dumps({"version": 1, "url": "http://192.168.1.10:8791", "name": "Club", "account": bad}).encode()
+            self.write(data + struct.pack("<I", len(data)) + preset.MAGIC)
+            self.assertEqual(preset.read(self.exe), {"url": "http://192.168.1.10:8791", "name": "Club"}, repr(bad))
+
+    def test_the_hand_over_keeps_the_id(self):
+        # The installer leaves it for the launcher with the server; taken once, as the server is.
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"OPENDMTQ_CLIENT_DIR": self.dir}):
+            preset.hand_over({"url": "http://192.168.1.10:8791", "name": "Club", "account": "admin"})
+            self.assertEqual(preset.take(), {"url": "http://192.168.1.10:8791", "name": "Club", "account": "admin"})
+            self.assertIsNone(preset.take())
 
     def test_the_servers_own_authority_comes_with_an_https_address(self):
         self.write(preset.tail("https://example.test:80", "x", CA))

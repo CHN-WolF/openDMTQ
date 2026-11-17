@@ -97,6 +97,7 @@ def _server(entry):
         "name": str(entry.get("name") or entry["url"]),      # what the server calls itself (client.php?about)
         "address": str(entry.get("address") or ""),          # the host and port its app is built for
         "account": entry.get("account") or None,              # the site account signed in as, or None
+        "fill": entry.get("fill") or None,                    # the ID an installer brought to sign in with, or None
         "cookie": entry.get("cookie") or None,                # the site's sign-in cookie for it, or None
         "expires": int(entry.get("expires") or 0),            # when that sign-in ends (Unix time; 0: none)
         "app": app if isinstance(app, dict) else None,        # the server's app as it last described it
@@ -263,6 +264,17 @@ class LauncherState:
         """True while the server's sign-in has not run out (the server may still have ended it: a new password)."""
         server = server or self.server()
         return bool(server and server.get("cookie") and server.get("expires", 0) > (now or time.time()))
+
+    def fill_account(self, url, account):
+        """The site ID an installer brought for the server at `url` (Play on this PC, on the server PC itself), in its
+        sign-in form from now on (its "fill", until a sign-in there works), so that only the password is left to type.
+        Kept apart from the account signed in before: nobody signed in with it yet, and the PLAY page says no sign-in
+        ended. A sign-in that holds stays as it is, whoever it is for. True when it changed."""
+        server = self.server(url)
+        if server is None or not account or self.signed_in(server) or server.get("fill") == account:
+            return False
+        server["fill"] = account
+        return True
 
     def forget_sign_in(self, server=None):
         """The server no longer takes the sign-in (or the player signed out): only the account's name stays, to fill

@@ -349,13 +349,17 @@ def own_ca(folder=None):
     return text
 
 
-def preset(url, name, ca=""):
+def preset(url, name, ca="", account=""):
     """The end that goes on the installer as this server hands it out: the server's address as players reach its site
     (`url`, scheme and host with its port), its name and, for an address over HTTPS, its own certificate authority (`ca`,
-    PEM text, left out when ""), read back by the installer (client/opendmtq_client)."""
+    PEM text, left out when ""), read back by the installer (client/opendmtq_client). `account`: the site ID the
+    launcher's sign-in fills in, for the installer the admin pages run on the server PC itself (Play on this PC, the
+    owner's own ID); never on an installer the site hands out."""
     details = {"version": PRESET_FORMAT, "url": url, "name": name}
     if ca:
         details["ca"] = ca
+    if account:
+        details["account"] = account
     data = json.dumps(details, ensure_ascii=False, separators=(",", ":")).encode()
     return data + struct.pack("<I", len(data)) + MAGIC
 

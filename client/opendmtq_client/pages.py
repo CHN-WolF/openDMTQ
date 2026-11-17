@@ -1370,9 +1370,10 @@ def signin_panel(app, parent, rerender):
         # Under each field, what is wrong with it, in place (empty until there is something to say).
         line = widgets.Said(parent, ui)
         fields[key], said[key] = box, line
-    if server.get("account"):
-        # The account signed in before: only the password to type again.
-        fields["online.id"].entry.insert(0, server["account"])
+    # The ID an installer brought (Play on this PC), else the account signed in before: only the password to type.
+    known = server.get("fill") or server.get("account")
+    if known:
+        fields["online.id"].entry.insert(0, known)
 
     def say(key, text):
         """What is wrong with one field under it (None: nothing), its edge in the error's colour while it is."""
@@ -1447,7 +1448,7 @@ def signin_panel(app, parent, rerender):
         box.entry.bind("<Return>", lambda e: sign_in())
         box.entry.bind("<KP_Enter>", lambda e: sign_in())
     # Typing goes to the first empty field; Tab to the next, then Sign in; Enter signs in.
-    first = fields["online.password"] if server.get("account") else fields["online.id"]
+    first = fields["online.password"] if known else fields["online.id"]
     first.entry.after_idle(first.entry.focus_set)
     main_button(app, buttons, w("online.signin"), sign_in).pack(side="left")
 
@@ -1606,7 +1607,7 @@ def online_keys(app):
 
     def signin_key():
         current = state.server()
-        return (current["url"], state.signed_in(current), current.get("account")) if current else None
+        return (current["url"], state.signed_in(current), current.get("account"), current.get("fill")) if current else None
 
     def app_key():
         current = state.server()

@@ -138,8 +138,10 @@ def sign_in(state, user, password, change=at_once):
     if server is None:
         raise srv.ServerError("connect to a server first", "error.server.none")
     answer = srv.sign_in(server["url"], user.strip(), password)
-    # The account, the cookie and when it ends, together in one change, made where `change` makes it.
-    change(lambda: server.update(account=answer["account"], cookie=answer["cookie"], expires=answer["expires"]))
+    # The account, the cookie and when it ends, together in one change, made where `change` makes it; an ID an
+    # installer brought to fill in has done its part.
+    change(lambda: server.update(account=answer["account"], cookie=answer["cookie"], expires=answer["expires"],
+                                 fill=None))
     return answer
 
 

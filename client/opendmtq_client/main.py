@@ -702,6 +702,9 @@ def main(argv=None):
             log.warning("the installer brought an address that is none: %r", brought["url"])
         if url:
             state.add_server(url, brought["name"])
+            # The ID Play on this PC brought (the owner's): in the sign-in form, while that server is not signed in.
+            if state.fill_account(url, brought.get("account")):
+                log.info("the installer brought the ID %s to sign in with", brought["account"])
             state.save()
             log.info("the installer brought the server %s", url)
     try:

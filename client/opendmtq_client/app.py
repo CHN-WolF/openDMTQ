@@ -677,7 +677,11 @@ class LauncherApp:
             # The game or a download uses the current server: the installer's waits on the Online page.
             self.state.current = before
         switched = self.state.current != before
-        if known is not None and not switched and named == self.state.server(url)["name"]:
+        # The ID Play on this PC brought (the owner's): in that server's sign-in form while it is not signed in.
+        filled = self.state.fill_account(url, brought.get("account"))
+        if filled:
+            log.info("the installer left the ID %s to sign in with", brought["account"])
+        if known is not None and not switched and not filled and named == self.state.server(url)["name"]:
             # Known, and the one in use already (or kept from being, while busy): nothing to save or to say.
             log.info("the installer left the server %s, known already", url)
             return
