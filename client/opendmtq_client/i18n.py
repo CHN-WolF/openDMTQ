@@ -555,6 +555,9 @@ TEXT = {
                       "OpenDMTQ는 MIT 라이선스입니다. 런처에는 게임 파일이 없고, 앱은 플레이하는 서버에서 받습니다."),
     "about.notice": ("An unofficial, non-commercial project, not affiliated with or endorsed by NEOWIZ. DJMAX and TECHNIKA Q belong to NEOWIZ.",
                      "NEOWIZ와 관련이 없는 비공식·비상업 프로젝트입니다. DJMAX와 TECHNIKA Q의 권리는 NEOWIZ에 있습니다."),
+    # The notice's second line, the owner's sentence word for word, as the site's footers have it.
+    "about.notice.2": ("OpenDMTQ contains no game data. If the copyright holder requests it, this project may be made private or shut down.",
+                       "OpenDMTQ에는 게임 데이터가 포함되어 있지 않습니다. 저작권자의 요청이 있는 경우 본 프로젝트는 비공개되거나 폐쇄될 수 있습니다."),
 
     # -------------------------------------------------------------------------------------------- guide
     "guide.skip": ("Skip: I set it up myself", "건너뛰기(직접 설정)"),

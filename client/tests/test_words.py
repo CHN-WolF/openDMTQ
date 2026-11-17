@@ -205,6 +205,23 @@ class Wording(unittest.TestCase):
             for text in pair:
                 self.assertNotRegex(text, r"F11|Alt\+Enter", key)
 
+    def test_the_owners_notice_word_for_word(self):
+        # The notice's two lines in the launcher's About page and the installer are the site's footer's, word for word,
+        # in both languages (the second, "OpenDMTQ contains no game data", was missing); the bundle's README has it too.
+        root = os.path.join(PACKAGE, "..", "..")
+        with open(os.path.join(root, "server", "portal", "strings.php"), encoding="utf-8") as f:
+            site = re.findall(r"'foot\.line([12])' => '((?:[^'\\]|\\.)*)'", f.read())
+        self.assertEqual(len(site), 4)
+        for (line, words), lang in zip(site, ("en", "en", "ko", "ko")):
+            key = "about.notice" if line == "1" else "about.notice.2"
+            self.assertEqual(i18n.TEXT[key][0 if lang == "en" else 1], words.replace("\\'", "'"), key)
+        with open(os.path.join(root, "host", "windows", "README.txt"), encoding="utf-8") as f:
+            self.assertIn(i18n.TEXT["about.notice.2"][0], " ".join(f.read().split()))
+        # Used by both windows: the About page and the installer's own notice.
+        for name in ("pages.py", "setup_window.py"):
+            with open(os.path.join(PACKAGE, name), encoding="utf-8") as f:
+                self.assertIn('"about.notice.2"', f.read(), name)
+
     def test_the_address_example_is_on_a_new_servers_port(self):
         # A new server is on 8791: the example in an empty address field shows that port, as the server's own pages name
         # it (cli/opendmtq_cli/env.py DEFAULT_PORT).

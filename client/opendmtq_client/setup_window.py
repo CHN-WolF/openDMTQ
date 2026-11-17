@@ -152,6 +152,14 @@ class SetupWindow:
         room = max(self.ui.px(120), self.strip.winfo_width() - self.button_row.winfo_reqwidth() - self.ui.px(16))
         self.note.configure(text=text, fg=colour, wraplength=room)
 
+    def notice(self, parent):
+        """The project's notice under a page's cards, its two lines as the site's footers and the launcher's About page
+        have them."""
+        for i, key in enumerate(("about.notice", "about.notice.2")):
+            # The card's gap above it (CARD_GAP), then a line's under the first.
+            widgets.label(parent, self.ui, self.words(key), font=self.ui.fonts.small, fg=theme.MUTED,
+                          wrap_margin=0).pack(fill="x", pady=(self.ui.px(16 if i == 0 else 4), 0))
+
     def lines(self, parent, rows):
         """What came of the work, a line each, as the launcher's ready check says a state: [(state, words)], state "ok"
         (a lime dot), "change" (a yellow ring), "bad" (a red dot), or None for a plain line in ash (where a log is)."""

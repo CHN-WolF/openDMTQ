@@ -2082,6 +2082,8 @@ def build_about(app, parent):
         if i:
             widgets.divider(card.body, ui, pady=CHECK_GAP)
         widgets.label(card.body, ui, w(key), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+    # The notice's second line under its first, as the site's footers have the two.
+    widgets.label(card.body, ui, w("about.notice.2"), fg=theme.MUTED, wrap_margin=0).pack(fill="x", pady=(ui.px(4), 0))
 
 
 def _updates_card(app, parent):

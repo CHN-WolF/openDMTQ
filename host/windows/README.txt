@@ -7,7 +7,8 @@ folder or an archive, also one in parts). Please use only files you have the rig
 the songs' music, charts and jackets, is optional.
 
 OpenDMTQ is an unofficial, non-commercial project, not affiliated with or endorsed by NEOWIZ. DJMAX and TECHNIKA Q are
-trademarks of NEOWIZ. If the copyright holder requests it, this project may be made private or shut down.
+trademarks of NEOWIZ. OpenDMTQ contains no game data. If the copyright holder requests it, this project may be made
+private or shut down.
 
 Start
 -----
