@@ -208,7 +208,7 @@ change what it keeps are refused. `--set` takes the settings of the **Screen**, 
 | `show_fps` | `off`, `on` (a corner's name, as `fps_position` takes it, is on in that corner) | FPS counter |
 | `fps_position` | `bottom_right` (where it covers the least of the game), `top_left` (beside a song's pause button), `top_right`, `bottom_left`; kept while the counter is off | Position, while the counter is on |
 | `render_scale` | `100`, `85`, `75`, `67`, `50` | Render scale |
-| `upscaler` | `nis`, `fsr1`, `bilinear` | Upscaler, below 100 % |
+| `upscaler` | `fsr1`, `nis`, `bilinear` | Upscaler, below 100 % |
 | `anti_aliasing` | `off`, `cmaa2`, `smaa` | Anti-aliasing |
 | `audio_device` | `default` (Windows' default output), or a device's id from `--audio-devices` | Device |
 | `audio_mode` | `shared`, `exclusive` | Mode |

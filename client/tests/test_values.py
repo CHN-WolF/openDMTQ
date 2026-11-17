@@ -10,6 +10,23 @@ from opendmtq_client import values as choices
 SETTINGS_CPP = os.path.join(os.path.dirname(__file__), "..", "..", "arm32", "desktop", "settings.cpp")
 
 
+class GuideTable(unittest.TestCase):
+    def test_the_guides_settings_table_puts_each_default_first(self):
+        # docs/windows-player.md lists each setting's values, the default first: the launcher's own default (upscaler
+        # listed NVIDIA NIS first while AMD FSR 1 is the default).
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "windows-player.md")
+        with open(path, encoding="utf-8") as f:
+            rows = [line.split("|")[1:3] for line in f.read().splitlines() if line.startswith("| `")]
+        seen = 0
+        for names, values in rows:
+            first = re.search(r"`([^`]*)`", values).group(1).strip('"')
+            for name in re.findall(r"`([a-z0-9_]+)`", names):
+                if name in choices.DEFAULTS:
+                    self.assertEqual(first, str(choices.DEFAULTS[name]), name)
+                    seen += 1
+        self.assertGreater(seen, 20)
+
+
 class Values(unittest.TestCase):
     def test_defaults_fill_everything(self):
         filled = choices.normalize({})
