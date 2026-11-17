@@ -16,9 +16,12 @@ owner gave it, in Chrome or Samsung Internet. When it still does not open, the s
 
 ### The sign-in is refused
 
-The ID and the password are the ones the server's owner made for you: nobody makes their own, and the owner can give an
-account a new password. After too many wrong passwords the site says **Too many failed sign-ins. Try again in ten
-minutes.** The PC client signs in with the same account, under the same limit.
+The ID and the password are the ones the server's owner made for you, or the ones you set on
+[MY PAGE](play.md#my-page): nobody makes their own account, and the owner can give an account a new password. After too
+many wrong passwords the site says **Too many failed sign-ins. Try again in ten minutes.** The PC client signs in with
+the same account, under the same limit. A player the owner has banned is refused with the owner's reason, and the ban's
+end when it has one (**This account cannot sign in until ...**); the game then stops at its own **Network connection
+error.**, with OpenDMTQ's notice **You cannot play on this server** and the same reason over it.
 
 ### The app does not download or install
 
@@ -36,9 +39,11 @@ minutes.** The PC client signs in with the same account, under the same limit.
 
 ### The game cannot connect, stops at its start or shows no songs
 
-These are the server's: tell its owner. When the server's address changes, its owner builds a new app for it: install
-the new download over the app you have ([the app installs but cannot connect](#the-app-installs-but-cannot-connect)). A
-game that stops at its start, or shows an empty song list, waits for files on the server
+These are the server's: tell its owner. When the server's address or port changes, the server builds a new app for
+it, and the download page says so for a month: install the new download over the app you have
+([the app installs but cannot connect](#the-app-installs-but-cannot-connect)). A server on port 80 that was updated to
+0.11.0 moved to 8791: its new address is the old one with `:8791`. A game that stops at its start, or shows an empty
+song list, waits for files on the server
 ([the game stops at its start](#the-game-stops-at-its-start-or-the-song-list-is-empty)). While the server is under
 maintenance the site says **Under maintenance**, and the game cannot start until it ends.
 
@@ -106,9 +111,12 @@ When the game does not start or shows no songs, this chart leads to the right se
   reachable from outside your home network, set `BIND_ADDRESS` in `.env` to its LAN address. A host install's Apache
   is not Docker's: there the system's firewall applies as usual.
 - The port already used by something else. With Docker Compose, `./opendmtq up` then fails to start the edge proxy,
-  the small program that holds the server's public port. Stop the other program, or use another port, for example
-  `./opendmtq host 192.168.1.10:8792` (the app is rebuilt for it). A new install takes 8791, or the first free port after
-  it when 8791 is taken; the players' site, the admin pages and the API are all on that one port. `./opendmtq host <address>:<port>` (`OpenDMTQ.exe host <address>:<port>`) changes it.
+  the small program that holds the server's public port. Stop the other program, or move the server to another port
+  with `./opendmtq port <port>` (`OpenDMTQ.exe port <port>`, or the admin pages' **Server** page): the app is built
+  again for it. A new install takes 8791, or the first free port after it when 8791 is taken; the players' site, the
+  admin pages and the API are all on that one port.
+- A server set up on port 80 before 0.11.0 is on 8791 after the update (its start, `status` and the **Server** page
+  say so once): phones open the address with `:8791` and install the app built for it from the download page.
 - `./opendmtq doctor` fails when the port in the address and `LISTEN_PORT` differ: phones would call one port while
   the server listens on the other. `./opendmtq host` sets both.
 
@@ -131,6 +139,8 @@ When the game does not start or shows no songs, this chart leads to the right se
   start `OpenDMTQ.exe` again), and install the new app on the phones over the old one. A DHCP reservation for the PC
   in the router's settings keeps its address from changing. `./opendmtq doctor` and `./opendmtq setup` notice a
   changed address, and `import` and `restore` say so without changing it.
+- **The server moved to another port** (`port`, or the update of a server on port 80 to 8791): phones install the app
+  built for the new port, over the old one, from the site's download page at the new address.
 - `./opendmtq check` (`OpenDMTQ.exe check`) walks the same path the app takes. If it passes and the phone still
   fails, the problem is between the phone and the server (see above).
 
@@ -181,8 +191,8 @@ has every form the import takes.
 
 The link the server opens works once, from the server PC, within an hour. Sign in with the user `admin` and the admin
 password instead: the window shows it (on Linux and macOS, `setup` prints it), and it is `ADMIN_PASSWORD` in `.env`. The
-status page then leads to the setup. From another computer, open `http://<server>/opendmtq/admin/setup` and sign in the
-same way.
+status page then leads to the setup. From another computer, open `http://<server>:8791/opendmtq/admin/setup` (the
+server's own port, when it was moved) and sign in the same way.
 
 ### Slow or failing under WSL
 
@@ -193,8 +203,8 @@ and the owner of a file cannot be set. `setup` and `doctor` warn about it.
 
 `./opendmtq up` stops with the reason, and `./opendmtq doctor`, `./opendmtq status` and the Status page of the admin
 pages show it until a build succeeds. `./opendmtq logs builder` has the whole output; on a host install and on Windows
-it is in `data/state/logs/programs.log`. Players then read "The app could not be built. Tell the server's admin." when
-there is no app for the address at all. When a rebuild fails (a new patcher, base APK, runtime bundle or signing key),
+it is in `data/state/logs/programs.log`. Players then read "The app could not be built." when there is no app for the
+address at all. When a rebuild fails (a new patcher, base APK, runtime bundle or signing key),
 phones keep getting the earlier app. A base APK that does not match the expected client stops the build with the edit
 that failed. If `data/apk/base` holds several different clients, see [several clients](game-files.md#several-clients).
 To choose one, set `BASE_APK=<file name>` in `.env`, or with Docker Compose run `./opendmtq apk --base <file name>`,
@@ -218,16 +228,17 @@ A host install and the Windows bundle have no HTTPS.
 
 - `./opendmtq setup` names what is missing (Apache, PHP's module, Java, 7-Zip, the pinned tools): run
   `host/install.sh` again. On Windows, unpack the whole zip again. The commands other than `setup`, `start`, `stop`,
-  `restart`, `status`, `run`, `import`, `apk`, `runtime`, `host`, `check` and `service` (`expose`, `firewall`, `deploy`,
-  `doctor` and the rest) are for Docker Compose only.
+  `restart`, `status`, `run`, `import`, `apk`, `runtime`, `host`, `port`, `password`, `check`, `repair`,
+  `delete-data`, `uninstall` and `service` (`expose`, `firewall`, `deploy`, `doctor` and the rest) are for Docker
+  Compose only.
 - The logs are in `data/state/logs` (on Windows in the OpenDMTQ folder): `host.log` (the host program's own, in the
   background), `server.log` (Apache and PHP), `programs.log` (the database setup, the admin pages, the app builder).
 - "the server already runs": a server of this folder is running; `./opendmtq stop` stops it. On Windows, it runs in
   another OpenDMTQ window: close that one.
-- The system's own Apache service on port 80: `host/install.sh` turns it off when it installed Apache itself, and
-  leaves one that was there before alone; the server then takes another port.
+- The system's own Apache service: `host/install.sh` turns it off when it installed Apache itself (OpenDMTQ runs its
+  own), and leaves one that was there before alone, on its own port.
 - "apache keeps stopping": usually another program holds the server's port, or an antivirus blocks Apache;
-  `server.log` says which. Close that program, or move the server to another port: `./opendmtq host <address>:<port>`.
+  `server.log` says which. Close that program, or move the server to another port: `./opendmtq port <port>`.
 - "no answer from the server, still waiting": the first start can take a few minutes while an antivirus checks the new
   programs. Leave the window open: the setup opens in the browser once the server answers.
 

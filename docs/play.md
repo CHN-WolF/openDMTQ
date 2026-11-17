@@ -35,8 +35,9 @@ on. The server's owner runs it and makes your account.
   <img src="images/site-phone.webp" alt="The server's site on an Android phone: the sign-in page with an ID and a password typed in, and the Download page with Download app (.apk), the app's size and date, and the steps to download, install and play it" width="640">
 </p>
 
-1. Open the server's address in Chrome or Samsung Internet, or scan the server's QR code. Inside a messenger app
-   (KakaoTalk, LINE and others) the page offers **Open in browser**: a download may fail there.
+1. Open the server's address (the one in the owner's message, such as `http://192.168.1.10:8791/`) in Chrome or
+   Samsung Internet, or scan the server's QR code. Inside a messenger app (KakaoTalk, LINE and others) the page offers
+   **Open in browser**: a download may fail there.
 2. Sign in with your ID and password. The browser stays signed in for 30 days.
 3. Tap **Download app (.apk)**. If the browser warns, download anyway.
 4. Open the file. If Android blocks it, turn on **Allow from this source** under **Install unknown apps**; if Play
@@ -48,8 +49,8 @@ Songs download the first time you play them. The app is the game's own Android a
 so nothing else on the phone changes: no DNS, proxy or certificate. The same site has the rankings, the songs, each
 player's page and the broadcasts, in English and Korean (**KOR** / **ENG** at the top).
 
-A line under the site's top bar is the server's owner's notice, on every page while it is up. Its **×**
-closes it until your next visit; new words from the owner show again.
+A line under the site's top bar is a notice from the server's owner, on every page while it is up. Its **×** closes it
+until your next visit; new words from the owner show again.
 
 ## On a Windows PC
 
@@ -62,8 +63,10 @@ The PC client plays the same app on Windows:
 3. The launcher signs in with your ID and password, downloads the game and asks about the picture and the sound once.
    Then **PLAY**.
 
-The launcher keeps the game up to date. [The PC client](windows-player.md) has the rest: the launcher's pages, the
-controls, the picture and the sound, what it keeps, and how it runs on Linux under Wine.
+The launcher keeps the game and itself up to date, from the server. Its **Play** page opens your [MY PAGE](#my-page)
+on the site, signed in already, and lists your latest plays and best records; a bar over the game has the sound,
+minimise, full screen and quit. [The PC client](windows-player.md) has the rest: the launcher's pages, the controls,
+the picture and the sound, what it keeps, and how it runs on Linux under Wine.
 
 On the site, a small keyboard beside a score marks one played with the PC's keys (on a best record, the play that set
 that score), and beside a total says how many such scores it counts; the rankings are one for touch and keys.
@@ -71,9 +74,14 @@ that score), and beside a total says how many such scores it counts; the ranking
 ## Updates and other devices
 
 - **A new app:** the download page offers one, with the date it was built, when the server's owner changes the
-  server's address or an update brings one. Install it over the app you have: your account stays. An app that installs
-  beside the old one instead was signed with a new key: tell the server's owner
+  server's address or port or an update brings one. Install it over the app you have: your account stays. An app that
+  installs beside the old one instead was signed with a new key: tell the server's owner
   ([restoring](troubleshooting.md#restoring)).
+- **A server that moved:** for a month after the owner moves the server to another address or port, its download page
+  says so, with the old address and the new one. A server set up on port 80 before 0.11.0 moved to 8791 with the update.
+  Open the new address, install the app built for it over the old one, and on a PC run the installer from the page
+  again; the PC client's connection test also finds a server that moved to 8791
+  ([testing the connection](windows-player.md#testing-the-connection)).
 - **New songs** reach the game at its next start, which downloads what changed.
 - **Other servers' apps**, and the original game, stay installed next to this one: each is an app of its own.
 - **Another phone, or a PC:** each device is a player of its own on the server. The game's account transfer carries a

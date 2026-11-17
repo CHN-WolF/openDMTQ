@@ -14,10 +14,16 @@ Android 5.0 or newer, phones and tablets. Newer ones without 32-bit support (Pix
 work too: the server adds what they need to the app. iPhones do not ([why](game-files.md#iphones)).
 
 **Can I play on a computer?**
-On a PC with 64-bit Windows 10 or 11 on an x64 processor (Intel or AMD): the site's Download page has the PC client, an installer set up for the server.
-It installs for your Windows account without administrator rights; sign in there with your site ID, and it downloads the
-game and keeps it up to date. The PC is a player of its own, apart from your phone, and the game's account transfer
-carries a player from one to the other ([the PC client](windows-player.md)).
+On a PC with 64-bit Windows 10 or 11 on an x64 processor (Intel or AMD), or on Linux under Wine: the site's Download
+page has the PC client, an installer set up for the server. It installs for your Windows account without administrator
+rights; sign in there with your site ID, and it downloads the game and keeps it up to date. A touch screen, the mouse or
+the keyboard plays. The PC is a player of its own, apart from your phone, and the game's account transfer carries a
+player from one to the other ([the PC client](windows-player.md)).
+
+**Where do I see my own records, or change my password?**
+On MY PAGE, from your name at the top of the site: what the game keeps of you, every play and best record, and your
+account, where you change your password and ID ([my page](play.md#my-page)). The PC client's **Play** page opens it
+signed in, and lists your latest plays and best records.
 
 **Is the app safe to install?**
 The app comes from the server, not from a store, so Android asks to allow installs from the browser and Play Protect may
@@ -58,13 +64,20 @@ server takes about 170 MB, and two cores serve hundreds of requests a second
 Each needs an account: make them in the setup or on the **Accounts** page, which gives the message to send. The rest is
 theirs: [playing on a server](play.md).
 
+**Which port does it use?**
+One, for everything: the game, the players' site, the admin pages and the API, 8791 unless another program has it.
+`port <port>`, or the admin pages' **Server** page, moves it; phones then install the app built for the new port. A
+server set up on port 80 before 0.11.0 moves to 8791 at its first start after the update
+([the server's port](install.md#the-servers-port)).
+
 **Can players outside my home play?**
 Yes, with a host name and one forwarded port: [Playing from outside your home](internet.md).
 
 **Does it need the internet?**
-Only to get its programs onto the server. The server for Windows (`opendmtq-server-<version>-windows-x64.zip`) already has them all.
-After that the setup, the app's build, the server and the game stay on your network. [Without internet](closed-network.md)
-says what to carry in for each way of running it, and why the macOS install cannot run without it.
+Only to get its programs onto the server. The server for Windows (`opendmtq-server-<version>-windows-x64.zip`) already
+has them all. After that the setup, the app's build, the server and the game stay on your network.
+[Without internet](closed-network.md) says what to carry in for each way of running it, and why the macOS install
+cannot run without it.
 
 **How do I make backups?**
 The server makes one a day by itself and keeps the last seven. The **Backups** page makes one at any time, downloads
@@ -73,7 +86,8 @@ them and restores them ([backups and a new computer](install.md#backups-and-a-ne
 **What happens to the data if I update OpenDMTQ?**
 Everything of yours is in the `data` folder and the `.env` file, and an update leaves those alone. On Windows, close the
 server's window and run the same five lines again; on Linux or macOS, the same command ([installing](install.md)). With
-Docker, `git pull`, then `./opendmtq up`; `./opendmtq runtime` also brings the newest runtime for newer phones.
+Docker, `git pull`, then `./opendmtq up`; `./opendmtq runtime` also brings the newest runtime for newer phones. The PC
+clients that play on the server then update to its version from the server itself.
 
 **The game shows no songs.**
 The song list is empty until the songs are imported. On Windows and a host install: on the admin pages, **Songs**,
@@ -84,13 +98,16 @@ too** ticked. With Docker, as its Songs page says: `./opendmtq import --songs <f
 
 **What leaves my computer?**
 Accounts, scores, recordings and backups stay on the server's computer, in `data/`, and phones talk to the server alone.
-The server asks the internet for two things, from this repository's latest release: the runtime for newer phones, when
-it builds the app without one, and the PC client's installer, when none came with it, then once a week for a newer one
-(a release's images and the Windows bundle carry both, and ask for neither). The PC client asks the same releases for a
-newer launcher once at each start and when **Check for updates** is pressed, and nothing else on its own.
-`./opendmtq doctor` on a server reachable from the internet asks check-host.net to open its page from outside, which
-tells that site the server's address. The game's own app, and Android, also look up a few Google and ad addresses; the
-game plays the same without them ([without internet](closed-network.md)).
+The server asks the internet for what it hands out, from this repository's release of its own version (else the
+latest), each checked against the release's signed checksums: the runtime for newer phones, when it builds the app
+without one, and the PC client's installer and updates, when none came with it, then once a week for a newer one (a
+release's images carry them, and the Windows bundle the runtime and the installer). The PC client asks its server for
+a newer launcher, and the same releases when its server hands out none, at each start, every six hours while it is
+open and when **Check for updates** is pressed, and nothing else on its own. Messages go to Discord or Slack only
+through webhooks the owner adds on the admin pages' **Notices** page. `./opendmtq doctor` on a server reachable from the
+internet asks check-host.net to open its page from outside, which tells that site the server's address. The game's own
+app, and Android, also look up a few Google and ad addresses; the game plays the same without them
+([without internet](closed-network.md)).
 
 ## The project
 
