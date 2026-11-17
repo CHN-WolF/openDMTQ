@@ -188,12 +188,18 @@ def shown_version():
     return current_version() or __version__
 
 
+def _request(url, method=None):
+    """A request as the launcher makes them, with its own name (server.py's requests carry the same)."""
+    from opendmtq_client import __version__
+    request = urllib.request.Request(url, method=method)
+    request.add_header("User-Agent", "OpenDMTQ-client/%s" % __version__)
+    return request
+
+
 def _read(source, name, version, limit):
     """A release's small file (the feed, the checksums, the signature) as bytes, at most `limit` and one more (a file
     longer than that is none of these). Missing for a 404."""
-    request = urllib.request.Request(source.url(name, version))
-    from opendmtq_client import __version__
-    request.add_header("User-Agent", "OpenDMTQ-client/%s" % __version__)
+    request = _request(source.url(name, version))
     try:
         with source.opener().open(request, timeout=READ_SECONDS) as response:
             return response.read(limit + 1)
@@ -256,7 +262,7 @@ def release(source, version=None):
 def _latest_tag(source):
     """The latest release's version on GitHub (1.2.3): its /releases/latest leads to the tag's page, whose address names
     it. A HEAD request, as the servers' tools ask (no API, whose limit for unnamed callers a shared address runs into)."""
-    request = urllib.request.Request(source.base + "/releases/latest", method="HEAD")
+    request = _request(source.base + "/releases/latest", method="HEAD")
     with source.opener().open(request, timeout=READ_SECONDS) as response:
         where = response.geturl()
     found = re.search(r"/releases/tag/v(%s)/?$" % VERSION.pattern, where)
@@ -474,7 +480,7 @@ def _fetch(result, asset, folder):
     name, size = asset["FileName"], asset["Size"]
     path = os.path.join(folder, name)
     started = time.monotonic()
-    request = urllib.request.Request(result.source.url(name, result.version))
+    request = _request(result.source.url(name, result.version))
     try:
         with result.source.opener().open(request, timeout=READ_SECONDS) as response, open(path, "wb") as out:
             done = 0

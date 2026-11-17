@@ -1175,6 +1175,21 @@ class AppStepTest(unittest.TestCase):
             inst.sign_in()
             self.assertIn("could not fetch it: no network", inst.page(BASE + "/setup?step=app"))
 
+    def test_a_runtime_refused_for_its_signature_is_said_in_the_pages_words(self):
+        # DEP-63: what runtime.py notes in English for a zip that is not the one the release signed, said on the setup page
+        # in its own language, inside the line about what newer phones need.
+        with HostInstall() as inst:
+            inst.write("apk/runtime-error.txt",
+                       "opendmtq-phone-runtime-0.11.0-android-arm64-armv7.zip is not the file the release signed")
+            inst.sign_in()
+            page = inst.page(BASE + "/setup?step=app")
+            self.assertIn("could not be added: opendmtq-phone-runtime-0.11.0-android-arm64-armv7.zip is not the file the "
+                          "OpenDMTQ release signed, so the server did not take it. The app runs only", page)
+            inst.client.set_cookie("opendmtq_lang", "ko")
+            page = inst.page(BASE + "/setup?step=app")
+            self.assertIn("넣지 못했습니다: opendmtq-phone-runtime-0.11.0-android-arm64-armv7.zip 파일은 OpenDMTQ 릴리스가 "
+                          "서명한 파일이 아니어서 서버가 받지 않았습니다. 앱은", page)
+
     def test_with_the_runtime_in_place_the_page_says_so(self):
         with HostInstall() as inst:
             os.makedirs(inst.path("apk/arm32"))
