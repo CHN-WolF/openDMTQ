@@ -1404,10 +1404,12 @@ class ChangeLogPageTest(unittest.TestCase):
     def test_every_change_the_site_notes_has_its_words(self):
         # MY PAGE writes its own lines into the log of changes (server/portal/me_lib.php, me_note()): each of its codes has
         # words in both languages, as the pages' own do, and the Logs page reads them (ADM-125).
-        site = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "server", "portal", "me_lib.php")
-        if not os.path.isfile(site):
+        portal = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "server", "portal")
+        # Without the portal beside the tools (a run of the tools alone) there is nothing to read; with it, MY PAGE's
+        # library must be there.
+        if not os.path.isfile(os.path.join(portal, "lib.php")):
             self.skipTest("the portal is not at hand")
-        with open(site, encoding="utf-8") as f:
+        with open(os.path.join(portal, "me_lib.php"), encoding="utf-8") as f:
             codes = set(re.findall(r"me_note\('([a-z]+:[a-z-]+)'", f.read()))
         self.assertEqual(codes, {"site:password", "site:id", "site:signout"})
         for code in codes:
