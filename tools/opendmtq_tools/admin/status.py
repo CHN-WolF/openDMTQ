@@ -11,7 +11,7 @@ import time
 from flask import render_template, request, url_for
 
 from .. import songs, windows_client
-from . import apps, auth, backups, charts, core, insights, recordings, song_pages
+from . import apps, auth, backups, charts, core, insights, recordings, song_pages, webhooks
 from .core import ago, app, BASE, db, human, t, tp
 
 
@@ -70,6 +70,11 @@ def attention(health, counts, saved, backup_age, on, build, failed, usage):
         out.append(("warn", t("alert.old_backup", ago=ago(time.time() - backup_age)), url_for("backups_page"), t("nav.backups")))
     if on:
         out.append(("warn", t("alert.maintenance"), url_for("maintenance_page") + "#maintenance", t("nav.maintenance")))
+    # A chat whose messages do not go through (its webhook deleted in the chat, the server without internet): the first one
+    # with why, and the way to the card.
+    hooks = webhooks.failing()
+    if hooks:
+        out.append(("bad", t("alert.hook_failed", why=hooks[0]["last_failure"]["message"]), url_for("maintenance_page") + "#hooks", t("nav.notices")))
     return out
 
 # How much each kind of thing takes on the disk changes slowly, and counting it means walking folders (a folder's bytes:

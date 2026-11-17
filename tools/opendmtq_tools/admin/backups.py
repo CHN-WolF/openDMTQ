@@ -16,7 +16,7 @@ from flask import flash, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import NotFound
 
 from .. import songs
-from . import auth, core, insights, jobs, recordings, status, tokens
+from . import auth, core, insights, jobs, recordings, status, tokens, webhooks
 from .core import Refused, ago, app, BASE, changed, db, private_file, safe_name, t, tp, why
 
 # Backups made here are kept up to this many, like the CLI's.
@@ -548,9 +548,11 @@ def restore_backup(name, path):
             # API's tokens: an old backup must not bring back one that was revoked, nor end one made since (the one that
             # asked for this restore). Tokens are made and revoked under tokens.LOCK: none comes or goes between this look
             # and the swap. The site's accounts too: an old backup must not bring back an account deleted since, nor an
-            # old password, nor end an account made since.
-            with tokens.LOCK:
-                switches, settings, kept_tokens, kept_accounts = [], [], [], []
+            # old password, nor end an account made since. The chats' webhooks too, as they are now, under their own lock: an
+            # old backup must not bring back one deleted since (its chat would hear from this server again), and nothing
+            # the restored database's queue holds is sent again (webhooks.put).
+            with tokens.LOCK, webhooks.LOCK:
+                switches, settings, kept_tokens, kept_accounts, kept_hooks = [], [], [], [], []
                 # The live database's rankings' change number (0 when it is set aside as damaged and cannot be read).
                 live_stamp = 0
                 if not kept:
@@ -564,6 +566,7 @@ def restore_backup(name, path):
                         # The table as the pages keep it (its guid column added to an older one), then every account.
                         auth.account_table(con)
                         kept_accounts = con.execute(f"SELECT {', '.join(auth.ACCOUNT_COLUMNS)} FROM SiteUser").fetchall()
+                        kept_hooks = webhooks.kept(con)
                 # Today's tokens and accounts go into the restored copy while it is still apart from the server: the
                 # database that takes the live one's place has them from its first moment (a damaged one set aside
                 # leaves no tokens).
@@ -571,6 +574,9 @@ def restore_backup(name, path):
                 try:
                     with copy:
                         tokens.put(copy, kept_tokens)
+                        # Today's webhooks, and the loop's memory and queue gone: its next look starts from the restored
+                        # data as it is, sending nothing of it.
+                        webhooks.put(copy, kept_hooks)
                         # A server with no account (a new PC, or a damaged database set aside) has none to keep: the
                         # backup's accounts come with it then, or a move to a new PC would leave every player out.
                         if kept_accounts:

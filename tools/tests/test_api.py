@@ -322,6 +322,29 @@ def C(route, method, path, status, code=None, token="owner", setup=None, check=N
     return {"route": route, "method": method, "path": path, "status": status, "code": code, "token": token, "setup": setup, "check": check, "kw": kw}
 
 
+# A Discord webhook's address, made up: its id 1234 and its secret, which no answer may hold whole.
+HOOK_URL = "https://discord.com/api/webhooks/1234/secret-part-9876"
+
+
+def a_webhook(inst):
+    """A webhook on the server, as the card adds one (webhooks.add): id 1."""
+    with admin.app.test_request_context():
+        admin.webhooks.add(HOOK_URL, "en", list(admin.webhooks.DEFAULT_EVENTS))
+    return []
+
+
+def a_chat(answer):
+    """A webhook, and its chat as webhooks.post would find it: what it answers (no request leaves the test)."""
+    def setup(inst):
+        a_webhook(inst)
+        return [mock.patch.object(admin.webhooks, "post", lambda url, body, timeout=5: dict(answer))]
+    return setup
+
+
+a_chat_that_takes_it = a_chat({"ok": True, "status": 204, "code": None, "retry_after": None})
+a_chat_that_is_gone = a_chat({"ok": False, "status": 404, "code": "gone", "retry_after": None})
+
+
 def port_free_host(inst):
     """A host install whose every other port is free (lifecycle.port_free asks the machine itself)."""
     return host_install(inst) + [mock.patch.object(admin.lifecycle, "port_free", lambda port: True)]
@@ -608,30 +631,31 @@ def CASES():
         C("maintenance_set", "PUT", "/maintenance", 400, "bad_json", data="message=x", content_type="application/x-www-form-urlencoded"),
         C("maintenance_clear", "DELETE", "/maintenance", 200),
         C("maintenance_clear", "DELETE", "/maintenance", 403, "read_only", token="reader"),
-        # API-57: the Notices page's notice on the site, as its card sets it (notice.py): none yet, up with no end and with
-        # one, its words made one line; refused in the card's words too long, empty, with a character that is no text, with
-        # an end that has come, on a read token; taken down, and none to take down is no error.
-        C("notice_get", "GET", "/notice", 200,
-          check=lambda t, inst, r: t.assertEqual(r.get_json(), {"text": "", "shown": False, "until": None, "set_at": None, "by": None})),
-        C("notice_set", "PUT", "/notice", 200, json={"text": "Open late tonight.\r\nNew songs on Friday."},
-          check=lambda t, inst, r: t.assertEqual((r.get_json()["text"], r.get_json()["shown"], r.get_json()["until"], r.get_json()["by"]),
-                                                 ("Open late tonight. New songs on Friday.", True, None, "admin (owner)"))),
-        C("notice_set", "PUT", "/notice", 200, json={"text": "Until nine.", "until": soon},
-          check=lambda t, inst, r: t.assertEqual((r.get_json()["until"], admin.notice.read()["until"]), (soon, soon))),
-        C("notice_set", "PUT", "/notice", 400, "notice_too_long", json={"text": "x" * 201},
-          check=lambda t, inst, r: t.assertEqual(r.get_json()["error"]["message"], "The notice is longer than 200 characters.")),
-        C("notice_set", "PUT", "/notice", 400, "notice_empty", json={"text": " \n "}),
-        C("notice_set", "PUT", "/notice", 400, "notice_not_text", json={"text": "Open \u202elate"}),
-        C("notice_set", "PUT", "/notice", 400, "notice_end_past", json={"text": "Gone.", "until": 1000}),
-        # An end the server's clock cannot even write (past the year 9999): refused before anything is kept.
-        C("notice_set", "PUT", "/notice", 400, "notice_end_far", json={"text": "Far.", "until": 300000000000},
-          check=lambda t, inst, r: t.assertIsNone(admin.notice.read())),
-        C("notice_set", "PUT", "/notice", 400, "bad_field", json={"text": "Soon.", "until": "tomorrow"}),
-        C("notice_set", "PUT", "/notice", 403, "read_only", token="reader", json={"text": "No."}),
-        C("notice_clear", "DELETE", "/notice", 200, setup=lambda inst: [admin.notice.put("Up for a moment.")][:0],
-          check=lambda t, inst, r: t.assertEqual((r.get_json()["shown"], admin.notice.read()), (False, None))),
-        C("notice_clear", "DELETE", "/notice", 200, check=lambda t, inst, r: t.assertEqual(r.get_json()["text"], "")),
-        C("notice_clear", "DELETE", "/notice", 403, "read_only", token="reader"),
+        # The Notices page's Discord and Slack card (API-50): the address never whole in an answer, a test sent at once.
+        C("webhooks_list", "GET", "/webhooks", 200, setup=a_webhook,
+          check=lambda t, inst, r: (t.assertEqual(r.get_json()["items"][0]["address"], "discord.com/api/webhooks/1234/••••9876"),
+                                    t.assertNotIn("secret-part-9876", r.get_data(as_text=True)))),
+        C("webhooks_list", "GET", "/webhooks", 401, "no_token", token=None),
+        C("webhooks_add", "POST", "/webhooks", 201, json={"url": "https://hooks.slack.com/services/T01/B02/xyz-secret-5432", "language": "ko"},
+          check=lambda t, inst, r: (t.assertEqual({k: r.get_json()["webhook"][k] for k in ("kind", "language", "events")},
+                                                  {"kind": "slack", "language": "ko", "events": list(admin.webhooks.DEFAULT_EVENTS)}),
+                                    t.assertNotIn("xyz-secret-5432", r.get_data(as_text=True)))),
+        C("webhooks_add", "POST", "/webhooks", 400, "bad_url", json={"url": "ftp://chat.example/hook"}),
+        C("webhooks_add", "POST", "/webhooks", 400, "bad_url", json={"url": "https://name:pw@chat.example/hook"}),
+        C("webhooks_add", "POST", "/webhooks", 400, "bad_events", json={"url": "https://chat.example/hook", "events": ["everything"]}),
+        C("webhooks_add", "POST", "/webhooks", 409, "webhook_taken", setup=a_webhook, json={"url": HOOK_URL}),
+        C("webhook_set", "PUT", "/webhooks/1", 200, setup=a_webhook, json={"events": ["maint_off", "maint_on"], "language": "ko"},
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["webhook"]["events"], r.get_json()["webhook"]["language"]), (["maint_on", "maint_off"], "ko"))),
+        C("webhook_set", "PUT", "/webhooks/99", 404, "webhook_not_found", json={"events": ["maint_on"]}),
+        C("webhook_set", "PUT", "/webhooks/1", 400, "bad_events", setup=a_webhook, json={"events": []}),
+        C("webhook_delete", "DELETE", "/webhooks/1", 200, setup=a_webhook,
+          check=lambda t, inst, r: t.assertEqual(r.get_json()["deleted"], "discord.com/api/webhooks/1234/••••9876")),
+        C("webhook_delete", "DELETE", "/webhooks/1", 403, "read_only", token="reader", setup=a_webhook),
+        C("webhook_test", "POST", "/webhooks/1/test", 200, setup=a_chat_that_takes_it,
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["sent"], r.get_json()["status"]), (True, 204))),
+        C("webhook_test", "POST", "/webhooks/1/test", 200, setup=a_chat_that_is_gone,
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["sent"], r.get_json()["code"]), (False, "gone"))),
+        C("webhook_test", "POST", "/webhooks/9/test", 404, "webhook_not_found"),
         C("server_stop", "POST", "/server/stop", 202, setup=host_install, check=lambda t, inst, r: t.assertTrue(os.path.exists(inst.path("run/stop.request")))),
         C("server_stop", "POST", "/server/stop", 404, "host_only"),
         # The Server page: its state, restart, repair, data and uninstall (lifecycle.py).
@@ -2109,7 +2133,13 @@ PAGE_ACTIONS = {
     "songs_page:hide": ["song_hide"],
     "songs_page:show": ["song_show"],
     "songs_page:remove": ["song_remove"],
-    "maintenance_page": ["maintenance_get", "notice_get"],
+    "maintenance_page": ["maintenance_get", "webhooks_list"],
+    # The Notices page's Discord and Slack card (webhooks.py).
+    "webhook_new": ["webhooks_add"],
+    "webhook_action": ["webhooks_list"],
+    "webhook_action:save": ["webhook_set"],
+    "webhook_action:test": ["webhook_test"],
+    "webhook_action:delete": ["webhook_delete"],
     "maintenance_page:on": ["maintenance_set"],
     "maintenance_page:off": ["maintenance_clear"],
     # The Notices page's notice on the site (notice.py): its form's address, and its two buttons.

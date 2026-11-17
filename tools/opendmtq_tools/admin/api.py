@@ -22,8 +22,7 @@ from werkzeug.exceptions import HTTPException
 
 from .. import server_data, songs
 from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, tokens
-# The site's notice by another name: notice() here is the maintenance notice's answer.
-from . import notice as site_notice
+from . import webhooks
 # The status page's module by another name: the route's handler is called status.
 from . import status as status_page
 from .core import Refused, app, changed, db, json_error, plain, tp
@@ -614,6 +613,35 @@ def notice_clear(args):
 
 
 # ------------------------------------------------------------------------------ Discord and Slack (webhooks.py)
+
+@handler
+def webhooks_list(args):
+    """GET /webhooks: the card's list, addresses masked."""
+    return {"items": webhooks.listing()}
+
+
+@handler
+def webhooks_add(args):
+    """POST /webhooks: the card's Add (webhooks.add, which refuses what is no webhook's address)."""
+    return {"webhook": webhooks.add(args["url"], args.get("language", "en"), args.get("events", list(webhooks.DEFAULT_EVENTS)))}, 201
+
+
+@handler
+def webhook_set(args):
+    """PUT /webhooks/{webhook}: the card's Save, of what is given."""
+    return {"webhook": webhooks.change(args["webhook"], args.get("language"), args.get("events"))}
+
+
+@handler
+def webhook_delete(args):
+    """DELETE /webhooks/{webhook}: the card's Delete; the address masked as what was deleted."""
+    return {"deleted": webhooks.delete(args["webhook"])}
+
+
+@handler
+def webhook_test(args):
+    """POST /webhooks/{webhook}/test: the card's Send a test, its result as the card says it."""
+    return webhooks.send_test(args["webhook"])
 
 
 # ------------------------------------------------------------------------------ the server page

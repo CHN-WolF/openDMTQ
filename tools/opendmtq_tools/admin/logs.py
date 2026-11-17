@@ -46,8 +46,9 @@ CHANGE_WORDS = {
     "backup_action:delete": "change.backup_delete", "backup_action:restore": "change.backup_restore",
     "songs_page:upload": "change.song_add", "songs_page:hide": "change.song_hide", "songs_page:show": "change.song_show", "songs_page:remove": "change.song_remove",
     "maintenance_page:on": "change.maint_on", "maintenance_page:off": "change.maint_off",
-    # The Notices page's notice on the site (notice.py).
-    "notice:show": "change.notice_show", "notice:clear": "change.notice_clear",
+    # The Notices page's Discord and Slack card (webhooks.py): the address masked as the target.
+    "webhook_new:": "change.hook_add", "webhook_action:save": "change.hook_save", "webhook_action:test": "change.hook_test",
+    "webhook_action:delete": "change.hook_delete",
     "accounts_page:create": "change.acc_create", "accounts_page:password": "change.acc_password",
     "accounts_page:off": "change.acc_off", "accounts_page:on": "change.acc_on", "accounts_page:delete": "change.acc_delete",
     "accounts_page:admin": "change.acc_admin", "accounts_page:player": "change.acc_player", "accounts_page:link": "change.acc_link",

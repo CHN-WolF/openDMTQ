@@ -670,46 +670,89 @@ Turns the notice off. Players in the game are told between songs that it is over
 
 Answer: `200` with [Notice](#notice).
 
-### Notice
+### Webhooks
 
-The Notices page's notice on the site: one line at the top of every page of the players' site.
+The Notices page's Discord and Slack card: the chats the server sends messages to.
 
 | Route | Scope | What it does |
 |:---|:---:|:---|
-| [`GET /notice`](#get-notice) | read | The notice on the site: what it says, whether it is up, when it ends. |
-| [`PUT /notice`](#put-notice) | write | Puts the notice up, or gives it new words or a new end. |
-| [`DELETE /notice`](#delete-notice) | write | Takes the notice down. |
+| [`GET /webhooks`](#get-webhooks) | read | Every chat the server sends messages to, with how its last message went. |
+| [`POST /webhooks`](#post-webhooks) | write | Adds a webhook, as the card's Add does. |
+| [`PUT /webhooks/{webhook}`](#put-webhookswebhook) | write | Changes what a webhook hears of and its language, as the card's Save does. |
+| [`DELETE /webhooks/{webhook}`](#delete-webhookswebhook) | write | Deletes a webhook, and its messages waiting. |
+| [`POST /webhooks/{webhook}/test`](#post-webhookswebhooktest) | write | Sends a test message now, as the card's Send a test does. |
 
-#### `GET /notice`
+#### `GET /webhooks`
 
-The notice on the site: what it says, whether it is up, when it ends.
+Every chat the server sends messages to, with how its last message went.
 
-Answer: `200` with [SiteNotice](#sitenotice).
+Answer: `200` with [WebhookList](#webhooklist).
 
-#### `PUT /notice`
+#### `POST /webhooks`
 
-Puts the notice up, or gives it new words or a new end. Everyone signed in sees it at the top of every page of the site at once. A visitor who closed it sees it again on their next visit, and when its words change. Its whitespace, line breaks too, becomes single spaces.
+Adds a webhook, as the card's Add does. Its chat hears of what it takes from the next look on (every few seconds), nothing of what happened before.
 
 Body (JSON):
 
-- `text` (string): What it says: one line of up to 200 characters.
-- `until` (integer, or null, optional): When it ends by itself (Unix time). Null or left out: no end.
+- `url` (string, 1000 characters at most): The webhook's address, http or https (Discord's or Slack's, or any chat that takes Slack's).
+- `language` (string, optional): The language of its messages. Left out: English. One of `en`, `ko`.
+- `events` (list of string, optional): What it hears of (Webhook's events). Left out: all but live_off.
 
-Answer: `200` with [SiteNotice](#sitenotice).
+Answer: `201` with [WebhookAnswer](#webhookanswer).
 
 Refusals:
 
-- `400 notice_empty`: No words, or only spaces.
-- `400 notice_too_long`: Longer than 200 characters.
-- `400 notice_not_text`: Characters that cannot be shown (control or formatting characters).
-- `400 notice_end_past`: The end has come already.
-- `400 notice_end_far`: The end is more than ten years away.
+- `400 bad_url`: No address of a webhook: another scheme, a name or password in it, spaces, or too long.
+- `400 bad_events`: No events, or one this server does not know.
+- `409 webhook_taken`: A webhook with that address is here already.
 
-#### `DELETE /notice`
+#### `PUT /webhooks/{webhook}`
 
-Takes the notice down. No notice to take down is no error: the answer says there is none.
+Changes what a webhook hears of and its language, as the card's Save does.
 
-Answer: `200` with [SiteNotice](#sitenotice).
+Parameters:
+
+- `webhook` (path, integer): A webhook's id, as the list of webhooks gives it.
+
+Body (JSON):
+
+- `language` (string, optional): The language of its messages. One of `en`, `ko`.
+- `events` (list of string, optional): What it hears of.
+
+Answer: `200` with [WebhookAnswer](#webhookanswer).
+
+Refusals:
+
+- `404 webhook_not_found`: No such webhook.
+- `400 bad_events`: No events, or one this server does not know.
+
+#### `DELETE /webhooks/{webhook}`
+
+Deletes a webhook, and its messages waiting.
+
+Parameters:
+
+- `webhook` (path, integer): A webhook's id, as the list of webhooks gives it.
+
+Answer: `200` with [Deleted](#deleted).
+
+Refusals:
+
+- `404 webhook_not_found`: No such webhook.
+
+#### `POST /webhooks/{webhook}/test`
+
+Sends a test message now, as the card's Send a test does. It waits for the chat's answer (five seconds at most) and says how it went; the webhook's last result is this one's.
+
+Parameters:
+
+- `webhook` (path, integer): A webhook's id, as the list of webhooks gives it.
+
+Answer: `200` with [WebhookTest](#webhooktest).
+
+Refusals:
+
+- `404 webhook_not_found`: No such webhook.
 
 ### Server
 
@@ -2462,12 +2505,51 @@ The in-game maintenance notice.
 - `change` (integer): The number of its last change (turned on, a new message, ended), higher with each one; 0 before the first. The game's notice page is asked for under it, and players in the game are told of each change once.
 - `changed_at` (integer, or null): When that change was made (Unix time); null before the first.
 
-#### PasswordChanged
+#### Webhook
 
-The owner's password changed.
+A chat the server sends messages to, through its webhook.
 
-- `changed` (boolean): True: the new password works from now on, for the admin pages and the players' site alike.
-- `user` (string): The owner's ID (ADMIN_USER), which signs in with it.
+- `id` (integer): Its id.
+- `address` (string): Its address masked: the host and the path, the secret at the path's end as dots and its last four characters. The whole address never leaves the server but for the chat.
+- `kind` (string): The format its messages take, by its host: Discord's for Discord's hosts, Slack's for every other. One of `discord`, `slack`.
+- `language` (string): The language of its messages. One of `en`, `ko`.
+- `events` (list of string): What it hears of, in the card's order: live_on (a player starts broadcasting), live_off (their broadcast ends), chart_top (a new #1 on a song's chart, taken from another player), month_top (a new #1 of the month), maint_on and maint_off (maintenance begins, ends).
+- `made_by` (string): Who added it.
+- `made_at` (integer): When it was added (Unix time).
+- `last_sent` (integer, or null): When its last message went through (Unix time).
+- `last_failure` ([WebhookFailure](#webhookfailure), or null): Its last failure, while nothing went through since.
+- `waiting` (integer): Its messages waiting to be sent (tried again after a failure, or queued just now).
+- `given_up` (integer): Its messages given up on, not sent within half an hour of what they tell.
+
+#### WebhookFailure
+
+A message a chat did not take.
+
+- `at` (integer): When (Unix time).
+- `code` (string): What happened: gone (404: no such webhook), refused (401, 403: its address is wrong or no longer valid), bad (another 4xx: the message refused), limited (429: the chat asked to wait), server (5xx), timeout, unreachable, redirect (the address leads elsewhere). One of `gone`, `refused`, `bad`, `limited`, `server`, `timeout`, `unreachable`, `redirect`.
+- `status` (integer, or null): The chat's HTTP status; null without an answer.
+- `message` (string): The same in a sentence.
+
+#### WebhookList
+
+The webhooks.
+
+- `items` (list of [Webhook](#webhook)): Every one, the first added first.
+
+#### WebhookAnswer
+
+A webhook.
+
+- `webhook` ([Webhook](#webhook)): The webhook.
+
+#### WebhookTest
+
+A test message sent.
+
+- `sent` (boolean): True when the chat took it.
+- `status` (integer, or null): The chat's HTTP status; null without an answer.
+- `code` (string, or null): When it did not go through, what happened, as a failure's code.
+- `message` (string): How it went, in a sentence.
 
 #### Stopping
 

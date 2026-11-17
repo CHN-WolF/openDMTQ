@@ -862,7 +862,29 @@ table.data-parts .runtime { font-weight: 400; }
 .notice-until { flex: 0 1 240px; }
 @media (max-width: 600px) { .notice-until { flex: none; } }
 
-/* Discord and Slack (webhooks_card.html). */
+/* Discord and Slack (webhooks_card.html). Each chat on a floor of its own in the card, as the page's panels stand apart (the
+   page's gap); its address in the code face, broken anywhere on a phone; what it hears of in rows of boxes to tick, its
+   language and buttons under them, the buttons across a phone's width. */
+.hooks { display: grid; gap: var(--gap); margin: 0 0 18px; padding: 0; list-style: none; }
+.hook { display: grid; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--deck); box-shadow: inset 0 0 0 1px var(--seam); }
+.hook > p { margin: 0; }
+.hook-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.hook-kind { font: 700 var(--t-md)/1.4 var(--text-face); color: #fff; }
+.hook-address { overflow-wrap: anywhere; }
+.hook-state { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--chalk); }
+.hook-dropped, .hook-made { font-size: var(--t-sm); color: var(--ash); }
+.hook-form { display: grid; gap: 12px; margin: 0; }
+.hook-form .hook-made { margin: 0; }
+.hook-events { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.hook-label { flex-basis: 100%; font-size: var(--t-sm); font-weight: 600; color: var(--ash); }
+.hook-go { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+.hook-go .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.hook-new .hook-events { margin-top: 14px; }
+@media (max-width: 700px) {
+  .hook-go .field { flex: 1 1 100%; }
+  .hook-go .btns { flex: 1 1 100%; margin-left: 0; }
+  .hook-go .btns .btn { flex: 1 1 auto; }
+}
 
 /* The owner's password on the Server page (server.html). */
 /* The new password and the same again side by side, the rule and the button across under them; one under the other on

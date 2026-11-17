@@ -78,7 +78,7 @@ PARAMS = {
     "part": ("string", "A recording's playlist (index.m3u8) or one of its segments (<n>.ts)."),
     "backup": ("string", "A backup's file name, as the list of backups gives it."),
     "chart": ("integer", "A chart's id (the song list's pattern id)."),
-    "item": ("integer", "An item's id, as a player's game state lists it (items)."),
+    "webhook": ("integer", "A webhook's id, as the list of webhooks gives it."),
 }
 
 # Whether a play was made with the keyboard, which the PC client's player says with its save (the header X-OpenDMTQ-Keys):
@@ -321,6 +321,37 @@ SHAPES = {
         Field("set_at", "integer", "When it was set (Unix time); null when there is none.", nullable=True),
         Field("by", "string", "Who set it: the admin, or through the API the admin whose token it was.", nullable=True)]),
     # The Notices page's Discord and Slack (webhooks.py).
+    "Webhook": Shape("A chat the server sends messages to, through its webhook.", [
+        Field("id", "integer", "Its id."),
+        Field("address", "string", "Its address masked: the host and the path, the secret at the path's end as dots and its last four "
+              "characters. The whole address never leaves the server but for the chat."),
+        Field("kind", "string", "The format its messages take, by its host: Discord's for Discord's hosts, Slack's for every other.",
+              enum=["discord", "slack"]),
+        Field("language", "string", "The language of its messages.", enum=["en", "ko"]),
+        Field("events", "[string]", "What it hears of, in the card's order: live_on (a player starts broadcasting), live_off (their "
+              "broadcast ends), chart_top (a new #1 on a song's chart, taken from another player), month_top (a new #1 of the month), "
+              "maint_on and maint_off (maintenance begins, ends)."),
+        Field("made_by", "string", "Who added it."),
+        Field("made_at", "integer", "When it was added (Unix time)."),
+        Field("last_sent", "integer", "When its last message went through (Unix time).", nullable=True),
+        Field("last_failure", "WebhookFailure", "Its last failure, while nothing went through since.", nullable=True),
+        Field("waiting", "integer", "Its messages waiting to be sent (tried again after a failure, or queued just now)."),
+        Field("given_up", "integer", "Its messages given up on, not sent within half an hour of what they tell.")]),
+    "WebhookFailure": Shape("A message a chat did not take.", [
+        Field("at", "integer", "When (Unix time)."),
+        Field("code", "string", "What happened: gone (404: no such webhook), refused (401, 403: its address is wrong or no longer "
+              "valid), bad (another 4xx: the message refused), limited (429: the chat asked to wait), server (5xx), timeout, "
+              "unreachable, redirect (the address leads elsewhere).",
+              enum=["gone", "refused", "bad", "limited", "server", "timeout", "unreachable", "redirect"]),
+        Field("status", "integer", "The chat's HTTP status; null without an answer.", nullable=True),
+        Field("message", "string", "The same in a sentence.")]),
+    "WebhookList": Shape("The webhooks.", [Field("items", "[Webhook]", "Every one, the first added first.")]),
+    "WebhookAnswer": Shape("A webhook.", [Field("webhook", "Webhook", "The webhook.")]),
+    "WebhookTest": Shape("A test message sent.", [
+        Field("sent", "boolean", "True when the chat took it."),
+        Field("status", "integer", "The chat's HTTP status; null without an answer.", nullable=True),
+        Field("code", "string", "When it did not go through, what happened, as a failure's code.", nullable=True),
+        Field("message", "string", "How it went, in a sentence.")]),
     # The owner's password on the Server page (lifecycle.py).
     "PasswordChanged": Shape("The owner's password changed.", [
         Field("changed", "boolean", "True: the new password works from now on, for the admin pages and the players' site alike."),
@@ -786,6 +817,7 @@ TAGS = [
     # The Notices page's notice on the site (notice.py).
     ("Notice", "The Notices page's notice on the site: one line at the top of every page of the players' site."),
     # The Notices page's Discord and Slack (webhooks.py).
+    ("Webhooks", "The Notices page's Discord and Slack card: the chats the server sends messages to."),
     ("Server", "The Server page: the server's state, stopping and restarting it, the repair, its data, and uninstalling it."),
     ("Players", "The Players page."),
     ("Accounts", "The Accounts page: the site's accounts."),
@@ -922,6 +954,28 @@ ROUTES = [
     Route("DELETE", "/notice", "write", "notice_clear", "Notice", "Takes the notice down.",
           "No notice to take down is no error: the answer says there is none.", answer="SiteNotice"),
     # The Notices page's Discord and Slack (webhooks.py).
+    Route("GET", "/webhooks", "read", "webhooks_list", "Webhooks", "Every chat the server sends messages to, with how its last message went.",
+          answer="WebhookList"),
+    Route("POST", "/webhooks", "write", "webhooks_add", "Webhooks", "Adds a webhook, as the card's Add does.",
+          "Its chat hears of what it takes from the next look on (every few seconds), nothing of what happened before.",
+          body=[Field("url", "string", "The webhook's address, http or https (Discord's or Slack's, or any chat that takes Slack's).",
+                      max_length=1000),
+                Field("language", "string", "The language of its messages. Left out: English.", optional=True, enum=["en", "ko"]),
+                Field("events", "[string]", "What it hears of (Webhook's events). Left out: all but live_off.", optional=True)],
+          answer="WebhookAnswer", status=201,
+          errors=[(400, "bad_url", "No address of a webhook: another scheme, a name or password in it, spaces, or too long."),
+                  (400, "bad_events", "No events, or one this server does not know."),
+                  (409, "webhook_taken", "A webhook with that address is here already.")]),
+    Route("PUT", "/webhooks/{webhook}", "write", "webhook_set", "Webhooks", "Changes what a webhook hears of and its language, as the card's Save does.",
+          body=[Field("language", "string", "The language of its messages.", optional=True, enum=["en", "ko"]),
+                Field("events", "[string]", "What it hears of.", optional=True)],
+          answer="WebhookAnswer",
+          errors=[(404, "webhook_not_found", "No such webhook."), (400, "bad_events", "No events, or one this server does not know.")]),
+    Route("DELETE", "/webhooks/{webhook}", "write", "webhook_delete", "Webhooks", "Deletes a webhook, and its messages waiting.",
+          answer="Deleted", errors=[(404, "webhook_not_found", "No such webhook.")]),
+    Route("POST", "/webhooks/{webhook}/test", "write", "webhook_test", "Webhooks", "Sends a test message now, as the card's Send a test does.",
+          "It waits for the chat's answer (five seconds at most) and says how it went; the webhook's last result is this one's.",
+          answer="WebhookTest", errors=[(404, "webhook_not_found", "No such webhook.")]),
     # The Server page (lifecycle.py): the state, stop and restart (setup.stop_server, lifecycle.restart_server), the repair,
     # the data, the uninstall.
     Route("GET", "/server", "read", "server_get", "Server", "The server as the Server page shows it: how it is installed, its address, "

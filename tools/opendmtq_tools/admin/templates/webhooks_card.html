@@ -1,0 +1,55 @@
+{# The Notices page's Discord and Slack card (webhooks.py gives hooks): every chat the server sends messages to, with what it
+   hears of, its language and how its last message went, and the form that adds one. A part the page changes in place
+   (data-region; its forms data-inplace, admin.js). An address shows masked: the server keeps it whole, and nobody reads
+   it back. No main button here: the page has one, the maintenance card's. #}
+<section class="card" id="hooks" data-region>
+  <h2>{{ t('hook.heading') }}{% if hooks.chats %} <span class="meta-inline">{{ hooks.chats|length }}</span>{% endif %}</h2>
+  <p class="lead">{{ t('hook.lead') }}</p>
+  {% if hooks.broken %}<p class="empty">{{ t('dash.db_short') }}</p>
+  {% elif hooks.chats %}
+  <ul class="hooks">
+  {% for h in hooks.chats %}
+    <li class="hook">
+      {# Which chat, by the format its address takes, and the address itself as the pages show it. #}
+      <p class="hook-head"><span class="hook-kind">{{ 'Discord' if h.kind == 'discord' else 'Slack' }}</span><code class="hook-address">{{ h.address }}</code></p>
+      {# How its last message went: a failure in red with why, one sent with when, or nothing sent yet; what still waits. #}
+      <p class="hook-state"><span class="lamp {{ 'bad' if h.last_failure else ('on' if h.last_sent else 'off') }}"></span><span>{% if h.last_failure %}{{ t('hook.failed_ago', ago=h.last_failure.ago, why=h.last_failure.message) }}{% elif h.last_sent %}{{ t('hook.sent_ago', ago=h.sent_ago) }}{% else %}{{ t('hook.never') }}{% endif %}{% if h.waiting %} · {{ t('hook.waiting', n=h.waiting) }}{% endif %}</span></p>
+      {% if h.given_up %}<p class="hook-dropped">{{ t('hook.given_up', n=h.given_up) }}</p>{% endif %}
+      {# What it hears of and its language, saved together; its test and its deletion beside them, each its own button. #}
+      <form method="post" action="{{ url_for('webhook_action', hook=h.id) }}" class="hook-form" data-inplace>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <div class="hook-events" role="group" aria-label="{{ t('hook.events') }}">
+          <span class="hook-label" aria-hidden="true">{{ t('hook.events') }}</span>
+          {% for e in hooks.events %}<label class="check"><input type="checkbox" name="event" value="{{ e }}"{% if e in h.events %} checked{% endif %}><span>{{ t(hooks.event_words[e]) }}</span></label>{% endfor %}
+        </div>
+        <div class="hook-go">
+          <label class="field">{{ t('hook.language') }} <select class="input" name="language">{% for l in hooks.languages %}<option value="{{ l }}"{% if l == h.language %} selected{% endif %}>{{ t(hooks.language_words[l]) }}</option>{% endfor %}</select></label>
+          <div class="btns">
+            <button class="btn btn-sm" name="action" value="save">{{ t('hook.save') }}</button>
+            <button class="btn btn-sm" name="action" value="test">{{ t('hook.test') }}</button>
+            <button class="btn btn-sm btn-danger" name="action" value="delete" data-ask="{{ tp('hook.delete_confirm') }}" data-yes="{{ tp('hook.delete') }}">{{ t('hook.delete') }}</button>
+          </div>
+        </div>
+        <p class="hook-made">{{ t('hook.made', who=h.made_by or 'API', ago=h.made_ago) }}</p>
+      </form>
+    </li>
+  {% endfor %}
+  </ul>
+  {% else %}<p class="empty">{{ t('hook.none') }}</p>{% endif %}
+  {# A new webhook: its address, its language (the page's as it comes) and what it hears of (all but a broadcast's end as it
+     comes). A refused one comes back with what was typed. Checked on the page as the other forms (novalidate): what is
+     wrong said under the field. #}
+  {% set typed = hooks.typed or {} %}
+  <form method="post" action="{{ url_for('webhook_new') }}" class="hook-new" novalidate data-inplace>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label class="field grow">{{ t('hook.address') }} <input class="input" name="url" type="url" required maxlength="{{ hooks.url_max }}" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" lang="en" inputmode="url" placeholder="{{ t('hook.address_placeholder') }}" value="{{ typed.url or '' }}" data-bad="{{ tp('hook.bad_url') }}"></label>
+      <label class="field">{{ t('hook.language') }} <select class="input" name="language">{% for l in hooks.languages %}<option value="{{ l }}"{% if l == (typed.language or hooks.language) %} selected{% endif %}>{{ t(hooks.language_words[l]) }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="hook-events" role="group" aria-label="{{ t('hook.events') }}">
+      <span class="hook-label" aria-hidden="true">{{ t('hook.events') }}</span>
+      {% for e in hooks.events %}<label class="check"><input type="checkbox" name="event" value="{{ e }}"{% if e in (typed.events if typed else hooks.defaults) %} checked{% endif %}><span>{{ t(hooks.event_words[e]) }}</span></label>{% endfor %}
+    </div>
+    <div class="btn-line"><button class="btn">{{ t('hook.add') }}</button></div>
+  </form>
+</section>
