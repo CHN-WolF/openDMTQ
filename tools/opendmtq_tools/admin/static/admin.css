@@ -880,10 +880,14 @@ table.data-parts .runtime { font-weight: 400; }
 .hook-go { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
 .hook-go .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .hook-new .hook-events { margin-top: 14px; }
+/* On a phone each thing to tick on a line of its own, whatever the language's words; the buttons two by two across the
+   width, Delete across under them. */
 @media (max-width: 700px) {
+  .hook-events { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .hook-label { flex-basis: auto; }
   .hook-go .field { flex: 1 1 100%; }
-  .hook-go .btns { flex: 1 1 100%; margin-left: 0; }
-  .hook-go .btns .btn { flex: 1 1 auto; }
+  .hook-go .btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 1 1 100%; margin-left: 0; }
+  .hook-go .btns .btn-danger { grid-column: 1 / -1; }
 }
 
 /* The owner's password on the Server page (server.html). */

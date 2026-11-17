@@ -989,6 +989,16 @@ async function webhookFlows(contexts) {
   listed = await hooks();
   check('a webhook added on the card is there, masked', listed.length === 3 && /••••7777/.test(listed[2].text) && /Nothing sent yet/.test(listed[2].text)
     && !(await page.content()).includes('ui-secret-7777'), JSON.stringify(listed[2] || null));
+  // The same address again: refused by the server, said in the band, and the page stays with what was typed (the form is
+  // sent in place: an answer at another address would take the page away).
+  await page.type('.hook-new input[name=url]', `${process.env.CHAT}/api/webhooks/77/ui-secret-7777`);
+  await press(page, '.hook-new button:not([type=button])');
+  check('the same webhook again is refused on the page, with what was typed', new URL(page.url()).pathname === '/opendmtq/admin/maintenance'
+    && /That webhook is here already/.test(await textOf(page, '.bar .flash, main .flash'))
+    && (await page.$eval('.hook-new input[name=url]', f => f.value).catch(() => '')).endsWith('/api/webhooks/77/ui-secret-7777')
+    && (await hooks()).length === 3, `${page.url()} ${await textOf(page, '.bar .flash, main .flash')}`);
+  // On from the page itself, wherever that answer left the browser.
+  await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
   await press(page, '#hooks .hook:last-child button[value=test]');
   check('Send a test says it was sent', /Test message sent/.test(await textOf(page, '.bar .flash, main .flash')), await textOf(page, '.bar .flash, main .flash'));
   const got = await (await fetch(`${process.env.CHAT_LOCAL}/got`)).json();
@@ -1003,14 +1013,16 @@ async function webhookFlows(contexts) {
   check('deleting a webhook asks first', /Delete this webhook/.test(await textOf(page, '#ask p')), await textOf(page, '#ask p'));
   await settle(page, () => page.click('#ask [value=yes]'));
   check('and then it is gone', (await hooks()).length === 2);
-  // The card at a phone's width, in Korean too.
-  await page.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
-  for (const lang of ['ko', 'en']) {
-    await page.setCookie({ name: 'opendmtq_lang', value: lang, url: ADMIN });
-    await page.goto(`${A}/maintenance#hooks`, { waitUntil: 'domcontentloaded' });
-    await noFindings(page, `the Discord and Slack card on a phone (${lang})`);
-    await page.$eval('#hooks', e => e.scrollIntoView());
-    await page.screenshot({ path: path.join(OUT, 'shots', `flows-hooks-${lang}-360.jpg`), type: 'jpeg', quality: 80, fullPage: true });
+  // The card at a laptop's width and a phone's, in both languages: measured, and its picture at its real size.
+  for (const [width, height] of [[1280, 900], [360, 740]]) {
+    await page.setViewport({ width, height, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
+    for (const lang of ['ko', 'en']) {
+      await page.setCookie({ name: 'opendmtq_lang', value: lang, url: ADMIN });
+      await page.goto(`${A}/maintenance#hooks`, { waitUntil: 'domcontentloaded' });
+      await noFindings(page, `the Discord and Slack card at ${width} px (${lang})`);
+      const card = await page.$('#hooks');
+      await card.screenshot({ path: path.join(OUT, 'shots', `flows-hooks-card-${lang}-${width}.png`) });
+    }
   }
   check('the card in Korean says why in Korean', /채팅방에 이 웹후크가 없습니다/.test(await (async () => {
     await page.setCookie({ name: 'opendmtq_lang', value: 'ko', url: ADMIN });
