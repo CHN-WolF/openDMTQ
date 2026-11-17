@@ -142,6 +142,24 @@ class OwnerOnSiteTest(unittest.TestCase):
                 whats = [json.loads(line)["what"] for line in f]
             self.assertIn("login:throttled", whats)
 
+    def test_no_header_lets_a_visit_past_the_overall_limit(self):
+        # Through the server (the test client's address as the server's), wrong passwords from enough addresses together
+        # hold every sign-in up: also one that says it is the server PC's own (X-Server-PC, once believed from the server),
+        # with the right password.
+        with Install() as inst, mock.patch.object(admin.auth, "server_addresses", lambda: {"127.0.0.1"}):
+            try:
+                for n in range(admin.auth.OVERALL):
+                    inst.client.post("/opendmtq/admin/login", data={"name": "admin", "password": "wrong"},
+                                     headers={"X-Real-IP": "198.51.100.%d" % n})
+                r = inst.client.post("/opendmtq/admin/login", data={"name": "admin", "password": "pw"},
+                                     headers={"X-Real-IP": "192.0.2.10", "X-Server-PC": "yes"})
+            finally:
+                # The throttle is the process's: the other tests sign in from the same address.
+                admin.auth._failures.clear()
+                admin.auth._all_failures.clear()
+            self.assertEqual(r.status_code, 200)
+            self.assertIn(admin.strings.STRINGS["en"]["login.throttled"], r.get_data(as_text=True))
+
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class SessionsOverRestartTest(unittest.TestCase):

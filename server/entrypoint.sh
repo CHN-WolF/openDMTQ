@@ -53,15 +53,24 @@ esac
 export OPENDMTQ_NAME OPENDMTQ_PORT
 
 # Only the server PC may use the admin pages and the API on this door (written into the doors' configuration); anyone
-# else is told where they open.
+# else is told where they open. A visit with a header that a proxy adds to say whom it passes on is one from elsewhere
+# that a proxy on the server PC passes on, whatever address it comes from: never the server PC's own. (A browser sends
+# none of these; the doors' own X-Forwarded-Proto is set after this rule is checked.)
+NOT_FORWARDED='-z %{HTTP:X-Forwarded-For} && -z %{HTTP:Forwarded} && -z %{HTTP:X-Real-IP} && -z %{HTTP:X-Forwarded-Host} && -z %{HTTP:X-Forwarded-Proto} && -z %{HTTP:Via}'
 local_only() {
     cat <<CONF
 <LocationMatch "^/(opendmtq/)?admin(/|\$)">
-    Require ip $LOCAL_FROM
+    <RequireAll>
+        Require ip $LOCAL_FROM
+        Require expr "$NOT_FORWARDED"
+    </RequireAll>
     ErrorDocument 403 "The admin pages open on the server PC: http://localhost:$OPENDMTQ_PORT/opendmtq/admin/"
 </LocationMatch>
 <LocationMatch "^/opendmtq/api(/|\$)">
-    Require ip $LOCAL_FROM
+    <RequireAll>
+        Require ip $LOCAL_FROM
+        Require expr "$NOT_FORWARDED"
+    </RequireAll>
 </LocationMatch>
 CONF
 }
@@ -93,10 +102,8 @@ if [ -n "${ADMIN_URL:-}" ]; then
     cat > "$PASS" <<CONF
 # The visitor's real address for the admin's sign-in throttle; any client-sent value is replaced.
 RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"
-# Whether the visit is the server PC's own (its gateway, see LOCAL_FROM): such a visit is never held up by guesses from
-# elsewhere. Whatever the client sent is dropped first.
+# Nothing behind the server takes a visit for the server PC's by a header: one a visitor sends with that name goes.
 RequestHeader unset X-Server-PC
-$( [ -n "$LOCAL_FROM" ] && echo "RequestHeader set X-Server-PC yes \"expr=-R '$LOCAL_FROM'\"" )
 # Sign-in forms are tiny; uploads (songs, backups) go to their own pages.
 <LocationMatch "^/(opendmtq/)?admin/login">
     LimitRequestBody 8192

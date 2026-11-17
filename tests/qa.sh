@@ -106,6 +106,8 @@ step shell shell_tests
 step tools tools_tests
 step cli cli_tests
 step client client_tests
+# Who reaches the admin pages and the API on an exposed server's one port, proxies on the server PC among them.
+step access tests/access/run.sh
 # The game server's contract with the game, on stand-in game files: every reply the client reads, and its quirks.
 step game tests/game/protocol.sh
 # The server on the real game files: the game's own requests, broadcasts, recordings, and a real video in Chromium.

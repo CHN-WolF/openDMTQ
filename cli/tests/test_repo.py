@@ -511,6 +511,9 @@ class HostAdminConfTest(unittest.TestCase):
             self.assertIn('<LocationMatch "^/(opendmtq/)?admin(/|$)">', conf)
             self.assertIn('<LocationMatch "^/opendmtq/api(/|$)">', conf)
             self.assertEqual(conf.count("Require local"), 2, values)
+            # Never a visit a proxy passes on, though it comes from loopback; and no header marks the server PC's own.
+            self.assertEqual(conf.count('Require expr "-z %{HTTP:X-Forwarded-For} && -z %{HTTP:Forwarded}'), 2, values)
+            self.assertNotIn("X-Server-PC yes", conf)
             self.assertIn("http://localhost:8790/opendmtq/admin/", conf)
             self.assertNotIn("18791/opendmtq/admin/\"", conf)
 

@@ -124,6 +124,12 @@ def httpd_conf(values, found):
     return "\n".join(lines) + "\n"
 
 
+# An Apache expression true for a visit that carries none of the headers a proxy adds to say whom it passes on (a browser
+# sends none of them), as the server image's doors have it (server/entrypoint.sh).
+NOT_FORWARDED = ("-z %{HTTP:X-Forwarded-For} && -z %{HTTP:Forwarded} && -z %{HTTP:X-Real-IP} && "
+                 "-z %{HTTP:X-Forwarded-Host} && -z %{HTTP:X-Forwarded-Proto} && -z %{HTTP:Via}")
+
+
 def admin_conf(values):
     """The admin pages (/opendmtq/admin) and their API (/opendmtq/api) on the server's one port, passed to the admin
     service on loopback: from anywhere on a local network address; on an internet one (or with ADMIN_ON_PUBLIC_PORT=no)
@@ -133,10 +139,8 @@ def admin_conf(values):
     lines = [
         # The visitor's real address for the sign-in throttle; whatever the visitor sent is replaced.
         'RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"',
-        # Whether the visit is the server PC's own (loopback): never held up by guesses from elsewhere. Whatever the client
-        # sent is dropped first.
+        # Nothing behind the server takes a visit for the server PC's by a header: one a visitor sends with that name goes.
         "RequestHeader unset X-Server-PC",
-        "RequestHeader set X-Server-PC yes \"expr=-R '127.0.0.0/8'\"",
         # Sign-in forms are tiny; uploads (songs, backups) go to their own pages.
         '<LocationMatch "^/(opendmtq/)?admin/login">',
         "    LimitRequestBody 8192",
@@ -151,14 +155,18 @@ def admin_conf(values):
         f'ProxyPassReverse "/opendmtq/api" "{target}/opendmtq/api"',
     ]
     if not (values.get("ADMIN_ON_PUBLIC_PORT", "yes") == "yes" and env.is_lan_only(values["PUBLIC_HOST"])):
-        # The server PC only (Apache's "local": loopback), on this same port; anyone else is told where they open.
+        # The server PC only (Apache's "local": loopback), on this same port; anyone else is told where they open. A
+        # visit with a header that a proxy adds to say whom it passes on comes from elsewhere through a proxy on the
+        # server PC, though from loopback: never the server PC's own.
+        server_pc = ["    <RequireAll>", "        Require local", f'        Require expr "{NOT_FORWARDED}"',
+                     "    </RequireAll>"]
         lines += [
             '<LocationMatch "^/(opendmtq/)?admin(/|$)">',
-            "    Require local",
+            *server_pc,
             f'    ErrorDocument 403 "The admin pages open on the server PC: http://localhost:{port}/opendmtq/admin/"',
             "</LocationMatch>",
             '<LocationMatch "^/opendmtq/api(/|$)">',
-            "    Require local",
+            *server_pc,
             f'    ErrorDocument 403 "The API answers on the server PC: http://localhost:{port}/opendmtq/api/v1/"',
             "</LocationMatch>",
         ]

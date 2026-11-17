@@ -218,12 +218,11 @@ def _prune(now):
 
 def throttled(ip):
     """True when this address, or everyone together, failed too often recently. The overall limit
-    only counts for visits through the game server: on this service's own port (the server PC, by
-    default) the owner is not locked out by guesses from the internet."""
+    only counts for visits through the game server, the server PC's own among them: on this
+    service's own port (Kubernetes' port-forward) the owner is not locked out by guesses from the
+    internet. No header a visit brings exempts it."""
     now = time.time()
-    # Through the server, but the server PC's own visit (the server says so in X-Server-PC, which it always sets itself):
-    # counted as on this service's own port.
-    through_server = request.remote_addr in server_addresses() and request.headers.get("X-Server-PC") != "yes"
+    through_server = request.remote_addr in server_addresses()
     with _failures_lock:
         _prune(now)
         return len(_failures.get(ip, [])) >= PER_IP or (through_server and len(_all_failures) >= OVERALL)
