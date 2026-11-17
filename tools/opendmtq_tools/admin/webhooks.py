@@ -385,8 +385,11 @@ def words_of(language, kind, data):
             else say("hook.msg_live_on", name=data["name"])
         return say("hook.msg_live_on_title"), sentence, say("hook.link_live"), f"/opendmtq/live.php?p={int(data['player'])}"
     if kind == "live_off":
-        return (say("hook.msg_live_off_title"), say("hook.msg_live_off", name=data["name"], length=length_words(language, data.get("seconds", 0))),
-                say("hook.link_replay"), f"/opendmtq/live.php?r={int(data['player'])}-{int(data['rec'])}")
+        # Watched again from its recording; one with none leads to the player on the live page, with their past broadcasts.
+        link = (say("hook.link_replay"), f"/opendmtq/live.php?r={int(data['player'])}-{int(data['rec'])}") if data.get("rec") \
+            else (say("hook.link_live"), f"/opendmtq/live.php?p={int(data['player'])}")
+        return (say("hook.msg_live_off_title"), say("hook.msg_live_off", name=data["name"], length=length_words(language, data.get("seconds", 0))))\
+            + link
     if kind == "chart_top":
         return (say("hook.msg_chart_title"),
                 say("hook.msg_chart", name=data["name"], song=data["song"], chart=data["chart"], score=number(data["score"]),
@@ -552,9 +555,11 @@ ALL_TOPS = f"""SELECT pattern_id, user_id, score, judgement FROM (
                 WHERE place = 1"""
 
 
-def on_air(con):
-    """Who is on air now, as the site shows it (site.live_now()): {guid: {"rec", "name", "song", "chart", "began"}}, rec being
-    the recording's id (the moment it began), from the stream's own file."""
+def on_air(con, now):
+    """Who is on air now, as the site shows it (site.live_now()): {guid: {"rec", "name", "song", "chart", "began"}}. rec is
+    the recording the server makes of it now (the moment it began), from the stream's own file, or 0 while there is none:
+    the server holds a new one back for a while after a quick end and start, and goes on unrecorded when it cannot make
+    one. began: when the site counts the broadcast from (its recording's start), or now without a recording."""
     out = {}
     for p in site.live_now(con):
         guid = int(p["player"])
@@ -563,9 +568,10 @@ def on_air(con):
                 rec = int(json.load(f).get("rec") or 0)
         except (OSError, ValueError, TypeError, AttributeError):
             rec = 0
-        # Without the recording's id, the start of this look's broadcast stands in for it.
-        began = int(time.time()) - int(p.get("seconds") or 0)
-        out[guid] = {"rec": rec or began, "name": p["name"], "song": p.get("song"), "chart": p.get("chart"), "began": began}
+        # The site counts the broadcast's seconds from its recording; without one it says none.
+        seconds = int(p.get("seconds") or 0)
+        out[guid] = {"rec": rec, "name": p["name"], "song": p.get("song"), "chart": p.get("chart"),
+                     "began": int(now) - seconds if seconds else int(now)}
     return out
 
 
@@ -589,17 +595,23 @@ def present(con, now):
     cursor = con.execute("SELECT COALESCE(MAX(id), 0) FROM PlayLog").fetchone()[0] if has_playlog(con) else 0
     start = site.month_start()
     board = month_leader(con, start)
-    air = {str(g): dict(p, seen=int(now)) for g, p in on_air(con).items()}
+    air = {str(g): broadcast(p, now) for g, p in on_air(con, now).items()}
     tops = [tuple(r) for r in con.execute(ALL_TOPS, (core.CHECK_UDID,))]
     state = {"rev": 0, "cursor": int(cursor), "month": {"start": start, "leader": board[0]["id"] if board else None},
              "air": air, "maint": maintenance_now()}
     return state, tops
 
 
+def broadcast(p, now):
+    """A broadcast as the loop keeps it, from the first look that saw it on air (on_air()'s p): when it began, its first
+    recording (0 until there is one), who, and when a look last saw it on air."""
+    return {"began": int(p["began"]), "rec": int(p["rec"]), "name": p["name"], "seen": int(now)}
+
+
 def ended(guid, was, now):
-    """A broadcast's end as its message tells it: who, the recording (to watch again), and how long it ran, from its start
-    to the last look that saw it on air."""
-    return {"player": int(guid), "name": was["name"], "rec": was["rec"],
+    """A broadcast's end as its message tells it: who, its first recording (to watch it again; 0 for none), and how long it
+    ran, from its start to the last look that saw it on air."""
+    return {"player": int(guid), "name": was["name"], "rec": int(was.get("rec") or 0),
             "seconds": max(0, int(was.get("seen", now)) - int(was.get("began", now)))}
 
 
@@ -663,23 +675,28 @@ def look(con, state, now):
                            {"player": leader["id"], "name": leader["name"], "score": leader["score"], "start": start, "first": known is None,
                             "before": before["name"] if before else None, "before_score": before["score"] if before else None}))
         new["month"] = {"start": start, "leader": leader["id"] if leader else known}
-    # Who is on air: a broadcast that began since the last look starts; one gone for OFF_AIR seconds has ended.
-    air_now = on_air(con)
+    # Who is on air. A broadcast is a player on air, from the first look that sees them until they have been off air for
+    # OFF_AIR seconds: whatever its recordings do meanwhile (none for a while, a new one each hour, a new one after a short
+    # drop), it is one start and one end. Its key is when it began, as the look that first saw it kept it.
+    air_now = on_air(con, now)
     air = new.get("air", {})
     for guid, p in air_now.items():
         was = air.get(str(guid))
-        if was and was.get("rec") != p["rec"]:
-            # A new recording right after another: the one before ended.
-            events.append(("live_off", f"live_off:{guid}:{was['rec']}", ended(guid, was, now)))
-        if not was or was.get("rec") != p["rec"]:
-            events.append(("live_on", f"live_on:{guid}:{p['rec']}", {"player": guid, "name": p["name"], "song": p["song"],
-                                                                      "chart": p["chart"], "rec": p["rec"]}))
-        # Seen now: its end counts from the last look that saw it.
-        air[str(guid)] = dict(p, seen=int(now))
+        if was is None:
+            started = air[str(guid)] = broadcast(p, now)
+            events.append(("live_on", f"live_on:{guid}:{started['began']}", {"player": guid, "name": p["name"], "song": p["song"],
+                                                                             "chart": p["chart"], "rec": p["rec"]}))
+            continue
+        # The same broadcast, seen now: its end counts from the last look that saw it. Its first recording is the one it
+        # is watched again from, kept once there is one.
+        was.update(seen=int(now), name=p["name"])
+        if not was.get("rec") and p["rec"]:
+            was["rec"] = p["rec"]
     for guid in list(air):
         # Off air for OFF_AIR seconds: ended. One on air at the loop's first look ends too, though its start was before.
         if int(guid) not in air_now and now - int(air[guid].get("seen", now)) >= OFF_AIR:
-            events.append(("live_off", f"live_off:{guid}:{air[guid]['rec']}", ended(int(guid), air.pop(guid), now)))
+            was = air.pop(guid)
+            events.append(("live_off", f"live_off:{guid}:{was['began']}", ended(int(guid), was, now)))
     new["air"] = air
     # The maintenance notice turned on or off since the last look.
     maint = maintenance_now()

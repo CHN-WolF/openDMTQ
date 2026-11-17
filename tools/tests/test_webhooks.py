@@ -332,6 +332,42 @@ class RulesTest(unittest.TestCase):
             self.assertEqual((k1, on["name"], on["rec"]), ("live_on", "Sena", 1793000000))
             self.assertEqual((k2, off["rec"]), ("live_off", 1793000000))
 
+    def test_one_broadcast_is_one_start_and_one_end_whatever_its_recordings(self):
+        with Server() as inst:
+            inst.hook(events=["live_on", "live_off"])
+            now = time.time()
+            webhooks.detect(now)
+            # On air without a recording (the server's hold after a quick end and start, or one it could not open): one
+            # start, not one at every look.
+            for i in range(4):
+                inst.on_air(7, 0)
+                webhooks.detect(now + 5 * (i + 1))
+            # Its recording opens, then the next hour's: the same broadcast still.
+            inst.on_air(7, 1793000000)
+            webhooks.detect(now + 25)
+            inst.on_air(7, 1793003600)
+            webhooks.detect(now + 30)
+            self.assertEqual([k for _, k, _, _ in inst.queued()], ["live_on"])
+            # Ended, and on again within the minute: still the one broadcast.
+            inst.on_air(7, 1793003600, on=False)
+            webhooks.detect(now + 50)
+            inst.on_air(7, 1793007200)
+            webhooks.detect(now + 60)
+            self.assertEqual([k for _, k, _, _ in inst.queued()], ["live_on"])
+            # Off air for a minute: one end, watched again from its first recording.
+            inst.on_air(7, 1793007200, on=False)
+            webhooks.detect(now + 130)
+            self.assertEqual([(k, d.get("rec")) for _, k, d, _ in inst.queued()], [("live_on", 0), ("live_off", 1793000000)])
+            # On again after that: a new broadcast.
+            inst.on_air(7, 1793010000)
+            webhooks.detect(now + 140)
+            self.assertEqual([k for _, k, _, _ in inst.queued()], ["live_on", "live_off", "live_on"])
+
+    def test_an_unrecorded_broadcasts_end_leads_to_the_players_live_page(self):
+        with mock.patch.multiple(admin.core, PUBLIC_HOST="192.168.1.10:8791", server_health=lambda fresh=False: None):
+            body = webhooks.payload("discord", "en", "live_off", {"player": 7, "name": "Sena", "rec": 0, "seconds": 300}, 0)
+        self.assertEqual(body["embeds"][0]["url"], "http://192.168.1.10:8791/opendmtq/live.php?p=7")
+
     def test_maintenance_on_and_off(self):
         with Server() as inst:
             inst.hook()
