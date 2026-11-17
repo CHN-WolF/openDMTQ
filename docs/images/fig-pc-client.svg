@@ -6,7 +6,7 @@
 <text x="14" y="22" font-size="13" font-weight="600" fill="#aeb8c3" text-anchor="start" data-box="14,596">On a Windows PC</text>
 <path d="M14,40 H584 L596,52 V112 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="28" y="71.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,582">Installer</text>
-<text x="28" y="90.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">OpenDMTQ-Setup.exe, set up for its server: for one Windows user, no administrator</text>
+<text x="28" y="90.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">From the server's site, set up for it: for one Windows user, no administrator rights</text>
 <path d="M664,40 H874 L886,52 V112 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="678" y="62.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">Players' site</text>
 <text x="678" y="81.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">/windows: the installer,</text>

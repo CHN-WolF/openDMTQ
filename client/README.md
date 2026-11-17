@@ -1,7 +1,8 @@
 # The PC client
 
 The installer (`opendmtq-pc-client-<version>-windows-x64-setup.exe` in a release,
-`opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe` from a server's site; `OpenDMTQ-Setup.exe` as built)
+`opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe` from a server's site; the build's own file, which the
+release names so, is `OpenDMTQ-Setup.exe`)
 installs the launcher and the player for Windows for one Windows user, with no administrator rights. The launcher
 connects to an OpenDMTQ server, signs in with an account its owner made, downloads that server's app, sets the picture
 and the sound up for the PC, and starts the game in the player. An installer downloaded from a server's site has that

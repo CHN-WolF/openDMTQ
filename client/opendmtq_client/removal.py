@@ -402,7 +402,7 @@ def can_uninstall(root=None):
     Settings, Apps names, else this launcher's own); RemovalError when OpenDMTQ-Setup.exe did not install it."""
     root = root or installed.root()
     if not root or not installed.updater(root):
-        raise RemovalError("uninstalling works in the launcher installed by OpenDMTQ-Setup.exe",
+        raise RemovalError("uninstalling works in the launcher the installer put on this PC",
                            "error.uninstall.not_installed")
     return root
 

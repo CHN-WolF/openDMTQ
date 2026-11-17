@@ -588,7 +588,8 @@ class Maintenance(Folder):
         os.environ.pop("OPENDMTQ_INSTALL_ROOT")
         code, said = self.run_main(["--repair"])
         self.assertEqual(code, 2)
-        self.assertIn("installed by OpenDMTQ-Setup.exe", said)
+        # The installer as players have it, never the build's own file name.
+        self.assertIn("in the launcher the installer put on this PC", said)
 
     def test_clear_game_data_asks_first(self):
         code, said = self.run_main(["--clear-game-data"], stdin="n\n")
@@ -744,7 +745,7 @@ class Maintenance(Folder):
         os.environ.pop("OPENDMTQ_INSTALL_ROOT")
         code, said = self.run_main(["--uninstall", "--yes"])
         self.assertEqual(code, 2)
-        self.assertIn("installed by OpenDMTQ-Setup.exe", said)
+        self.assertIn("in the launcher the installer put on this PC", said)
 
     def test_a_bad_setting_anywhere_changes_none(self):
         # Every --set is checked before any is applied, as window= is: a refusal in the second leaves the first as it

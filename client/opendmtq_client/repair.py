@@ -75,7 +75,7 @@ def package_path(root):
         found = []
     path = os.path.join(folder, found[0]) if found else None
     if not path or not os.path.isfile(path):
-        raise RepairError("the installed package is not on this PC (run OpenDMTQ-Setup.exe again)",
+        raise RepairError("the installed package is not on this PC (run the installer again)",
                           "error.repair.no_package")
     return path
 
@@ -169,7 +169,7 @@ def run(root=None, progress=None):
     """
     root = root or installed.root()
     if not root:
-        raise RepairError("repair works in the launcher installed by OpenDMTQ-Setup.exe", "error.repair.not_installed")
+        raise RepairError("repair works in the launcher the installer put on this PC", "error.repair.not_installed")
     path = package_path(root)
     _sweep(root)
     missing, changed, failed, checked = [], [], [], 0
@@ -200,7 +200,7 @@ def run(root=None, progress=None):
     except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as e:
         # The package itself is damaged or cannot be opened: only the installer has another copy.
         log.warning("the installed package cannot be read: %s", e)
-        raise RepairError("the installed package cannot be read (run OpenDMTQ-Setup.exe again)",
+        raise RepairError("the installed package cannot be read (run the installer again)",
                           "error.repair.package") from e
     log.info("repair: %d files compared, %d missing, %d changed, %d not put back", checked, len(missing),
              len(changed), len(failed))

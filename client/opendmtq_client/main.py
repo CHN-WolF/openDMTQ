@@ -284,7 +284,7 @@ def _update(yes):
     server = result.source is not None and result.source.kind == "server"
     source = result.source.label() if result.source is not None else ""
     if result.kind != "available":
-        said = {"not_installed": "Updates work in the launcher installed by OpenDMTQ-Setup.exe.",
+        said = {"not_installed": "Updates work in the launcher the installer put on this PC.",
                 "no_source": "No update address is set for this build.",
                 "uptodate": ("This is the newest version for %s (%s)." % (source, updates.shown_version()) if server
                              else "This is the newest version (%s)." % updates.shown_version()),
@@ -360,7 +360,7 @@ def _repair():
         for name in names:
             _say("  %s: %s%s" % (kind, name, " (not put back)" if name in result.failed else ""))
     if result.failed:
-        _say("Put back %d files; %d could not be. Run OpenDMTQ-Setup.exe again and choose Repair."
+        _say("Put back %d files; %d could not be. Run the installer again and choose Repair."
              % (result.restored, len(result.failed)), error=True)
         return 1
     if result.restored:

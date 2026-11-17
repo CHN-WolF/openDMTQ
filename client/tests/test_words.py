@@ -205,6 +205,13 @@ class Wording(unittest.TestCase):
             for text in pair:
                 self.assertNotRegex(text, r"F11|Alt\+Enter", key)
 
+    def test_no_file_name_a_player_never_has(self):
+        # Players get the installer as the site or a release names it (opendmtq-pc-client-...-setup....exe): the words
+        # say "the installer", never the build's own OpenDMTQ-Setup.exe.
+        for key, pair in i18n.TEXT.items():
+            for text in pair:
+                self.assertNotIn("OpenDMTQ-Setup", text, key)
+
     def test_the_bar_over_the_game_is_said_as_it_is(self):
         # The bar holds Sound, minimise, full screen and X, and comes down by the pointer, a finger or the mouse drawing
         # it down: each line about it names the Sound button, in both languages; the PC's needs name the keyboard too.
