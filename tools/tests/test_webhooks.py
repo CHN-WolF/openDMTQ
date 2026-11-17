@@ -170,6 +170,26 @@ class AddressTest(unittest.TestCase):
         for url in ("https://hooks.slack.com/services/T/B/x", "https://chat.example/hooks/abc", "https://discord.com.example/x"):
             self.assertEqual(webhooks.kind_of(url), "slack", url)
 
+    def test_discords_own_endings(self):
+        # Discord's webhook takes Slack's messages under /slack (and GitHub's under /github): the token before them stays
+        # masked, and /slack gets Slack's format.
+        url = "https://discord.com/api/webhooks/123456/TOKENsecretTOKEN/slack"
+        self.assertEqual(webhooks.masked(url), "discord.com/api/webhooks/123456/••••OKEN/slack")
+        self.assertEqual(webhooks.kind_of(url), "slack")
+        self.assertEqual(webhooks.masked("https://discord.com/api/webhooks/123456/TOKENsecretTOKEN?thread_id=99"),
+                         "discord.com/api/webhooks/123456/••••OKEN?••••d=99")
+        with admin.app.test_request_context():
+            with self.assertRaises(webhooks.Refused) as e:
+                webhooks.check_url("https://discord.com/api/webhooks/123456/TOKENsecretTOKEN/github")
+        self.assertEqual(e.exception.code, "bad_url")
+
+    def test_another_chats_address_shows_only_its_first_part(self):
+        # Where the secret is in another chat's address is not known: all of it past its first part is masked.
+        self.assertEqual(webhooks.masked("https://chat.example/hooks/LONGSECRETVALUE/abc"), "chat.example/hooks/••••/abc")
+        self.assertEqual(webhooks.masked("https://chat.example/LONGSECRETVALUE"), "chat.example/••••ALUE")
+        for url in ("https://chat.example/hooks/LONGSECRETVALUE/abc", "https://chat.example/LONGSECRETVALUE"):
+            self.assertNotIn("SECRET", webhooks.masked(url))
+
     def test_shown_masked_never_whole(self):
         cases = {"https://discord.com/api/webhooks/1234/secret-part-9876": "discord.com/api/webhooks/1234/••••9876",
                  "https://hooks.slack.com/services/T01/B02/xyzsecret5432": "hooks.slack.com/services/T01/B02/••••5432",

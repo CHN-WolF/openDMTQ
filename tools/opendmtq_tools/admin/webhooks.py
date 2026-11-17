@@ -139,15 +139,30 @@ def has_table(con):
 
 # ------------------------------------------------------------------------------ an address
 
+# The endings Discord gives a webhook's address for other services' messages (its token stays before them): /slack takes
+# Slack's format, /github GitHub's own events, which these messages are not.
+DISCORD_ENDINGS = ("slack", "github")
+
+
+def pieces_of(url):
+    """An address's host (with a port it names) and its path's parts."""
+    parts = urllib.parse.urlsplit(url)
+    host = (parts.hostname or "") + (f":{parts.port}" if parts.port else "")
+    return host, [p for p in parts.path.split("/") if p]
+
+
 def kind_of(url):
-    """The format a webhook's address takes: Discord's for Discord's hosts, Slack's for every other."""
+    """The format a webhook's address takes: Discord's for Discord's hosts, Slack's for every other, and for a Discord
+    address that ends in /slack (Discord takes Slack's messages there)."""
     host = (urllib.parse.urlsplit(url).hostname or "").lower()
-    return "discord" if host in DISCORD_HOSTS else "slack"
+    if host in DISCORD_HOSTS:
+        return "slack" if pieces_of(url)[1][-1:] == ["slack"] else "discord"
+    return "slack"
 
 
 def check_url(raw):
     """An address as typed, as a webhook's: http or https, a host, no name or password in it, no spaces or other unseen
-    characters, and not longer than URL_MAX. Refused (400 bad_url) otherwise."""
+    characters, not longer than URL_MAX, and not Discord's ending for GitHub's events. Refused (400 bad_url) otherwise."""
     url = (raw or "").strip()
     try:
         parts = urllib.parse.urlsplit(url)
@@ -159,25 +174,36 @@ def check_url(raw):
     if (not url or len(url) > URL_MAX or not url.isprintable() or re.search(r"\s", url) or parts.scheme.lower() not in ("http", "https")
             or not parts.hostname or parts.username is not None or parts.password is not None):
         raise Refused(400, "bad_url", t("hook.bad_url"))
+    # Discord's address for GitHub's events takes nothing else.
+    if (parts.hostname or "").lower() in DISCORD_HOSTS and pieces_of(url)[1][-1:] == ["github"]:
+        raise Refused(400, "bad_url", t("hook.github"))
     return url
 
 
 def masked(url):
-    """An address as the pages show it: its host and path, the last part of the path (the secret both Discord's and Slack's
-    keep there) as dots and its last four characters; a query, which can hold a key too, the same way."""
+    """An address as the pages show it, its secret masked (dots, then its last four characters): Discord's token, after the
+    webhook's id (an ending of Discord's own after it stays as it is); the last part of Slack's; of any other chat's, all
+    of its path past its first part (where its secret is is not known), or its one part. A query, which can hold a key too,
+    the same way."""
     parts = urllib.parse.urlsplit(url)
-    host = parts.hostname or ""
-    # A port the address names, as it names it.
-    if parts.port:
-        host += f":{parts.port}"
-    pieces = [p for p in parts.path.split("/") if p]
-    # The last piece is the secret: dots, then its end.
-    if pieces:
-        pieces[-1] = "••••" + pieces[-1][-4:]
-    shown = host + ("/" + "/".join(pieces) if pieces else "")
+    host, pieces = pieces_of(url)
+    hostname = (parts.hostname or "").lower()
+    if hostname in DISCORD_HOSTS and len(pieces) >= 4 and pieces[:2] == ["api", "webhooks"]:
+        # api/webhooks/<id>/<token>[/slack]: the token masked, the rest as it is.
+        ending = pieces[4:] if pieces[4:] and pieces[4] in DISCORD_ENDINGS else []
+        shown = pieces[:3] + ["••••" + pieces[3][-4:]] + ending
+    elif hostname == "hooks.slack.com" and pieces:
+        # services/<team>/<bot>/<secret>: the last part masked.
+        shown = pieces[:-1] + ["••••" + pieces[-1][-4:]]
+    elif len(pieces) >= 2:
+        # Its first part, then the rest masked as one.
+        shown = pieces[:1] + ["••••" + "/".join(pieces[1:])[-4:]]
+    else:
+        shown = ["••••" + pieces[0][-4:]] if pieces else []
+    out = host + ("/" + "/".join(shown) if shown else "")
     if parts.query:
-        shown += "?••••" + parts.query[-4:]
-    return shown
+        out += "?••••" + parts.query[-4:]
+    return out
 
 
 def check_events(events):
