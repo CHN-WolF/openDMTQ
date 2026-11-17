@@ -10,7 +10,7 @@ import os
 import threading
 import tkinter as tk
 
-from opendmtq_client import actions, apps, dialogs, displays, i18n, keys, maintenance, player, theme, updates, widgets
+from opendmtq_client import actions, apps, art, dialogs, displays, i18n, keys, maintenance, player, theme, updates, widgets
 from opendmtq_client import server as srv
 from opendmtq_client import state as st
 from opendmtq_client import values as choices
@@ -58,8 +58,11 @@ class Sections:
     that came (a server connected, a sign-in, a download done, a game that ended) changes its own card, never the page
     drawn again (client/tests/ui/flicker.py)."""
 
-    def __init__(self, parent, ui, after=None):
+    def __init__(self, parent, ui, after=None, first_gap=0):
         self.parent, self.ui, self.after = parent, ui, after
+        # The gap above the first card on show (logical pixels): 0 where the cards start the page, a card's gap where
+        # they come under something else of it (PLAY's records under its two columns).
+        self.first_gap = first_gap
         # Each card: its holder frame (in the page's order), its key, its builder, the key it was made for, and the
         # gap above it now.
         self.items = []
@@ -147,7 +150,7 @@ class Sections:
             holder = item["holder"]
             if not holder.winfo_manager():
                 continue
-            wanted = 0 if first else self.ui.px(CARD_GAP)
+            wanted = self.ui.px(self.first_gap) if first else self.ui.px(CARD_GAP)
             if item["gap"] != wanted:
                 holder.pack_configure(pady=(wanted, 0))
                 item["gap"] = wanted
@@ -191,21 +194,22 @@ def rows_that_come(page):
     return [words for key in ROWS_THAT_COME.get(page, ()) for words in i18n.TEXT[key] if words]
 
 
-def _columns(parent, ui, weights=(3, 2), gap_above=0):
+def _columns(parent, ui, weights=(3, 2), gap_above=0, bg=theme.BG, stack_below=None):
     """Cards side by side: a frame for each column, as wide as its share of the row less the gaps; one under another
     when the row is narrower than STACK_BELOW (the smallest window, beside the menu column). The shares come from the
     row's own width alone: a grid that sized them from what they hold would loop for ever, as the text in each wraps to
-    the width it is given and so asks for what it got (one pixel going back and forth between the columns)."""
-    row = tk.Frame(parent, bg=theme.BG)
+    the width it is given and so asks for what it got (one pixel going back and forth between the columns). `bg`: the
+    page's field, or a card's deck for lists side by side in a card; `stack_below` another width for those."""
+    row = tk.Frame(parent, bg=bg)
     row.pack(fill="x", pady=(ui.px(gap_above), 0))
     columns = []
     for i in range(len(weights)):
-        column = tk.Frame(row, bg=theme.BG)
+        column = tk.Frame(row, bg=bg)
         columns.append(column)
     laid = {"stacked": None}
 
     def fit(event):
-        stacked = event.width < ui.px(STACK_BELOW)
+        stacked = event.width < ui.px(stack_below or STACK_BELOW)
         if stacked != laid["stacked"]:
             # Laid out again only when the arrangement changes: the cells' places, then their widths below.
             laid["stacked"] = stacked
@@ -256,6 +260,10 @@ def _server_card(app, parent):
     signed = app.state.signed_in(server)
     if not signed:
         main_button(app, line, w("online.signin"), lambda: app.nav_go("online")).pack(side="right", anchor="n")
+    else:
+        # The player's page on the site in the PC's browser, signed in already by a one-time link the server makes for
+        # this sign-in (app.open_my_page): plain, as PLAY is the screen's main action.
+        widgets.Button(line, ui, w("play.mypage"), app.open_my_page).pack(side="right", anchor="n")
     words = tk.Frame(line, bg=theme.PANEL)
     words.pack(side="left", fill="x", expand=True)
     if st.has_own_name(server):
@@ -293,11 +301,16 @@ def build_play(app, parent):
              lambda holder: how_to_play(app, _card(holder, ui, w("play.how")).body))
     side.add(lambda: repr(sorted((app.state.last_session or {}).items())), lambda holder: _last_card(app, holder),
              expand=True)
-    app.page_follow = lambda: (top.refresh(), side.refresh())
+    # Under the columns, the signed-in player's records on the server, made when they come (app.refresh_records) and
+    # again when they change; none while not signed in.
+    below = Sections(parent, ui, first_gap=CARD_GAP)
+    below.add(lambda: records_key(app), lambda holder: _records_card(app, holder))
+    app.page_follow = lambda: (top.refresh(), side.refresh(), below.refresh())
     # Made again each time the page shows: a sign-in can have ended, or an app come, since the last one. Until it
     # comes back, the box says it is being made.
     app.refresh_checks()
     refresh_checks(app)
+    app.refresh_records()
 
 
 def _server_key(app):
@@ -306,6 +319,108 @@ def _server_key(app):
     if server is None:
         return None
     return (server["url"], server["name"], st.has_own_name(server), app.state.signed_in(server), server.get("account"))
+
+
+# How many of each of the records' lists PLAY shows: the rest is on the player's page on the site.
+RECORDS_SHOWN = 3
+
+
+def records_key(app):
+    """What PLAY's records card shows: the records the server gave for the sign-in in use, or None (not signed in, not
+    asked yet, or a server from before records)."""
+    key, kept = app.records_key(), app.records
+    if key is None or kept is None or kept["key"] != key or kept["answer"] is None:
+        return None
+    return key, repr(kept["answer"])
+
+
+def _records_card(app, holder):
+    """PLAY's My records: the signed-in player's latest plays and best records on the server, side by side (one under the
+    other in a narrow window), each with the chart, the score after the keyboard's mark when a keyboard played it, and
+    the player's place on that chart; one line instead for an account linked to no player, or one with no plays."""
+    if records_key(app) is None:
+        return
+    ui, w = app.ui, app.words
+    answer = app.records["answer"]
+    card = _card(holder, ui, w("play.records"), last=True)
+    if answer["player"] is None:
+        # The site's account has no game player linked to it on this server (the owner links them).
+        widgets.label(card.body, ui, w("play.records.unlinked", account=answer["account"] or app.records["key"][1]),
+                      fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+        return
+    if not answer["recent"] and not answer["best"]:
+        widgets.label(card.body, ui, w("play.records.none"), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+        return
+    left, right = _columns(card.body, ui, weights=(1, 1), bg=theme.PANEL, stack_below=RECORDS_STACK_BELOW)
+    keys = False
+    for column, title, rows, recent in ((left, w("play.records.recent"), answer["recent"], True),
+                                        (right, w("play.records.best"), answer["best"], False)):
+        widgets.label(column, ui, title, font=ui.fonts.body_bold, bg=theme.PANEL).pack(anchor="w",
+                                                                                         pady=(0, ui.px(FORM_LABEL_GAP)))
+        if not rows:
+            widgets.label(column, ui, w("play.records.none"), fg=theme.MUTED, bg=theme.PANEL, wrap_margin=0).pack(fill="x")
+        for i, row in enumerate(rows[:RECORDS_SHOWN]):
+            if i:
+                widgets.divider(column, ui, pady=CHECK_GAP)
+            _record_row(app, column, row, recent)
+            keys = keys or row["keys"]
+    if keys:
+        # What the keyboard's mark means, said once under the lists for every row that has it (never only by hover).
+        widgets.divider(card.body, ui, pady=CHECK_GAP)
+        legend = tk.Frame(card.body, bg=theme.PANEL)
+        legend.pack(fill="x")
+        _keys_mark(app, legend).pack(side="left")
+        widgets.label(legend, ui, w("play.records.keys"), font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL).pack(
+            side="left", padx=(ui.px(6), 0))
+
+
+# The records' two lists stand side by side down to this width of the card's body (logical pixels): each list's rows then
+# have room for a long title beside the score.
+RECORDS_STACK_BELOW = 640
+
+
+def _keys_mark(app, parent):
+    """The keyboard's mark as a label (art.keys_mark), the site's own, in the hints' colour on the card's deck."""
+    from PIL import ImageTk
+    picture = art.keys_mark(theme.MUTED, app.ui.scale, bg=theme.PANEL)
+    image = ImageTk.PhotoImage(picture, master=parent)
+    mark = tk.Label(parent, image=image, bg=theme.PANEL, bd=0)
+    # Kept on the label: Tk drops a picture the moment Python forgets it.
+    mark.odq_image, mark.odq_picture = image, picture
+    return mark
+
+
+def _record_row(app, parent, row, recent):
+    """One record: the song's title, under it the chart and when (a play's new record said), and at the right end the
+    score (the keyboard's mark before it) over the place on that chart."""
+    ui, w = app.ui, app.words
+    line = tk.Frame(parent, bg=theme.PANEL)
+    line.pack(fill="x")
+    end = tk.Frame(line, bg=theme.PANEL)
+    end.pack(side="right", anchor="n", padx=(ui.px(12), 0))
+    figure = tk.Frame(end, bg=theme.PANEL)
+    figure.pack(anchor="e")
+    if row["keys"]:
+        _keys_mark(app, figure).pack(side="left", padx=(0, ui.px(6)))
+    tk.Label(figure, text="{:,}".format(row["score"]), font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL).pack(
+        side="left")
+    if row["rank"]:
+        tk.Label(end, text=w("play.records.place", n=row["rank"], all=max(row["players"], row["rank"])),
+                 font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL).pack(anchor="e")
+    words = tk.Frame(line, bg=theme.PANEL)
+    words.pack(side="left", fill="x", expand=True)
+    title = row["title"] or w("play.records.chart", id=row.get("chart", ""))
+    widgets.label(words, ui, title, bg=theme.PANEL, wrap_margin=0).pack(fill="x")
+    sub = [row["chart_name"]] if row["chart_name"] else []
+    if row["at"]:
+        sub.append(w.say(i18n.ago(row["at"])))
+    if recent and row["new_record"]:
+        sub.append(w("play.records.new"))
+    elif not recent and row["grade"]:
+        sub.append(w("play.records.grade", grade=row["grade"]))
+    if sub:
+        widgets.label(words, ui, "  ·  ".join(sub), font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL,
+                      wrap_margin=0).pack(fill="x")
 
 
 def _last_card(app, holder):

@@ -7,6 +7,9 @@ What the server answers is its site's client.php (server/portal/client.php) and 
   GET  /opendmtq/client.php?app      the app on offer: {"file", "sha256", "size", "built_at", "label", "package",
                                      "address"} (signed in)
   GET  /apk                          the app (signed in)
+  POST /opendmtq/client.php?link     a one-time link that signs a browser in as the same account and opens its player's
+                                     page: {"url", "page", "expires"} (signed in; from 0.11)
+  GET  /opendmtq/client.php?records  the account's player's latest plays and best records (signed in; from 0.11)
 
 Only the standard library (urllib), with short timeouts: the window calls these on a worker thread. The launcher keeps
 the cookie the sign-in gives (as a browser does), never the password. No redirect is followed: the site sends a request
@@ -272,6 +275,72 @@ def sign_in(base, user, password):
     if not cookie:
         raise ServerError("the server signed in without a cookie", "error.server.answered", status=status)
     return {"account": str(answer["account"]), "expires": int(answer.get("expires") or 0), "cookie": cookie}
+
+
+def _signed_out_or(status, answer):
+    """SignedOut when the site's answer says the sign-in ended: on to its sign-in page, refused, or its word for it."""
+    code = answer.get("error") if isinstance(answer, dict) else None
+    if status in (302, 303, 403) or code == "signin":
+        raise SignedOut("the server no longer takes the sign-in", "error.signin.ended")
+
+
+def sign_in_link(base, cookie):
+    """A one-time link that signs the PC's browser in to the site as this sign-in and opens the player's page (My page on
+    the site): its whole address. SignedOut when the sign-in ended; ServerError error.link.none from a server older than
+    such links (0.10 and before), whose site's own address then opens instead; ServerError for anything else."""
+    status, answer, _ = _call(base, "/opendmtq/client.php?link", data=b"", cookie=cookie)
+    _signed_out_or(status, answer)
+    if status == 404:
+        raise ServerError("the server makes no sign-in links (it is older than 0.11)", "error.link.none")
+    url = answer.get("url") if isinstance(answer, dict) else None
+    # A path on the site, as the site makes it: nothing that leads elsewhere is opened.
+    if status != 200 or not isinstance(url, str) or not re.fullmatch(r"/opendmtq/login\.php\?once=[A-Za-z0-9_-]{43}", url):
+        raise ServerError("the server answered %s" % status, "error.server.answered", status=status)
+    return base + url
+
+
+def _whole(value, least=None):
+    """A whole number of an answer, or None for what is none (the site's own lists, read with care: they go on a page)."""
+    if isinstance(value, bool) or not isinstance(value, int) or (least is not None and value < least):
+        return None
+    return value
+
+
+def _words(value, most=200):
+    """Words of an answer for a page, or None: text only, at most `most` characters."""
+    return value[:most] if isinstance(value, str) and value.strip() else None
+
+
+def _record(row):
+    """One play or best of the site's records as the PLAY page shows it, or None for what is no record."""
+    if not isinstance(row, dict) or _whole(row.get("score")) is None:
+        return None
+    return {"title": _words(row.get("title")), "chart_name": _words(row.get("chart_name"), 60),
+            "score": row["score"], "grade": _words(row.get("grade"), 2) or "", "keys": row.get("keys") is True,
+            "rank": _whole(row.get("rank"), 1), "players": _whole(row.get("players"), 0) or 0,
+            "new_record": row.get("new_record") is True, "at": _whole(row.get("at")) or _whole(row.get("set_at")),
+            "all_combo": row.get("all_combo") is True, "perfect_play": row.get("perfect_play") is True}
+
+
+def records(base, cookie):
+    """The signed-in account's player's latest plays and best records, as the site lists them (client.php?records):
+    {"account", "player": {"id", "name", "rank"} or None (an account linked to no player), "recent": [...], "best":
+    [...]}, each record as _record() reads it; None from a server older than these (0.10 and before). SignedOut when the
+    sign-in ended."""
+    status, answer, _ = _call(base, "/opendmtq/client.php?records", cookie=cookie)
+    _signed_out_or(status, answer)
+    if status == 404:
+        return None
+    if status != 200 or not isinstance(answer, dict):
+        raise ServerError("the server answered %s" % status, "error.server.answered", status=status)
+    player = answer.get("player") if isinstance(answer.get("player"), dict) else None
+    out = {"account": _words(answer.get("account"), 40) or "", "player": None, "recent": [], "best": []}
+    if player is not None and _whole(player.get("id"), 0) is not None:
+        out["player"] = {"id": player["id"], "name": _words(player.get("name"), 60) or "", "rank": _whole(player.get("rank"), 1)}
+        for key in ("recent", "best"):
+            listed = answer.get(key) if isinstance(answer.get(key), list) else []
+            out[key] = [r for r in (_record(row) for row in listed[:20]) if r is not None]
+    return out
 
 
 # What an Android package name is: the player makes the game's data folder of it, so nothing else may pass (a name with

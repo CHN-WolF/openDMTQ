@@ -11,8 +11,8 @@ from unittest import mock
 from opendmtq_client import i18n, theme
 
 PACKAGE = os.path.join(os.path.dirname(__file__), "..", "opendmtq_client")
-# Strings in the code shaped as words' keys that are none: a file's name (apps.py).
-NOT_WORDS = {"app.json"}
+# Strings in the code shaped as words' keys that are none: a file's name (apps.py, report.py).
+NOT_WORDS = {"app.json", "about.txt"}
 
 
 def _luminance(colour):

@@ -16,6 +16,28 @@ ACCOUNT, PASSWORD = "player1", "pass-1234"
 POLL = 0.01
 # The made-up app: what /apk hands out, and its description.
 APP = b"PK\x03\x04 made-up app " * 4096
+# A one-time link's token as the site makes one (43 letters of base64url).
+LINK_TOKEN = "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v"
+
+
+def made_up_records(now=1795400000):
+    """A player's records as client.php?records answers them, with made-up songs: plays and bests with the keyboard and
+    without, a new record, places on their charts."""
+    def row(title, chart, score, grade, keys, rank, players, **more):
+        return dict({"chart": 100 + rank, "title": title, "chart_name": chart, "score": score, "grade": grade, "keys": keys,
+                     "rank": rank, "players": players}, **more)
+    return {"account": ACCOUNT, "player": {"id": 7, "name": "SENA", "rank": 2, "total": 4212345, "charts": 12},
+            "page": "/opendmtq/player.php?id=7",
+            "recent": [row("Neon Rain", "3LINE Hard 9", 987654, "S", True, 1, 4, new_record=True, at=now - 300),
+                       row("Paper Planes", "2LINE Normal 5", 812300, "A", False, 2, 6, new_record=False, at=now - 3 * 3600),
+                       row("Glass Garden of the Long Afternoon", "4LINE Expert 12", 645120, "B", True, 3, 3,
+                           new_record=False, at=now - 2 * 86400)],
+            "best": [row("Neon Rain", "3LINE Hard 9", 987654, "S", True, 1, 4, all_combo=True, perfect_play=False,
+                         set_at=now - 300),
+                     row("Midnight Tram", "4LINE Hard 10", 954210, "S", False, 2, 5, all_combo=False, perfect_play=False,
+                         set_at=now - 5 * 86400),
+                     row("Paper Planes", "2LINE Normal 5", 812300, "A", False, 2, 6, all_combo=False, perfect_play=False,
+                         set_at=None)]}
 
 
 class Site:
@@ -30,6 +52,8 @@ class Site:
         self.damage = False            # /apk hands out other bytes than the description says
         self.requests = []             # (method, path, cookie) of each request
         self.old = False               # an OpenDMTQ from before the PC client: no client.php, its health page only
+        self.records = made_up_records()   # client.php?records' answer; None: a server from before records (404)
+        self.links = True              # client.php?link answers; False: a server from before one-time links (404)
 
     def describe(self):
         return {"file": "opendmtq-phone-app-2026.11.09-android-127.0.0.1-8080.apk", "sha256": hashlib.sha256(self.app).hexdigest(),
@@ -76,6 +100,12 @@ class Site:
                 if self.path == "/opendmtq/client.php?about":
                     return self._json(200, {"opendmtq": "0.8.0", "name": "Stand-in", "address": "127.0.0.1:8080",
                                             "app": site.app_state == "ok"})
+                if self.path == "/opendmtq/client.php?records":
+                    if site.records is None:
+                        return self._json(404, {"error": "unknown"})
+                    if not self._signed():
+                        return self._json(403, {"error": "signin"})
+                    return self._json(200, site.records)
                 if self.path == "/opendmtq/client.php?app":
                     if not self._signed():
                         return self._json(403, {"error": "signin"})
@@ -110,6 +140,13 @@ class Site:
                 site.requests.append(("POST", self.path, self._cookie()))
                 length = int(self.headers.get("Content-Length") or 0)
                 form = urllib.parse.parse_qs(self.rfile.read(length).decode())
+                if self.path == "/opendmtq/client.php?link":
+                    if not site.links:
+                        return self._json(404, {"error": "unknown"})
+                    if not self._signed():
+                        return self._json(403, {"error": "signin"})
+                    return self._json(200, {"url": "/opendmtq/login.php?once=" + LINK_TOKEN,
+                                            "page": "/opendmtq/player.php?id=7", "expires": 1999999999})
                 if self.path != "/opendmtq/client.php?signin":
                     return self._json(404, {"error": "none"})
                 if form.get("user", [""])[0] != ACCOUNT or form.get("password", [""])[0] != PASSWORD:

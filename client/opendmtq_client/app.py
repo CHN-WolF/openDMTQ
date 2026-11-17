@@ -94,6 +94,9 @@ class LauncherApp:
         self.page_follow = None         # the page's (or the guide's step's) own update for settings changed from
         #                                 outside: the Sound page's controls for what the in-game menu wrote back
         self.took_mtime = None          # the settings file's time when the window last looked at it (took_back)
+        self.records = None             # the last records the server gave for the sign-in in use: {"key": (address,
+        #                                 account), "answer": server.records' answer or None, "at"}; None before any
+        self.records_asked = None       # the sign-in whose records are being asked for now, or None
         self._setup_fonts()
         self._size_window()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -458,6 +461,8 @@ class LauncherApp:
             # The page on show follows the game's end where it shows what a game changes, in place: the last game on
             # PLAY, the player's log on Help, the app on Online (a newer one PLAY got first).
             self.follow_page(*GAME_PAGES)
+        # The game's plays are on the server now: PLAY's records asked for again.
+        self.refresh_records(force=True)
 
     def open_player_log(self):
         """Show the player's log for the current server's app (Explorer, the file selected); the Help page when there
@@ -489,6 +494,91 @@ class LauncherApp:
         self.set_status(i18n.Said("status.signed_out"), "warn", sticky=True)
         self.refresh_checks()
         self._paint_play()
+
+    def records_key(self):
+        """The sign-in the records are for: (the server's address, the account), or None while not signed in."""
+        server = self.state.server()
+        if server is None or not self.state.signed_in(server):
+            return None
+        return server["url"], server.get("account")
+
+    def refresh_records(self, force=False):
+        """The PLAY page's records asked of the server on a worker thread, for the sign-in in use: the last answer stands
+        for REACH_FOR seconds unless `force` (a game that ended). The page follows when they come; nothing is asked while
+        not signed in."""
+        import time
+        key = self.records_key()
+        if key is None or self.records_asked == key:
+            return
+        kept = self.records
+        if not force and kept is not None and kept["key"] == key and time.time() - kept["at"] < REACH_FOR:
+            return
+        self.records_asked = key
+
+        def work():
+            try:
+                # A sign-in that ended is forgotten on the window's thread, as every change is.
+                answer, error = actions.records(self.state, change=self.post), None
+            except Exception as e:  # noqa: BLE001  (logged; the card keeps what it showed)
+                log.info("could not ask %s for the records: %s", key[0], e)
+                answer, error = None, e
+            self.post(lambda: self._records_came(key, answer, error))
+
+        threading.Thread(target=work, daemon=True, name="records").start()
+
+    def _records_came(self, key, answer, error):
+        """The records' answer: kept for the sign-in it is for, and the PLAY page's card follows. A failure keeps what
+        was shown (the server away for a moment); a sign-in that ended is said as the watch says it."""
+        import time
+        self.records_asked = None
+        if isinstance(error, srv.SignedOut):
+            self.state.save()
+            self.set_status(i18n.Said("status.signed_out"), "warn", sticky=True)
+            self.refresh_checks()
+        elif error is None:
+            self.records = {"key": key, "answer": answer, "at": time.time()}
+        if self.guide is None:
+            self.follow_page("play")
+
+    def open_my_page(self):
+        """My page on the site: a one-time link the server makes for this sign-in, opened in the PC's browser on a worker
+        thread (the server is asked first); said on the status line."""
+        if self.busy:
+            return
+        self.user_acted()
+        self.set_status(i18n.Said("status.mypage"), "normal")
+
+        def work():
+            try:
+                url, error = actions.my_page(self.state, change=self.post), None
+            except Exception as e:  # noqa: BLE001  (said on the status line, never swallowed)
+                log.info("could not open the player's page on the site: %s", e)
+                url, error = None, e
+            self.post(lambda: self._my_page_came(url, error))
+
+        threading.Thread(target=work, daemon=True, name="my-page").start()
+
+    def _my_page_came(self, url, error):
+        """The link came (or not): the browser opens it, and the status line says how it went."""
+        if isinstance(error, srv.SignedOut):
+            self.state.save()
+            self.set_status(i18n.Said("status.signed_out"), "warn", sticky=True)
+            self.refresh_checks()
+            self.follow_page("play")
+            return
+        if error is not None:
+            self.set_status(i18n.Said("status.error", error=error), "bad", sticky=True)
+            return
+        try:
+            actions.open_url(url)
+        except OSError as e:
+            # No browser to open it with: said, the address in the log.
+            log.warning("could not open %s: %s", url.split("?", 1)[0], e)
+            self.set_status(i18n.Said("status.error", error=e), "bad", sticky=True)
+            return
+        # The link works once: never in the log; the page it opens is said instead.
+        log.info("opened the player's page on the site in the browser")
+        self.set_status(i18n.Said("status.mypage.opened"), "ok", transient=True)
 
     def look_for_update(self):
         """The look for a newer launcher at the start (updates.Look): on a worker thread, with its time limit. A newer one

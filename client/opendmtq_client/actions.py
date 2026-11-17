@@ -167,6 +167,54 @@ def reset(state):
     state.picked_language = picked
 
 
+def _signed(state):
+    """The current server, signed in: ServerError without a server, SignedOut without a sign-in that holds."""
+    server = state.server()
+    if server is None:
+        raise srv.ServerError("connect to a server first", "error.server.none")
+    if not state.signed_in(server):
+        raise srv.SignedOut("sign in to the server first", "error.signin.needed")
+    return server
+
+
+def my_page(state, change=at_once):
+    """My page on the site: the address that opens the player's page in the PC's browser, signed in already (a one-time
+    link the server makes for this sign-in); from a server older than such links, its site's own address. SignedOut
+    forgets the sign-in, made where `change` makes it."""
+    server = _signed(state)
+    try:
+        return srv.sign_in_link(server["url"], server["cookie"])
+    except srv.SignedOut:
+        change(lambda: state.forget_sign_in(server))
+        raise
+    except srv.ServerError as e:
+        if e.key != "error.link.none":
+            raise
+        # The site as it is: its sign-in page first, then its own pages.
+        return server["url"] + "/opendmtq/"
+
+
+def records(state, change=at_once):
+    """The current server's records of the signed-in account's player (server.records), or None from an older server.
+    SignedOut forgets the sign-in, made where `change` makes it."""
+    server = _signed(state)
+    try:
+        return srv.records(server["url"], server["cookie"])
+    except srv.SignedOut:
+        change(lambda: state.forget_sign_in(server))
+        raise
+
+
+def open_url(url):
+    """An address opened in the PC's own browser."""
+    safety.refuse_windows_in_tests("the browser")
+    if sys.platform == "win32":
+        os.startfile(url)
+        return
+    import webbrowser
+    webbrowser.open(url)
+
+
 def check_app(state, change=at_once):
     """The app the current server offers now, kept with the server; SignedOut forgets the sign-in. Either change is
     made where `change` makes it."""

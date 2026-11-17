@@ -43,6 +43,8 @@ TEXT = {
     "status.not_updated": ("The update to {v} was not installed. This is still {now}. Try again on the LAUNCHER page.",
                            "{v} 버전으로 업데이트하지 못했습니다. 지금 버전은 {now}입니다. LAUNCHER 페이지에서 다시 해 보세요."),
     "status.error": ("{error}", "{error}"),
+    "status.mypage": ("Opening your page on the site...", "사이트의 내 페이지를 여는 중..."),
+    "status.mypage.opened": ("Your page on the site is open in the browser.", "브라우저에서 사이트의 내 페이지를 열었습니다."),
     "status.signed_out": ("Your sign-in ended (it ran out, or the password changed). Sign in again on the ONLINE page.",
                           "로그인이 끝났습니다(기간이 지났거나 비밀번호가 바뀌었습니다). ONLINE 페이지에서 다시 로그인하세요."),
 
@@ -73,6 +75,24 @@ TEXT = {
                    "터치스크린은 휴대폰처럼 플레이하고, 마우스는 클릭이 터치, 끌기가 슬라이드입니다."),
     "play.how.3": ("Esc goes back. The pointer on the handle at the game's top centre brings the bar: minimise, full screen, and X to quit.",
                    "Esc는 뒤로 가기입니다. 게임 맨 위 가운데 손잡이에 포인터를 두면 최소화, 전체 화면, 끝내기(X)가 있는 막대가 나옵니다."),
+    "play.mypage": ("My page on the site", "사이트의 내 페이지"),
+    "play.records": ("My records", "내 기록"),
+    "play.records.recent": ("Recent plays", "최근 플레이"),
+    "play.records.best": ("Best records", "최고 기록"),
+    "play.records.none": ("No plays recorded yet.", "아직 플레이 기록이 없습니다."),
+    "play.records.unlinked": ("{account} is not linked to a player on this server.",
+                              "이 서버에는 {account} 계정과 연결된 플레이어가 없습니다."),
+    "play.records.place": ("#{n} of {all}", "{all}명 중 {n}위"),
+    "play.records.new": ("New record", "새 기록"),
+    "play.records.grade": ("Grade {grade}", "{grade} 등급"),
+    "play.records.keys": ("Keyboard play", "키보드 플레이"),
+    "play.records.chart": ("Chart {id}", "{id}번 차트"),
+    # How long ago a play was, as the site says it (server/portal/strings.php ago.*).
+    "ago.now": ("just now", "방금"),
+    "ago.min": ("{n} min ago", "{n}분 전"),
+    "ago.h": ("{n} h ago", "{n}시간 전"),
+    "ago.d": ("{n} d ago", "{n}일 전"),
+    "ago.mo": ("{n} mo ago", "{n}개월 전"),
     "play.last": ("Last game", "지난 플레이"),
     "play.last.none": ("No game yet.", "아직 플레이 기록이 없습니다."),
     "play.last.ok": ("{time} of play, closed normally.", "{time} 플레이한 뒤 게임을 닫았습니다."),
@@ -700,6 +720,8 @@ TEXT = {
     "error.signin.ended": ("Your sign-in ended (it ran out, or the password changed). Sign in again.",
                            "로그인이 끝났습니다(기간이 지났거나 비밀번호가 바뀌었습니다). 다시 로그인하세요."),
     "error.signin.needed": ("Sign in to the server first.", "먼저 서버에 로그인하세요."),
+    "error.link.none": ("This server makes no sign-in links for the site (it is older than 0.11).",
+                        "이 서버는 사이트 로그인 링크를 만들지 않습니다(0.11보다 오래된 버전입니다)."),
     "error.app.none": ("The server is building its app (about 20 seconds). Try again in a moment.",
                        "서버가 앱을 만드는 중입니다(약 20초). 잠시 뒤 다시 해 보세요."),
     "error.app.stale": ("The server's address changed, so it is building its app again. Try again in a moment.",
@@ -753,6 +775,17 @@ class Said:
 
     def __repr__(self):
         return "Said(%r, %r)" % (self.key, self.params)
+
+
+def ago(at, now=None):
+    """How long ago a moment (Unix time) was, as words to say later, as the site says it: just now, minutes, hours, days,
+    months."""
+    import time
+    gone = int((now or time.time()) - at)
+    for unit, key in ((86400 * 30, "ago.mo"), (86400, "ago.d"), (3600, "ago.h"), (60, "ago.min")):
+        if gone >= unit:
+            return Said(key, n=gone // unit)
+    return Said("ago.now")
 
 
 def span(seconds):

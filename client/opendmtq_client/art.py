@@ -424,6 +424,32 @@ def lamp(colour, scale=1.0, bg=None, hollow=False):
     return img
 
 
+# The keyboard's mark as the site draws it (server/portal/style.css .keys-mark): a key cap 20 by 12 with its top left and
+# bottom right corners cut, and its keys left out of it in three rows (x, y, width, height on that grid).
+KEYS_MARK_KEYS = ((2, 2, 2, 2), (5, 2, 2, 2), (8, 2, 2, 2), (11, 2, 2, 2), (14, 2, 4, 2), (2, 5, 3, 2), (6, 5, 2, 2),
+                  (9, 5, 2, 2), (12, 5, 2, 2), (15, 5, 3, 2), (5, 8, 10, 2))
+
+
+def keys_mark(colour=theme.MUTED, scale=1.0, bg=theme.PANEL):
+    """The keyboard's mark before a score a keyboard play made, the site's own shape (KEYS_MARK_KEYS) at 20 by 12 logical
+    pixels, in the hints' colour on `bg`: drawn larger and made smaller, so that its keys stay clean at any scale."""
+    k = SS
+    unit = scale * k
+    width, height = int(round(20 * scale)), int(round(12 * scale))
+    shape = Image.new("L", (width * k, height * k), 0)
+    draw = ImageDraw.Draw(shape)
+    # The cap: its two corners cut by 2 of the grid's 20, as the site's path is.
+    draw.polygon([(2 * unit, 0), (20 * unit, 0), (20 * unit, 10 * unit), (18 * unit, 12 * unit), (0, 12 * unit),
+                  (0, 2 * unit)], fill=255)
+    for x, y, w, h in KEYS_MARK_KEYS:
+        # Each key a hole in the cap, the background showing through.
+        draw.rectangle([x * unit, y * unit, (x + w) * unit - 1, (y + h) * unit - 1], fill=0)
+    shape = shape.resize((width, height), Image.LANCZOS)
+    img = Image.new("RGBA", (width, height), _rgb(bg) + (255,))
+    img.paste(_rgb(colour) + (255,), (0, 0), shape)
+    return img
+
+
 def tab_face(width, height, state, scale=1.0, bg=theme.PANEL):
     """One choice of a row of tabs, as the site's (.tabs a): a trapezoid, its top 11 px shorter at each end, in rail
     metal, lighter under the pointer, filled with the accent when chosen. On `bg` around its slanted sides."""
