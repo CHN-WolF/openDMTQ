@@ -38,9 +38,9 @@ for the songs. Please use only files you have the right to use. OpenDMTQ does no
 to get them.
 [The game's files](game-files.md) says what each has to be.
 
-**My copy of the app was changed for another server. Does it work?**
-Yes. The build points every address of the other server at yours. A version other than 1.3.5 or 1.3.4 plays the same, with
-a few of the game's own screens left as they were.
+**My copy of the app was changed for another server. Does it work?** Yes. The build points every address of the other
+server at yours. A version other than 1.3.5 or 1.3.4 plays the same, with a few of the game's own screens left as they
+were.
 
 **Will my files work?**
 For each file it finds, the setup says what it is and whether it can be used, before importing anything. On the command
@@ -89,10 +89,10 @@ server's window and run the same five lines again; on Linux or macOS, the same c
 Docker, `git pull`, then `./opendmtq up`; `./opendmtq runtime` also brings the newest runtime for newer phones. The PC
 clients that play on the server then update to its version from the server itself.
 
-**The game shows no songs.**
-The song list is empty until the songs are imported. On Windows and a host install: on the admin pages, **Songs**,
-**Choose the folder**, then the client data and the song data together, or the `DMQ` folder alone, with **Import the songs
-too** ticked. With Docker, as its Songs page says: `./opendmtq import --songs <folder>` on the server PC.
+**The game shows no songs.** The song list is empty until the songs are imported. On Windows and a host install: on the
+admin pages, **Songs**, **Choose the folder**, then the client data and the song data together, or the `DMQ` folder
+alone, with **Import the songs too** ticked. With Docker, as its Songs page says: `./opendmtq import --songs <folder>`
+on the server PC.
 
 ### Privacy
 

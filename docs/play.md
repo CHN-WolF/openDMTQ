@@ -94,10 +94,10 @@ that score), and beside a total says how many such scores it counts; the ranking
 Your name or badge at the top of every page of the site opens **MY PAGE**. Only you see it:
 
 - **Profile:** what the game keeps for you, as the game shows it: your level and EXP, MAX POINT and Q POINT, the levels
-  of FEVER PLUS, GAUGE REFILL and ANTI BREAK, what is in your four slots (character, add-on, note and skin), and how many
-  items you own. These change in the game, not on the site. Then your
-  achievements, each with the day you earned it, your place overall and this month, and your broadcasts while the server
-  has them on. **My public page** shows what other players see of you.
+  of FEVER PLUS, GAUGE REFILL and ANTI BREAK, what is in your four slots (character, add-on, note and skin), and how
+  many items you own. These change in the game, not on the site. Then your achievements, each with the day you earned
+  it, your place overall and this month, and your broadcasts while the server has them on. **My public page** shows what
+  other players see of you.
 - **Plays** and **Records:** every play you made and every best record, fifty to a page, a play with the PC's keys
   marked as everywhere on the site.
 - **Account:** everything the site keeps about your account: its ID, when it was made, when it last signed in and when
@@ -116,7 +116,8 @@ Your name or badge at the top of every page of the site opens **MY PAGE**. Only 
 - **The server's own account,** the owner's ID and password from `.env`, changes its password on the admin pages'
   **Server** page instead, which MY PAGE links to.
 
-A script that holds the site's cookie reads and changes the same as JSON: [the site's own JSON](api.md#the-sites-own-json).
+A script that holds the site's cookie reads and changes the same as JSON: [the site's own
+JSON](api.md#the-sites-own-json).
 
 ## Broadcasting
 

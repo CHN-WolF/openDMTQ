@@ -44,8 +44,8 @@ files in Downloads, on the Desktop or in Documents, or takes the path you paste.
 use and an account for each player, and builds the app.
 
 - **The server's window says where everything is:** the players' site at `http://<this PC>:8791/`, the admin pages at
-  the same address with `/opendmtq/admin/`, and the owner's ID and password, which sign in to both (the password is
-  kept in `.env` in the folder, which Notepad opens).
+  the same address with `/opendmtq/admin/`, and the owner's ID and password, which sign in to both. The password is
+  kept as `ADMIN_PASSWORD` in the folder's `.env`, which Notepad opens.
 
 - **Windows Firewall** asks about Apache: allow it on private networks. If your Wi-Fi is a public network, set it to
   **Private** in Settings, or phones cannot connect.
@@ -144,10 +144,11 @@ Everything else is on the admin pages: the app, songs, players, accounts, broadc
 
 `uninstall` stops the server and removes what it set up, then its folder; `--keep-data` leaves `data` and `.env` in it.
 On Windows that is the folder, the firewall rules Windows made for its programs (Windows asks for permission once) and
-its shortcuts; on Linux and macOS its start with the computer and the `opendmtq` command on the PATH (the system packages
-`host/install.sh` brought stay, as other programs may use them); with Docker its containers and their network and the
-images built for it. `delete-data` without parts lists them with their size: `database` (players, scores, accounts),
-`recordings`, `songs` (added ones), `apps`, `backups`, `logs`, `game` (the imported game files); a backup comes first.
+its shortcuts; on Linux and macOS its start with the computer and the `opendmtq` command on the PATH (the system
+packages `host/install.sh` brought stay, as other programs may use them); with Docker its containers and their network
+and the images built for it. `delete-data` without parts lists them with their size: `database` (players, scores,
+accounts), `recordings`, `songs` (added ones), `apps`, `backups`, `logs`, `game` (the imported game files); a backup
+comes first.
 
 An update keeps `data` and `.env`. Phones get a newer app on the site when the update brings one. The PC clients that
 play on the server take the update to its version from the server itself: each launcher offers it on its status line
