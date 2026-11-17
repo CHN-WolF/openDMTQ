@@ -15,6 +15,9 @@
   OpenDMTQ.exe --skip-guide             the window opens on its pages, the first-start guide done (the guide's Skip)
   OpenDMTQ.exe --servers                list the servers this launcher knows, the one PLAY plays on marked *
   OpenDMTQ.exe --open-log player|launcher   show the player's or the launcher's log in Explorer
+  OpenDMTQ.exe --report FILE            save a report for whoever helps (a zip: the logs, the settings, the displays, the
+                                        sound devices, Windows and the graphics card; names, addresses and sign-ins left
+                                        out); FILE may be a folder, where it takes the report's own name
   OpenDMTQ.exe --play                   get ready and start the game, no window; returns when the game ends
   OpenDMTQ.exe --forget URL [--yes]     forget a server, its sign-in and its app on this PC
   OpenDMTQ.exe --reset [--yes]          start over: forget the servers, the sign-ins, the apps and the settings
@@ -590,6 +593,10 @@ def parse(argv):
                                "Skip)")
     upkeep = p.add_argument_group("help and upkeep")
     upkeep.add_argument("--open-log", choices=("player", "launcher"), help="show the player's or the launcher's log")
+    upkeep.add_argument("--report", metavar="FILE",
+                        help="save a report for whoever helps: one zip with the logs, the settings, the displays, the "
+                             "sound devices, Windows and the graphics card, the user's name, the servers' addresses and "
+                             "the sign-ins left out (FILE may be a folder)")
     upkeep.add_argument("--update", action="store_true", help="look for a newer launcher and install it")
     upkeep.add_argument("--repair", action="store_true", help="put back the program's files that are missing or changed")
     upkeep.add_argument("--clear-game-data", action="store_true",
@@ -642,7 +649,7 @@ def _jobs(args, maintenance=True):
     --clear-game-data and --uninstall."""
     return any((args.status, args.server, args.sign_in, args.sign_out, args.app, args.set, args.audio_devices,
                 args.language, args.guide, args.open_log, args.play, args.forget, args.reset, args.update,
-                args.skip_guide, args.servers)) or (
+                args.skip_guide, args.servers, args.report)) or (
         maintenance and any((args.repair, args.clear_game_data, args.uninstall)))
 
 
@@ -773,6 +780,22 @@ def _check_settings(state, args):
         trial = choices.normalize(trial)
 
 
+def _report(state, target):
+    """--report FILE: Help's Save a report, into FILE (a folder: the report's own name in it); the file and what was left
+    out said, in the window's English words."""
+    from opendmtq_client import report
+    path = os.path.abspath(target)
+    if os.path.isdir(path):
+        # A folder: the name the window gives it, for this moment.
+        path = os.path.join(path, os.path.basename(report.default_path()))
+    elif not path.lower().endswith(".zip"):
+        # A zip by its name too, as Windows opens it.
+        path += ".zip"
+    path, left = report.make(state, path=path)
+    _say("Saved the report: %s" % path)
+    _say("Left out: %s." % report.left_words(i18n.Words("en"), left))
+
+
 def _servers(state):
     """--servers: every server this launcher knows, as Online lists them, the one PLAY plays on first and marked *."""
     if not state.servers:
@@ -887,6 +910,8 @@ def _run(state, args, jobs):
         actions.show_file(path)
     if args.servers:
         _servers(state)
+    if args.report:
+        _report(state, args.report)
     if args.status:
         return _status(state)
     if args.play:

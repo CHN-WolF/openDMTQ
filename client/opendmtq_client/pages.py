@@ -1712,6 +1712,11 @@ def _help_tools(app, parent):
     widgets.setting_row(card.body, ui, w("help.logs"),
                         lambda p: widgets.Button(p, ui, w("common.open"), lambda: actions.open_folder(logs)),
                         w("help.logs.hint")).pack(fill="x")
+    # A report of them all, with this PC's displays, sound and graphics, for whoever helps (report.py).
+    widgets.divider(card.body, ui)
+    widgets.setting_row(card.body, ui, w("help.report.row"),
+                        lambda p: widgets.Button(p, ui, w("help.report"), lambda: maintenance.save_report(app)),
+                        w("help.report.hint")).pack(fill="x")
     from opendmtq_client import installed
     root = installed.root()
     if root:

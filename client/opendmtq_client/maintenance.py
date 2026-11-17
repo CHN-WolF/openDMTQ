@@ -48,6 +48,32 @@ def _in_background(app, message, job, then, detail=None):
     threading.Thread(target=work, daemon=True, name=job.__name__).start()
 
 
+def save_report(app):
+    """Save a report: the zip made on a worker thread under a dialog that says so (the player may take a few seconds to
+    list the sound devices), then Explorer with the zip chosen in its folder, and a dialog that names it and says what
+    was left out. Nothing it reads is changed, so it never waits for a game or a download."""
+    import os
+    from opendmtq_client import report
+    w = app.words
+    # The sound devices the Sound page listed already, when it did: the player is not asked again.
+    devices = app.devices
+
+    def make_report():
+        return report.make(app.state, devices=devices)
+
+    def done(result, error):
+        if error is not None:
+            dialogs.tell(app, "error", w("help.report"), w("help.report.failed"), w.error(error))
+            return
+        path, left = result
+        # In its folder, chosen, as Help's logs open: the file a person attaches next.
+        actions.show_file(path)
+        dialogs.tell(app, "info", w("help.report"), w("help.report.done", name=os.path.basename(path)),
+                     w("help.report.done.detail", folder=os.path.dirname(path), left=report.left_words(w, left)))
+
+    _in_background(app, w("help.report.working"), make_report, done)
+
+
 def _not_now(app):
     """True, said on the status line, while the files these tools change are in use (app.files_in_use): the game runs,
     from this window or the command line, or PLAY or a download is under way."""
