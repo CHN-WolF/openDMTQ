@@ -229,12 +229,15 @@ curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/j
 curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$API/maintenance"
 ```
 
-Put a notice at the top of the site's pages until an hour from now, then take it down:
+Send a Discord channel's messages from this server in Korean, check that the chat takes them, and see how its last one
+went (the address comes back masked; the whole one stays on the server):
 
 ```sh
-curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"text\": \"Open late tonight.\", \"until\": $(( $(date +%s) + 3600 ))}" "$API/notice"
-curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$API/notice"
+hook=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"url": "https://discord.com/api/webhooks/<id>/<secret>", "language": "ko"}' "$API/webhooks" \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)["webhook"]["id"])')
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$API/webhooks/$hook/test"
+curl -s -H "Authorization: Bearer $TOKEN" "$API/webhooks"
 ```
 
 On Windows, in PowerShell on the server PC of the Windows bundle or a host install there: the status, then a backup kept
