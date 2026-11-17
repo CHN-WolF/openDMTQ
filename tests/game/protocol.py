@@ -349,45 +349,6 @@ check("the help page the SDK opens answers", post("/www/mobile/help", None)[0] =
 check("an address the game never asks for is a 404", post("/DMQ/nothing", None)[0] == 404)
 check("the game server's code is never served", all(post(p, None)[0] in (403, 404) for p in ("/game/src/rpc.php", "/src/config.php", "/game/index.php")))
 
-# ------------------------------------------------------------------ the owner's notice in the lobby's news
-
-# The notice as the admin pages' Notices page keeps it beside the database (notice.json, admin/notice.py), written into the
-# server's state folder (protocol.sh names it): the news call carries its words while it is up, under a number of their
-# own, and its one plain entry again once it ended or went. Never an empty list (the client closes on one).
-STATE = os.environ.get("PROTOCOL_STATE", "")
-if STATE:
-    notice_file = os.path.join(STATE, "notice.json")
-
-    def put_notice(text, until=None):
-        """The file as the admin pages write it: a new one moved into place."""
-        with open(notice_file + ".new", "w", encoding="utf-8") as f:
-            json.dump({"text": text, "until": until, "at": 1, "by": "admin"}, f, ensure_ascii=False)
-        os.chmod(notice_file + ".new", 0o644)
-        os.replace(notice_file + ".new", notice_file)
-
-    def news():
-        return one("board.getNoticeList", ["US", 0, 4])[0]
-
-    plain = news()
-    put_notice("오늘 밤에는 새벽 1시까지 서버를 엽니다.")
-    up = news()
-    check("GAME-80: the owner's notice in the lobby's news, its words in the one entry", isinstance(up, list) and len(up) == 1
-          and up[0]["content"] == "오늘 밤에는 새벽 1시까지 서버를 엽니다." and up[0]["image_url"] == "" and up[0]["news_type"] == "N", json.dumps(up))
-    check("GAME-80: under a number of its own, not the plain entry's", up[0]["news_id"] not in (plain[0]["news_id"], 0), json.dumps([plain, up]))
-    put_notice("Open late tonight.")
-    other = news()
-    check("GAME-81: new words, a new number", other[0]["content"] == "Open late tonight." and other[0]["news_id"] != up[0]["news_id"], json.dumps(other))
-    put_notice("Open late tonight.")
-    check("GAME-81: the same words, the same number", news()[0]["news_id"] == other[0]["news_id"])
-    put_notice("Gone by now.", 1000)
-    check("GAME-82: once its end came, the one plain entry again", news() == plain, json.dumps(news()))
-    os.remove(notice_file)
-    check("GAME-82: taken down, the one plain entry again", news() == plain, json.dumps(news()))
-    with open(notice_file, "w", encoding="utf-8") as f:
-        f.write("{")
-    check("GAME-82: a file that is no notice is none, and the list is never empty", news() == plain, json.dumps(news()))
-    os.remove(notice_file)
-
 # ------------------------------------------------------------------ every reply of the run
 
 # The errors among all the replies above. The unknown method's SVC.05008 must be among them: without it, the replies

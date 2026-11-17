@@ -142,6 +142,6 @@ document.addEventListener('click', e => {
   const band = cross.closest('.site-notice');
   // Kept where the tab can keep it; a browser that keeps nothing closes it on this page alone.
   try { sessionStorage.setItem('opendmtq-notice', band.dataset.notice); } catch (_) { /* Nowhere to keep it. */ }
-  document.documentElement.dataset.noticeClosed = band.dataset.notice;
+  document.documentElement.classList.add('notice-closed');
   band.remove();
 });

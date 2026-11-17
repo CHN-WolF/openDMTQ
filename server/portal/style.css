@@ -1798,9 +1798,10 @@ table.board.parts td.name a::after { content: none; }
 
 /* ---------------------------------------------------------------------- the owner's notice (lib.php, page_header()) */
 
-/* One quiet line under the bar on every page: a plain surface, as it marks no state (maintenance and a server in trouble
-   have their colours above it), its word in the menus' face, and the cross that closes it for this visit (tips.js). */
-.site-notice { background: var(--deck); border-bottom: 1px solid var(--seam); color: var(--chalk); font-size: var(--t-sm); }
+/* One quiet line under the bar on every page: no surface or colour of its own, as it marks no state (maintenance and a
+   server in trouble have their colours above it), a rule under it, its word in the menus' face, and the cross that closes
+   it for this visit (tips.js). Not a box: the page's content, or the front page's stage, follows right under its rule. */
+.site-notice { border-bottom: 1px solid var(--seam); color: var(--chalk); font-size: var(--t-sm); }
 .notice-in { display: flex; align-items: center; gap: 14px; padding-block: 4px; }
 /* The word as the bar's state words are: the menus' face, small, in the ash of quiet text. */
 .notice-tag { flex: none; font: 800 var(--t-xs)/1 var(--display); letter-spacing: 0.08em; color: var(--ash); }
@@ -1813,5 +1814,9 @@ table.board.parts td.name a::after { content: none; }
 @media (pointer: coarse) { .notice-close { width: 44px; height: 44px; } }
 /* On a phone the word goes, and the line has the width. */
 @media (max-width: 480px) { .notice-tag { display: none; } }
+/* Closed for this visit (the page's head knows before drawing, tips.js when its cross is pressed): not drawn. */
+.notice-closed .site-notice { display: none; }
+/* The front page's stage tucks under the bar; under a notice it starts below it, as under the maintenance sentence. */
+html:not(.notice-closed) .site-notice ~ .stage { --bar-h: 0px; }
 
 /* ---------------------------------------------------------------------- MY PAGE (me.php) */

@@ -400,8 +400,9 @@ async function settle(page, act) {
   const never = p => p.catch(() => new Promise(() => {}));
   let timer;
   const late = new Promise((_, fail) => { timer = setTimeout(() => fail(new Error('the press neither loaded a page nor changed this one')), 30000); });
-  await act();
+  // The press itself may fail (nothing there to press): its own error then, and no timer left to fail the run later.
   try {
+    await act();
     await Promise.race([never(loaded), never(changed), late]);
   } finally {
     clearTimeout(timer);
@@ -2189,13 +2190,17 @@ async function ownersNotice(contexts) {
   const owner = await contexts.signed.newPage();
   await owner.setViewport({ width: 1280, height: 900 });
   // The card's Show, with these words and no end.
+  // The owner's tab in front first: a tab out of sight for minutes has its timers held back by the browser, and the press
+  // would wait for a page that looks only once a minute.
   const putUp = async text => {
+    await owner.bringToFront();
     await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
     await owner.$eval('#notice input[name=text]', (e, v) => { e.value = v; }, text);
     await press(owner, '#notice button[name=action][value=show]');
   };
   // The card's Take down.
   const takeDown = async () => {
+    await owner.bringToFront();
     await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
     await press(owner, '#notice button[name=action][value=clear]');
   };
@@ -2257,6 +2262,7 @@ async function ownersNotice(contexts) {
   await putUp('The server is open all night.');
   await all('The server is open all night.', 'PAGE-68: put up, the pages left open show it by themselves');
   // The order under the bar when maintenance comes too: the sentence of what is wrong first, the notice under it.
+  await owner.bringToFront();
   await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
   await pressAndConfirm(owner, '#maintenance button[name=action][value=on]');
   const ordered = [];
@@ -2267,6 +2273,7 @@ async function ownersNotice(contexts) {
     }));
   }
   check('PAGE-68: with maintenance begun, its sentence comes above the notice', ordered.every(Boolean), ordered.join(' '));
+  await owner.bringToFront();
   await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
   await press(owner, '#maintenance button[name=action][value=off]');
   await putUp('Back to normal hours tomorrow.');

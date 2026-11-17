@@ -371,7 +371,7 @@ function maintenance_notice(): ?string
    is the words' own: a visitor who closed it sees it again when the words change. */
 function site_notice(): ?array
 {
-    // The game server's own reader (config.php), which the lobby's news reads too: one notice for both.
+    // The game server's settings' reader (config.php), so that the site and the server read one notice the same way.
     $text = odq_owner_notice();
     return $text === null ? null : ['text' => $text, 'id' => substr(hash('sha256', $text), 0, 12)];
 }
@@ -658,10 +658,9 @@ function page_header(string $title, string $active = '', string $refresh = '', s
     // "motion"). The class goes after 1.6 s, so that nothing the page redraws later moves again.
     echo '<script>document.documentElement.classList.add("arriving");setTimeout(()=>document.documentElement.classList.remove("arriving"),1600)</script>';
     // The owner's notice this visitor closed in this tab (tips.js keeps its id): not drawn at all, before the page shows.
-    $own = $inside ? site_notice() : null;
-    if ($own) {
-        echo '<script>try{document.documentElement.dataset.noticeClosed=sessionStorage.getItem("opendmtq-notice")||""}catch(e){}</script>'
-            . '<style>html[data-notice-closed="' . h($own['id']) . '"] .site-notice{display:none}</style>';
+    $band = $inside ? site_notice() : null;
+    if ($band) {
+        echo '<script>try{if(sessionStorage.getItem("opendmtq-notice")===' . json_encode($band['id']) . ')document.documentElement.classList.add("notice-closed")}catch(e){}</script>';
     }
     echo '</head>';
     // With the state it was drawn with (site_state()), for the pages that look again by themselves.

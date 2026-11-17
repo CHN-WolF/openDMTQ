@@ -109,17 +109,10 @@ function odq_user_use_transfer_code(array $p)
  * board.getNoticeList [code, fromNewsId, limit]: news banners for the lobby. The official server's banners are not
  * this server's to show, so the one entry here has no picture and leads nowhere. One there must be: the client turns
  * the list into an array of entries and closes when the list is empty (an empty JSON list has no element it could
- * take the type from; InvalidCastException in WebResponseProcessor.getNoticeList). While the owner's notice is up, the
- * entry carries its words (config.php odq_owner_notice()), under a number of their own (the client may keep the numbers it
- * has shown).
+ * take the type from; InvalidCastException in WebResponseProcessor.getNoticeList).
  */
 function odq_board_news(array $p)
 {
-    $notice = odq_owner_notice();
-    if ($notice !== null) {
-        // A number from the words: the same notice, the same number; new words, a new one. Above 1, the entry without one.
-        return [['news_id' => 2 + (crc32($notice) % 2000000000), 'link_url' => '', 'image_url' => '', 'content' => $notice, 'news_type' => 'N']];
-    }
     return [['news_id' => 1, 'link_url' => '', 'image_url' => '', 'content' => '0', 'news_type' => 'N']];
 }
 

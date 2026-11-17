@@ -59,6 +59,8 @@
       if (band && keep) band.replaceWith(keep);
       else if (keep && heading) heading.before(keep);
       else if (band) band.remove();
+      // A notice put in place shows, whatever was closed before it (the page's mark of a closed one goes).
+      if (keep) document.documentElement.classList.remove('notice-closed');
       // The sentence under the bar, where the page puts it: before the notice, else before the page's heading.
       const said = document.querySelector('body > .site-alert'), says = page.querySelector('body > .site-alert');
       const after = document.querySelector('body > .site-notice') || heading;

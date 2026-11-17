@@ -185,7 +185,9 @@ function odq_address_moved(?string $dir = null, ?string $now = null): ?array
 
 /* The owner's notice while it is up, as the admin pages keep it beside the database (notice.json, written by their Notices
    page, admin/notice.py): its one line, or null when there is none or its end has come. The site shows it above every page
-   (portal/lib.php site_notice()), the game in the lobby's news (src/user.php). Read once per request. */
+   (portal/lib.php site_notice()). Not the game: client 1.3.4 draws no news of the lobby's news call (board.getNoticeList,
+   src/user.php) anywhere, and its NOTICE window, which opened at every start, is skipped by the patcher. Read once per
+   request. */
 function odq_owner_notice(): ?string
 {
     static $notice = false;
