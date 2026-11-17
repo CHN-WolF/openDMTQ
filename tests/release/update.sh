@@ -19,10 +19,12 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OLD=$(realpath -m "${1:?usage: update.sh OLD_RELEASE_DIR NEW_RELEASE_DIR OUT_DIR}")
 NEW=$(realpath -m "${2:?usage: update.sh OLD_RELEASE_DIR NEW_RELEASE_DIR OUT_DIR}")
 OUT=$(realpath -m "${3:?usage: update.sh OLD_RELEASE_DIR NEW_RELEASE_DIR OUT_DIR}")
-# The release worker's own names and addresses (no other test uses them).
-NET=odq-w4r-net
-STUB=odq-w4r-gh
-STUB_IP=192.168.244.10
+# This run's own names (NAME_PREFIX keeps them apart from another run's) and its network (SUBNET, the stand-in at its .10).
+NAME=${NAME_PREFIX:-odq}-release-update
+NET=$NAME-net
+STUB=$NAME-gh
+SUBNET=${SUBNET:-192.168.244.0/24}
+STUB_IP=${SUBNET%.*}.10
 # The images: the PC client's build machine (Wine, a Windows Python with Velopack 1.2.161, the virtual screen) and the
 # UI test image's Python for the stand-in.
 WINE_IMAGE=opendmtq-client-winbuild:local
@@ -56,7 +58,7 @@ cp "$NEW"/* "$OUT/rel/v$NEW_VERSION/"
 : > "$OUT/requests.log"
 docker rm -f "$STUB" >/dev/null 2>&1
 docker network rm "$NET" >/dev/null 2>&1
-docker network create --internal --subnet 192.168.244.0/24 "$NET" >/dev/null
+docker network create --internal --subnet "$SUBNET" "$NET" >/dev/null
 docker run -d --name "$STUB" --network "$NET" --ip "$STUB_IP" -v "$OUT:/o" -v "$ROOT/tests/release:/t:ro" \
   --entrypoint python3 "$PY_IMAGE" /t/github_stub.py /o/rel 80 /o/requests.log >/dev/null
 cleanup() { docker rm -f "$STUB" >/dev/null 2>&1; docker network rm "$NET" >/dev/null 2>&1; }
@@ -65,6 +67,7 @@ trap cleanup EXIT
 # The Wine side, run once for each way: install the old release silently, then the update named by $1.
 wine_run() {
   docker run --rm --network "$NET" -v "$OUT:/out" -v "$OLD:/old:ro" -e WINEDEBUG=-all -e WAY="$1" -e NEW_VERSION="$NEW_VERSION" \
+    -e STUB_IP="$STUB_IP" \
     --entrypoint bash "$WINE_IMAGE" -c '
   set -u
   Xvfb :99 -screen 0 1280x800x24 -nolisten tcp >/dev/null 2>&1 &
@@ -85,7 +88,7 @@ local = sys.argv[1]
 app = local + "\\\\OpenDMTQ.Client"
 locator = velopack.VelopackLocatorConfig(app, app + "\\\\Update.exe", app + "\\\\packages", app + "\\\\current\\\\sq.version",
                                          app + "\\\\current", False)
-manager = velopack.UpdateManager(velopack.GithubSource("http://192.168.244.10/kanggu12/openDMTQ", None, False), None, locator)
+manager = velopack.UpdateManager(velopack.GithubSource("http://$STUB_IP/kanggu12/openDMTQ", None, False), None, locator)
 print("current", manager.get_current_version())
 info = manager.check_for_updates()
 print("offered", info.TargetFullRelease.Version if info else None, info.TargetFullRelease.FileName if info else None)
@@ -97,7 +100,7 @@ PY
     launcher)
       # The 0.10.0 launcher itself, its update address from the variable it reads first (a folder: the trailing slash
       # keeps the folder in the address Velopack joins the file names to).
-      OPENDMTQ_UPDATE_SOURCE=http://192.168.244.10/feed/ wine "$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe" --update --yes \
+      OPENDMTQ_UPDATE_SOURCE=http://$STUB_IP/feed/ wine "$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe" --update --yes \
         > /out/$WAY-update.log 2>&1 ;;
   esac
   wait_for 180 "$NEW_VERSION" && echo "updated $(installed)" || echo "not updated: $(installed)"
