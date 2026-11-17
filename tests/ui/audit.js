@@ -968,6 +968,8 @@ async function formsLook(contexts) {
 // width and a laptop's, in both languages.
 async function webhookFlows(contexts) {
   const page = await contexts.signed.newPage();
+  // In front: a page behind others has its timers held back by the browser, and the presses below wait on them.
+  await page.bringToFront();
   const errors = watch(page, `${A}/maintenance`);
   await page.setViewport({ width: 1280, height: 900 });
   const hooks = () => page.$$eval('#hooks .hook', all => all.map(h => ({ text: h.textContent.replace(/\s+/g, ' ').trim(), bad: !!h.querySelector('.lamp.bad'), sent: !!h.querySelector('.lamp.on') })));
