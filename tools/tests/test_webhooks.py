@@ -597,13 +597,22 @@ class CardTest(unittest.TestCase):
 
     def test_a_refused_address_comes_back_with_what_was_typed_and_why(self):
         with Server() as inst:
-            r = self.form(inst, "/opendmtq/admin/webhooks", url="ftp://chat.example/x", language="en", event=["maint_on"])
-            self.assertEqual(r.status_code, 400)
-            page = r.get_data(as_text=True)
+            # Back to the page's own address (a form sent in place needs it), with why and what was typed, once.
+            r = self.form(inst, "/opendmtq/admin/webhooks", url="ftp://chat.example/x", language="ko", event=["maint_on"])
+            self.assertEqual((r.status_code, r.headers["Location"].rsplit("/", 1)[-1]), (302, "maintenance#hooks"))
+            page = inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True)
             self.assertIn("That is no webhook address", page)
             self.assertIn('value="ftp://chat.example/x"', page)
-            r = self.form(inst, "/opendmtq/admin/webhooks", url=inst.chat.url + "/x", language="en")
-            self.assertIn("Pick at least one thing", r.get_data(as_text=True))
+            self.assertRegex(page, r'<option value="ko" selected>한국어</option></select></label>\s*</div>\s*<div class="hook-events"')
+            self.assertRegex(page, r'<div class="hook-events"[^>]*>\s*<span[^>]*>[^<]*</span>\s*<label class="check"><input type="checkbox" name="event" value="live_on"><span>'
+                             r'[^<]*</span></label>(?:<label[^>]*>.*?</label>){3}<label class="check"><input type="checkbox" name="event" value="maint_on" checked>')
+            # The address typed is kept on the server, never in the browser's cookie.
+            with inst.client.session_transaction(path="/opendmtq/admin/") as sess:
+                self.assertNotIn("ftp://chat.example/x", json.dumps(dict(sess)))
+            # Once: the page drawn again comes as it always does.
+            self.assertNotIn('value="ftp://chat.example/x"', inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True))
+            self.form(inst, "/opendmtq/admin/webhooks", url=inst.chat.url + "/x", language="en")
+            self.assertIn("Pick at least one thing", inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True))
 
     def test_the_card_in_korean_and_its_delete_asks_first(self):
         with Server() as inst:

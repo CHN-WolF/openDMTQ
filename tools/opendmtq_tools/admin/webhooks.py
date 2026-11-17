@@ -28,7 +28,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from flask import flash, redirect, request, url_for
+from flask import flash, has_request_context, redirect, request, session, url_for
 
 from .. import songs, strings, windows_client
 from . import core, notices, site
@@ -880,9 +880,37 @@ def put(con, rows):
 
 # ------------------------------------------------------------------------------ the card
 
+# What a refused Add had typed, for the page it comes back to: once, ten minutes at most, in this process's memory, the
+# session holding only the way to it (the address is a secret: never in the browser's cookie).
+_typed = {}
+_typed_lock = threading.Lock()
+
+
+def keep_typed(values):
+    """Keeps what the add form sent for the next drawing of the card in this session."""
+    now = time.time()
+    token = secrets.token_urlsafe(12)
+    with _typed_lock:
+        # What nobody came back for is forgotten.
+        for old in [k for k, (at, _) in _typed.items() if now - at > 600]:
+            del _typed[old]
+        _typed[token] = (now, values)
+    session["hooks_typed"] = token
+
+
+def take_typed():
+    """What keep_typed() kept for this session, once; None when there is nothing (or it is older than ten minutes)."""
+    if not has_request_context():
+        return None
+    with _typed_lock:
+        kept = _typed.pop(session.pop("hooks_typed", ""), None)
+    return kept[1] if kept and time.time() - kept[0] <= 600 else None
+
+
 @notices.card("hooks")
 def hooks_card():
-    """The Notices page's Discord and Slack card: every webhook, and what the form to add one offers."""
+    """The Notices page's Discord and Slack card: every webhook, and what the form to add one offers (with what a refused
+    one had typed)."""
     try:
         items, broken = listing(), False
     except sqlite3.Error:
@@ -894,7 +922,8 @@ def hooks_card():
         if h["last_failure"]:
             h["last_failure"]["ago"] = ago(h["last_failure"]["at"])
     return {"chats": items, "broken": broken, "events": EVENTS, "defaults": DEFAULT_EVENTS, "event_words": EVENT_WORDS,
-            "languages": LANGUAGES, "language_words": LANGUAGE_WORDS, "language": core.lang(), "url_max": URL_MAX}
+            "languages": LANGUAGES, "language_words": LANGUAGE_WORDS, "language": core.lang(), "url_max": URL_MAX,
+            "typed": take_typed()}
 
 
 def back():
@@ -904,13 +933,15 @@ def back():
 
 @app.route(BASE + "/webhooks", methods=["POST"])
 def webhook_new():
-    """The card's form: a webhook added. A refused one draws the page again with what was typed, and why."""
+    """The card's form: a webhook added. A refused one comes back to the page with what was typed, and why: by a redirect,
+    as a form sent in place (admin.js) needs the page's own address back."""
     url, language, events = request.form.get("url", ""), request.form.get("language", core.lang()), request.form.getlist("event")
     try:
         made = add(url, language, events)
     except Refused as e:
         flash(e.words, e.tone)
-        return notices.render(e.status, hooks={"typed": {"url": url, "language": language, "events": events}})
+        keep_typed({"url": url[:URL_MAX], "language": language, "events": events})
+        return back()
     flash(t("hook.added", address=made["address"]), "ok")
     return back()
 
