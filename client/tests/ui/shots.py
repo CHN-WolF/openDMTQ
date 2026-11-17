@@ -1914,6 +1914,11 @@ def main():
     guide.finish(play=False)
     settle(app)
     pages_check(app, args.out, tag, problems)
+    # PLAY's records and My page on the site, signed in after the guide; Help's Save a report.
+    records_check(app, site, args.out, tag, problems)
+    report_check(app, args.out, tag, problems)
+    # The connection test on the Online page, and from PLAY's Server row when the server does not answer.
+    test_check(app, site, args.out, tag, problems)
     # The Sound page's Last game card, before a game and after one with and without gaps.
     sound_last_check(app, args.out, tag, problems)
     # Keyboard play on the Controls page, its states and its keys.

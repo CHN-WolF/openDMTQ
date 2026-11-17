@@ -466,7 +466,7 @@ def _status(state):
     # The last game's sound as the player measured it, as the Sound page's Last game card says it (the command line's
     # words are English).
     said = player.sound_words(i18n.Words("en"), player.last_sound())
-    last = "%s, %s" % (said[1], said[2]) if said else "none yet"
+    last = ", ".join(part for part in said[1:] if part) if said else "none yet"
     # Gaps marked as the window's lamp marks them (a ring there, a warning's mark here).
     _part("Sound", [("last game", last, None if not said or said[0] == "ok" else "warn")])
     # Where the logs are, as Help's Open buttons show them.

@@ -154,6 +154,10 @@ def sound_words(w, result):
     the game's own together). None without a result."""
     if not result:
         return None
+    if result["mode"] == "none":
+        # No device at all: the game was not heard, and its gaps against the clock kept alone are none of the player's;
+        # a ring, as something that will change once there is a device.
+        return ("change", w("sound.last.mode.none"), "")
     words = [w("sound.last.mode." + result["mode"])]
     if result["period_ms"] > 0:
         words.append(w("sound.last.period", ms=milliseconds(result["period_ms"])))

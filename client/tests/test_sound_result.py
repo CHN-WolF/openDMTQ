@@ -50,8 +50,9 @@ class SoundResult(Folder):
         self.write(SOUND_RESULT.replace("latency_measures=31204", "latency_measures=0"))
         self.assertEqual(player.sound_words(i18n.Words("en"), player.last_sound())[1], "Shared, 10 ms period")
         self.write(SOUND_RESULT.replace("mode=shared\n", "mode=none\n").replace("period_ms=10.00", "period_ms=0.00")
-                   .replace("latency_measures=31204", "latency_measures=0"))
-        self.assertEqual(player.sound_words(i18n.Words("en"), player.last_sound())[1], "No sound device")
+                   .replace("latency_measures=31204", "latency_measures=0").replace("game_gaps=0", "game_gaps=4"))
+        # No device: no gaps said (the game was not heard), a ring as for what will change.
+        self.assertEqual(player.sound_words(i18n.Words("en"), player.last_sound()), ("change", "No sound device", ""))
 
     def test_a_file_the_player_did_not_write(self):
         # No mode it knows, or a number that is none: no result, the card says no game yet.

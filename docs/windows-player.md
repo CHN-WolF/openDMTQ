@@ -185,12 +185,14 @@ The window says which of those it found; `about.txt` in the zip lists them with 
 
 `OpenDMTQ-cmd.exe`, in `%LOCALAPPDATA%\OpenDMTQ.Client\current`, does the same from the command line: `--status` (exit 0
 when PLAY can go; under **Sound** the last game's sound as the Sound page says it; its last line is the launcher's
-version, and a newer one when there is), `--server URL`, `--sign-in
-ID` (the password from standard input), `--sign-out`, `--app`, `--set NAME=VALUE`, `--audio-devices`, `--language
+version, and a newer one when there is), `--test-server [ADDRESS]` (the connection test of the server PLAY plays on
+or of ADDRESS, each step as it ends; exit 0 when every step passed, 1 when one failed), `--server URL`, `--sign-in ID`
+(the password from standard input), `--sign-out`, `--app`, `--set NAME=VALUE`, `--audio-devices`, `--language
 en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the window opens on its pages), `--servers` (the servers
-it knows, as **Online** lists them), `--open-log player|launcher`, `--play`, `--update`, `--forget URL`, `--reset`,
-`--repair`, `--clear-game-data` and `--uninstall [--delete-data]`, with `--yes` to answer their questions (`--help`
-lists them all, in parts). In a terminal it prints in the launcher's look: a title with the version, each part under its
+it knows, as **Online** lists them), `--open-log player|launcher`, `--report FILE` (Help's report, into FILE, or into a
+folder under its own name), `--play`, `--update`, `--forget URL`, `--reset`, `--repair`, `--clear-game-data` and
+`--uninstall [--delete-data]`, with `--yes` to answer their questions (`--help` lists them all, in parts). In a
+terminal it prints in the launcher's look: a title with the version, each part under its
 name, names and values in columns, the ready check's marks and a download's bar in the launcher's colours; piped to a
 file or a script, the same lines in plain words, as before. Started with no flag by a double click, it opens the
 launcher's window and closes the console Windows opened for it. While the launcher's window is open, the flags that
@@ -541,7 +543,10 @@ broadcast has stopped, and when the server answers again on air, that it is back
 - **The videos are black and silent:** see the Media Feature Pack above.
 - **It cannot reach the server:** the PC has to reach the server's address, as a phone does: on the same network, or
   over the internet when the server is set up for it
-  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)).
+  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)). The
+  [connection test](#testing-the-connection) says where the way to it stops, and finds a server that moved to 8791.
+- **Someone helps with a problem:** **Help**, **Save a report** gives them the logs and this PC's details in one zip
+  ([a report](#a-report-for-whoever-helps)).
 - **The sound breaks up:** the **Sound** page's **Last game** says whether the last game had gaps; choose the **Normal**
   or **Safe** buffer there, or **Shared** instead of **Exclusive**.
 

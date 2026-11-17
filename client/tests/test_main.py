@@ -346,6 +346,11 @@ class CommandLine(Folder):
             f.write(SOUND_RESULT.replace("game_gaps=0", "game_gaps=4"))
         code, said = self.run_main(["--status"])
         self.assertIn("last game: Shared, 10 ms period, 18 ms out, 4 gaps", said)
+        # No sound device: said alone.
+        with open(player.result_path(), "w", encoding="utf-8") as f:
+            f.write(SOUND_RESULT.replace("mode=shared\n", "mode=none\n"))
+        code, said = self.run_main(["--status"])
+        self.assertIn("last game: No sound device\n", said)
 
     def test_status_says_a_newer_launcher_on_offer(self):
         # The window's look at its start, from the command line: the launcher's version, and a newer one when the
