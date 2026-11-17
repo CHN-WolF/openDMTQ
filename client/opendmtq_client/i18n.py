@@ -341,7 +341,7 @@ TEXT = {
     "sound.buffer.normal": ("Normal", "보통"),
     "sound.buffer.safe": ("Safe", "안정"),
     "sound.buffer.hint.low": ("The least delay between a hit and its sound: the shortest period Windows has for the device.",
-                              "치는 순간과 소리 사이의 지연이 가장 적습니다. Windows가 이 장치에 쓰는 가장 짧은 주기로 냅니다."),
+                              "치는 순간과 소리 사이의 지연이 가장 적습니다. Windows가 이 장치에 쓸 수 있는 가장 짧은 주기로 소리를 냅니다."),
     "sound.buffer.hint.normal": ("A 20 ms buffer, a little more delay than Low.", "20 ms 버퍼로, 낮음보다 지연이 조금 깁니다."),
     "sound.buffer.hint.safe": ("More sound kept ahead: no breaks on a busy PC, a little more delay.",
                                "소리를 더 앞서 준비해 바쁜 PC에서도 끊기지 않습니다. 지연이 조금 늘어납니다."),

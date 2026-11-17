@@ -50,7 +50,7 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 ### Changed
 
 - The PC client's sound buffer is **Low** by default: Windows' shortest period for the device in its low-latency mode,
-  or a 10 ms buffer on a device that has no shorter period than its standard one. Measured through whole songs on
+  or the shortest shared buffer Windows gives a device that has no shorter period than its standard one. Measured through whole songs on
   Windows, the sound reaches the device about 8 ms sooner than with **Normal** when shared and 21 ms sooner when
   exclusive, with no gap.
 - One port for everything. The players' site, the admin pages (`/opendmtq/admin/`) and the API (`/opendmtq/api/v1/`)

@@ -85,7 +85,8 @@ struct Settings {
     // songs on real Windows (a 192 kHz device, the PC busy with other work, two songs each), shared, low put the sound
     // out 29 to 36 ms after the mix (Windows' low-latency mode at its 7 ms period) against normal's 37 to 43 and safe's
     // 73 to 78, the device alone 10 ms (its 3 ms period) against 31 and 61, with no gap in any; where a device has no
-    // shorter period than its standard one, low is a 10 ms buffer of the standard mode.
+    // shorter period than its standard one, low asks for a 10 ms buffer of the standard mode, which Windows may make
+    // longer (22 ms on the device measured, normal's: 43 ms out, no gap).
     std::string audio_device;
     bool audio_exclusive = false;
     int audio_buffer = 0;

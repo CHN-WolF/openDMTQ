@@ -425,8 +425,9 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
 - **Shared or Exclusive.** Shared plays alongside other programs' sound. Exclusive (WASAPI's exclusive mode) takes the
   device for the game alone and has the least delay, with buffers of the device's own period (3 ms on a device that
   has it); other programs are silent meanwhile, and the sound is shared when Windows does not allow it.
-- **The buffer:** low, the default (Windows' low-latency mode at the shortest period the device has, else a 10 ms
-  buffer), normal (20 ms) or safe (50 ms). Measured through whole songs on Windows with a 192 kHz device while the PC
+- **The buffer:** low, the default (Windows' low-latency mode at the shortest period the device has; a device without
+  one gets the shortest shared buffer Windows gives it, 22 ms on the device measured, as normal's), normal (20 ms) or
+  safe (50 ms). Measured through whole songs on Windows with a 192 kHz device while the PC
   was busy with other work, the time from the game's sound to the device's output, by the device's own clock:
 
   | Mode | Low | Normal | Safe |
