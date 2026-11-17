@@ -113,6 +113,26 @@ class ApiDocsTest(unittest.TestCase):
             self.assertIsNotNone(self.route_for(path, method), f"{method or ''} {path}")
 
 
+class DashesTest(unittest.TestCase):
+    def test_no_dash_on_the_pages(self):
+        # The pages a person reads, the players' site and the admin pages, and their words: no en or em dash, an empty
+        # value's mark among them (it was an en dash in five places), as the words of the project are written.
+        paths = []
+        for folder, kinds in (("server/portal", ("*.php", "*.js", "*.css")), ("server/game", ("*.php",)),
+                              ("tools/opendmtq_tools/admin/templates", ("*.html",)),
+                              ("tools/opendmtq_tools/admin/static", ("*.js", "*.css"))):
+            for kind in kinds:
+                paths += glob.glob(os.path.join(ROOT, folder, "**", kind), recursive=True)
+        paths.append(os.path.join(ROOT, "tools", "opendmtq_tools", "strings.py"))
+        self.assertGreater(len(paths), 40)
+        for path in paths:
+            if path.endswith(".min.js"):
+                continue
+            with open(path, encoding="utf-8") as f:
+                for n, line in enumerate(f, 1):
+                    self.assertNotRegex(line, "[\u2013\u2014]", f"{os.path.relpath(path, ROOT)}:{n}")
+
+
 class PlayerRateTest(unittest.TestCase):
     def test_the_readme_says_the_players_own_limit(self):
         # The player takes any frame limit up to its own most (arm32/desktop/settings.cpp) and follows the display's

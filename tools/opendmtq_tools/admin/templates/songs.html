@@ -54,7 +54,7 @@
         <td class="primary"><a href="{{ public_url }}/opendmtq/song.php?id={{ s.song_id }}">{{ s.title }}</a>{% if s.added %} <span class="mark new">{{ t('songs.added') }}</span>{% endif %}{% if s.hidden %} <span class="mark off">{{ t('songs.hidden') }}</span>{% endif %}</td>
         <td class="sub">{{ s.artist }}</td>
         {# The last 30 days' plays with a bar against the most played song's, and when it was last played at all. #}
-        <td data-label="{{ t('songs.th_plays') }}" class="song-plays" data-v="{{ s.plays }}">{% if s.plays or s.last %}<span class="plays-cell"><span class="plays-n">{{ s.plays }}</span><span class="plays-bar"><i style="width: {{ '%.1f'|format(100 * s.share) }}%"></i></span>{% if s.last %}<span class="runtime">{{ t('songs.last', ago=s.last) }}</span>{% endif %}</span>{% else %}<span class="plays-none">–</span>{% endif %}</td>
+        <td data-label="{{ t('songs.th_plays') }}" class="song-plays" data-v="{{ s.plays }}">{% if s.plays or s.last %}<span class="plays-cell"><span class="plays-n">{{ s.plays }}</span><span class="plays-bar"><i style="width: {{ '%.1f'|format(100 * s.share) }}%"></i></span>{% if s.last %}<span class="runtime">{{ t('songs.last', ago=s.last) }}</span>{% endif %}</span>{% else %}<span class="plays-none">-</span>{% endif %}</td>
         <td data-label="{{ t('songs.th_charts') }}" class="r opt">{{ s.charts }}</td>
         {# Hide or Show last, so it sits at the row's end in every row, as the last button of
            every other admin list does; an added song's Remove comes before it. #}

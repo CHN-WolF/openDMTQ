@@ -106,7 +106,7 @@
         {# Four songs at most: a long broadcast would make its row the tallest thing on the page. All of them beside the +n
            under a pointer, on a finger's press and on the keyboard's focus (admin.js). #}
         {% set titles = r.songs|map(attribute='title')|unique|list %}
-        <td data-label="{{ t('rec.th_songs') }}" class="rec-songs">{{ titles[:4]|join(', ') or '–' }}{% if titles|length > 4 %} <span class="more-songs" data-tip="{{ titles|join(', ') }}" tabindex="0">+{{ titles|length - 4 }}</span>{% endif %}</td>
+        <td data-label="{{ t('rec.th_songs') }}" class="rec-songs">{{ titles[:4]|join(', ') or '-' }}{% if titles|length > 4 %} <span class="more-songs" data-tip="{{ titles|join(', ') }}" tabindex="0">+{{ titles|length - 4 }}</span>{% endif %}</td>
         <td class="actions"><div class="btns">
           {% if not r.open %}
           <a class="btn btn-sm" href="{{ url_for('recordings_page', watch=name) }}">{{ t('btn.watch') }}</a>

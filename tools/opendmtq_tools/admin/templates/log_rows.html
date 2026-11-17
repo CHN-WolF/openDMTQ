@@ -9,7 +9,7 @@
       <td data-label="{{ t('logs.th_status') }}">{% if r.status %}<span class="code s{{ r.status // 100 }}">{{ r.status }}</span>{% endif %}</td>
       <td class="primary log-path"><span class="log-method">{{ r.method }}</span> {{ r.path }}</td>
       <td data-label="{{ t('logs.th_kind') }}" class="sub-kind">{{ t(kinds[r.kind]) }}</td>
-      <td data-label="{{ t('th.size') }}" class="r">{{ r.size|human if r.size else '–' }}</td>
+      <td data-label="{{ t('th.size') }}" class="r">{{ r.size|human if r.size else '-' }}</td>
       <td data-label="{{ t('logs.th_who') }}" class="log-who"><button type="button" class="link-btn" data-filter="{{ r.ip }}">{{ r.ip }}</button>{# What the visitor's program called itself, whole, beside the device's words under a pointer, on a finger's press and on
          the keyboard's focus (admin.js). #}<span class="runtime"{% if r.ua %} data-tip="{{ r.ua }}" tabindex="0"{% endif %}>{{ device_words(r.device) }}</span></td>
     </tr>

@@ -118,7 +118,7 @@ if (!$me): ?>
       <div class="stats">
         <div class="stat"><span class="lbl"><?= t('player.total') ?></span><span class="num"><?= number_format($me['total']) ?></span></div>
         <div class="stat"><span class="lbl"><?= t('player.charts') ?></span><span class="num"><?= (int)$me['charts'] ?></span></div>
-        <div class="stat"><span class="lbl"><?= t('player.avg') ?></span><span class="num"><?= $me['charts'] > 0 ? accuracy($me['avg_judgement']) : '–' ?></span></div>
+        <div class="stat"><span class="lbl"><?= t('player.avg') ?></span><span class="num"><?= $me['charts'] > 0 ? accuracy($me['avg_judgement']) : '-' ?></span></div>
       </div>
     </div>
     <?php if ($best): ?>

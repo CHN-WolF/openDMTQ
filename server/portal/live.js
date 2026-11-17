@@ -204,7 +204,7 @@ function drawStats() {
   if (stats.hidden) return;
   const q = video.getVideoPlaybackQuality ? video.getVideoPlaybackQuality() : null;
   const edge = attached[0] === 'p' ? liveEdge() : null;
-  const lines = [[words.stats_size, video.videoWidth ? `${video.videoWidth}×${video.videoHeight}` : '–'],
+  const lines = [[words.stats_size, video.videoWidth ? `${video.videoWidth}×${video.videoHeight}` : '-'],
     [words.stats_buffer, `${bufferLeft().toFixed(1)} s`]];
   if (fragRate) lines.push([words.stats_stream, `${(fragRate / 1e6).toFixed(1)} Mbit/s`]);
   if (hls && hls.bandwidthEstimate) lines.push([words.stats_rate, `${(hls.bandwidthEstimate / 1e6).toFixed(1)} Mbit/s`]);
