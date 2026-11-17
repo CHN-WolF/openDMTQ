@@ -23,7 +23,11 @@
   </nav>
 </section>
 
+{# Two columns of cards, each its own stack (the page's gap between its cards), so that a short card leaves no hole beside a
+   tall one: what the game's top bar shows on the left, the items and the ban on the right; one column on a phone, in
+   that order. #}
 <div class="game-grid">
+<div class="game-col">
   {# The two currencies as the game's top bar shows them, each with its own form: a figure, then set, add or take. #}
   <section class="card" id="game-currency" data-region aria-labelledby="currency-title">
     <h2 id="currency-title">{{ t('game.currency') }}</h2>
@@ -75,9 +79,37 @@
       <button class="btn" name="action" value="exp">{{ t('game.set_exp') }}</button>
     </form>
   </section>
+</div>
+<div class="game-col">
+  {# The items a player equips, kind by kind, each with the way to give or take it. One form for all of them: each button
+     names its item. #}
+  <section class="card" id="game-items" data-region aria-labelledby="items-title">
+    <h2 id="items-title">{{ t('game.items') }}</h2>
+    {% if not p.gear|selectattr('items')|list %}
+    <p class="empty">{{ t('game.no_items') }}</p>
+    {% else %}
+    <p class="lead">{{ t('game.items_lead') }}</p>
+    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" id="items-form" data-inplace>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for g in p.gear if g['items'] %}
+      <details class="kind">
+        <summary><span class="kind-name">{{ t(g.words) }}</span><span class="kind-count">{{ t('game.kind_count', n=g.owned, m=g['items']|length) }}</span></summary>
+        <ul class="item-list">
+          {% for i in g['items'] %}
+          <li{% if not i.owned %} class="not"{% endif %}>
+            <span class="item-name"><span class="lamp {{ 'on' if i.owned else 'off' }}"></span>{{ i.name }}<span class="item-id">{{ i.id }}</span>{% if i.how_words %}<span class="item-how">{{ t(i.how_words) }}</span>{% endif %}</span>
+            <button class="btn btn-sm twin" name="action" value="{{ 'take' if i.owned else 'give' }}" formaction="{{ url_for('player_game_action', pid=p.id, seen=p.seen, item=i.id) }}" data-twin="{{ t('game.give') if i.owned else t('game.take_item') }}">{{ t('game.take_item') if i.owned else t('game.give') }}</button>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endfor %}
+    </form>
+    {% endif %}
+  </section>
 
   {# A ban: what holds now and the way to lift it, or the form. The game shows the reason to the player. #}
-  <section class="card game-ban{% if p.ban %} is-banned{% endif %}" id="game-ban" data-region aria-labelledby="ban-title">
+  <section class="card game-ban" id="game-ban" data-region aria-labelledby="ban-title">
     <h2 id="ban-title">{{ t('game.ban') }}</h2>
     {% if p.ban %}
     <p class="auto-line big"><span class="lamp bad"></span><b>{{ t('game.chip_banned') }}</b></p>
@@ -97,33 +129,7 @@
     </form>
     {% endif %}
   </section>
-
-  {# The items a player equips, kind by kind, each with the way to give or take it. One form for all of them: each button
-     names its item. #}
-  <section class="card" id="game-items" data-region aria-labelledby="items-title">
-    <h2 id="items-title">{{ t('game.items') }}</h2>
-    {% if not p.gear|selectattr('items')|list %}
-    <p class="empty">{{ t('game.no_items') }}</p>
-    {% else %}
-    <p class="lead">{{ t('game.items_lead') }}</p>
-    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" id="items-form" data-inplace>
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      {% for g in p.gear if g['items'] %}
-      <details class="kind">
-        <summary><span class="kind-name">{{ t(g.words) }}</span><span class="kind-count">{{ t('game.kind_count', n=g.owned, m=g['items']|length) }}</span></summary>
-        <ul class="item-list">
-          {% for i in g['items'] %}
-          <li class="{{ 'has' if i.owned else 'not' }}">
-            <span class="item-name"><span class="lamp {{ 'on' if i.owned else 'off' }}"></span>{{ i.name }}<span class="item-id">{{ i.id }}</span>{% if i.how_words %}<span class="item-how">{{ t(i.how_words) }}</span>{% endif %}</span>
-            <button class="btn btn-sm twin" name="action" value="{{ 'take' if i.owned else 'give' }}" formaction="{{ url_for('player_game_action', pid=p.id, seen=p.seen, item=i.id) }}" data-twin="{{ t('game.give') if i.owned else t('game.take_item') }}">{{ t('game.take_item') if i.owned else t('game.give') }}</button>
-          </li>
-          {% endfor %}
-        </ul>
-      </details>
-      {% endfor %}
-    </form>
-    {% endif %}
-  </section>
+</div>
 </div>
 
 {# What the player bought in the game, newest first, with what was paid: none while their currency was unlimited. #}

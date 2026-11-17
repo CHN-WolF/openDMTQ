@@ -883,6 +883,8 @@ table.data-parts .runtime { font-weight: 400; }
 /* The cards of the game's state: two columns where they fit, the currency and the level on top, the ban and the items under
    them; one column below that. */
 .game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); align-items: start; }
+/* Each column its own stack of cards, the page's gap between them: a short card leaves no hole beside a tall one. */
+.game-col { display: grid; gap: var(--gap); align-content: start; min-width: 0; }
 @media (max-width: 980px) { .game-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* A currency as the game's top bar has it: its mark, its name and the figure, in a well of its own, then its form. */
