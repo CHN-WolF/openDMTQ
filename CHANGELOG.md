@@ -8,6 +8,28 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ### Added
 
+- Play on this PC, on the admin pages' App page and the setup's last step, for a visit from the server PC itself: on
+  the Windows bundle it installs the PC client set up for the server, quietly, and opens its launcher with the owner's
+  ID filled in to sign in (or opens it when it is installed); on Linux and macOS the page says how to play from a
+  Windows PC. Never for a visit from another PC. Its API route is `POST /app/play-here`.
+- The PC client's connection test: **Test connection** on the **Online** page, and from the **Play** page's Server row
+  while the server does not answer, follows the way to the server step by step (the address, the name, the port, the
+  OpenDMTQ server and its HTTPS certificate, the version, the sign-in, the game server, the broadcast state, the
+  downloads by their headers, the round trip), each with what it found and how long it took, in a card that fills in as
+  it goes, with **Copy**. When the port does not answer, a server on 8791 or the ports after it is found and one press
+  away (servers updated to 0.11.0 left port 80). `OpenDMTQ-cmd.exe --test-server [ADDRESS]` does the same.
+- A report for whoever helps: the PC client's **Help**, **Save a report** (and `OpenDMTQ-cmd.exe --report FILE`) puts the
+  launcher's logs, the end of the game's log, the settings, the displays, the sound devices, Windows, the graphics cards,
+  the versions and the last connection test in one zip, with the user's name, the site IDs, the servers' addresses,
+  the sign-ins, tokens and this PC's player id left out, and says what was left out.
+- **My page on the site** on the PC client's **Play** page opens the player's page in the browser, signed in already by a
+  one-time link the server makes for the launcher's sign-in (it works once, within a minute; `POST /site/link` makes one
+  through the API for the token's admin), and **My records** lists the player's latest plays and best records from the
+  server, with the place on each chart and the keyboard's mark.
+- The PC client's Sound page says how the last game's sound went, as the player measured it: shared or exclusive, the
+  device's period, the time from the game's sound to the device's output by the device's own clock, and any gaps (the
+  device running dry, or the game's sound falling behind). `--status` prints the same line. The player writes it beside
+  its settings file, `last-game-sound.txt`.
 - Discord and Slack on the admin pages' Notices page (the Maintenance page's new name, at the same address): a message to a
   chat through its webhook when a player starts broadcasting and, if wanted, when the broadcast ends; when someone takes a
   song's chart's #1 from another player; when this month's #1 changes; when maintenance begins and ends. Each webhook has
@@ -27,6 +49,41 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - Notices in the game at every change of a broadcast switch, the player's or the server's under it, also when a
   broadcast ends and while the server's broadcasts are off, each with its own number (`toast_id`, `toast_kind` in
   `/live/state`); and at every change of the maintenance notice for players already in the game.
+- The server hands the PC clients that play on it their updates: those of the version of the installer it hands out, at
+  `/updates/` on its one port. A release's tools image brings them, a host install's kit carries them in, and any other
+  install fetches them from the release. A launcher looks at its server first and at GitHub's releases second, and goes
+  no further than the version its server hands out, or than the server's own version when it hands out none: launchers
+  stay matched to their server, on a network with no way out too. The admin pages' App page says what the server hands
+  out, and `GET /app/windows/updates` gives it file by file.
+- Delta packages: each release has `opendmtq.client-<version>-delta.nupkg`, what changed since the release before, which
+  a PC client of that release downloads instead of the whole update and its own updater puts the new version together
+  from. When what it puts together does not hold the release's files, the whole package comes instead.
+- The PC client's Sound page: master, music and effects volumes and an equaliser (Flat, Bass, Vocal, Treble, or three
+  bands of the player's own at 120 Hz, 1 kHz and 6 kHz), with `--set music_volume=`, `effects_volume=`, `eq=` and
+  `eq_low=` to `eq_high=`, and `--status`.
+- A sound panel over the game, from the bar: the same volumes and equaliser, heard as they change, kept for the next game
+  and shown by the launcher.
+- The bar over the game by touch: a tap on its handle, a long press or a pull down brings it; a mouse brings it by
+  pointing at the top or by pressing and pulling down. In a song a press reaches the game unless the game has been quiet
+  for 1.5 s.
+- The PC client's installer, run again, offers Open, Repair, Update and Uninstall (with the player's data kept or not),
+  and Windows' Apps removes the PC client the same way, in OpenDMTQ's design.
+- The launcher's log names each display's current rate, its highest rate at its size and whether Windows changes the
+  rate by itself (dynamic refresh rate).
+- A page of each player's own on the admin pages, from their name on the Players page, for what the game keeps of them:
+  their MAX POINT and Q POINT, set, added to or taken from, as the game's top bar shows them; unlimited currency, the
+  player's own and one for every player (the game is told 99,999,999 of each, nothing is taken, purchases are kept as
+  usual; off until turned on); their level and experience, by the game's own table; the characters, add-ons, notes and
+  skins they have, given and taken; a ban with a reason and an end, which the game refuses their sign-in for with the
+  reason shown over it, and the site and the PC client refuse their accounts for, with their broadcast stopped; their
+  purchases; every change made about them, who made it and from what to what; and their game state reset to a new
+  player's. The Players page has what a new player starts with, unlimited currency for all, and the banned players. Each
+  has its API route.
+- The owner's notice: one line the owner sets on the admin pages, with an end of its own if wanted, at the top of every
+  page of the players' site for everyone signed in. A visitor closes it until their next visit, and new words show again;
+  the pages that look again by themselves take it up and drop it without being opened anew. The Maintenance page is now
+  the Notices page, which holds it, maintenance, and the messages to Discord and Slack; its API routes are `GET`, `PUT`
+  and `DELETE /notice`.
 - MY PAGE on the players' site, from the name and badge at the top of every page: the player's profile as the game shows
   it (level, EXP, MAX POINT and Q POINT, the in-game items, the items owned and equipped), their achievements with the day each
   was earned, their places overall and this month, their broadcasts, and every play and best record a page at a time.

@@ -38,7 +38,7 @@ FEED_PID=
 # What the containers wrote belongs to their user: removed from inside an image.
 cleanup() {
   if [ -n "$FEED_PID" ]; then kill "$FEED_PID" 2>/dev/null || true; fi
-  docker rm -f "$SITE" "$ADMIN" "$CHAT" >/dev/null 2>&1 || true
+  docker rm -f "$SITE" "$ADMIN" "$ADMIN-pc" "$CHAT" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker run --rm -u 0 -v "$DATA:/d" --entrypoint sh "opendmtq-server:$TAG" -c 'rm -rf /d/* /d/.[!.]*' >/dev/null 2>&1 || true
   rmdir "$DATA" 2>/dev/null || true

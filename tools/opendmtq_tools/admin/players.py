@@ -188,6 +188,9 @@ def act(pid, action, seen, name=""):
                 pass
             if action == "delete":
                 con.execute("DELETE FROM Member WHERE CAST(guid AS INTEGER) = ?", (pid,))
+                # Their game state and a ban go with them: a new phone that gets the number back starts as a new player.
+                from . import game
+                game.forget(con, pid)
             # The charts whose #1 the Discord and Slack messages knew as theirs: held by the next now.
             webhooks.refresh_tops(con, pid)
             if action == "delete":

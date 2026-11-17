@@ -14,11 +14,14 @@ from .. import songs, strings
 # The application first; each page adds its addresses to it as it is imported.
 from .core import app
 from . import core, auth, assets, jobs, apps, players, recordings, song_pages, status, backups, accounts, logs
-from . import charts, insights, setup, lifecycle
+# A player's game state, after the Players page whose rows it reads.
+from . import game
+from . import charts, insights, setup, lifecycle, this_pc
 # The Notices page and its cards beside the maintenance one (song_pages): the notice on the site, Discord and Slack.
 from . import notices, notice, webhooks
 # The API last: its routes call every page's actions, and its token check comes after the pages' sign-in gate.
 from . import tokens, site, api_routes, api
 
 __all__ = ["app", "songs", "strings", "charts", "insights", "setup", "core", "auth", "assets", "jobs", "apps", "players", "recordings", "song_pages",
-           "status", "backups", "accounts", "logs", "tokens", "site", "api_routes", "api", "lifecycle", "notices", "notice", "webhooks"]
+           "status", "backups", "accounts", "logs", "tokens", "site", "api_routes", "api", "lifecycle", "this_pc",
+           "game", "notices", "notice", "webhooks"]

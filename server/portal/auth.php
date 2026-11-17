@@ -193,7 +193,9 @@ function site_user(bool $again = false): ?string
             // pressed for the account no longer counts.
             $made = (int)$m[1] - DL_DAYS * 86400;
             $since = $row && $row['signed_out_at'] !== null ? (int)$row['signed_out_at'] : 0;
-            if ($row && !$row['off'] && $made >= $since && hash_equals(dl_mac($m[1], (string)$row['name'], (string)$row['pass']), $m[3])) {
+            // A banned player's account is signed out, as one switched off is.
+            if ($row && !$row['off'] && $made >= $since && hash_equals(dl_mac($m[1], (string)$row['name'], (string)$row['pass']), $m[3])
+                    && site_ban($row) === null) {
                 $who = (string)$row['name'];
             }
         }

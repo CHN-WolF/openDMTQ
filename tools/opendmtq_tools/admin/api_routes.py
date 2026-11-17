@@ -78,6 +78,7 @@ PARAMS = {
     "part": ("string", "A recording's playlist (index.m3u8) or one of its segments (<n>.ts)."),
     "backup": ("string", "A backup's file name, as the list of backups gives it."),
     "chart": ("integer", "A chart's id (the song list's pattern id)."),
+    "item": ("integer", "An item's id, as a player's game state lists it (items)."),
     "webhook": ("integer", "A webhook's id, as the list of webhooks gives it."),
 }
 

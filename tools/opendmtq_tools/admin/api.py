@@ -21,7 +21,9 @@ from flask import g, jsonify, request, send_file
 from werkzeug.exceptions import HTTPException
 
 from .. import server_data, songs
-from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, tokens
+from . import accounts, api_routes, apps, auth, backups, core, game, insights, jobs, lifecycle, logs, players, recordings, setup, site, site_links, song_pages, this_pc, tokens
+# The site's notice by another name: notice() here is the maintenance notice's answer.
+from . import notice as site_notice
 from . import webhooks
 # The status page's module by another name: the route's handler is called status.
 from . import status as status_page

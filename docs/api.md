@@ -229,6 +229,14 @@ curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/j
 curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$API/maintenance"
 ```
 
+Put a notice at the top of the site's pages until an hour from now, then take it down:
+
+```sh
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"text\": \"Open late tonight.\", \"until\": $(( $(date +%s) + 3600 ))}" "$API/notice"
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$API/notice"
+```
+
 Send a Discord channel's messages from this server in Korean, check that the chat takes them, and see how its last one
 went (the address comes back masked; the whole one stays on the server):
 
@@ -672,6 +680,47 @@ Refusals:
 Turns the notice off. Players in the game are told between songs that it is over.
 
 Answer: `200` with [Notice](#notice).
+
+### Notice
+
+The Notices page's notice on the site: one line at the top of every page of the players' site.
+
+| Route | Scope | What it does |
+|:---|:---:|:---|
+| [`GET /notice`](#get-notice) | read | The notice on the site: what it says, whether it is up, when it ends. |
+| [`PUT /notice`](#put-notice) | write | Puts the notice up, or gives it new words or a new end. |
+| [`DELETE /notice`](#delete-notice) | write | Takes the notice down. |
+
+#### `GET /notice`
+
+The notice on the site: what it says, whether it is up, when it ends.
+
+Answer: `200` with [SiteNotice](#sitenotice).
+
+#### `PUT /notice`
+
+Puts the notice up, or gives it new words or a new end. Everyone signed in sees it at the top of every page of the site at once. A visitor who closed it sees it again on their next visit, and when its words change. Its whitespace, line breaks too, becomes single spaces.
+
+Body (JSON):
+
+- `text` (string): What it says: one line of up to 200 characters.
+- `until` (integer, or null, optional): When it ends by itself (Unix time). Null or left out: no end.
+
+Answer: `200` with [SiteNotice](#sitenotice).
+
+Refusals:
+
+- `400 notice_empty`: No words, or only spaces.
+- `400 notice_too_long`: Longer than 200 characters.
+- `400 notice_not_text`: Characters that cannot be shown (control or formatting characters).
+- `400 notice_end_past`: The end has come already.
+- `400 notice_end_far`: The end is more than ten years away.
+
+#### `DELETE /notice`
+
+Takes the notice down. No notice to take down is no error: the answer says there is none.
+
+Answer: `200` with [SiteNotice](#sitenotice).
 
 ### Webhooks
 
@@ -2509,6 +2558,16 @@ The in-game maintenance notice.
 - `change` (integer): The number of its last change (turned on, a new message, ended), higher with each one; 0 before the first. The game's notice page is asked for under it, and players in the game are told of each change once.
 - `changed_at` (integer, or null): When that change was made (Unix time); null before the first.
 
+#### SiteNotice
+
+The notice on the site: one line at the top of every page of the players' site, for everyone signed in.
+
+- `text` (string): What it says; empty when there is none.
+- `shown` (boolean): True while it is up: there is one, and its end has not come.
+- `until` (integer, or null): When it ends by itself (Unix time); null for no end.
+- `set_at` (integer, or null): When it was set (Unix time); null when there is none.
+- `by` (string, or null): Who set it: the admin, or through the API the admin whose token it was.
+
 #### Webhook
 
 A chat the server sends messages to, through its webhook.
@@ -2554,6 +2613,13 @@ A test message sent.
 - `status` (integer, or null): The chat's HTTP status; null without an answer.
 - `code` (string, or null): When it did not go through, what happened, as a failure's code.
 - `message` (string): How it went, in a sentence.
+
+#### PasswordChanged
+
+The owner's password changed.
+
+- `changed` (boolean): True: the new password works from now on, for the admin pages and the players' site alike.
+- `user` (string): The owner's ID (ADMIN_USER), which signs in with it.
 
 #### Stopping
 

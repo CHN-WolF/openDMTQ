@@ -857,6 +857,110 @@ table.data-parts .runtime { font-weight: 400; }
 .ask .btn[disabled] { opacity: 0.42; cursor: not-allowed; }
 /* The stopped page's state, its light beside the heading as on the Server page. */
 .server-state .setup-state { color: var(--chalk); }
+
+/* ------------------------------------------------------------------ a player's own page (player.html) */
+
+/* Who the page is about: the level badge, the name and what holds for them, the ways back on the right; under each other
+   on a phone. */
+.player-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px var(--gap); }
+.player-who { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.player-name { min-width: 0; }
+.player-name h2 { margin: 0; }
+.player-name .meta { margin: 4px 0 0; }
+.player-links { display: flex; flex-wrap: wrap; gap: 8px; }
+/* A state of the player's in its own colour, the lamp of the same meaning before its words. */
+.player-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; font-size: var(--t-xs); font-weight: 700; color: var(--chalk); background: var(--deck); box-shadow: inset 0 0 0 1px var(--seam); }
+.chip.bad { color: #ffc4cb; background: color-mix(in srgb, var(--bad) 13%, var(--deck)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 46%, transparent); }
+.chip.warn { color: #ffe6a0; background: color-mix(in srgb, var(--warn) 11%, var(--deck)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 42%, transparent); }
+/* The level as the game's top bar shows it: a round emblem, the figure in the numbers' face and Lv under it. */
+.lv-badge { flex: none; display: grid; place-content: center; justify-items: center; width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #2d353e, #161b20 72%); box-shadow: inset 0 0 0 2px var(--seam), inset 0 0 0 5px #11151a, inset 0 0 0 6px rgba(255, 255, 255, 0.08); }
+.lv-badge b { font: 800 22px/0.95 var(--display); color: #fff; font-variant-numeric: tabular-nums; }
+.lv-badge i { font: 700 var(--t-2xs)/1 var(--wide); font-style: normal; color: var(--ash); }
+.lv-badge.big { width: 76px; height: 76px; }
+.lv-badge.big b { font-size: 32px; }
+
+/* The cards of the game's state: two columns where they fit, the currency and the level on top, the ban and the items under
+   them; one column below that. */
+.game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); align-items: start; }
+/* Each column its own stack of cards, the page's gap between them: a short card leaves no hole beside a tall one. */
+.game-col { display: grid; gap: var(--gap); align-content: start; min-width: 0; }
+@media (max-width: 980px) { .game-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* A currency as the game's top bar has it: its mark, its name and the figure, in a well of its own, then its form. */
+.purse { margin: 0 0 16px; padding: 14px 16px 12px; background: var(--deck); box-shadow: inset 0 0 0 1px var(--seam); }
+.purse-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 10px; }
+.purse-mark { font: 800 var(--t-md)/1 var(--wide); color: var(--ash); min-width: 2.6em; }
+.purse-name { font-size: var(--t-sm); font-weight: 600; color: var(--ash); overflow-wrap: anywhere; }
+.purse-num { font: 800 32px/1.05 var(--display); color: #fff; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+/* The player's own balance under a figure that is unlimited, under that figure. */
+.purse-own { margin: 2px 0 0; text-align: right; }
+.purse-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+.purse-form .input { flex: 1 1 130px; min-width: 0; font-variant-numeric: tabular-nums; }
+.purse-form .btns { flex: none; }
+.purse-how { margin: 10px 0 0; }
+/* The switch under the two currencies, as the Broadcasts page's: the state, what it does, the one button. */
+.game-switch { margin: 0; padding-top: 4px; }
+.game-switch .auto-line { margin: 0; }
+.game-switch .auto-line span:last-child { color: var(--ash); }
+
+/* The level, its badge and the gauge as the game draws it, then the two forms side by side where they fit. */
+.level-now { display: flex; align-items: center; gap: 16px; margin: 0 0 18px; }
+.level-gauge { flex: 1 1 auto; min-width: 0; }
+.gauge { height: 10px; background: #0e1216; box-shadow: inset 0 0 0 1px var(--seam); }
+.gauge > span { display: block; height: 100%; background: var(--mark); }
+.level-gauge .meta { margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+.level-form { display: flex; align-items: flex-end; gap: 8px; margin: 0 0 12px; }
+.level-form:last-child { margin-bottom: 0; }
+.level-form .field { flex: 1 1 auto; }
+/* As tall as the field beside it: the field's own height, not a small button's. */
+.level-form .btn { flex: none; min-width: 112px; }
+
+/* A ban: what holds and why, or the form. The reason as the owner wrote it, set apart. */
+.ban-reason { margin: 0 0 4px; padding: 10px 14px; font-size: var(--t-md); color: var(--chalk); background: var(--deck); box-shadow: inset 3px 0 0 var(--bad); overflow-wrap: anywhere; white-space: pre-line; }
+.game-ban .auto-line.big { margin: 0 0 12px; }
+.ban-form { display: grid; gap: 12px; }
+.ban-form .btn-line { margin: 0; }
+.ban-form textarea { min-height: 64px; }
+
+/* The items, a kind to a fold: its name and how many the player has, then the items each with its button. */
+.kind { border-top: 1px solid rgba(255, 255, 255, 0.075); }
+.kind:last-child { border-bottom: 1px solid rgba(255, 255, 255, 0.075); }
+.kind > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 0 2px; cursor: pointer; list-style: none; }
+.kind > summary::-webkit-details-marker { display: none; }
+.kind > summary::after { content: ""; flex: none; width: 8px; height: 8px; margin-left: 4px; border-right: 2px solid var(--ash); border-bottom: 2px solid var(--ash); transform: rotate(45deg) translateY(-2px); }
+.kind[open] > summary::after { transform: rotate(225deg) translateY(-2px); }
+.kind-name { flex: 1 1 auto; font-size: var(--t-md); font-weight: 700; color: var(--chalk); }
+.kind-count { color: var(--ash); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.item-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.item-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: var(--ctl-sm); padding: 4px 4px 4px 12px; background: var(--deck); }
+.item-list li.not .item-name { color: var(--ash); }
+.item-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-sm); color: var(--chalk); overflow-wrap: anywhere; }
+/* The item's number, as the API names it: two items the game names alike (a note sold, the same note given) told apart. */
+.item-id { flex: none; font-size: var(--t-2xs); color: var(--ash); font-variant-numeric: tabular-nums; }
+.item-how { flex: none; padding: 1px 6px; font-size: var(--t-2xs); font-weight: 700; color: var(--ash); box-shadow: inset 0 0 0 1px var(--seam); }
+.item-list .btn { flex: none; }
+
+/* The player's purchases: the dates and figures in their columns. */
+table.purchases td.r { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The name and the reset, the page's last card: the reset's heading as the card's second part. */
+.player-name-card h3 { margin-top: 22px; }
+.player-name-card .inline-form { max-width: 460px; }
+
+/* ------------------------------------------------------------------ the Players page's game card and bans */
+/* The server's own game settings: the switch for every player, then what new players start with, three figures and Save. */
+.game-start { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 10px; align-items: end; margin: 12px 0 0; }
+.game-start .btn { min-width: 96px; }
+@media (max-width: 700px) { .game-start { grid-template-columns: minmax(0, 1fr); } }
+.banned-list { list-style: none; margin: 0; padding: 0; }
+.banned-list li { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr) auto auto; align-items: center; gap: 6px 14px; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.075); font-size: var(--t-sm); }
+.banned-list li > span { overflow-wrap: anywhere; }
+.banned-list .ban-why { color: var(--chalk); }
+.banned-list .ban-end { color: var(--ash); white-space: nowrap; }
+@media (max-width: 700px) { .banned-list li { grid-template-columns: minmax(0, 1fr) auto; } .banned-list .ban-why, .banned-list .ban-end { grid-column: 1; } }
+/* A banned player in the list: the mark after the name. */
+.name-chip { margin-left: 8px; padding: 2px 7px; font-size: var(--t-2xs); font-weight: 700; color: #ffc4cb; background: color-mix(in srgb, var(--bad) 13%, var(--deck)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 46%, transparent); white-space: nowrap; }
+
 /* The Notices page's cards. The site's notice (notice_card.html). */
 /* The end beside the words: as wide as a date and a time, the words take the rest; on a phone the row stands as a column. */
 .notice-until { flex: 0 1 240px; }

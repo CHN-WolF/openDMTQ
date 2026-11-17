@@ -46,6 +46,8 @@ CHANGE_WORDS = {
     "backup_action:delete": "change.backup_delete", "backup_action:restore": "change.backup_restore",
     "songs_page:upload": "change.song_add", "songs_page:hide": "change.song_hide", "songs_page:show": "change.song_show", "songs_page:remove": "change.song_remove",
     "maintenance_page:on": "change.maint_on", "maintenance_page:off": "change.maint_off",
+    # The Notices page's notice on the site (notice.py).
+    "notice:show": "change.notice_show", "notice:clear": "change.notice_clear",
     # The Notices page's Discord and Slack card (webhooks.py): the address masked as the target.
     "webhook_new:": "change.hook_add", "webhook_action:save": "change.hook_save", "webhook_action:test": "change.hook_test",
     "webhook_action:delete": "change.hook_delete",
@@ -63,6 +65,17 @@ CHANGE_WORDS = {
     "server:stop": "change.server_stop", "server:port": "change.server_port", "server:restart": "change.server_restart",
     "server:uninstall": "change.server_uninstall",
     "server:repair": "change.server_repair", "server:delete-data": "change.server_delete_data",
+    # Play on this PC (this_pc.py): the PC client installed or opened on the server PC, by whoever pressed it.
+    "app:play_here": "change.play_here",
+    # A one-time sign-in link to the players' site the API made (site_links.py), for its token's admin.
+    "site:link": "change.site_link",
+    # A player's game state on their page (game.py), and the server's game settings on the Players page.
+    "player_game:max": "change.game_max", "player_game:q": "change.game_q", "player_game:unlimited-on": "change.game_unlimited_on",
+    "player_game:unlimited-off": "change.game_unlimited_off", "player_game:level": "change.game_level", "player_game:exp": "change.game_exp",
+    "player_game:give": "change.game_give", "player_game:take": "change.game_take", "player_game:ban": "change.game_ban",
+    "player_game:unban": "change.game_unban", "player_game:reset": "change.game_reset",
+    "game_settings:unlimited-on": "change.game_all_on", "game_settings:unlimited-off": "change.game_all_off",
+    "game_settings:start": "change.game_start",
     # The owner's password changed on the Server page (lifecycle.py).
     "server:password": "change.server_password",
     # What a player changed of their own account on the site's MY PAGE (server/portal/me_lib.php writes these lines).

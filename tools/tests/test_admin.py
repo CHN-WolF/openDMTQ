@@ -3078,9 +3078,10 @@ class FormChecksTest(unittest.TestCase):
                     self.assertIn("novalidate", form.group(1), f"{name}: {field}")
                     self.assertRegex(field, r"""data-bad="\{\{ tp\('[\w.]+'\) \}\}\"""", f"{name}: {field}")
         # The sign-in's two, the account's ID and passwords, a token's name, the setup's ID, the other address, the two
-        # files, the recordings' limits, the plays' days, the Server page's new port and a new webhook's address: none of
-        # them left out.
-        self.assertEqual(checked, 16)
+        # files, the recordings' limits, the plays' days, the Server page's new port, the owner's new password twice, the
+        # site's notice with its end, and a new webhook's address; a player's currency, level, experience and ban reason,
+        # and what a new player starts with: none of them left out.
+        self.assertEqual(checked, 27)
 
     def test_the_sign_in_and_the_password_fields_are_labelled_with_show_and_the_kept_id(self):
         with Install() as inst:
