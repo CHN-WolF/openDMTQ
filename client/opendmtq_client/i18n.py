@@ -570,7 +570,7 @@ TEXT = {
     "guide.download.name": ("DOWNLOAD", "DOWNLOAD"),
     "guide.download.title": ("Get the app", "앱 받기"),
     "guide.download.text": ("The server builds it for its own address, the same one its phones install. It comes once, and again only when the server has a newer one.",
-                            "서버가 자기 주소용으로 만든 앱으로, 휴대폰에 설치하는 앱과 같습니다. 한 번 받고, 서버에 새 버전이 있을 때만 다시 받습니다."),
+                            "서버 주소에 맞춰 만든 앱으로, 휴대폰에 설치하는 앱과 같습니다. 한 번 받고, 서버에 새 버전이 있을 때만 다시 받습니다."),
     "guide.sound.name": ("SOUND CHECK", "SOUND CHECK"),
     "guide.sound.title": ("Sound and screen", "소리와 화면"),
     "guide.stage.name": ("STAGE START", "STAGE START"),
