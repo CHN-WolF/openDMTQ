@@ -43,27 +43,15 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - Notices in the game at every change of a broadcast switch, the player's or the server's under it, also when a
   broadcast ends and while the server's broadcasts are off, each with its own number (`toast_id`, `toast_kind` in
   `/live/state`); and at every change of the maintenance notice for players already in the game.
-- The server hands the PC clients that play on it their updates: those of the version of the installer it hands out, at
-  `/updates/` on its one port. A release's tools image brings them, a host install's kit carries them in, and any other
-  install fetches them from the release. A launcher looks at its server first and at GitHub's releases second, and goes
-  no further than the version its server hands out, or than the server's own version when it hands out none: launchers
-  stay matched to their server, on a network with no way out too. The admin pages' App page says what the server hands
-  out, and `GET /app/windows/updates` gives it file by file.
-- Delta packages: each release has `opendmtq.client-<version>-delta.nupkg`, what changed since the release before, which
-  a PC client of that release downloads instead of the whole update and its own updater puts the new version together
-  from. When what it puts together does not hold the release's files, the whole package comes instead.
-- The PC client's Sound page: master, music and effects volumes and an equaliser (Flat, Bass, Vocal, Treble, or three
-  bands of the player's own at 120 Hz, 1 kHz and 6 kHz), with `--set music_volume=`, `effects_volume=`, `eq=` and
-  `eq_low=` to `eq_high=`, and `--status`.
-- A sound panel over the game, from the bar: the same volumes and equaliser, heard as they change, kept for the next game
-  and shown by the launcher.
-- The bar over the game by touch: a tap on its handle, a long press or a pull down brings it; a mouse brings it by
-  pointing at the top or by pressing and pulling down. In a song a press reaches the game unless the game has been quiet
-  for 1.5 s.
-- The PC client's installer, run again, offers Open, Repair, Update and Uninstall (with the player's data kept or not),
-  and Windows' Apps removes the PC client the same way, in OpenDMTQ's design.
-- The launcher's log names each display's current rate, its highest rate at its size and whether Windows changes the
-  rate by itself (dynamic refresh rate).
+- A page of each player's own on the admin pages, from their name on the Players page, for what the game keeps of them:
+  their MAX POINT and Q POINT, set, added to or taken from, as the game's top bar shows them; unlimited currency, the
+  player's own and one for every player (the game is told 99,999,999 of each, nothing is taken, purchases are kept as
+  usual; off until turned on); their level and experience, by the game's own table; the characters, add-ons, notes and
+  skins they have, given and taken; a ban with a reason and an end, which the game refuses their sign-in for with the
+  reason shown over it, and the site and the PC client refuse their accounts for, with their broadcast stopped; their
+  purchases; every change made about them, who made it and from what to what; and their game state reset to a new
+  player's. The Players page has what a new player starts with, unlimited currency for all, and the banned players. Each
+  has its API route.
 
 ### Changed
 
@@ -129,9 +117,9 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ### Fixed
 
-- On a PC the game mixed its sound at 22,050 Hz, which cut everything above 11 kHz from every song. It mixes at
-  44,100 Hz now, as on a phone: from 11 to 17 kHz a song is within 2 dB of its own samples, where it was about 35 dB
-  down.
+- A purchase in the game's shop kept nothing: a note bought for MAX POINT never became the player's, and nothing was
+  taken from the balance the top bar showed. Purchases now take their price, unless the player's currency is unlimited,
+  and the item stays theirs.
 - The ID and password the server's window and `.env` named did not open the players' site, the page the server's own
   address shows, only the admin pages: signing in there failed every time.
 - A player's menu on the admin Players page opened under the next card or was cut off by its own on a short list.

@@ -125,7 +125,7 @@ page's things to look at first.
 | Status | Things to look at first when there are any (no app, no backup, little disk, a failed build). Game server health, players, plays in the last 24 hours, players broadcasting now (or that broadcasts are off), disk space, current app, last backup, maintenance. An "Add a player" card that leads to the Accounts page, where each account comes with the message to send its player, and the code that downloads the app. Plays over the last 30 days, when people play by weekday and hour, who plays most, the most played songs, what takes the disk, best records by grade, recent plays (one played with the keyboard marked as on the site). Resources: this machine's processors, uptime, memory, swap, disk and load, with CPU, memory in use and the game server's answers over the last 24 hours. |
 | App | The app's name on phones, `TECHNIKA Q (<name>)`: SERVER_NAME, or the address in PUBLIC_HOST when it is unset. Build the app (about 20 seconds, output shown live), download any build, delete one, or all the old ones at once. A build for another address is kept for download and does not replace the one the site offers. The PC client's installer for Windows, its size and its own download, set up for this server (the builder keeps it beside the app; the same installer serves every server). Opened on the server PC itself, [**Play on this PC**](#play-on-this-pc). |
 | Songs | Add a song package, remove added songs, hide or show any song; what takes more than a few seconds shows its progress until it ends. Each song's plays over the last 30 days, against the most played, and when it was last played. Says so when the server has no client data or no songs yet. See [songs.md](songs.md). |
-| Players | Search by name, sort by any column, when each last played, and a row of 14 small cells, one per day of the last two weeks, darker on days with more plays. A spreadsheet of them all. A name leads to the player's page on the site. On each row whether their broadcast is on, with its switch (while broadcasts are off for the server, the page says so and a switch that is on is held for then); under More: rename, reset scores, delete (those two ask first and make a backup first, and take the player's achievements with their scores) ([live.md](live.md)). |
+| Players | At the top, the game for every player: unlimited currency for all of them, and what a new player starts with ([a player's page](#a-players-page)); under it, while anyone is banned, the banned players with the reason, the end and the way to lift each ban. Search by name, sort by any column, when each last played, and a row of 14 small cells, one per day of the last two weeks, darker on days with more plays. A spreadsheet of them all. A name leads to the player's own page here, a banned player's marked. On each row whether their broadcast is on, with its switch (while broadcasts are off for the server, the page says so and a switch that is on is held for then); under More: rename, reset scores, delete (those two ask first and make a backup first, and take the player's achievements with their scores; a deletion takes their game state and ban too) ([live.md](live.md)). |
 | Accounts | The site's accounts, the only way into it: make one (an ID, a password typed or made, whom it is for, the game player it is, admin rights to these pages too), and its password shows once with the message to send; a new password, disable or enable, delete. Each with when it was made and last signed in. Under them the API's tokens: make one (a name and a scope, read or write), shown once; each with whose it is, when it was last used and whether it works; revoke ([api.md](api.md)). |
 | Broadcasts | At the top, broadcasts for the whole server: on or off (off until turned on; turning them off while someone is on air asks first), how many players are switched on and on air, what new players start with (off, or on from their first play), and the stream's quality, one of four with what an hour of it takes and what each viewer's connection needs. Under it every broadcast, kept (players see them as past broadcasts): watch, download as one file, hide from players, delete one, selected or all of a player's. Disk used against the two limits (20 GB and 30 days by default), which are set here, and about how many hours of broadcast still fit at the quality chosen. See [live.md](live.md). |
 | Backups | Back up now, download, upload, restore (the server keeps running; the current state is saved first; the accounts and the API's tokens stay as they are now, and a server with no account yet takes the backup's), delete, each with its date and kind. A backup or a restore that takes more than a few seconds shows its progress until it ends. A daily backup, on unless turned off: one a day while something has changed, the latest seven kept. The page shows those seven as seven slots, the newest on the right, and when the next one comes. |
@@ -142,6 +142,43 @@ Backups hold neither live video nor recordings, so they stay small.
 On a host install and in the Windows bundle, the setup imports the game's files and changes the address. With Docker
 Compose those stay on the command line (`./opendmtq import`, `./opendmtq host`, `./opendmtq expose`), because they
 restart the containers. The ports and the passwords are in `.env`; change them there, then restart the server.
+
+## A player's page
+
+A name on the Players page opens that player's own page: what the game keeps of them besides their scores, each part with
+the way to change it. A change shows in the game at its next look at the player: after a song, a purchase, or the game's
+next start.
+
+- **Currency.** The two the game's top bar shows: MAX POINT beside MAX and Q POINT beside Q, each set to a figure, or
+  added to or taken from, from 0 to 99,999,999 (the most the bar shows whole). A song played adds 150 MAX POINT; the shop
+  takes what its tables price a skin, a note, a character, an add-on or a pack of MAX POINT at, and some 4 LINE charts
+  take 200 to 500 MAX POINT a play, as their song's page shows. **Unlimited currency**, the player's own switch (and one
+  for every player on the Players page; both off until turned on): the game is told 99,999,999 of each, and a purchase
+  or a chart takes nothing, while the purchase is kept as usual (the item is the player's, and the purchase is listed with
+  nothing paid). The player's own balance stays as it was underneath, and shows again once unlimited is off.
+- **Level.** The level and its gauge as the top bar draws them, from the game's own table of experience: a level from 1
+  to 99 (its experience goes to that level's start), or the experience itself, 0 to 130,408 (the level follows it). A
+  song played adds 10 EXP; past a level's end the game shows its level-up after the song.
+- **Items.** The items a player equips, kind by kind as MY PAGE's inventory has them (characters, add-ons, notes,
+  skins), each given or taken. Every player has every item but the notes from the start; a note bought in the shop stays
+  theirs. An item taken while equipped is unequipped, and the game shows its own default in its place.
+- **Ban.** A reason (up to 200 characters, which the player sees) and an end: in 1, 3, 7 or 30 days, or until lifted.
+  The game stops the player's sign-in, and any request of a game already in, at its own "Network connection error."
+  (RETRY tries again, CLOSE ends the game), with OpenDMTQ's notice over it saying "You cannot play on this server" and the
+  reason, with the end where the ban has one: the PC client's overlay and the phones show it at every refused sign-in. The
+  site and the PC client's launcher refuse the accounts linked to the player with the same reason, a browser signed in to
+  one is signed out at its next page, and the player's broadcast ends (their own switch is kept for after the ban). A ban
+  whose end has passed ends by itself. Lift the ban here or on the Players page.
+- **Purchases.** What the player bought in the game, with its price and what was paid.
+- **Changes.** Every change of this player's made on these pages or through the API: when, what, from what to what, and
+  who; the Logs page's Changes tab has them too.
+- **Name, and the game state's reset.** The name, as the Players page's More renames; and the game state back to what a
+  new player starts with (currency, level, items, purchases), the scores, achievements, name and ban as they are, a backup
+  first.
+
+What a new player starts with, on the Players page: the MAX POINT, the Q POINT and the level, 999,999, 999,999 and 99
+until set otherwise (what every player had before these were kept). Players already on the server keep what they have
+when the values change. Every one of these has its route in the API ([api.md](api.md)).
 
 ## The PC client's installer
 

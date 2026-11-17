@@ -202,6 +202,26 @@ chart=$(curl -s -H "Authorization: Bearer $TOKEN" "$API/site/songs/$song" | pyth
 curl -s -H "Authorization: Bearer $TOKEN" "$API/site/charts/$chart/ranking"
 ```
 
+A player's game state, as their page on the admin pages shows it: 5,000 MAX POINT, level 20, then a ban for a week with
+the reason the game shows them, and the ban lifted again:
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" "$API/players/3/game"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"currency": "max", "how": "set", "amount": 5000}' "$API/players/3/game/currency"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"level": 20}' "$API/players/3/game/level"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"reason": "Scores sent from a program", "days": 7}' "$API/players/3/ban"
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$API/players/3/ban"
+```
+
+Unlimited currency for every player, and what a new player starts with:
+
+```sh
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"unlimited": true, "start_mpoint": 0, "start_qpoint": 0, "start_level": 1}' "$API/game"
+```
+
 Turn the maintenance notice on with a message, then off:
 
 ```sh
@@ -730,6 +750,19 @@ The Players page.
 | [`DELETE /players/{player}`](#delete-playersplayer) | write | Deletes a player, with their records, broadcast and recordings. |
 | [`POST /players/{player}/live`](#post-playersplayerlive) | write | Turns a player's broadcast on. |
 | [`DELETE /players/{player}/live`](#delete-playersplayerlive) | write | Turns a player's broadcast off. |
+| [`GET /players/{player}/game`](#get-playersplayergame) | read | A player's game state: currencies, level, items, ban, purchases. |
+| [`POST /players/{player}/game/currency`](#post-playersplayergamecurrency) | write | Sets a player's MAX POINT or Q POINT, or adds to it or takes from it. |
+| [`POST /players/{player}/game/unlimited`](#post-playersplayergameunlimited) | write | Makes a player's currency unlimited. |
+| [`DELETE /players/{player}/game/unlimited`](#delete-playersplayergameunlimited) | write | Turns a player's own unlimited currency off: the game shows their own balance again. |
+| [`POST /players/{player}/game/level`](#post-playersplayergamelevel) | write | Sets a player's level or their experience. |
+| [`POST /players/{player}/game/items/{item}`](#post-playersplayergameitemsitem) | write | Gives a player an item they equip. |
+| [`DELETE /players/{player}/game/items/{item}`](#delete-playersplayergameitemsitem) | write | Takes an item from a player. |
+| [`POST /players/{player}/ban`](#post-playersplayerban) | write | Bans a player, with a reason and an end. |
+| [`DELETE /players/{player}/ban`](#delete-playersplayerban) | write | Lifts a player's ban. |
+| [`POST /players/{player}/game/reset`](#post-playersplayergamereset) | write | Resets a player's game state to what a new player starts with: currencies, level, items, purchases. |
+| [`GET /bans`](#get-bans) | read | Every banned player, with the reason and the end. |
+| [`GET /game`](#get-game) | read | The server's game settings: unlimited currency for every player, what a new player starts with. |
+| [`PUT /game`](#put-game) | write | Changes the server's game settings. |
 
 #### `GET /players`
 
@@ -844,6 +877,227 @@ Refusals:
 
 - `404 player_not_found`: No such player.
 - `409 stale`: The number belongs to someone else now.
+
+#### `GET /players/{player}/game`
+
+A player's game state: currencies, level, items, ban, purchases.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `404 player_not_found`: No such player.
+
+#### `POST /players/{player}/game/currency`
+
+Sets a player's MAX POINT or Q POINT, or adds to it or takes from it. Within what the game's top bar shows: 0 to 99,999,999 after the change. The game shows it at its next look at the player's state: after a song, a purchase, or its next start.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Body (JSON):
+
+- `currency` (string): Which: max (MAX POINT) or q (Q POINT). One of `max`, `q`.
+- `how` (string): set it to amount, add amount, or take amount. One of `set`, `add`, `take`.
+- `amount` (integer): 0 to 99,999,999 (not 0 to add or take).
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `400 bad_amount`: An amount outside 0 to 99,999,999, or 0 to add or take.
+- `400 too_much`: The change would go past 99,999,999.
+- `400 too_little`: They hold less than amount.
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `POST /players/{player}/game/unlimited`
+
+Makes a player's currency unlimited. The game is told they have 99,999,999 of each; a purchase or a chart that costs MAX POINT takes nothing, and the purchase is kept as usual. Their own balance stays as it is underneath.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `DELETE /players/{player}/game/unlimited`
+
+Turns a player's own unlimited currency off: the game shows their own balance again. While the server's is on (GET /game), their currency stays unlimited.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `POST /players/{player}/game/level`
+
+Sets a player's level or their experience. A level sets the experience to that level's start, as the game's own table has it; an experience sets the level it falls in. One of the two.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Body (JSON):
+
+- `level` (integer, optional): 1 to 99.
+- `exp` (integer, optional): 0 to 130,408.
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `400 level_or_exp`: Both or neither of level and exp.
+- `400 bad_level`: A level outside 1 to 99.
+- `400 bad_exp`: An experience outside 0 to 130,408.
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `POST /players/{player}/game/items/{item}`
+
+Gives a player an item they equip. A character, an add-on, a note or a skin (the items of GET /players/{player}/game). The game lists it as theirs in MY PAGE and the shop from its next look.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `item` (path, integer): An item's id, as a player's game state lists it (items).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `404 item_not_found`: No such item to give.
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `DELETE /players/{player}/game/items/{item}`
+
+Takes an item from a player. Equipped, it is unequipped too: the game shows its own default in its place.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `item` (path, integer): An item's id, as a player's game state lists it (items).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `404 item_not_found`: No such item to take.
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `POST /players/{player}/ban`
+
+Bans a player, with a reason and an end. The game refuses their sign-in and every request of theirs with its own Network connection error, and OpenDMTQ's notice over the game shows the reason (and the end); the site and the PC client refuse their accounts, and their broadcast ends. A ban there already is replaced. The end: days from now, or until (Unix time); neither, until it is lifted.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Body (JSON):
+
+- `reason` (string, 200 characters at most): Why, as the game shows it to the player.
+- `days` (integer, optional): Days from now, 1 to 3,650; 0 (as when left out without until): until it is lifted.
+- `until` (integer, optional): When it ends (Unix time, to come).
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `400 no_reason`: No reason.
+- `400 bad_days`: days outside 0 to 3,650.
+- `400 bad_until`: until has passed.
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `DELETE /players/{player}/ban`
+
+Lifts a player's ban.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Answer: `200` with [PlayerGameAnswer](#playergameanswer).
+
+Refusals:
+
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+
+#### `POST /players/{player}/game/reset`
+
+Resets a player's game state to what a new player starts with: currencies, level, items, purchases. Their scores, achievements, name and ban stay. A backup is made first; without it nothing changes.
+
+Parameters:
+
+- `player` (path, integer): A player's number (the game's player id, which the site's player.php?id= takes too).
+- `seen` (query, string, optional): The player's seen value from the list. When given, the change happens only while the number still belongs to the same player (409 stale otherwise). A deleted player's number goes to the next new phone.
+
+Answer: `200` with [PlayerGameReset](#playergamereset).
+
+Refusals:
+
+- `404 player_not_found`: No such player.
+- `409 stale`: The number belongs to someone else now.
+- `500 backup_failed`: The backup could not be made (the message says why).
+
+#### `GET /bans`
+
+Every banned player, with the reason and the end.
+
+Answer: `200` with [BanList](#banlist).
+
+#### `GET /game`
+
+The server's game settings: unlimited currency for every player, what a new player starts with.
+
+Answer: `200` with [GameSettings](#gamesettings).
+
+#### `PUT /game`
+
+Changes the server's game settings. What is left out stays as it is. New start values reach new players alone: every player there is now keeps what they have.
+
+Body (JSON):
+
+- `unlimited` (boolean, optional): Unlimited currency for every player.
+- `start_mpoint` (integer, optional): 0 to 99,999,999.
+- `start_qpoint` (integer, optional): 0 to 99,999,999.
+- `start_level` (integer, optional): 1 to 99.
+
+Answer: `200` with [GameSettings](#gamesettings).
+
+Refusals:
+
+- `400 bad_body`: None of the four was sent.
+- `400 bad_start_mpoint`: A start value outside its range.
+- `400 bad_start_qpoint`: A start value outside its range.
+- `400 bad_start_level`: A start level outside 1 to 99.
 
 ### Accounts
 
@@ -2201,6 +2455,99 @@ A player deleted.
 
 - `deleted` (integer): Their number.
 - `backup` (string): The backup made first.
+
+#### PlayerGame
+
+A player's game state: the currencies and the level the game's top bar shows, their items, a ban.
+
+- `player` (integer): Their number.
+- `name` (string): Their name as the pages show it.
+- `mpoint` (integer): Their MAX POINT, 0 to 99,999,999.
+- `qpoint` (integer): Their Q POINT, 0 to 99,999,999.
+- `shown_mpoint` (integer): The MAX POINT the game is told: 99,999,999 while their currency is unlimited, else mpoint.
+- `shown_qpoint` (integer): The Q POINT the game is told, likewise.
+- `unlimited` (boolean): True while their currency is unlimited: their own switch or the server's (GET /game).
+- `own_unlimited` (boolean): Their own switch (POST or DELETE /players/{player}/game/unlimited).
+- `level` (integer): Their level, 1 to 99, worked out of their experience by the game's own table.
+- `exp` (integer): Their experience, 0 to 130,408 (level 99's start).
+- `level_start` (integer): The experience their level starts at.
+- `level_next` (integer, or null): The experience the next level starts at; null at the top.
+- `kept` (boolean): False while the server keeps nothing of theirs yet: they have what a new player starts with.
+- `items` (list of [GameItem](#gameitem)): The items a player equips, kind by kind, each with whether they have it.
+- `ban` ([Ban](#ban), or null): Their ban while it lasts.
+- `purchases` (list of [Purchase](#purchase)): What they bought in the game, newest first (20 at most).
+- `seen` (string): Who the number belongs to now: send it as ?seen= with a change.
+
+#### GameItem
+
+An item a player equips.
+
+- `id` (integer): Its id.
+- `kind` (string): C a character, F an add-on, N a note, K a skin: the four places on the game's top bar. One of `C`, `F`, `N`, `K`.
+- `name` (string): Its name, as the client's tables give it.
+- `owned` (boolean): True when the player has it.
+- `how` (string): How they have it: everyone (every player has it), bought, given; empty when they have not. One of `everyone`, `bought`, `given`, ``.
+
+#### Ban
+
+A ban.
+
+- `reason` (string): The owner's reason, which the game shows the player.
+- `since` (integer): When it began (Unix time).
+- `until` (integer, or null): When it ends (Unix time); null until it is lifted.
+- `by` (string): Who made it: the admin, or the admin and their token's name.
+
+#### Purchase
+
+A purchase in the game.
+
+- `at` (integer): When (Unix time).
+- `product` (integer): The shop's product.
+- `item` (integer): The item it gave (a pack of MAX POINT its own id).
+- `name` (string): The item's name.
+- `currency` (string): What its price is in. One of `max`, `q`, `free`.
+- `price` (integer): Its price.
+- `paid` (integer): What was taken: 0 while the player's currency was unlimited.
+
+#### PlayerGameAnswer
+
+A player's game state.
+
+- `game` ([PlayerGame](#playergame)): The player's game state now.
+
+#### PlayerGameReset
+
+A player's game state reset.
+
+- `game` ([PlayerGame](#playergame)): The player's game state now.
+- `backup` (string): The backup made first.
+
+#### BannedPlayer
+
+A banned player.
+
+- `id` (integer): Their number.
+- `name` (string): Their name.
+- `reason` (string): The owner's reason.
+- `since` (integer): When the ban began (Unix time).
+- `until` (integer, or null): When it ends (Unix time); null until it is lifted.
+- `by` (string): Who made it.
+- `seen` (string): Who the number belongs to now: send it as ?seen= with a change.
+
+#### BanList
+
+The bans that last.
+
+- `items` (list of [BannedPlayer](#bannedplayer)): Every banned player, the newest ban first.
+
+#### GameSettings
+
+The server's game settings.
+
+- `unlimited` (boolean): True while every player's currency is unlimited, whatever their own switch says.
+- `start_mpoint` (integer): The MAX POINT a new player starts with.
+- `start_qpoint` (integer): The Q POINT a new player starts with.
+- `start_level` (integer): The level a new player starts at.
 
 #### Account
 

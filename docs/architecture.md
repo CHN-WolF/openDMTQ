@@ -164,8 +164,25 @@ What the replies rely on, as the client behaves:
   own rules, whichever way their plays were made: the grade and the accuracy follow the best accuracy, and the AC and PP
   marks stay once any play earned them. The game's replies and its rankings are the same with or without the header: the
   site and the admin pages show the mark, and the rankings are one for touch and keys.
-- **Everyone has everything.** Level 99, 999,999 MAX POINT, every song from 1 to the highest id, every item. No quests,
-  no coupons (every code is invalid, in the client's own popup), no terms popup.
+- **A player's game state** (`src/player.php`, the admin pages' `game.py`). The two currencies the top bar shows (MAX
+  POINT, `mpoint`; Q POINT, `amt_total` as text), the level and its experience, and the items a player equips, kept in
+  `PlayerState` and `PlayerItem`. The level is worked out of the experience with the client's own table, so that the top
+  bar's gauge (the share of the way from the level's start to the next one's) is always right. A player the server has
+  kept nothing of has what a new player starts with (`GameSetting`: 999,999 of each and level 99 until the owner sets
+  others). A saved play adds 150 MAX POINT and 10 experience; `getPreviewPlayInfo` takes a chart's MAX POINT cost as its
+  play starts; the shop takes a product's price from the client's own tables (`catalog.json`'s `products`), keeps the item
+  and notes the purchase in `PlayerPurchase`: a MAX POINT price through `shop.buyFreeProduct` (the client's call for its
+  free currency), a Q price through `shop.buyProductByQPoint`, the currency the product's whichever call it comes by. The
+  client asks for the balance and the items in the same request and shows them. Unlimited currency (the player's own switch or the server's) tells the game 99,999,999 of each and takes nothing,
+  the purchase kept as usual. Every song from 1 to the highest id is owned, and every item of the client's tables but the
+  notes; no quests, no coupons (every code is invalid, in the client's own popup), no terms popup.
+- **A ban** (`PlayerBan`, with a reason and an end). The client shows only words of its own for a refused sign-in: a
+  platform login refused leaves it waiting with nothing on the screen, and RPC codes it knows are silent. So the game's
+  login (`user.loginV2`) and every call of the player's are answered with a code it does not know (`SVC.05403`), which
+  opens its own "Network connection error." with RETRY and CLOSE (CLOSE ends the game), and each refused login leaves a
+  notice for `/live/state` (`toast_kind` `ban`), which the PC client's overlay and the phones show over the game with the
+  owner's reason and the end. The site's sign-in and `client.php` refuse the accounts linked to the player, and
+  `/live/state` and `/live/upload` keep the player off the air.
 
 The in-game rankings are this month's: each player's best score per chart since the first of the month at midnight UTC
 (09:00 in Korea), from the log of every play. The game's ranking screens count down to that moment, so the boards start
@@ -186,8 +203,8 @@ database had used, so that nothing kept before it is taken for the restored data
 song list (each chart's line and difficulty, the charts of a line and of a song) is kept the same way, as a PHP file named
 after the list's file and made from that very file, so that only the song list's own request decodes its 200 KB.
 
-The achievements on MY PAGE come from what the server knows (level 99 and 999,999 MAX POINT for every player, the best
-scores, the play log), and each keeps the date it was earned on: the save that earns one stores it in
+The achievements on MY PAGE come from what the server knows (each player's level and MAX POINT as the game is told them,
+the best scores, the play log), and each keeps the date it was earned on: the save that earns one stores it in
 `AchievementDate`, and its reply names it. A stored achievement stays listed whatever the records give later (the play
 log keeps a year). Only a player's reset or deletion on the admin pages removes their rows.
 
@@ -353,6 +370,10 @@ erDiagram
   Member ||--o| LiveSwitch : "broadcast switch"
   SiteUser }o--o| Member : "linked player"
   SiteUser |o--o{ ApiToken : "an admin's tokens"
+  Member ||--o| PlayerState : "currencies and experience"
+  Member ||--o{ PlayerItem : "items given, taken, bought"
+  Member ||--o{ PlayerPurchase : "purchases"
+  Member ||--o| PlayerBan : "a ban"
   Member {
     INTEGER id "no key: the game's own table"
     NVARCHAR nickname
@@ -421,6 +442,38 @@ erDiagram
     INTEGER admin_since "when that account was made"
     INTEGER created_at
     INTEGER used_at
+  }
+  PlayerState {
+    INTEGER guid PK
+    INTEGER mpoint "MAX POINT"
+    INTEGER qpoint "Q POINT"
+    INTEGER exp "the level comes from it"
+    INTEGER unlimited "the player's own switch"
+    INTEGER changed_at
+  }
+  PlayerItem {
+    INTEGER guid PK
+    INTEGER item_id PK
+    INTEGER owned "1 has it, 0 taken"
+    TEXT how "bought, given, taken"
+    INTEGER at
+  }
+  PlayerPurchase {
+    INTEGER id PK
+    INTEGER guid
+    INTEGER product_id
+    INTEGER item_id
+    TEXT currency "max, q or free"
+    INTEGER price
+    INTEGER paid "0 while unlimited"
+    INTEGER at
+  }
+  PlayerBan {
+    INTEGER guid PK
+    TEXT reason "the game shows it"
+    INTEGER since
+    INTEGER until "null: until lifted"
+    TEXT by
   }
 ```
 
