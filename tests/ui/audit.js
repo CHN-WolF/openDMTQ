@@ -1219,6 +1219,35 @@ async function portalFlows(contexts) {
   const me = await linker.$eval('.auth-who', e => [e.tagName, (e.querySelector('.who-name') || e).textContent, e.getAttribute('href') || '']).catch(() => []);
   const marked = (await linker.$$('.pod.me, .board tr.me')).length;
   check('a linked account shows its player and marks their place', me[0] === 'A' && me[1] === 'Sena' && me[2].endsWith('player.php?id=1') && marked === 1, `${me} ${marked}`);
+  // The PC client's records of a linked account (client.php?records with the client's sign-in): Sena's, who plays by
+  // touch, then 민호's, who plays with the keyboard. Each list newest or best first, each row's chart named, its place on
+  // the chart among those with a record there, and the keyboard's mark as the play had it. Sena linked again after.
+  const pcSide = await contexts.browser.createBrowserContext();
+  const pc = await pcSide.newPage();
+  await pc.goto(`${P}/client.php?about`, { waitUntil: 'domcontentloaded' });
+  await pc.evaluate(async password => {
+    await fetch('/opendmtq/client.php?signin', { method: 'POST', body: new URLSearchParams({ user: 'dmtq', password }) });
+  }, PASSWORD);
+  const recordsNow = async () => pc.evaluate(async () => {
+    const r = await fetch('/opendmtq/client.php?records');
+    return [r.status, await r.json()];
+  });
+  // Rows as the PC client shows them, in their list's order.
+  const rowsFit = (list, inOrder) => Array.isArray(list) && list.length > 0 && list.every((r, i) => Number.isInteger(r.score)
+    && typeof r.title === 'string' && typeof r.chart_name === 'string' && Number.isInteger(r.rank) && r.rank >= 1
+    && r.rank <= r.players && (i === 0 || inOrder(list[i - 1], r)));
+  const newestFirst = (a, b) => a.at >= b.at, bestFirst = (a, b) => a.score >= b.score;
+  const [senaStatus, sena] = await recordsNow();
+  check("the PC client's records of a linked account: its player's latest plays and best records, each placed on its chart",
+    senaStatus === 200 && !!sena.player && sena.player.id === 1 && sena.player.name === 'Sena' && rowsFit(sena.recent, newestFirst)
+      && rowsFit(sena.best, bestFirst) && [...sena.recent, ...sena.best].every(r => r.keys === false), JSON.stringify(sena).slice(0, 400));
+  await linkTo('2');
+  const [, minho] = await recordsNow();
+  check("and of a player who plays with the keyboard, each row with the keyboard's mark",
+    !!minho.player && minho.player.id === 2 && rowsFit(minho.recent, newestFirst) && rowsFit(minho.best, bestFirst)
+      && [...minho.recent, ...minho.best].every(r => r.keys === true), JSON.stringify(minho).slice(0, 400));
+  await pcSide.close();
+  await linkTo('1');
   // Measured while linked too, where the player's own place shows: the name in the bar is a key of its own (a finger
   // can hit it), and the marked rows and podium card carry their ring.
   // Korean first and English last: a sweep leaves its last language in the browser's cookie, and the flows after this
