@@ -153,6 +153,37 @@ def main():
             controls_from_one_line(page, " with wider names")
     finally:
         bold.configure(size=size)
+
+    # ---- State rows (widgets.check_line: PLAY's ready check and its server card's sign-in): the words' first line and
+    # the value or the way to fix it at the right end stand on one line, with its middle on the lamp's (once a value
+    # stood 2 px above its words, 5 px at 200 %).
+    def edge(widget):
+        # What a label keeps above its words: its border, its padding and its keyboard ring.
+        return sum(int(widget.winfo_fpixels(str(widget.cget(o)))) for o in ("borderwidth", "pady", "highlightthickness"))
+
+    def state_rows_on_one_line(page):
+        app.nav_go(page)
+        shots.settle(app)
+        found = 0
+        for frame in shots.widgets_of(app.body.inner):
+            slaves = [x for x in frame.pack_slaves() if x.winfo_ismapped()] if isinstance(frame, tk.Frame) else []
+            lamps = [x for x in slaves if hasattr(x, "odq_picture") and isinstance(x, tk.Label)]
+            texts = [x for x in slaves if isinstance(x, tk.Label) and x not in lamps and x.cget("text")]
+            if len(lamps) != 1 or not texts:
+                continue
+            found += 1
+            light = lamps[0]
+            middle = light.winfo_rooty() + light.winfo_height() / 2.0
+            for text in texts:
+                line = app.root.tk.call("font", "metrics", text.cget("font"), "-linespace")
+                at = text.winfo_rooty() + edge(text) + int(line) / 2.0
+                if abs(at - middle) > 1:
+                    problems.append("%s: the state row's %r has its line's middle at %.1f, the lamp's at %.1f"
+                                    % (page, text.cget("text")[:30], at, middle))
+        if not found:
+            problems.append("%s: no state rows found" % page)
+
+    state_rows_on_one_line("play")
     for job in app.root.tk.splitlist(app.root.tk.call("after", "info")):
         app.root.after_cancel(job)
     app.root.destroy()

@@ -1714,17 +1714,29 @@ def check_line(parent, ui, state, text, action_text=None, action=None, bg=theme.
     light = lamp(row, ui, colour, bg=bg, hollow=state == "change")
     light.pack(side="left", anchor="n", pady=(ui.px(1), 0))
     beside = [light]
+    # The lamp's middle, from the row's top: the words' first line and what stands at the right end have their line's
+    # middle there, so that they stand on one line whether the words wrap or not (pack centred the words alone, which
+    # put a value held at the top two pixels above them, five at 200 %).
+    middle = ui.px(1) + light.winfo_reqheight() / 2.0
+
+    def at_middle(widget, font):
+        """How far down `widget` goes for its words' line to have its middle on the lamp's."""
+        # What the widget keeps above its words: its border, its padding and its keyboard ring.
+        edge = sum(int(widget.winfo_fpixels(str(widget.cget(option))))
+                   for option in ("borderwidth", "pady", "highlightthickness"))
+        return max(0, round(middle - font.metrics("linespace") / 2.0 - edge))
+
     if action_text and action:
         # The way to fix it, reached by the mouse or the keyboard.
         fix = link(row, ui, action_text, action, bg=bg)
-        fix.pack(side="right", anchor="n")
+        fix.pack(side="right", anchor="n", pady=(at_middle(fix, ui.fonts.body_bold), 0))
         beside.append(fix)
     elif value:
         what = tk.Label(row, text=value, font=ui.fonts.body, fg=theme.MUTED, bg=bg)
-        what.pack(side="right", anchor="n")
+        what.pack(side="right", anchor="n", pady=(at_middle(what, ui.fonts.body), 0))
         beside.append(what)
     words = label(row, ui, text, fg=theme.TEXT, bg=bg, wrap_margin=24, beside=beside)
-    words.pack(side="left", fill="x", padx=(ui.px(6), 0))
+    words.pack(side="left", fill="x", anchor="n", padx=(ui.px(6), 0), pady=(at_middle(words, ui.fonts.body), 0))
     return row
 
 
