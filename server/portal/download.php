@@ -114,7 +114,8 @@ page_header(t('dl.title'), 'download', $start ? '1;url=/apk' : ($building ? '20'
     <?php // A computer plays too: the same app, through the PC client, which this download sets up for this server. ?>
     <section class="card" id="computer">
       <h2><?= t('pc.title') ?></h2>
-      <a class="button get" href="/windows"><?= t('pc.button') ?></a>
+      <?php // The page's one lime button is the app's: this one quiet metal beside it, as large. ?>
+      <a class="btn get" href="/windows"><?= t('pc.button') ?></a>
       <?php /* The version when the installer came with one (a release's); a copy put there by hand has its size only. */ ?>
       <?php $win_version = (string)($win['version'] ?? ''); $win_mb = number_format($win['size'] / 1048576, 1); ?>
       <p class="meta"><?= $win_version !== '' ? t('pc.meta', ['size' => $win_mb, 'version' => $win_version]) : t('pc.meta_size', ['size' => $win_mb]) ?></p>

@@ -1104,7 +1104,11 @@ async function portalFlows(contexts) {
   // sign-in page first.
   const dl = await contexts.signed.newPage();
   await dl.goto(`${P}/download.php`, { waitUntil: 'domcontentloaded' });
-  check('the download page offers the installer for Windows', await dl.$eval('#computer .button', a => new URL(a.href).pathname).catch(() => '') === '/windows');
+  check('the download page offers the installer for Windows', await dl.$eval('#computer .get', a => new URL(a.href).pathname).catch(() => '') === '/windows');
+  // One lime button on the page, the app's: the installer's is the quiet one beside it, at the width of a computer.
+  await dl.setViewportSize({ width: 1280, height: 900 });
+  const lime = await dl.$$eval('.button, .btn-primary', els => els.filter(e => e.offsetParent).map(e => e.getAttribute('href')));
+  check('the download page has one lime button, the app\'s', lime.length === 1 && lime[0] === '/apk', JSON.stringify(lime));
   const setup = await dl.evaluate(async () => {
     const r = await fetch('/windows');
     const body = new Uint8Array(await r.arrayBuffer());

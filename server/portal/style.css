@@ -483,6 +483,9 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
    size and one face wherever it stands, wide enough for the longest of their words in both languages, and across a
    phone. */
 .button.get { width: min(100%, 360px); min-height: 54px; font-size: var(--t-xl); }
+/* The installer's download beside the app's: as large, in quiet metal, so the page has one lime button. */
+.btn.get { width: min(100%, 360px); height: auto; min-height: 54px; padding: 10px 26px; font-size: var(--t-xl); white-space: normal;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
 .button:hover { filter: brightness(1.09); }
 .button:active { transform: translateY(1px); filter: brightness(0.97); }
 /* Sent, the answer on its way. */
