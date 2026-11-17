@@ -251,7 +251,7 @@ check("GAME-92 a banned player's save is not kept", $saved === null && (int)$db-
 // The notice the overlay and the phones show, once for that refused sign-in, in the player's language, and no broadcast:
 // broadcasts on for the server and the player's own switch on, with its key, as the Broadcasts and Players pages leave them.
 $db->exec("INSERT INTO LiveSetting (name, value) VALUES ('on', '1') ON CONFLICT (name) DO UPDATE SET value = '1'");
-$db->exec("UPDATE LiveSwitch SET live = 1, token = 'stalekey' WHERE guid = 9202");
+$db->exec("INSERT INTO LiveSwitch (guid, live, token) VALUES (9202, 1, 'stalekey') ON CONFLICT (guid) DO UPDATE SET live = 1, token = 'stalekey'");
 [, $state] = get("$base/live/state?ids=protocol-state-9202&lang=en");
 $s = json_decode($state, true) ?: [];
 check('GAME-92 the refused sign-in leaves a notice with the reason and the end, and the player is not on air though switched on',
@@ -263,7 +263,9 @@ check('GAME-92 the notice is handed out once; the next sign-in leaves a new one,
 call($base, 'user.loginV2', [$token, ' ', '', '1.3.4', 'ANDROID', 'KR']);
 [, $ko] = get("$base/live/state?ids=protocol-state-9202&lang=ko");
 check('GAME-92 a second refused sign-in: a new notice', strpos(json_decode($ko, true)['toast'] ?? '', "이 서버에서 플레이할 수 없어요\nMade-up scores · ") === 0, $ko);
-// Its key is right and its switch on: only the ban refuses it (403, which stops the phone), before anything is read.
+// Its key is right (set as the state hands one out, after the state was asked: a server that put the player on air would
+// have made a new one) and its switch on: only the ban refuses it (403, which stops the phone), before anything is read.
+$db->exec("INSERT INTO LiveSwitch (guid, live, token) VALUES (9202, 1, 'stalekey') ON CONFLICT (guid) DO UPDATE SET live = 1, token = 'stalekey'");
 $up = post_raw("$base/live/upload?ids=protocol-state-9202&seq=0&dur=2000", "\x47" . str_repeat("\0", 187), ['X-Live-Token: stalekey']);
 check("GAME-92 a banned player's upload is refused, which stops the phone", $up === 403, (string)$up);
 $db->exec("UPDATE LiveSetting SET value = '0' WHERE name = 'on'");
