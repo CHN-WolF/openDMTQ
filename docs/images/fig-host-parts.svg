@@ -28,7 +28,7 @@
 <path d="M234,300 H422 L434,312 V400 H234 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="248" y="327.75" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="248,420">Admin pages</text>
 <text x="248" y="346.75" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="248,420">Flask on waitress,</text>
-<text x="248" y="364.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="248,420">127.0.0.1:ADMIN_PORT,</text>
+<text x="248" y="364.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="248,420">on loopback, its own port,</text>
 <text x="248" y="381.75" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="248,420">with the setup</text>
 <path d="M468,300 H656 L668,312 V400 H468 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="482" y="336.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="482,654">PHP keeper</text>

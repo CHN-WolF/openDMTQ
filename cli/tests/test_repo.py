@@ -113,6 +113,18 @@ class ApiDocsTest(unittest.TestCase):
             self.assertIsNotNone(self.route_for(path, method), f"{method or ''} {path}")
 
 
+class FiguresTest(unittest.TestCase):
+    """The guides' figures name what the program has now: no setting it reads no more (ADMIN_PORT, the admin pages' own
+    port before 0.11.0), no loopback address with a port, no build's file name a player never has."""
+
+    def test_no_old_names_in_the_figures(self):
+        for path in glob.glob(os.path.join(ROOT, "docs", "images", "*.svg")):
+            with open(path, encoding="utf-8") as f:
+                words = " ".join(re.findall(r">([^<]+)<", f.read()))
+            for old in ("ADMIN_PORT", "127.0.0.1:", "OpenDMTQ-Setup.exe"):
+                self.assertNotIn(old, words, os.path.basename(path))
+
+
 class DesignTest(unittest.TestCase):
     """What the markup asks of the stylesheets, including pages no test reaches with a browser (an error page, a rare state)."""
 
