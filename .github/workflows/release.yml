@@ -161,7 +161,7 @@ jobs:
           # of this release hands them to its launchers without fetching them (tools/opendmtq_tools/client_updates.py).
           # The Windows bundle cannot: the checksums name its own hash.
           mkdir -p tools/opendmtq_tools/pc-client-updates
-          cp dist/release/releases.win.json dist/release/opendmtq.client-"$VERSION"-*.nupkg \
+          cp dist/release/releases.win.json "dist/release/opendmtq.client-$VERSION-"*.nupkg \
             dist/release/opendmtq-"$VERSION"-sha256sums.txt dist/release/opendmtq-"$VERSION"-sha256sums.txt.sig \
             tools/opendmtq_tools/pc-client-updates/
 

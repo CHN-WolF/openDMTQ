@@ -94,7 +94,7 @@ docker run --rm -u 33:33 --network none -v "$DATA/content:/content" -v "$ROOT/te
 # the code takes the test's key besides the project's (update-test-keys.txt, as a test build's launcher does).
 cp -r "$ROOT/tools" "$OUT/tools"
 printf '%s\n' "$PUBLIC" > "$OUT/tools/opendmtq_tools/update-test-keys.txt"
-cp "$OUT/rel/v$NEXT/releases.win.json" "$OUT/rel/v$NEXT"/opendmtq.client-"$NEXT"-*.nupkg \
+cp "$OUT/rel/v$NEXT/releases.win.json" "$OUT/rel/v$NEXT/opendmtq.client-$NEXT-"*.nupkg \
   "$OUT/rel/v$NEXT/opendmtq-$NEXT-sha256sums.txt" "$OUT/rel/v$NEXT/opendmtq-$NEXT-sha256sums.txt.sig" "$DATA/apk/pc-client-updates/"
 docker run --rm --network none -v "$OUT/tools:/t:ro" -v "$DATA/apk:/apk" -w /t --entrypoint python3 "$TOOLS_IMAGE" -c "
 from opendmtq_tools import client_updates
@@ -109,7 +109,7 @@ chmod -R a+rX "$DATA/apk"
 cp -a "$DATA/apk/out" "$OUT/served"
 # And 0.11.0's, kept the same way, for the way where the server hands out the version the launcher has.
 mkdir -p "$OUT/apk-$V/out" "$OUT/apk-$V/pc-client-updates"
-cp "$OUT/rel/v$V/releases.win.json" "$OUT/rel/v$V"/opendmtq.client-"$V"-*.nupkg "$OUT/rel/v$V/opendmtq-$V-sha256sums.txt" \
+cp "$OUT/rel/v$V/releases.win.json" "$OUT/rel/v$V/opendmtq.client-$V-"*.nupkg "$OUT/rel/v$V/opendmtq-$V-sha256sums.txt" \
   "$OUT/rel/v$V/opendmtq-$V-sha256sums.txt.sig" "$OUT/apk-$V/pc-client-updates/"
 docker run --rm --network none -v "$OUT/tools:/t:ro" -v "$OUT/apk-$V:/apk" -w /t --entrypoint python3 "$TOOLS_IMAGE" -c "
 from opendmtq_tools import client_updates

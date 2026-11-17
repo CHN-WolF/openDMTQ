@@ -100,6 +100,10 @@ def main():
         original = updates.Look
 
         class Found:
+            def __init__(self, *args, **kwargs):
+                # As updates.Look is made: with the window's settings, whose server it asks first.
+                pass
+
             def newer(self):
                 return found
 
