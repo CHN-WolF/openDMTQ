@@ -1015,15 +1015,17 @@ async function webhookFlows(contexts) {
   check('deleting a webhook asks first', /Delete this webhook/.test(await textOf(page, '#ask p')), await textOf(page, '#ask p'));
   await settle(page, () => page.click('#ask [value=yes]'));
   check('and then it is gone', (await hooks()).length === 2);
-  // The card at a laptop's width and a phone's, in both languages: measured, and its picture at its real size.
+  // The card at a laptop's width and a phone's, in both languages: measured, and its picture at its real size, cut out of
+  // the whole page (the bar stays at the page's top, not over the card as in a picture of the screen scrolled to it). The
+  // page loaded anew each time (its address without a #: the same address with one would only move on the page).
   for (const [width, height] of [[1280, 900], [360, 740]]) {
     await page.setViewport({ width, height, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
     for (const lang of ['ko', 'en']) {
       await page.setCookie({ name: 'opendmtq_lang', value: lang, url: ADMIN });
-      await page.goto(`${A}/maintenance#hooks`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
       await noFindings(page, `the Discord and Slack card at ${width} px (${lang})`);
-      const card = await page.$('#hooks');
-      await card.screenshot({ path: path.join(OUT, 'shots', `flows-hooks-card-${lang}-${width}.png`) });
+      const clip = await page.$eval('#hooks', e => { scrollTo(0, 0); const r = e.getBoundingClientRect(); return { x: 0, y: Math.max(0, r.top - 12), width: innerWidth, height: r.height + 24 }; });
+      await page.screenshot({ path: path.join(OUT, 'shots', `flows-hooks-card-${lang}-${width}.png`), clip, captureBeyondViewport: true });
     }
   }
   check('the card in Korean says why in Korean', /채팅방에 이 웹후크가 없습니다/.test(await (async () => {
