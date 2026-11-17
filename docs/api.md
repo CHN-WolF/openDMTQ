@@ -60,9 +60,10 @@ Where the live database was too damaged to copy and was set aside, its tokens ar
 
 The token is looked at first, and a token that works is never held back. A wrong one counts as a failed sign-in of the
 admin pages: after five in ten minutes from one address, wrong tokens from there are answered `429` (with
-`Retry-After`), and the sign-in page makes that address wait too. Requests through the server also count together:
-after thirty in ten minutes, every wrong token through the server is answered `429` ([admin.md](admin.md)). On the
-admin service's own port, on the server PC, only each address's own count applies.
+`Retry-After`), and the sign-in page makes that address wait too. Requests through the server also count together, the
+server PC's own among them: after thirty in ten minutes, every wrong token through the server is answered `429`
+([admin.md](admin.md)), and no header a request brings exempts it. Through Kubernetes' port-forward to the admin
+service's own port, only each address's own count applies.
 
 What a token changes goes into the log of changes (Logs, Changes, or `GET /logs/changes`), under the admin's ID with the
 token's name: `sena (nightly backup)`. A refused token goes there as a failed sign-in does, by `API` with the address it
@@ -120,7 +121,8 @@ still belongs to the player you saw.
 ## Jobs
 
 What takes longer than a request answers `202` with the job: an app build (`POST /builds`, `POST /setup/build`), an
-import (`POST /setup/import`) and a restore (`POST /backups/{backup}/restore`). Ask `GET /jobs/{job}` until its state is
+import (`POST /setup/import`), a restore (`POST /backups/{backup}/restore`), a repair (`POST /server/repair`) and a
+deletion of the server's data (`POST /server/data/delete`). Ask `GET /jobs/{job}` until its state is
 `done` or `failed`. Its `log` holds the last 200 lines of its output, and `why` says why it failed when that can be said
 in words. A backup made, or a change to the songs, on the admin pages is a job there too (`backup`, `songs`), which
 `GET /jobs` lists; through the API the same is done when it answers.
@@ -131,9 +133,10 @@ in words. A backup made, or a change to the songs, on the admin pages is a job t
 
 Jobs live in the admin service's memory: it keeps its last twenty, and a restart of it forgets them.
 
-Two routes answer `202` with no job, as what they start ends the admin service itself. `PUT /setup/address` starts
-every program again for the new address: its answer's `instance` is this run's, and `GET /status` gives another once
-the new one answers. `POST /server/stop` stops the server, the API with it.
+Four routes answer `202` with no job, as what they start ends the admin service itself. `PUT /setup/address` starts
+every program again for the new address, and `POST /server/restart` starts them again as they are: each answer's
+`instance` is this run's, and `GET /status` gives another once the new one answers. `POST /server/stop` stops the
+server, the API with it, and `POST /server/uninstall` removes it from the computer once it has stopped.
 
 ## Uploads and downloads
 
@@ -156,8 +159,8 @@ otherwise); a part that begins past the end is `416`, with `Content-Range: bytes
 
 ## Examples
 
-`API` is the address [Where it is](#where-it-is) gives: on the server PC the admin service's own port, from another
-computer the one for that computer.
+`API` is the address [Where it is](#where-it-is) gives: on the server PC the server's one port as localhost, from
+another computer the one for that computer.
 
 ```sh
 API=http://<server>:<port>/opendmtq/api/v1    # the address Where it is gives
@@ -2636,9 +2639,9 @@ The server as the Server page shows it.
 - `version` (string, or null): Its version.
 - `started` (integer, or null): When the admin service started, with the server (Unix time).
 - `runs_itself` (boolean): True where this API can stop, restart and uninstall the server (a host install, the Windows bundle).
-- `commands` (object of string): Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall, port), on the server PC or the cluster.
+- `commands` (object of string): Where it cannot: the command for each action, on the server PC or the cluster. With Docker Compose stop, restart, repair, delete_data, uninstall and port; on Kubernetes stop, restart, delete_data, uninstall and port; none on a host install, which does each through this API.
 - `port` (integer): Its one port: the game, the players' site, the admin pages and this API.
-- `next_address` (string, or null): The address it moves to at its next start, when it was moved (POST /server/port); null otherwise.
+- `next_address` (string, or null): The address it moves to at its next start (http://host:port/), when it was moved (POST /server/port); null otherwise.
 - `moved_from` (integer, or null): The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.
 - `data` (list of [DataPart](#datapart)): The server's data, part by part.
 
@@ -2669,6 +2672,7 @@ A move to another port, from the server's next start.
 A restart asked for.
 
 - `restarting` (boolean): True: every part stops and starts again within seconds, this API with it.
+- `instance` (string): This run's: GET /status gives another once the new one answers.
 
 #### Uninstalling
 

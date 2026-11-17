@@ -630,6 +630,9 @@ def CASES():
           check=lambda t, inst, r: t.assertEqual(r.get_json()["error"]["message"], "The message is longer than 200 characters.")),
         C("maintenance_set", "PUT", "/maintenance", 400, "bad_json", data="message=x", content_type="application/x-www-form-urlencoded"),
         C("maintenance_clear", "DELETE", "/maintenance", 200),
+        # On with no message of the owner's: the usual words are no message ("").
+        C("maintenance_set", "PUT", "/maintenance", 200, json={"message": ""},
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["on"], r.get_json()["message"]), (True, ""))),
         C("maintenance_clear", "DELETE", "/maintenance", 403, "read_only", token="reader"),
         # API-57: the Notices page's notice on the site, as its card sets it (notice.py): none yet, up with no end and with
         # one, its words made one line; refused in the card's words too long, empty, with a character that is no text, with
@@ -689,6 +692,9 @@ def CASES():
         C("server_get", "GET", "/server", 401, "no_token", token=None),
         C("server_restart", "POST", "/server/restart", 202, setup=host_install,
           check=lambda t, inst, r: t.assertTrue(os.path.exists(inst.path("run/restart.request")))),
+        # With this run's instance, as PUT /setup/address answers.
+        C("server_restart", "POST", "/server/restart", 202, setup=host_install,
+          check=lambda t, inst, r: t.assertEqual(r.get_json()["instance"], admin.setup.STARTED)),
         C("server_restart", "POST", "/server/restart", 404, "host_only"),
         # A move to another port: from the next start on a host install (its .env), the command line's elsewhere.
         C("server_port", "POST", "/server/port", 200, setup=port_free_host, json={"port": 8792},
@@ -709,6 +715,10 @@ def CASES():
         C("server_data_delete", "POST", "/server/data/delete", 202, json={"parts": ["logs"], "backup": False, "confirm": "delete"}),
         C("server_data_delete", "POST", "/server/data/delete", 400, "not_confirmed", json={"parts": ["logs"], "confirm": "yes"}),
         C("server_data_delete", "POST", "/server/data/delete", 400, "no_parts", json={"parts": ["everything"], "confirm": "delete"}),
+        # A part this server cannot delete here, which the page offers no box for, is refused as an unknown one is.
+        C("server_data_delete", "POST", "/server/data/delete", 400, "no_parts", json={"parts": ["logs", "game"], "confirm": "delete"},
+          setup=lambda inst: [mock.patch.object(admin.lifecycle.server_data, "can_delete", lambda layout, part: part != "game")],
+          check=lambda t, inst, r: t.assertIn("(not game)", r.get_json()["error"]["message"])),
         C("server_uninstall", "POST", "/server/uninstall", 202, setup=host_install, json={"keep_data": True, "confirm": "uninstall"},
           check=lambda t, inst, r: t.assertEqual(json.load(open(inst.path("run/uninstall.request"), encoding="utf-8")), {"keep_data": True})),
         C("server_uninstall", "POST", "/server/uninstall", 400, "not_confirmed", setup=host_install, json={"confirm": "no"}),

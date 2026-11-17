@@ -366,9 +366,9 @@ SHAPES = {
         Field("version", "string", "Its version.", nullable=True),
         Field("started", "integer", "When the admin service started, with the server (Unix time).", nullable=True),
         Field("runs_itself", "boolean", "True where this API can stop, restart and uninstall the server (a host install, the Windows bundle)."),
-        Field("commands", "{string}", "Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall, port), on the server PC or the cluster."),
+        Field("commands", "{string}", "Where it cannot: the command for each action, on the server PC or the cluster. With Docker Compose stop, restart, repair, delete_data, uninstall and port; on Kubernetes stop, restart, delete_data, uninstall and port; none on a host install, which does each through this API."),
         Field("port", "integer", "Its one port: the game, the players' site, the admin pages and this API."),
-        Field("next_address", "string", "The address it moves to at its next start, when it was moved (POST /server/port); null otherwise.", nullable=True),
+        Field("next_address", "string", "The address it moves to at its next start (http://host:port/), when it was moved (POST /server/port); null otherwise.", nullable=True),
         Field("moved_from", "integer", "The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.", nullable=True),
         Field("data", "[DataPart]", "The server's data, part by part.")]),
     "DataPart": Shape("One part of the server's data.", [
@@ -380,7 +380,8 @@ SHAPES = {
         Field("port", "integer", "The new port."),
         Field("address", "string", "The server's address from its next start: the players' site, with the admin pages and this API under it."),
         Field("from_next_start", "boolean", "True: the server answers there from its next start, with the app built again for it.")]),
-    "ServerRestarting": Shape("A restart asked for.", [Field("restarting", "boolean", "True: every part stops and starts again within seconds, this API with it.")]),
+    "ServerRestarting": Shape("A restart asked for.", [Field("restarting", "boolean", "True: every part stops and starts again within seconds, this API with it."),
+        Field("instance", "string", "This run's: GET /status gives another once the new one answers.")]),
     "Uninstalling": Shape("An uninstall asked for.", [
         Field("uninstalling", "boolean", "True: the server stops, then its program removes itself."),
         Field("keep_data", "boolean", "True when the data folder and .env stay.")]),

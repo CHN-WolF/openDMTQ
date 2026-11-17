@@ -455,7 +455,7 @@ class PortMoveTest(unittest.TestCase):
             with mock.patch.object(admin.lifecycle, "port_free", lambda port: True):
                 moved = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8792}, headers=headers)
             self.assertEqual(moved.get_json(), {"port": 8792, "address": "http://192.168.0.10:8792/", "from_next_start": True})
-            self.assertEqual(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["next_address"], "192.168.0.10:8792")
+            self.assertEqual(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["next_address"], "http://192.168.0.10:8792/")
 
     def test_a_move_off_port_80_is_said_once_and_the_owners_port_80_is_kept(self):
         # At its first start with this version a server set up on port 80 moved to 8791 (cli/opendmtq_cli/env.py): the

@@ -570,6 +570,8 @@ def notice():
     maintenance_stamp())."""
     on, message = songs.maintenance()
     stamp = songs.maintenance_stamp() or {}
+    # The usual words of a notice turned on without any (songs.DEFAULT_MAINTENANCE) are no message of the owner's: "".
+    message = "" if message == songs.DEFAULT_MAINTENANCE else message
     return {"on": on, "message": message, "change": stamp.get("id", 0), "changed_at": stamp.get("at")}
 
 
@@ -655,7 +657,9 @@ def server_get(args):
     return {"install": lifecycle.install_kind(), "address": f"http://{core.PUBLIC_HOST}/",
             "version": os.environ.get("OPENDMTQ_VERSION") or None, "started": started,
             "runs_itself": lifecycle.can_run_itself(), "commands": lifecycle.commands(), "data": lifecycle.data_parts(),
-            "port": lifecycle.port_now(), "next_address": lifecycle.next_address(),
+            "port": lifecycle.port_now(),
+            # A URL as the other addresses are (lifecycle.next_address gives host:port).
+            "next_address": f"http://{lifecycle.next_address()}/" if lifecycle.next_address() else None,
             "moved_from": (lifecycle.moved_off_80(once=False) or {}).get("was")}
 
 
@@ -686,7 +690,8 @@ def server_password(args):
 def server_restart(args):
     """POST /server/restart: the Server page's Restart (lifecycle.restart_server). 202: the answer leaves first."""
     lifecycle.restart_server()
-    return {"restarting": True}, 202
+    # This run's, as PUT /setup/address answers it: GET /status gives another once the new one answers.
+    return {"restarting": True, "instance": setup.STARTED}, 202
 
 
 @handler
@@ -704,10 +709,12 @@ def server_data_get(args):
 @handler
 def server_data_delete(args):
     """POST /server/data/delete: the Server page's Delete, the same job (lifecycle.start_delete): a backup first unless
-    backup is false. Parts this server has not are refused with the ones it has."""
-    unknown = [p for p in args["parts"] if p not in server_data.PARTS]
+    backup is false. Parts this server has not, and parts it cannot delete here (the page offers no box for them: with
+    Docker Compose the game files are the command line's), are refused with the ones it can delete."""
+    deletable = [p["part"] for p in lifecycle.data_parts() if p["can_delete"]]
+    unknown = [p for p in args["parts"] if p not in deletable]
     if unknown or not args["parts"]:
-        raise Refused(400, "no_parts", message=f"Name parts to delete, of: {', '.join(server_data.PARTS)}"
+        raise Refused(400, "no_parts", message=f"Name parts to delete, of: {', '.join(deletable)}"
                       + (f" (not {', '.join(unknown)})." if unknown else "."))
     return started(lifecycle.start_delete(args["parts"], args.get("backup", True), args["confirm"]))
 
