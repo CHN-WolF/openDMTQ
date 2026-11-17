@@ -734,6 +734,9 @@ def whole_rows_at_top(app, area):
             # sliders, rows of tabs and buttons (a frame round them is no line of its own).
             if not widget.winfo_ismapped() or not isinstance(widget, (tk.Label, ttk.Combobox, tk.Entry, tk.Canvas)):
                 continue
+            if getattr(widget, "odq_field", False):
+                # The page's own field under the cards (its picture on a canvas): no line a person reads.
+                continue
             start = widget.winfo_rooty() - origin
             if start < top < start + widget.winfo_height():
                 cut = start if cut is None else min(cut, start)
