@@ -839,6 +839,46 @@ class DeleteAndRepairTest(unittest.TestCase):
         self.assertEqual(state["commands"]["uninstall"], "./opendmtq uninstall")
         self.assertEqual(self.inst.client.post("/opendmtq/api/v1/server/uninstall", json={"confirm": "uninstall"}, headers=headers).status_code, 404)
 
+    def test_neither_runs_beside_a_restore(self):
+        # A restore holds backups._restoring as long as it runs: the deletion and the repair are refused meanwhile (both
+        # went ahead before), and while a repair runs a restore and a backup wait for it.
+        with admin.app.test_request_context():
+            _, token = admin.tokens.make("test", "write", ("admin", True, None))
+        headers = {"Authorization": f"Bearer {token}"}
+        self.assertTrue(admin.backups._restoring.acquire(blocking=False))
+        try:
+            for path, body in (("/server/data/delete", {"parts": ["apps"], "backup": False, "confirm": "delete"}),
+                               ("/server/repair", None)):
+                r = self.inst.client.post("/opendmtq/api/v1" + path, json=body, headers=headers)
+                self.assertEqual((r.status_code, r.get_json()["error"]["code"]), (409, "busy"), path)
+            self.assertTrue(os.listdir(self.inst.path("apk/out")))
+        finally:
+            admin.backups._restoring.release()
+        # A repair held mid-way: a restore and a backup made now are refused until it ends.
+        going, go_on = threading.Event(), threading.Event()
+        real_run = admin.lifecycle.repairing.run
+
+        def slow_run(*args, **kw):
+            going.set()
+            go_on.wait(20)
+            return real_run(*args, **kw)
+        with mock.patch.object(admin.lifecycle.repairing, "run", slow_run):
+            r = self.inst.client.post("/opendmtq/api/v1/server/repair", headers=headers)
+            self.assertEqual(r.status_code, 202)
+            self.assertTrue(going.wait(20))
+            backup = sorted(os.listdir(self.inst.path("backups")))[0]
+            with admin.app.test_request_context():
+                with self.assertRaises(admin.core.Refused) as refused:
+                    admin.backups.start_restore(backup)
+                self.assertEqual(refused.exception.code, "busy")
+                with self.assertRaises(admin.core.Refused):
+                    admin.backups.create()
+            go_on.set()
+            self.wait(r.get_json()["job"]["id"])
+        # Ended: the lock is free again.
+        self.assertTrue(admin.backups._restoring.acquire(blocking=False))
+        admin.backups._restoring.release()
+
     def test_the_repair_makes_folders_and_the_owner_sign_in_again(self):
         import shutil
         shutil.rmtree(self.inst.path("backups"))

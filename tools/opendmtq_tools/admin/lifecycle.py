@@ -369,7 +369,29 @@ def start_delete(parts, make_backup, confirm):
         changed("server:delete-data", ", ".join(gone))
         return said, not left
 
-    return jobs.start_page_task("delete-data", work, parts=parts)
+    return beside_no_restore("delete-data", work, parts=parts)
+
+
+def beside_no_restore(kind, work, **details):
+    """Starts a page's job (jobs.start_page_task) that no restore runs beside: refused while a restore, a backup made on
+    the Backups page or another such job runs, and none of them starts until it ends (backups._restoring, taken here and
+    given back when the job ends). Returns the job's id."""
+    if not backups._restoring.acquire(blocking=False):
+        raise Refused(409, "busy", t("bak.busy"))
+
+    def held(say):
+        # Given back whatever happens.
+        try:
+            return work(say)
+        finally:
+            backups._restoring.release()
+
+    try:
+        return jobs.start_page_task(kind, held, **details)
+    except Exception:
+        # No job to give it back: given back here.
+        backups._restoring.release()
+        raise
 
 
 def start_repair():
@@ -415,7 +437,7 @@ def start_repair():
         changed("server:repair", ", ".join(f"{s} {results[s][0]}" for s in results if results[s][0] in ("fixed", "bad")))
         return said, not any(state == "bad" for state, _ in results.values())
 
-    return jobs.start_page_task("repair", work)
+    return beside_no_restore("repair", work)
 
 
 # ------------------------------------------------------------------------------ the page
