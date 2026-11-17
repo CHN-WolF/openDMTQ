@@ -871,7 +871,9 @@ table.data-parts .runtime { font-weight: 400; }
 .hook-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .hook-kind { font: 700 var(--t-md)/1.4 var(--text-face); color: #fff; }
 .hook-address { overflow-wrap: anywhere; }
-.hook-state { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--chalk); }
+/* The light on the words' first line (its foot on their baseline), as the other state lines have it, when a failure's why
+   wraps. */
+.hook-state { display: flex; align-items: baseline; gap: 8px; font-size: var(--t-sm); color: var(--chalk); }
 .hook-dropped, .hook-made { font-size: var(--t-sm); color: var(--ash); }
 .hook-form { display: grid; gap: 12px; margin: 0; }
 .hook-form .hook-made { margin: 0; }

@@ -625,6 +625,13 @@ class CardTest(unittest.TestCase):
             self.assertRegex(page, r'value="delete" data-ask="[^"]+" data-yes="삭제"')
             # A new webhook speaks the page's language as the form comes.
             self.assertRegex(page, r'<option value="ko" selected>한국어</option></select></label>\s*</div>\s*<div class="hook-events"')
+            # When it went, in words a Korean reader says: "방금 보냄", "3분 전 보냄", never "방금에".
+            csrf = page_token(inst)
+            inst.client.post("/opendmtq/admin/webhooks/1", data={"csrf": csrf, "action": "test"})
+            page = inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True)
+            self.assertIn("방금 보냄", page)
+            self.assertIn("방금 추가", page)
+            self.assertNotIn("방금에", page)
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
