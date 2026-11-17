@@ -35,6 +35,7 @@ a feed nobody has checked, and the download writes what it fetches straight into
 puts the downloaded package's Update.exe over the installed one before it returns (Velopack 1.2.161, manager.rs).
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -254,7 +255,7 @@ def release(source, version=None):
     except signing.Unsigned as e:
         raise Refused(str(e)) from None
     # The feed itself is a file of the release: what it names and gives is signed only as the file the checksums sum.
-    if sums.get(FEED) != signing.hashlib.sha256(data).hexdigest():
+    if sums.get(FEED) != hashlib.sha256(data).hexdigest():
         raise Refused("%s from %s is not the feed the release %s signed" % (FEED, source.base, newest))
     return Release(source, newest, feed, sums)
 
