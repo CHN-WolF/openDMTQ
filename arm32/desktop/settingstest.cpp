@@ -18,6 +18,7 @@
 #include "frame_rate.h"
 #include "keyboard_play.h"
 #include "live_notice.h"
+#include "mixer.h"
 #include "overlay_motion.h"
 #include "overlay_scale.h"
 #include "player.h"
@@ -1179,13 +1180,19 @@ void sound_settings_checks() {
     write_text(path, "display=window\n");
     check(player::save_settings_keys(path, {{"eq", "custom"}, {"eq_low", "-4"}}) && file_text(path) == "display=window\neq=custom\neq_low=-4\n",
           "keys the file has not go at its end in order");
-    // Read back alone while the game runs (the launcher changed them): only the sound's keys into the settings.
-    write_text(path, "volume=33\r\nmusic_volume=44\r\neffects_volume=55\r\neq=treble\r\nrender_scale=50\r\n");
-    player::Settings mine;
-    mine.render_scale = 100;
-    check(player::load_sound_settings(path, mine) && mine.volume == 33 && mine.music_volume == 44 && mine.effects_volume == 55 && mine.eq == "treble" &&
-              mine.render_scale == 100,
-          "the sound's keys read back alone, CR LF and all");
+    // The start's path to the mix (main.cpp): the file read as the player reads it at its start, then the mixer's
+    // choices and controls from it, the launcher's volume, music, effects and equaliser among them.
+    const player::Settings& launcher = read(path, "volume=33\r\nmusic_volume=44\r\neffects_volume=55\r\neq=custom\r\neq_low=-4\r\n"
+                                                  "eq_mid=2\r\neq_high=7\r\naudio_device={0.0.0.00000000}.{xyz}\r\naudio_mode=exclusive\r\n"
+                                                  "audio_buffer=safe\r\n");
+    player::audio::Options given;
+    player::sound_options(launcher, given);
+    check(given.volume == 33 && given.levels.master == 33 && given.levels.music == 44 && given.levels.effects == 55,
+          "the launcher's volume, music and effects reach the mixer at the start");
+    check(given.levels.eq == player::audio::EqPreset::kCustom && given.levels.bands().low == -4 && given.levels.bands().mid == 2 &&
+              given.levels.bands().high == 7,
+          "the launcher's custom equaliser reaches the mixer at the start, its three bands");
+    check(given.device == "{0.0.0.00000000}.{xyz}" && given.exclusive && given.buffer == 2, "the launcher's device, mode and buffer reach the mixer");
     // No temporary file left beside it.
     check(file_text(path + ".player.tmp").empty(), "no temporary file left");
     std::remove(path.c_str());

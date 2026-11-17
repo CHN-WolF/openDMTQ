@@ -56,6 +56,7 @@
 #include "player.h"
 
 #include "jvm.h"
+#include "mixer.h"
 #include "sound_mix.h"
 
 #include <algorithm>
@@ -357,29 +358,18 @@ bool save_settings_keys(const std::string& path, const std::vector<std::pair<std
     return true;
 }
 
-bool load_sound_settings(const std::string& path, Settings& s) {
-    // The sound's keys alone, as load_settings reads them, into `s`; the rest of `s` as it was.
-    std::ifstream f(utf8_path(path));
-    if (!f) return false;
-    std::string line, key, raw;
-    bool first = true;
-    int n = 0;
-    while (std::getline(f, line)) {
-        const bool read = key_value(line, first, key, raw);
-        first = false;
-        if (!read) continue;
-        const std::string value = lower(raw);
-        if (key == "volume" && number(value, -2000000000, 2000000000, n)) s.volume = std::clamp(n, 0, 100);
-        else if (key == "music_volume" && number(value, -2000000000, 2000000000, n)) s.music_volume = std::clamp(n, 0, 100);
-        else if (key == "effects_volume" && number(value, -2000000000, 2000000000, n)) s.effects_volume = std::clamp(n, 0, 100);
-        else if (key == "eq") {
-            audio::EqPreset p;
-            if (audio::eq_from_name(value, p)) s.eq = value;
-        } else if ((key == "eq_low" || key == "eq_mid" || key == "eq_high") && number(value, -2000000000, 2000000000, n)) {
-            (key == "eq_low" ? s.eq_low : key == "eq_mid" ? s.eq_mid : s.eq_high) = audio::clamp_band(n);
-        }
-    }
-    return true;
+void sound_options(const Settings& s, audio::Options& out) {
+    out.device = s.audio_device;
+    out.exclusive = s.audio_exclusive;
+    out.buffer = s.audio_buffer;
+    out.volume = s.volume;
+    // The rest of the sound's controls (sound_mix.h): music and effects as shares of the volume, the equaliser's preset
+    // and the bands a custom one has.
+    out.levels.master = s.volume;
+    out.levels.music = s.music_volume;
+    out.levels.effects = s.effects_volume;
+    audio::eq_from_name(s.eq, out.levels.eq);
+    out.levels.custom = {s.eq_low, s.eq_mid, s.eq_high};
 }
 
 std::string settings_language(const std::string& path) {

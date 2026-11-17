@@ -132,8 +132,13 @@ bool load_settings(const std::string& path);
 // not goes after the sound's keys before it in that order (volume first), else at the end. By a temporary file beside
 // it then a rename: the launcher never reads half a file. False when it could not.
 bool save_settings_keys(const std::string& path, const std::vector<std::pair<std::string, std::string>>& changes);
-// Reads the sound's keys alone from the settings file into `s` (the launcher changed them while the game ran).
-bool load_sound_settings(const std::string& path, Settings& s);
+namespace audio {
+struct Options;
+}  // namespace audio
+// The mixer's choices from the settings, as the start gives them to it (main.cpp, before the game's first sound): the
+// device, its mode and buffer, and the sound's controls (the volume, music, effects and the equaliser, which the mix,
+// the game's OpenAL shares and Unity's own sound start with). The in-game panel changes the controls later.
+void sound_options(const Settings& s, audio::Options& out);
 // The settings file the player was started with (--settings), "" for none: where the panel's changes are written.
 std::string& settings_path();
 // The language a settings file names (language=), "" for none or one the player does not speak: read before the app's

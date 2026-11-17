@@ -336,17 +336,8 @@ int main(int argc, char** argv) {
     }
     g_host_vsync.store(st.vsync);
     g_host_fps_cap.store(st.fps);
-    player::audio::Options& sound = player::audio::options();
-    sound.device = st.audio_device;
-    sound.exclusive = st.audio_exclusive;
-    sound.buffer = st.audio_buffer;
-    sound.volume = st.volume;
-    // The rest of the sound's controls (sound_mix.h): music and effects as shares of the volume, the equaliser.
-    sound.levels.master = st.volume;
-    sound.levels.music = st.music_volume;
-    sound.levels.effects = st.effects_volume;
-    player::audio::eq_from_name(st.eq, sound.levels.eq);
-    sound.levels.custom = {st.eq_low, st.eq_mid, st.eq_high};
+    // The sound's choices and controls for the mixer, which starts with them at the game's first sound.
+    player::sound_options(st, player::audio::options());
     if (a.host_sysroot.empty() || a.host_agent.empty() || a.package.empty() || a.host_apk.empty() || a.host_libs.empty() || a.host_data.empty()) {
         std::fprintf(stderr, "usage: %s --sysroot DIR --agent FILE --package NAME --apk FILE --libs DIR --data DIR\n", argv[0]);
         return 2;

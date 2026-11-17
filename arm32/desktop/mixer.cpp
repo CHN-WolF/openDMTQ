@@ -310,11 +310,15 @@ Mixer::Mixer(std::unique_ptr<Output> output)
       // The square of the share: amplitude falls faster than the slider, as loudness is heard.
       gain_(percent_gain(options().volume)) {
     // The equaliser as the settings had it (set_levels before the mixer started keeps its own in levels()).
-    const EqBands bands = levels().bands();
+    const Levels start = levels();
+    const EqBands bands = start.bands();
     eq_.set(rate_, bands);
-    jvm::log("player: sound out through %s at %d Hz, %.2f ms a period, %.1f ms buffered, volume %d%%, equaliser %s (%+d %+d %+d dB)", output_->name(),
-             rate_, 1000.0 * static_cast<double>(period_) / rate_, output_->buffer_ms(), std::clamp(options().volume, 0, 100), eq_name(levels().eq),
-             bands.low, bands.mid, bands.high);
+    // The controls the game's sound starts with, all of them: the volume here, the music's and the effects' shares
+    // where the game's OpenAL and Unity's own sound take them (soundmix.cpp, Mixer::open), the equaliser here.
+    jvm::log("player: sound out through %s at %d Hz, %.2f ms a period, %.1f ms buffered, volume %d%%, music %d%%, effects %d%%, equaliser %s "
+             "(%+d %+d %+d dB)",
+             output_->name(), rate_, 1000.0 * static_cast<double>(period_) / rate_, output_->buffer_ms(), std::clamp(options().volume, 0, 100),
+             std::clamp(start.music, 0, 100), std::clamp(start.effects, 0, 100), eq_name(start.eq), bands.low, bands.mid, bands.high);
     thread_ = std::thread([this] { run(); });
 }
 
