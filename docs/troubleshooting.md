@@ -61,7 +61,12 @@ uninstalled, which also takes the data with it.
 The PC client says why on its bottom line and on its **Help** page, with the player's log. [The PC client's
 troubleshooting](windows-player.md#when-something-goes-wrong) covers a game that does not start, a refused sign-in,
 Windows blocking the installer, black videos and broken sound. A PC reaches the server the same way a phone does, so
-[the server's site does not open](#the-servers-site-does-not-open) applies to it too.
+[the server's site does not open](#the-servers-site-does-not-open) applies to it too. The PC client's
+[connection test](windows-player.md#testing-the-connection) (**Online**, **Test connection**, or
+`OpenDMTQ-cmd.exe --test-server`) says which step of the way to the server does not get through: the address, the
+name, the port, the server, the sign-in, the game server or the downloads. A server that moved to port 8791 (servers
+updated to 0.11.0 left port 80) is found there, one press away. **Help**, **Save a report** gives whoever helps the logs
+and the PC's details in one zip, with the names, the addresses and the sign-ins left out.
 
 ## For server owners
 

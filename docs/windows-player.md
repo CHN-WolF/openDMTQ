@@ -64,12 +64,12 @@ Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, a
 
 | Page | What it has |
 | :--- | :--- |
-| **Play** | The server and the account, the checks before a start (the player, the server, the sign-in, the app), one that is not fine with a link to the page that sees to it, how to play (keyboard play's keys first, or that it is off, with **CONTROLS** beside them), the last play, and **PLAY** |
+| **Play** | The server and the account with **My page on the site**, the checks before a start (the player, the server, the sign-in, the app), one that is not fine with a link to the page that sees to it (a server that does not answer, to its connection test), how to play (keyboard play's keys first, or that it is off, with **CONTROLS** beside them), the last play, **My records** under them, and **PLAY** |
 | **Screen** | Full screen or a window, the window's size, VSync, the frame limit, the FPS counter and its position, the render scale and its upscaler, anti-aliasing |
 | **Sound** | The master, music and effects volumes, the equaliser (a preset or three bands), the device, **Shared** or **Exclusive**, the buffer |
 | **Controls** | Keyboard play: on or off, and the keys of each lane of 2, 3 and 4 LINE; what the touch screen, the mouse and the keyboard do |
-| **Online** | The servers, the sign-in, the app on this PC and a check for a newer one |
-| **Help** | The checks, what to try when something does not work, the logs, and repairing, clearing, starting over and uninstalling |
+| **Online** | The servers, the [connection test](#testing-the-connection), the sign-in, the app on this PC and a check for a newer one |
+| **Help** | The checks, what to try when something does not work, the logs, [a report](#a-report-for-whoever-helps) to send, and repairing, clearing, starting over and uninstalling |
 | **Launcher** | The language, updates of the launcher, the first-start guide again |
 
 The pages are in a column down the window's left, under the wordmark and the launcher's version; the status line and
@@ -124,6 +124,14 @@ GitHub, over HTTPS, checking only the hash the update feed gives. So it updates 
 trusts GitHub's answer for what it puts in; from 0.11.0 on, every update a launcher takes is one the project signed,
 whoever hands it out.
 
+Signed in, **My page on the site** on the **Play** page's server card opens the player's page on the server's site in
+the PC's browser, signed in already: the server makes a link for the launcher's sign-in that signs the browser in to
+the same account once, within a minute. **My records**, under the page's columns, lists the player's three latest plays
+and three best records from the server, each with the song, the chart, when, the score (with the keyboard's mark
+before it when a keyboard played it) and the place on that chart (#2 of 5); it is asked for when the page shows and
+again after a game. An account the server's owner has not linked to a game player says so instead, and signed out the
+card is not there.
+
 **Controls** sets keyboard play. **Play with keys** turns it on or off (on at first). While it is on, a table shows the
 lanes of 2, 3 and 4 LINE from the top, each with a box for its key and one for a second key: click a box (or Tab to it
 and press Enter), then press the key. The key goes in by its place on the keyboard, and is named as the US layout's key
@@ -134,15 +142,52 @@ under the table, and the box waits for another. Esc keeps the key that was there
 keys, and **Reset keys** puts back F J, D F J and D F J K. A key held down counts once, and while a box waits a Korean
 or Japanese input method is off, so that a letter goes in by its place. The game reads the keys at the next **PLAY**.
 
+### <a id="testing-the-connection"></a>Testing the connection
+
+**Test connection**, at the top of the **Online** page's server card (and the **Play** page's Server row while the server
+does not answer), follows the way from this PC to the server a step at a time, in a card that fills in as each step
+ends, with what it found and how long it took, under a line that says how it went; **Copy** puts the whole result on
+the clipboard:
+
+| Step | What it looks at |
+| :--- | :--- |
+| Address | The address as the launcher reads it: its scheme, host and port |
+| Name lookup | The host's name, and the addresses it leads to |
+| Port | A connection to the port: taken, refused, or no answer within 5 seconds |
+| OpenDMTQ server | Its answer as an OpenDMTQ server: its name and version, and over HTTPS whether Windows or the server's own authority vouches for its certificate |
+| Version | The server's version against the launcher's |
+| Sign-in | Whether the server still takes the launcher's sign-in (asked with it, no password) |
+| Game server | The game server's own answer: its patch, maintenance |
+| Broadcasts | The broadcast state the player asks for between songs |
+| Downloads | The app and the client data's list of files, by their headers alone: nothing is downloaded |
+| Round trip | Five small asks: the time in the middle, the fastest and the slowest |
+
+A step after one that did not get through says it was not tried. When nothing answers on the address's port, the test
+also asks the same host on 8791 and the ports a new server takes when that one is taken (to 8799): an OpenDMTQ server
+found there is named, with **Use this address**, which plays on it from then on with the sign-in kept (a server updated
+to 0.11.0 moved from port 80 to 8791, and a launcher set up for port 80 finds it so). The test changes nothing else, and
+its last result goes into the report.
+
+### <a id="a-report-for-whoever-helps"></a>A report for whoever helps
+
+**Help**, **Save a report** puts one zip in the Downloads folder (`opendmtq-report-<date>-<time>.zip`) and shows it
+selected in File Explorer: the launcher's logs, the end of the game's log, the settings, the displays, the sound
+devices, Windows and the graphics cards, the launcher's and the player's versions, and the last connection test. Left
+out of every file, each replaced by a word in angle brackets: the Windows user's name in paths, the site IDs, the
+servers' addresses and names, the sign-in cookies, tokens and keys, this PC's player id and what was typed in the game.
+The window says which of those it found; `about.txt` in the zip lists them with how often.
+
 ### The command line
 
 `OpenDMTQ-cmd.exe`, in `%LOCALAPPDATA%\OpenDMTQ.Client\current`, does the same from the command line: `--status` (exit 0
-when PLAY can go; its last line is the launcher's version, and a newer one when there is), `--server URL`, `--sign-in
-ID` (the password from standard input), `--sign-out`, `--app`, `--set NAME=VALUE`, `--audio-devices`, `--language
-en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the window opens on its pages), `--servers` (the servers
-it knows, as **Online** lists them), `--open-log player|launcher`, `--play`, `--update`, `--forget URL`, `--reset`,
-`--repair`, `--clear-game-data` and `--uninstall [--delete-data]`, with `--yes` to answer their questions (`--help`
-lists them all, in parts). In a terminal it prints in the launcher's look: a title with the version, each part under its
+when PLAY can go; its last line is the launcher's version, and a newer one when there is), `--test-server [ADDRESS]`
+(the connection test of the server PLAY plays on or of ADDRESS, each step as it ends; exit 0 when every step passed, 1
+when one failed), `--server URL`, `--sign-in ID` (the password from standard input), `--sign-out`, `--app`, `--set
+NAME=VALUE`, `--audio-devices`, `--language en|ko|system`, `--guide`, `--skip-guide` (the guide's **Skip**: the window
+opens on its pages), `--servers` (the servers it knows, as **Online** lists them), `--open-log player|launcher`,
+`--report FILE` (Help's report, into FILE, or into a folder under its own name), `--play`, `--update`, `--forget URL`,
+`--reset`, `--repair`, `--clear-game-data` and `--uninstall [--delete-data]`, with `--yes` to answer their questions
+(`--help` lists them all, in parts). In a terminal it prints in the launcher's look: a title with the version, each part under its
 name, names and values in columns, the ready check's marks and a download's bar in the launcher's colours; piped to a
 file or a script, the same lines in plain words, as before. Started with no flag by a double click, it opens the
 launcher's window and closes the console Windows opened for it. While the launcher's window is open, the flags that
@@ -470,7 +515,10 @@ broadcast has stopped, and when the server answers again on air, that it is back
 - **The videos are black and silent:** see the Media Feature Pack above.
 - **It cannot reach the server:** the PC has to reach the server's address, as a phone does: on the same network, or
   over the internet when the server is set up for it
-  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)).
+  ([the server's site does not open](troubleshooting.md#the-servers-site-does-not-open)). The
+  [connection test](#testing-the-connection) says where the way to it stops, and finds a server that moved to 8791.
+- **Someone helps with a problem:** **Help**, **Save a report** gives them the logs and this PC's details in one zip
+  ([a report](#a-report-for-whoever-helps)).
 - **The sound breaks up:** choose the **Safe** buffer on the **Sound** page, or **Shared** instead of **Exclusive**.
 
 The rest is the server's: [what to tell its owner](play.md#when-something-does-not-work).
@@ -555,6 +603,10 @@ game judged its notes by type.
 ## For server owners
 
 Nothing to do, unless the server has no internet: the site's **Download** page offers the installer to signed-in
-players, set up for the server as it is handed out, and the launcher signs in with the site's accounts. The server hands
-the launchers their updates too, of the installer's version ([updates](#updates)). Where the server gets the installer
-and the updates, and what it needs without internet: [the PC client's installer](admin.md#the-pc-clients-installer).
+players, set up for the server as it is handed out, and the launcher signs in with the site's accounts. Where the
+server gets the installer, and what it needs without internet:
+[the PC client's installer](admin.md#the-pc-clients-installer).
+
+To play on the server PC itself, nothing needs downloading: the admin pages' **App** page and the setup's last step,
+opened on that PC, have **Play on this PC**, which installs the PC client set up for the server and opens it with the
+owner's ID filled in, or opens it when it is installed ([Play on this PC](admin.md#play-on-this-pc)).

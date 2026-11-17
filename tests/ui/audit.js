@@ -177,8 +177,8 @@ async function open() {
 
 async function signIn(context) {
   const page = await context.newPage();
-  // (With the game server stopped, only the owner's pages are there to sign in to.)
-  if (stage !== 'down') {
+  // (With the game server stopped, only the owner's pages are there to sign in to; from the server PC's own network, too.)
+  if (stage !== 'down' && stage !== 'thispc') {
     await page.goto(`${P}/login.php?next=%2Fopendmtq%2F`, { waitUntil: 'domcontentloaded' });
     await typeId(page, 'input[name=user]', 'dmtq');
     await page.type('input[name=password]', PASSWORD);
@@ -1071,6 +1071,38 @@ async function portalFlows(contexts) {
   }, PASSWORD);
   check("the PC client's sign-in gives the site's cookie, and with it the app", signedIn[0] === 200 && signedIn[1].account === 'dmtq' && signedIn[2] === 200,
     JSON.stringify(signedIn));
+  // My page on the site: the client's sign-in asks for a one-time link (a POST: a GET is refused), which signs another
+  // browser in to the same account and opens its page, once; the account's records come as JSON, each with its place on
+  // its chart and the keyboard's mark.
+  const linked = await client.evaluate(async () => {
+    const get = await fetch('/opendmtq/client.php?link');
+    const r = await fetch('/opendmtq/client.php?link', { method: 'POST' });
+    const records = await fetch('/opendmtq/client.php?records');
+    return [get.status, r.status, await r.json(), records.status, await records.json()];
+  });
+  const [linkGet, linkStatus, link, recordsStatus, records] = linked;
+  check("the PC client's one-time link comes for its sign-in, by a POST alone",
+    linkGet === 405 && linkStatus === 200 && /^\/opendmtq\/login\.php\?once=[A-Za-z0-9_-]{43}$/.test(link.url || '') && typeof link.page === 'string',
+    JSON.stringify(linked).slice(0, 300));
+  const rows = [...(records.recent || []), ...(records.best || [])];
+  check("the PC client's records: the account's player's plays and bests, each with its place on its chart",
+    recordsStatus === 200 && records.account === 'dmtq' && (records.player === null
+      ? rows.length === 0 : rows.every(r => Number.isInteger(r.score) && typeof r.keys === 'boolean' && (r.rank === null || r.rank >= 1) && r.players >= 0)),
+    JSON.stringify(records).slice(0, 300));
+  const opener = await contexts.browser.createBrowserContext();
+  const opened = await opener.newPage();
+  await opened.goto(`${SITE}${link.url}`, { waitUntil: 'domcontentloaded' });
+  const landed = new URL(opened.url());
+  check("the one-time link signs a browser in and opens the player's page", landed.pathname + landed.search === link.page
+    && await opened.$('.auth-who') !== null, opened.url());
+  await opener.close();
+  const again = await contexts.browser.createBrowserContext();
+  const twice = await again.newPage();
+  await twice.goto(`${SITE}${link.url}`, { waitUntil: 'domcontentloaded' });
+  check('the same link a second time signs nobody in and says so on the sign-in page',
+    new URL(twice.url()).pathname === '/opendmtq/login.php' && await visible(twice, '.signin .error') && await twice.$('.auth-who') === null, twice.url());
+  await noFindings(twice, 'a one-time link used already');
+  await again.close();
   await clientSide.close();
 
   // A wrong password says so and keeps the form.
@@ -2034,6 +2066,40 @@ async function adminFlows(contexts) {
   await out.close();
 }
 
+// The admin pages from the server PC itself (the browser on the admin service's own network: its loopback): Play on this
+// PC on the App page and the setup's last step, as the Windows bundle shows it (WINDOWS=1: the button that installs the PC
+// client here) or a host install on Linux (how to play from a Windows PC), swept at every width in both languages; on the
+// bundle, pressed, its job followed on the page to its end, which says what came of it (no Windows program runs here).
+async function thisPc(contexts) {
+  const windows = process.env.WINDOWS === '1';
+  const kind = windows ? 'the Windows bundle' : 'a host install on Linux';
+  const page = await contexts.signed.newPage();
+  for (const [where, url] of [['the App page', `${A}/app`], ["the setup's last step", `${A}/setup?step=app`]]) {
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    const words = await textOf(page, '#this-pc');
+    check(`${kind}: ${where}, from the server PC, has Play on this PC`, windows
+      ? (await page.$('#this-pc button')) !== null && /Installs the PC client on this PC/.test(words)
+      : /Play on a Windows PC/.test(words) && /download\.php/.test(words) && (await page.$('#this-pc button')) === null, words.slice(0, 200));
+  }
+  await page.close();
+  const variant = windows ? 'windows' : 'linux';
+  await sweep(contexts, [[`app-here-${variant}`, `${A}/app`], [`setup-here-${variant}`, `${A}/setup?step=app`]], ALL_WIDTHS);
+  if (!windows) return;
+  const pressed = await contexts.signed.newPage();
+  await pressed.setViewport({ width: 1280, height: 900 });
+  await pressed.goto(`${A}/app`, { waitUntil: 'networkidle2' });
+  await Promise.all([pressed.waitForNavigation({ waitUntil: 'domcontentloaded' }), pressed.click('#this-pc button')]);
+  // Followed while it runs, then the page with what it said.
+  await until(pressed, () => !document.querySelector('#here-log'), null, 60000);
+  await pressed.waitForSelector('.flash', { timeout: 30000 }).catch(() => {});
+  const said = await textOf(pressed, '.flash');
+  check('pressed on the Windows bundle, Play on this PC says what came of it, its button there again', /PC client/.test(said)
+    && (await pressed.$('#this-pc button:not([disabled])')) !== null, said.slice(0, 200));
+  await noFindings(pressed, 'Play on this PC after a press');
+  await pressed.screenshot({ path: path.join(OUT, 'shots', 'thispc-pressed-en-1280.jpg'), type: 'jpeg', quality: 72, fullPage: true });
+  await pressed.close();
+}
+
 (async () => {
   fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true });
   const contexts = await open();
@@ -2047,6 +2113,8 @@ async function adminFlows(contexts) {
     await sweep(contexts, FULL, ALL_WIDTHS);
   } else if (stage === 'keys') {
     await keyboardMarks(contexts);
+  } else if (stage === 'thispc') {
+    await thisPc(contexts);
   } else if (stage === 'air') {
     // The video really runs, and the page says who is on.
     const page = await contexts.signed.newPage();

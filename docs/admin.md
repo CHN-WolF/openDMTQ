@@ -60,7 +60,8 @@ is at `/opendmtq/admin/setup`, and the status page leads there until every step 
 2. **Address.** The address phones use, which goes into the app: this PC's address on its network. A PC with several
    (wired and Wi-Fi) offers each. A new one is written to `.env`, and the server starts again for it.
 3. **Players.** An account for each player, its password shown once with the message to send.
-4. **App.** The app, built for that address; then what to do on each phone, with the QR code.
+4. **App.** The app, built for that address; then what to do on each phone, with the QR code, and
+   [**Play on this PC**](#play-on-this-pc) when the setup is open on the server PC itself.
 
 ![The setup's last step: the app is ready, with the QR code and what to do on each phone](images/setup-app.jpg)
 
@@ -122,7 +123,7 @@ page's things to look at first.
 | :--- | :--- |
 | Setup | The four steps above: the game's files, the address, the players and the app. Reached from the status page while a step is left, and from the Songs page to import songs. |
 | Status | Things to look at first when there are any (no app, no backup, little disk, a failed build). Game server health, players, plays in the last 24 hours, players broadcasting now (or that broadcasts are off), disk space, current app, last backup, maintenance. An "Add a player" card that leads to the Accounts page, where each account comes with the message to send its player, and the code that downloads the app. Plays over the last 30 days, when people play by weekday and hour, who plays most, the most played songs, what takes the disk, best records by grade, recent plays (one played with the keyboard marked as on the site). Resources: this machine's processors, uptime, memory, swap, disk and load, with CPU, memory in use and the game server's answers over the last 24 hours. |
-| App | The app's name on phones, `TECHNIKA Q (<name>)`: SERVER_NAME, or the address in PUBLIC_HOST when it is unset. Build the app (about 20 seconds, output shown live), download any build, delete one, or all the old ones at once. A build for another address is kept for download and does not replace the one the site offers. The PC client's installer for Windows, its size and its own download, set up for this server (the builder keeps it beside the app; the same installer serves every server). |
+| App | The app's name on phones, `TECHNIKA Q (<name>)`: SERVER_NAME, or the address in PUBLIC_HOST when it is unset. Build the app (about 20 seconds, output shown live), download any build, delete one, or all the old ones at once. A build for another address is kept for download and does not replace the one the site offers. The PC client's installer for Windows, its size and its own download, set up for this server (the builder keeps it beside the app; the same installer serves every server). Opened on the server PC itself, [**Play on this PC**](#play-on-this-pc). |
 | Songs | Add a song package, remove added songs, hide or show any song; what takes more than a few seconds shows its progress until it ends. Each song's plays over the last 30 days, against the most played, and when it was last played. Says so when the server has no client data or no songs yet. See [songs.md](songs.md). |
 | Players | Search by name, sort by any column, when each last played, and a row of 14 small cells, one per day of the last two weeks, darker on days with more plays. A spreadsheet of them all. A name leads to the player's page on the site. On each row whether their broadcast is on, with its switch (while broadcasts are off for the server, the page says so and a switch that is on is held for then); under More: rename, reset scores, delete (those two ask first and make a backup first, and take the player's achievements with their scores) ([live.md](live.md)). |
 | Accounts | The site's accounts, the only way into it: make one (an ID, a password typed or made, whom it is for, the game player it is, admin rights to these pages too), and its password shows once with the message to send; a new password, disable or enable, delete. Each with when it was made and last signed in. Under them the API's tokens: make one (a name and a scope, read or write), shown once; each with whose it is, when it was last used and whether it works; revoke ([api.md](api.md)). |
@@ -181,6 +182,35 @@ much a PC downloads; `GET /app/windows/updates` in the [API](api.md) gives the s
 A server reached over HTTPS hands out installers that use it, with the port named (HTTPS answers on the game's port).
 Where the server has its own certificate authority (Docker Compose makes one), the installer carries it, and the
 launcher trusts it for that server alone, beside Windows' own authorities.
+
+## <a id="play-on-this-pc"></a>Play on this PC
+
+An owner who plays on the server PC needs no download and no address typed: the App page and the setup's last step,
+opened in a browser on the server PC itself, have **Play on this PC**.
+
+- **The Windows bundle:** the installer this server keeps for the site, set up for this server with the ID of whoever
+  presses it on its end (the owner's own, which the players' site takes too; never a password), runs with `--silent`
+  for the Windows user the server runs as. It installs the PC client and opens its launcher, the server in place and
+  the ID filled in on the sign-in: only the password is left to type. With the PC client installed already, the
+  launcher opens the same way, and an open launcher takes the server and comes to the front. The page follows the
+  install until it is done and says what came of it; a game open on the PC holds it until the game closes. The installer
+  is the site's copy once the app is built, and before that the one the bundle brings.
+- **Linux and macOS:** the PC client is a Windows program, and the page says how to play from a Windows PC instead:
+  open the site's download page there, sign in, and download the installer, set up for this server. Nothing runs on the
+  server for it. Docker Compose on Linux says the same on the server PC.
+
+A visit from another PC never sees it, and is refused it: what it runs, it runs on the server PC. The server PC is a
+visit from loopback (`http://localhost:<port>/`), from one of the PC's own addresses, or, with Docker Compose on Linux,
+one the server marks as the server PC's own. Through the API it is `POST /app/play-here`, from the server PC too
+([api.md](api.md)).
+
+## One-time sign-in links
+
+The PC client's **My page on the site** opens the player's page in the PC's browser, signed in already: the server makes
+a link for the launcher's sign-in that signs a browser in to the same account once, within a minute
+(`/opendmtq/login.php?once=...`), then opens the page; one used already, or older, leads to the sign-in page, which says
+so. The links are kept beside the database (`data/state/signin-links`), each named by the hash of its token. The API
+makes one for its token's admin: `POST /site/link` ([api.md](api.md)).
 
 ## Where it runs
 

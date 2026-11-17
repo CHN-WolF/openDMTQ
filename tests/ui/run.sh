@@ -33,7 +33,7 @@ FEED_PID=
 # What the containers wrote belongs to their user: removed from inside an image.
 cleanup() {
   if [ -n "$FEED_PID" ]; then kill "$FEED_PID" 2>/dev/null || true; fi
-  docker rm -f "$SITE" "$ADMIN" >/dev/null 2>&1 || true
+  docker rm -f "$SITE" "$ADMIN" "$ADMIN-pc" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker run --rm -u 0 -v "$DATA:/d" --entrypoint sh "opendmtq-server:$TAG" -c 'rm -rf /d/* /d/.[!.]*' >/dev/null 2>&1 || true
   rmdir "$DATA" 2>/dev/null || true
@@ -179,6 +179,38 @@ export SITE_URL="http://127.0.0.1:$SITE_PORT" ADMIN_URL="http://127.0.0.1:$ADMIN
 python3 "$UI/feed.py" record
 
 stage full
+
+# The admin pages from the server PC itself, its browser on the admin service's own network (its loopback): Play on this
+# PC as a host install on Linux shows it (how to play from a Windows PC), then as the Windows bundle does, from a second
+# admin service on the same data that says it is the bundle (tests/ui/as_windows.py).
+here_stage() {
+  local target=$1 windows=$2 status=0
+  docker run --rm --name "$NAME_PREFIX-uitest-browser" --network "container:$target" --cpus "$BROWSER_CPUS" --memory 3g \
+    -e SITE="http://127.0.0.1:8000" -e ADMIN="http://127.0.0.1:8000" -e PASSWORD="$PASSWORD" -e OUT=/out -e WINDOWS="$windows" \
+    -v "$UI:/usr/src/app/ui:ro" -v "$REPORT:/out" --entrypoint node "$BROWSER_IMAGE" ui/audit.js thispc 2>&1 \
+    | tee "$REPORT/last.txt" >> "$REPORT/results.txt" || status=$?
+  if [ "$status" -ne 0 ]; then
+    FAILED=1
+    grep -A32 '^FAIL' "$REPORT/last.txt" | cut -c1-200 || tail -5 "$REPORT/last.txt" | cut -c1-200
+  fi
+  echo "stage thispc ($([ "$windows" = 1 ] && echo windows || echo linux)): $(grep -c '^PASS' "$REPORT/last.txt") passed, $(grep -c '^FAIL' "$REPORT/last.txt") failed"
+}
+if wanted thispc; then
+  here_stage "$ADMIN" 0
+  docker run -d --name "$ADMIN-pc" --network "$NET" --cpus 2 --memory 1g -u 33:33 --read-only --tmpfs /tmp:mode=1777 \
+    --tmpfs /home/player:mode=1777 -e HOME=/home/player -e OPENDMTQ_HOST_INSTALL=yes \
+    -e PUBLIC_HOST="$HOST" -e ADMIN_PASSWORD="$PASSWORD" -e SERVER_URL="http://$SITE:8080" -e TZ=Asia/Seoul \
+    -v "$DATA/state:/data" -v "$DATA/apk:/apk" -v "$DATA/custom:/custom" -v "$DATA/backups:/backups" \
+    -v "$DATA/content:/srv/content:ro" -v "$UI:/ui:ro" \
+    --entrypoint gunicorn "opendmtq-tools:$TAG" -w 1 --threads 4 -b 0.0.0.0:8000 --pythonpath /ui as_windows:app >/dev/null
+  for _ in $(seq 1 30); do
+    docker exec "$ADMIN-pc" python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/opendmtq/admin/login', timeout=3)" \
+      >/dev/null 2>&1 && break
+    sleep 1
+  done
+  here_stage "$ADMIN-pc" 1
+  docker rm -f "$ADMIN-pc" >/dev/null 2>&1 || true
+fi
 
 # The keyboard's mark: what the database holds of the plays and bests (seed.php made some with the keyboard), for the pages'
 # marks to be held to (audit.js keys): every play [id, player, chart, score, when, keys, record], every best [player, chart,

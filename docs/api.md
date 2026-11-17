@@ -324,7 +324,7 @@ The App page: the app on offer, its builds, the way players get it.
 |:---|:---:|:---|
 | [`GET /app`](#get-app) | read | The app players get: its build, whether it is right for this server, a build running now. |
 | [`GET /app/windows`](#get-appwindows) | read | The installer for Windows as the site hands it to computers, set up for this server (its address on the installer's end). |
-| [`GET /app/windows/updates`](#get-appwindowsupdates) | read | The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. |
+| [`POST /app/play-here`](#post-appplay-here) | write | Installs the PC client on the server PC and opens it, as the App page's Play on this PC does. |
 | [`GET /app/icon`](#get-appicon) | read | The launcher icon of the app on offer, as the builder kept it. |
 | [`GET /builds`](#get-builds) | read | Every build of the app, newest first. |
 | [`POST /builds`](#post-builds) | write | Starts a build of the app, as the App page's buttons do. |
@@ -353,11 +353,18 @@ Refusals:
 - `412 precondition_failed`: `If-Match` names another file than this server hands out now (another installer, or other details on its end): download it again from the start.
 - `416 range_not_satisfiable`: The part asked for begins past the end; `Content-Range: bytes */length` says the length.
 
-#### `GET /app/windows/updates`
+#### `POST /app/play-here`
 
-The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.
+Installs the PC client on the server PC and opens it, as the App page's Play on this PC does. From the server PC itself only, on the Windows bundle: the installer this server keeps, set up for this server with the token's admin's ID on its end, runs with `--silent` for the Windows user the server runs as, and the launcher opens with this server and that ID filled in to sign in (never a password). With the PC client installed already, its launcher opens the same way. The job's log says what it did.
 
-Answer: `200` with [PcClientUpdates](#pcclientupdates).
+Answer: `202` with [JobAnswer](#jobanswer).
+
+Refusals:
+
+- `403 not_this_pc`: The call does not come from the server PC itself (loopback, or one of its own addresses).
+- `404 not_windows`: The server runs on Linux or macOS, or in Docker: the message says how to play from a Windows PC.
+- `404 no_installer`: The PC client is not installed here and this server keeps no installer for Windows.
+- `409 busy`: Play on this PC runs already.
 
 #### `GET /app/icon`
 
@@ -1559,6 +1566,7 @@ What the players' site shows.
 | [`GET /site/players/{player}`](#get-siteplayersplayer) | read | A player's page: figures, rank, grades, the last 12 weeks, levels, recent plays, broadcasts. |
 | [`GET /site/players/{player}/records`](#get-siteplayersplayerrecords) | read | A player's best records, all of them. |
 | [`GET /site/plays/recent`](#get-siteplaysrecent) | read | The newest plays, or the newest records as the home page lists them. |
+| [`POST /site/link`](#post-sitelink) | write | A one-time link that signs a browser in to the players' site as the token's admin, as the PC client's My page on the site does for its own sign-in. |
 | [`GET /site/live`](#get-sitelive) | read | Who is on air now, and the recordings players may watch. |
 | [`GET /site/live/{player}/files/{part}`](#get-siteliveplayerfilespart) | read | A broadcast's live playlist or one of its segments, as the live page plays them. |
 
@@ -1666,6 +1674,21 @@ Refusals:
 
 - `400 bad_query`: A limit or a player that is not a number.
 
+#### `POST /site/link`
+
+A one-time link that signs a browser in to the players' site as the token's admin, as the PC client's My page on the site does for its own sign-in. The link is a path on the site (`/opendmtq/login.php?once=...`): opened in a browser on the server's address within a minute, it signs that browser in to the token's admin's account (the owner's ID for the owner's token) and opens `next`. It works once.
+
+Body (JSON):
+
+- `next` (string, optional, 200 characters at most): The site's page to open once signed in, a path on the site (default `/opendmtq/`).
+
+Answer: `200` with [SiteLink](#sitelink).
+
+Refusals:
+
+- `400 bad_field`: next is not a path on the site.
+- `503 links_unavailable`: The link could not be kept beside the database.
+
 #### `GET /site/live`
 
 Who is on air now, and the recordings players may watch.
@@ -1707,10 +1730,10 @@ A refusal.
 
 #### Job
 
-Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made, a change to the songs, a repair or a deletion of the server's data.
+Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made, a change to the songs, a repair or a deletion of the server's data, and Play on this PC.
 
 - `id` (string): Its id, for GET /jobs/{job}.
-- `kind` (string): What it does. One of `build`, `import`, `restore`, `backup`, `songs`, `repair`, `delete-data`.
+- `kind` (string): What it does. One of `build`, `import`, `restore`, `backup`, `songs`, `repair`, `delete-data`, `pc-client`.
 - `state` (string): Where it is. One of `running`, `done`, `failed`.
 - `started` (integer): When it started (Unix time).
 - `log` (list of string): Its last 200 lines of output.
@@ -2784,6 +2807,14 @@ A quality of the stream.
 - `segment` (integer): A segment's length (seconds).
 - `hour_bytes` (integer): What an hour of broadcast takes on the disk, about (bytes).
 - `viewer_bits` (integer): Each viewer's connection, about (bit/s), picture and sound.
+
+#### SiteLink
+
+A one-time link that signs a browser in to the players' site.
+
+- `url` (string): Its address on the site, after the server's address: it works once, for a minute.
+- `account` (string): The site account it signs in to: the token's admin's own.
+- `expires` (integer): When it stops working (Unix time).
 
 #### SiteLive
 

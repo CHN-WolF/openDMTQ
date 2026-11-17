@@ -101,7 +101,7 @@ SHAPES = {
         Field("nearest", "string", "With 404 cannot_open from GET /setup/folder: the folder the setup's picker opens instead, "
               "the nearest one above that can be read.", optional=True)]),
     "Job": Shape("Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made, "
-                 "a change to the songs, a repair or a deletion of the server's data.", [
+                 "a change to the songs, a repair or a deletion of the server's data, and Play on this PC.", [
         Field("id", "string", "Its id, for GET /jobs/{job}."),
         Field("kind", "string", "What it does.", enum=["build", "import", "restore", "backup", "songs", "repair", "delete-data",
                                                        "pc-client"]),
