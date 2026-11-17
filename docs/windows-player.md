@@ -98,8 +98,8 @@ The launcher takes its updates from the server it plays on first. The server kee
 it hands out, the same files as the project's release, at `/updates/` on its one port, and the launcher goes no further
 than that version: a launcher stays matched to its server, on a network with no way out too. A server that keeps none (one
 older than 0.11.0) lets the launcher take the project's releases on GitHub, up to the server's own version, and with no
-server it takes GitHub's latest release. A server that does not answer sends it nowhere else: nothing is said until it
-answers. **Check for updates** says where an update comes from.
+server it takes GitHub's latest release. A server that does not answer sends it nowhere else. **Check for updates** says
+where an update comes from.
 
 An update goes in only when the release's checksums carry the OpenDMTQ project's signature, by the key built into the
 launcher (`8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`, [a release's files](install.md#a-releases-files)):
@@ -112,8 +112,8 @@ launcher (`8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`, [a
 - `opendmtq.client-<version>-full.nupkg`, the whole update, is what every other launcher downloads, and one whose delta
   did not give the files signed (it says *The whole update is downloading* on the command line). It must be the file the
   signed checksums sum.
-- `opendmtq-<version>-sha256sums.txt` and its signature `opendmtq-<version>-sha256sums.txt.sig` come first: without
-  them nothing of the release is downloaded.
+- `opendmtq-<version>-sha256sums.txt` and its signature `opendmtq-<version>-sha256sums.txt.sig` come right after the
+  feed, before any package: without them no package of the release is downloaded.
 
 Everything is downloaded into a folder of the launcher's own in Windows' temporary folder and checked there, before
 anything goes into the program's folder: a package that is not the one the release signed is refused, said in words,
