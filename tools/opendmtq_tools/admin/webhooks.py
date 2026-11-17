@@ -952,16 +952,19 @@ def settle(con, row, me, result, now):
     if result["ok"]:
         con.execute("UPDATE WebhookMessage SET state = 'sent', done_at = ?, claim = NULL WHERE id = ? AND claim = ?", (int(now), row["id"], me))
         return
-    stop = result["code"] in ("gone", "refused", "bad", "redirect") or row["tries"] + 1 > len(BACKOFF)
+    stop = result["code"] in ("gone", "refused", "bad", "redirect") or (result["code"] != "limited" and row["tries"] + 1 > len(BACKOFF))
     if stop:
         con.execute("UPDATE WebhookMessage SET state = 'failed', done_at = ?, claim = NULL, tries = tries + 1 WHERE id = ? AND claim = ?",
                     (int(now), row["id"], me))
         return
-    wait = result["retry_after"] if result["code"] == "limited" else BACKOFF[row["tries"]]
+    # A chat that asked to wait (429) gets its wait, and it is no try: such a message waits until it is half an hour old,
+    # given up and counted then. Any other failure is a try, and the next waits as long as BACKOFF says.
+    limited = result["code"] == "limited"
+    wait = result["retry_after"] if limited else BACKOFF[row["tries"]]
     # To the fraction of a second: a chat that asks for 2.5 seconds gets them, no more.
     due = now + wait
-    con.execute("UPDATE WebhookMessage SET state = 'waiting', next_at = ?, claim = NULL, claim_until = NULL, tries = tries + 1 "
-                "WHERE id = ? AND claim = ?", (due, row["id"], me))
+    con.execute("UPDATE WebhookMessage SET state = 'waiting', next_at = ?, claim = NULL, claim_until = NULL, tries = tries + ? "
+                "WHERE id = ? AND claim = ?", (due, 0 if limited else 1, row["id"], me))
     # The webhook's later messages wait as long: a chat hears of things in the order they happened.
     con.execute("UPDATE WebhookMessage SET next_at = MAX(next_at, ?) WHERE hook = ? AND state = 'waiting' AND id != ?", (due, row["hook"], row["id"]))
 

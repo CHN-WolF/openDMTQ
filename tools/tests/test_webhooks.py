@@ -623,6 +623,23 @@ class SendingTest(unittest.TestCase):
             # Asked to wait is no failure: the card never showed one.
             self.assertIsNone(webhooks.listing()[0]["last_failure"])
 
+    def test_a_chat_that_keeps_asking_to_wait_is_no_failure(self):
+        # Nine 429s in a row: still waiting, each try after the chat's own wait; given up half an hour after its news, and
+        # counted then.
+        with Server() as inst:
+            inst.chat.answers = [(429, json.dumps({"retry_after": 1}).encode(), {})]
+            inst.hook(events=["maint_on"])
+            now = time.time()
+            webhooks.detect(now)
+            admin.songs.set_maintenance(True, "", HOST)
+            webhooks.detect(now)
+            for i in range(9):
+                webhooks.deliver(now + i * 2)
+            self.assertEqual((len(inst.chat.got), [s for _, _, _, s in inst.queued()]), (9, ["waiting"]))
+            self.assertEqual(webhooks.listing()[0]["given_up"], 0)
+            webhooks.deliver(now + webhooks.GIVE_UP + 1)
+            self.assertEqual(([s for _, _, _, s in inst.queued()], webhooks.listing()[0]["given_up"]), (["dropped"], 1))
+
     def test_a_webhook_gone_stops_its_message_and_says_so(self):
         with Server() as inst:
             inst.chat.answers = [(404, json.dumps({"message": "Unknown Webhook"}).encode(), {})]
