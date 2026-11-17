@@ -6,6 +6,12 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-17
+
+OpenDMTQ 0.11.0 puts the site, the admin pages and the API on one port, 8791, and gives the owner a Server page, a
+Notices page with Discord and Slack, and a page for each player's game state; players get MY PAGE on the site, and
+the PC client a Sound page, a connection test, signed updates from its own server and the game's sound at 44.1 kHz.
+
 ### Added
 
 - Play on this PC, on the admin pages' App page and the setup's last step, for a visit from the server PC itself: on
@@ -141,6 +147,9 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`, `opendmtq-phone-app-<date>-android-<address>.apk`,
   `opendmtq-server-backup-<time>-<why>.tar.gz` (backups named before still count), the players' and plays' files, the
   request log and recordings.
+- A server of 0.10.0 or older fetched the phones' runtime and the PC client's installer from the latest release by
+  their old names; from 0.11.0 on a server fetches them from its own version's release by the new ones. One of 0.10.0
+  that needs either again (its own copy gone) gets them by updating to 0.11.0 first.
 - The launcher's menu is a column on the left again, and the first start's steps run down its side.
 - A setting changed in the launcher changes its own row only: no page is drawn again whole, and nothing flashes. The
   launcher's drop-down lists are in OpenDMTQ's design, open over everything else and close when the window moves.
