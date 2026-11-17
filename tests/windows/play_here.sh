@@ -11,6 +11,8 @@
 #   5. the same through the API (POST /opendmtq/api/v1/app/play-here) with a token made on the Accounts page
 #   6. the PC client's connection test (OpenDMTQ-cmd.exe --test-server) against this server, then against port 80 of the
 #      same host as a launcher set up before 0.11.0 has it: nothing there, and the server found on 8791 (run with PORT=8791)
+#   7. the PC client's report (OpenDMTQ-cmd.exe --report): its files, and none of the Windows user's name in its paths or
+#      of the server's address in it
 # Every step leaves a screenshot of the virtual screen and the pages' HTML in OUT_DIR.
 #
 #   tests/windows/play_here.sh BUNDLE_DIR OUT_DIR      (BUNDLE_DIR: host/windows/build.sh's OUT/OpenDMTQ)
@@ -192,6 +194,27 @@ if [ "$PORT" = 8791 ]; then
   expect "--test-server on port 80 finds the server on 8791 ($code)" sh -c "test $code = 1 && grep -q \
     'refuses the connection on port 80. An OpenDMTQ server answers at http://127.0.0.1:8791.' /out/test-server-80.txt"
 fi
+
+# 7. The report from the PC client under Wine: one zip with its files, read back by the bundle's own Python; the user's
+# name (root, in every path of Wine's user) and the server's address left out.
+wine "$cmd" --report 'Z:\out\report.zip' > /out/report.txt 2>&1
+code=$?
+cat /out/report.txt
+expect "--report writes one zip ($code)" sh -c "test $code = 0 && test -s /out/report.zip"
+cat > /out/read-report.py <<'PY'
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+for name in z.namelist():
+    print(name)
+text = "".join(z.read(name).decode("utf-8", "replace") for name in z.namelist()).lower()
+print("LEAK" if ("\\users\\root" in text or "127.0.0.1:" + sys.argv[2] in text) else "CLEAN")
+PY
+wine "/tmp/Open DMTQ/runtime/python/python.exe" -I 'Z:\out\read-report.py' 'Z:\out\report.zip' "$PORT" > /out/report-list.txt 2>&1
+cat /out/report-list.txt
+for name in about.txt launcher/launcher.log settings/settings.json settings/player-settings.txt system/displays.txt system/sound.txt system/connection-test.txt; do
+  expect "the report has $name" grep -q "^$name" /out/report-list.txt
+done
+expect "and none of the user's name in its paths, nor the server's address" grep -q '^CLEAN' /out/report-list.txt
 
 echo "play here under Wine: $failures failed"
 [ "$failures" -eq 0 ]
