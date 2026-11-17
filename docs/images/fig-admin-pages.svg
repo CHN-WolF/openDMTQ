@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 564" width="956" height="564" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="What each admin page works on: the setup imports into data/content and data/apk/base and writes the address to .env; the status page reads the server's health page; the App page builds, downloads and deletes in data/apk/out; the Songs page adds, removes and hides in data/custom; the Players and Accounts pages change the database; the Broadcasts page works on the database's broadcast settings and data/state/live-rec; Backups on data/backups; Maintenance turns the notice in data/custom/web/inspection on or off; Logs reads the request log">
-<rect x="-28" y="-28" width="956" height="564" rx="16" fill="#11151a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 616" width="956" height="616" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="What each admin page works on: the setup imports into data/content and data/apk/base and writes the address to .env; the status page reads the server's health page; the App page builds, downloads and deletes in data/apk/out; the Songs page adds, removes and hides in data/custom; the Players and Accounts pages change the database; the Broadcasts page works on the database's broadcast settings and data/state/live-rec; Backups on data/backups; Notices puts the site's notice in data/state, turns the maintenance notice in data/custom/web/inspection on or off and keeps the chats it tells in the database; Server works on .env and the server's data; Logs reads the request log">
+<rect x="-28" y="-28" width="956" height="616" rx="16" fill="#11151a"/>
 <path d="M0,0 H158 L170,12 V40 H0 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="14" y="24.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,156">Setup</text>
 <path d="M560,0 H888 L900,12 V40 H560 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
@@ -47,19 +47,26 @@
 <path d="M559,384 L550.0,388.5 L550.0,379.5 Z" fill="#7b8794" data-tip="559,384"/>
 <text x="365" y="377" font-size="12" fill="#aeb8c3" text-anchor="middle" data-box="180,550">back up, restore</text>
 <path d="M0,416 H158 L170,428 V456 H0 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="14" y="440.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,156">Maintenance</text>
+<text x="14" y="440.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,156">Notices</text>
 <path d="M560,416 H888 L900,428 V456 H560 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="574" y="440.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="574,886">data/custom/web/inspection</text>
+<text x="574" y="440.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="574,886">data/state, data/custom</text>
 <path d="M170.5,436 L552,436" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="M559,436 L550.0,440.5 L550.0,431.5 Z" fill="#7b8794" data-tip="559,436"/>
-<text x="365" y="429" font-size="12" fill="#aeb8c3" text-anchor="middle" data-box="180,550">the notice on or off</text>
+<text x="365" y="429" font-size="12" fill="#aeb8c3" text-anchor="middle" data-box="180,550">the site's notice, maintenance, chats</text>
 <path d="M0,468 H158 L170,480 V508 H0 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="14" y="492.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,156">Logs</text>
+<text x="14" y="492.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,156">Server</text>
 <path d="M560,468 H888 L900,480 V508 H560 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="574" y="492.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="574,886">data/state/logs/access.log</text>
+<text x="574" y="492.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="574,886">.env, the server's data</text>
 <path d="M170.5,488 L552,488" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="M559,488 L550.0,492.5 L550.0,483.5 Z" fill="#7b8794" data-tip="559,488"/>
-<text x="365" y="481" font-size="12" fill="#aeb8c3" text-anchor="middle" data-box="180,550">reads</text>
+<text x="365" y="481" font-size="12" fill="#aeb8c3" text-anchor="middle" data-box="180,550">port, password, repair, delete</text>
+<path d="M0,520 H158 L170,532 V560 H0 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="14" y="544.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,156">Logs</text>
+<path d="M560,520 H888 L900,532 V560 H560 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="574" y="544.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="574,886">data/state/logs/access.log</text>
+<path d="M170.5,540 L552,540" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M559,540 L550.0,544.5 L550.0,535.5 Z" fill="#7b8794" data-tip="559,540"/>
+<text x="365" y="533" font-size="12" fill="#aeb8c3" text-anchor="middle" data-box="180,550">reads</text>
 <path d="M560,208 H888 L900,220 V300 H560 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="574" y="249.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="574,886">data/state/dmtq.db3</text>
 <text x="574" y="268.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="574,886">players, scores, accounts</text>

@@ -76,7 +76,7 @@ same everywhere.
 What each page works on:
 
 <p align="center">
-  <img src="images/fig-admin-pages.svg" alt="What each admin page works on: the setup imports into data/content and data/apk/base and writes the address to .env; the status page reads the server's health page; the App page builds, downloads and deletes in data/apk/out; the Songs page adds, removes and hides in data/custom; the Players and Accounts pages change the database; the Broadcasts page works on the database's broadcast settings and data/state/live-rec; Backups on data/backups; Maintenance turns the notice in data/custom/web/inspection on or off; Logs reads the request log" width="100%">
+  <img src="images/fig-admin-pages.svg" alt="What each admin page works on: the setup imports into data/content and data/apk/base and writes the address to .env; the status page reads the server's health page; the App page builds, downloads and deletes in data/apk/out; the Songs page adds, removes and hides in data/custom; the Players and Accounts pages change the database; the Broadcasts page works on the database's broadcast settings and data/state/live-rec; Backups on data/backups; Notices puts the site's notice in data/state, turns the maintenance notice in data/custom/web/inspection on or off and keeps the chats it tells in the database; Server works on .env and the server's data; Logs reads the request log" width="100%">
 </p>
 
 Where they are:
