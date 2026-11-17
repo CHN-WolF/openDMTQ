@@ -884,15 +884,15 @@ async function inPlace(contexts) {
   const hide = await sameWay(page, () => page.click('tr[data-n="2"] form:has(input[name=action][value=hide]) button'), () => !!document.querySelector('tr[data-n="2"] .mark.off'));
   const show = await sameWay(page, () => page.click('tr[data-n="2"] form:has(input[name=action][value=show]) button'), () => !document.querySelector('tr[data-n="2"] .mark.off'));
   check('a song is hidden and shown again in place', hide.ok && show.ok && !(await page.evaluate(hidden)), `${hide.detail} | ${show.detail}`);
-  // The Maintenance page: on (it asks first), then off.
+  // The Notices page's maintenance card (the site's notice has the card above it): on (it asks first), then off.
   await page.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.auto-line b');
-  const maintWord = () => document.querySelector('.auto-line b').textContent;
+  await page.waitForSelector('#maintenance .auto-line b');
+  const maintWord = () => document.querySelector('#maintenance .auto-line b').textContent;
   const m1 = await page.evaluate(maintWord);
-  const mOn = await sameWay(page, async () => { await page.click('button[name=action][value=on]'); await page.waitForSelector('#ask[open]'); await page.click('#ask [value=yes]'); },
-    w => document.querySelector('.auto-line b').textContent !== w, m1);
+  const mOn = await sameWay(page, async () => { await page.click('#maintenance button[name=action][value=on]'); await page.waitForSelector('#ask[open]'); await page.click('#ask [value=yes]'); },
+    w => document.querySelector('#maintenance .auto-line b').textContent !== w, m1);
   const m2 = await page.evaluate(maintWord);
-  const mOff = await sameWay(page, () => page.click('button[name=action][value=off]'), w => document.querySelector('.auto-line b').textContent !== w, m2);
+  const mOff = await sameWay(page, () => page.click('#maintenance button[name=action][value=off]'), w => document.querySelector('#maintenance .auto-line b').textContent !== w, m2);
   check('maintenance is turned on and off again in place', mOn.ok && mOff.ok, `${mOn.detail} | ${mOff.detail}`);
   await page.screenshot({ path: path.join(OUT, 'shots', 'patterns-in-place-maintenance-1280.jpg'), type: 'jpeg', quality: 80 });
   await page.close();
