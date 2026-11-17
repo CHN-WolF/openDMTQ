@@ -365,8 +365,8 @@ class Installer:
             name, url = self.server["name"], self.server["url"]
             rows.append((w("setup.row.server"), name if name == url else "%s  ·  %s" % (name, url)))
         self._facts(card.body, rows)
-        # The project's notice under it, as the site and the launcher have it.
-        self.window.notice(content)
+        # The project's notice at the card's foot, as the site and the launcher have it.
+        self.window.notice(card.body)
         self.window.set_buttons([(w("setup.cancel"), self.root.destroy, "secondary"),
                                  (w("setup.install"), lambda: self.work("install"), "primary")],
                                 default=1, escape=self.root.destroy)
