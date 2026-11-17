@@ -9,9 +9,7 @@ import http.server
 import json
 import multiprocessing
 import os
-import re
 import sqlite3
-import tarfile
 import threading
 import time
 import unittest
@@ -357,7 +355,7 @@ class RulesTest(unittest.TestCase):
             self.assertEqual(sorted((h, k) for h, k, _, _ in inst.queued()), [(1, "maint_on"), (2, "chart_top")])
 
     def test_nothing_is_followed_without_a_webhook(self):
-        with Server() as inst:
+        with Server():
             self.assertEqual(webhooks.detect(), 0)
             con = sqlite3.connect(admin.core.DB)
             try:
