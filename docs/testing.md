@@ -158,6 +158,10 @@ request or a script error also counts. The findings, the list of results and scr
 
 A rule that fits a page on purpose goes on that page's element as `data-layout-ok`, with the reason in a comment, not in the checker.
 
+Beside the server and the admin service, `run.sh` starts a stand-in chat (`tests/ui/chat.py`) on the test's own network,
+with two webhooks of the Notices page pointing at it (one whose chat deleted it): the messages the server's plays,
+broadcasts and maintenance make go there, and the `flows` stage reads what it got. No message leaves the test's network.
+
 `tests/upgrade/run.sh` starts the last release's published images on the same stand-in files and an empty data folder, and
 `tests/upgrade/upgrade.py` uses them the way people do: two phones play, the owner makes a site account and an API token, sets
 the recordings' limits, turns the daily backup off and a player's broadcast on, the phone broadcasts a song, and the Backups
