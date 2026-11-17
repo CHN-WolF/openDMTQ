@@ -452,7 +452,7 @@ TEXT = {
     "help.report.working": ("Making the report...", "보고서를 만드는 중..."),
     "help.report.done": ("Saved the report: {name}", "보고서를 저장했습니다: {name}"),
     "help.report.done.detail": ("It is in {folder}, selected in the File Explorer window that opened. Left out: {left}.",
-                                "{folder} 폴더에 있으며, 열린 파일 탐색기 창에서 선택되어 있습니다. 빠진 것: {left}."),
+                                "{folder} 폴더에 있으며, 열린 파일 탐색기 창에서 선택되어 있습니다. 뺀 것: {left}."),
     "help.report.failed": ("The report was not saved.", "보고서를 저장하지 못했습니다."),
     # What a report leaves out (report.KINDS), in the list the dialog and --report say after it is made.
     "report.left.user": ("your Windows user name in paths", "경로 속 Windows 사용자 이름"),
