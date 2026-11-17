@@ -7,8 +7,8 @@ import sys
 from .paths import CLI, WINDOWS
 from .output import die
 from .server import cmd_run
-from .commands import (cmd_apk, cmd_check, cmd_delete_data, cmd_host, cmd_import, cmd_port, cmd_repair, cmd_restart,
-                       cmd_runtime, cmd_service, cmd_start, cmd_status, cmd_stop, cmd_uninstall)
+from .commands import (cmd_apk, cmd_check, cmd_delete_data, cmd_host, cmd_import, cmd_password, cmd_port, cmd_repair,
+                       cmd_restart, cmd_runtime, cmd_service, cmd_start, cmd_status, cmd_stop, cmd_uninstall)
 from .setup import cmd_setup
 
 
@@ -39,6 +39,8 @@ def main(argv=None):
     r = sub.add_parser("runtime", help="get the newest runtime for phones without 32-bit support, then build the app")
     r.add_argument("--no-app", action="store_true", help="only the runtime: the server's next start builds the app")
     r.set_defaults(fn=cmd_runtime)
+    w = sub.add_parser("password", help="change the owner's password for the admin pages and the players' site (typed, or one made)")
+    w.set_defaults(fn=cmd_password)
     o = sub.add_parser("port", help="show the server's one port, or move it to another (from the next start, with a new app)")
     o.add_argument("port", nargs="?", type=int, help="the new port, 1 to 65535; one another program holds is refused")
     o.set_defaults(fn=cmd_port)

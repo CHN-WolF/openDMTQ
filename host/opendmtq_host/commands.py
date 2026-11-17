@@ -270,6 +270,39 @@ def cmd_port(args):
     return 0
 
 
+def cmd_password(args):
+    """Change the owner's password (ADMIN_PASSWORD in .env), which with the owner's ID opens the admin pages and the
+    players' site: typed twice on a terminal, or one made when nothing is typed or there is no terminal. The admin pages'
+    Server page does the same while the server runs; this is the way in when the password is lost. The server takes it at
+    its next start: a running one is started again here, as host does (on Windows its window is closed and opened again)."""
+    import getpass
+    import re
+    import secrets
+    values = require_settings()
+    new = ""
+    # On a terminal: the new password, hidden as it is typed, then again; Enter alone has one made.
+    if sys.stdin.isatty():
+        new = getpass.getpass("New password for the admin pages (Enter to have one made): ")
+        if new:
+            if not re.fullmatch(env.OWNER_PASSWORD, new):
+                die("a password here is 10 to 64 characters, without spaces, quotes, $, #, \\ or `")
+            if getpass.getpass("The same again: ") != new:
+                die("the two passwords are not the same; nothing changed")
+    made = not new
+    # Sixteen letters, digits, - and _, as setup makes the first one.
+    new = new or secrets.token_urlsafe(12)
+    env.save(ENV_FILE, {"ADMIN_PASSWORD": new})
+    ok(f"the owner's password is changed: ID {values.get('ADMIN_USER') or 'admin'}, for the admin pages and the players' site")
+    if made:
+        say(f"The new password: {new}  (kept as ADMIN_PASSWORD in .env)")
+    if running_pid():
+        if WINDOWS:
+            tell("Close the server's window and start OpenDMTQ.exe again: it takes the new password then.")
+        else:
+            cmd_restart(args)
+    return 0
+
+
 def cmd_check(args):
     """Walk the game's whole path against the running server (the same walk as ./opendmtq check)."""
     values = require_settings()

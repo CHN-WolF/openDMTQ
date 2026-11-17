@@ -130,6 +130,7 @@ Android phone or tablet, or the PC client on a Windows PC: [playing on a server]
 | Delete its data | admin pages, **Server**, the parts ticked | `./opendmtq delete-data <part>...`, or the same page | `./opendmtq delete-data <part>...` |
 | Remove it | admin pages, **Server**, **Uninstall** (or `OpenDMTQ.exe uninstall`) | `./opendmtq uninstall`, or the same page | `./opendmtq uninstall` |
 | Move it to another port | admin pages, **Server**, **Move to this port** (or `OpenDMTQ.exe port <port>`) | `./opendmtq port <port>`, or the same page | `./opendmtq port <port>` |
+| Change the owner's password | admin pages, **Server**, **The owner's password** (or `OpenDMTQ.exe password`) | `./opendmtq password`, or the same page | `./opendmtq password` |
 
 Everything else is on the admin pages: the app, songs, players, accounts, recordings and backups.
 

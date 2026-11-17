@@ -51,8 +51,8 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   everywhere else; each change is in the admin pages' log of changes. Its JSON twin, `me.php?json`, for a script with the
   site's cookie.
 - The owner's password on the admin pages' Server page, by the owner alone: it works at once for the admin pages and the
-  players' site, and the owner's other sign-ins end. `./opendmtq password` does it on Docker Compose, and the API's
-  `POST /server/password`.
+  players' site, and the owner's other sign-ins end. On the command line, also the way in when it is lost,
+  `./opendmtq password` (`OpenDMTQ.exe password` on Windows); the API's `POST /server/password`.
 
 ### Changed
 

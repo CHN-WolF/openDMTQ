@@ -2184,6 +2184,8 @@ async function stillIn(context) {
 
 // One of the account tab's forms, filled in and sent as a person does it: its fields by their ids, then its button.
 async function sendForm(page, form, fields) {
+  // A page that sat behind the other browsers' pages: in front first, or Chrome holds its timers back.
+  await page.bringToFront();
   for (const [id, text] of Object.entries(fields)) {
     await page.$eval(`#${id}`, e => { e.value = ''; });
     await page.type(`#${id}`, text);

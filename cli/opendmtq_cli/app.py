@@ -546,12 +546,6 @@ def cmd_port(args):
         print(line)
 
 
-# The owner's password as the admin pages take a new one (OWNER_PASSWORD in tools/opendmtq_tools/admin/lifecycle.py): it
-# goes into .env as typed, where Docker Compose reads it too, so nothing there could read it as something else (a space, a
-# quote, a $ that names a variable, a # that starts a comment, a backslash or a backquote).
-OWNER_PASSWORD = r"[^\s\"'$#\\`]{10,64}"
-
-
 def cmd_password(args):
     """Change the owner's password (ADMIN_PASSWORD in .env), which with the owner's ID (ADMIN_USER) opens the admin pages
     and the players' site: typed twice on a terminal, or one made when nothing is typed or there is no terminal (a
@@ -568,7 +562,7 @@ def cmd_password(args):
     if sys.stdin.isatty():
         new = getpass.getpass("New password for the admin pages (Enter to have one made): ")
         if new:
-            if not re.fullmatch(OWNER_PASSWORD, new):
+            if not re.fullmatch(env.OWNER_PASSWORD, new):
                 die("a password here is 10 to 64 characters, without spaces, quotes, $, #, \\ or `")
             if getpass.getpass("The same again: ") != new:
                 die("the two passwords are not the same; nothing changed")

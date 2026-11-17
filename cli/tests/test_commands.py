@@ -10,7 +10,7 @@ import time
 import unittest
 from unittest import mock
 
-from opendmtq_cli import app, checks, discover
+from opendmtq_cli import app, checks, discover, env
 
 from .sandbox import Sandbox, done
 
@@ -424,7 +424,67 @@ class PasswordCommandTest(unittest.TestCase):
         with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools",
                                "opendmtq_tools", "admin", "lifecycle.py"), encoding="utf-8") as f:
             pages = re.search(r'OWNER_PASSWORD = re\.compile\((r".*?")\)', f.read()).group(1)
-        self.assertEqual(eval(pages), app.OWNER_PASSWORD)  # noqa: S307 - a literal read from our own source
+        self.assertEqual(eval(pages), env.OWNER_PASSWORD)  # noqa: S307 - a literal read from our own source
+
+
+class HostPasswordCommandTest(unittest.TestCase):
+    """opendmtq password on a host install (OpenDMTQ.exe password on Windows), the way in when the owner's password is
+    lost: the same as ./opendmtq password, with a running server started again on Linux and macOS, and on Windows the
+    window to close and open again said (SRV-57)."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "host"))
+        from opendmtq_host import commands
+        cls.commands = commands
+
+    def run_password(self, running=None, windows=False, typed=None):
+        """The command on a host install's .env: (exit status, .env after, what it said, whether it restarted)."""
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env_file = os.path.join(tmp.name, ".env")
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=old-password-1\n")
+        said, restarted = [], []
+        patches = [mock.patch.object(self.commands, "ENV_FILE", env_file),
+                   mock.patch.object(self.commands, "require_settings", lambda: env.load(env_file)),
+                   mock.patch.object(self.commands, "running_pid", lambda: running),
+                   mock.patch.object(self.commands, "WINDOWS", windows),
+                   mock.patch.object(self.commands, "cmd_restart", lambda args: restarted.append(True)),
+                   mock.patch.object(self.commands, "say", said.append),
+                   mock.patch.object(self.commands, "ok", said.append),
+                   mock.patch.object(self.commands, "tell", said.append),
+                   mock.patch.object(self.commands, "die", lambda msg, code=1: (said.append(msg), sys.exit(code))),
+                   mock.patch("sys.stdin", io.StringIO()),
+                   mock.patch("sys.stdin.isatty", return_value=typed is not None),
+                   mock.patch("getpass.getpass", side_effect=typed or [])]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        try:
+            code = self.commands.cmd_password(None)
+        except SystemExit as e:
+            code = e.code
+        return code, env.load(env_file), " ".join(said), bool(restarted)
+
+    def test_one_made_and_a_running_server_started_again(self):
+        code, values, said, restarted = self.run_password(running=4242)
+        self.assertEqual(code, 0)
+        self.assertRegex(values["ADMIN_PASSWORD"], r"^[A-Za-z0-9_-]{16}$")
+        self.assertIn(f"The new password: {values['ADMIN_PASSWORD']}", said)
+        self.assertTrue(restarted)
+
+    def test_on_windows_the_window_is_said(self):
+        code, values, said, restarted = self.run_password(running=4242, windows=True, typed=["Xk3vQ9pLm2Rt7w", "Xk3vQ9pLm2Rt7w"])
+        self.assertEqual((code, values["ADMIN_PASSWORD"], restarted), (0, "Xk3vQ9pLm2Rt7w", False))
+        self.assertIn("start OpenDMTQ.exe again", said)
+        self.assertNotIn("Xk3vQ9pLm2Rt7w", said)
+
+    def test_refused_and_nothing_changed(self):
+        code, values, said, restarted = self.run_password(running=None, typed=["abc#defghijk"])
+        self.assertEqual((code, values["ADMIN_PASSWORD"], restarted), (1, "old-password-1", False))
+        self.assertIn("10 to 64 characters", said)
 
 
 class FirewallTest(unittest.TestCase):

@@ -12,6 +12,13 @@ MAX_HOST_LEN = 80
 _NAME = re.compile(r"(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*")
 
 
+# The owner's password as a new one is taken (./opendmtq password, the host install's password, and the admin pages'
+# Server page: OWNER_PASSWORD in tools/opendmtq_tools/admin/lifecycle.py): it goes into .env as typed, where Docker Compose
+# reads it too, so nothing there could read it as something else (a space, a quote, a $ that names a variable, a # that
+# starts a comment, a backslash or a backquote).
+OWNER_PASSWORD = r"[^\s\"'$#\\`]{10,64}"
+
+
 def parse(text):
     """KEY=value pairs from .env text, the way docker compose reads them."""
     values = {}

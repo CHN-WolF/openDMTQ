@@ -121,7 +121,8 @@ the server: the cookie's key and the open sign-ins are kept beside the database 
 of any request. At `localhost` on the server PC the password travels without TLS, but only within this PC. On a host
 install the address on the local network has no TLS either. The owner changes the owner's password on the Server page
 (**The owner's password**, on the server PC's own install: it works at once, for these pages and the players' site, and
-the owner's other sign-ins end), with `./opendmtq password` on Docker Compose, or in the chart's Secret on Kubernetes.
+the owner's other sign-ins end), or on the command line, the way in when it is lost: `./opendmtq password` (on Windows
+`OpenDMTQ.exe password`), which types it twice or makes one; on Kubernetes the chart's Secret.
 
 While the game server is not answering, every page says so: OFFLINE at the end of the bar and a sentence above the page.
 A page left open looks again every half minute, and the two come and go with the server by themselves; so do the status
