@@ -14,7 +14,7 @@
 /* What to do about any of them, in both languages. The Korean one breaks its line itself: GDI would break it inside a
    word. */
 #define UNPACK_EN L"Unpack the whole zip again, into a folder of its own, and start OpenDMTQ.exe from there."
-#define UNPACK_KO L"zip 전체를 새 폴더에 다시 풀고,\n그 안의 OpenDMTQ.exe로 시작하세요."
+#define UNPACK_KO L"zip 파일의 압축을 새 폴더에 다시 풀고,\n그 폴더의 OpenDMTQ.exe를 실행하세요."
 
 /* Room for long folder names (Windows allows paths beyond MAX_PATH with long path support on). */
 #define PATH_ROOM 4096
@@ -496,11 +496,11 @@ int wmain(void)
     /* This program's own path; the bundle is the folder it is in. */
     DWORD n = GetModuleFileNameW(NULL, dir, PATH_ROOM);
     if (n == 0 || n >= PATH_ROOM) {
-        return fail(L"OpenDMTQ could not find its own folder.", UNPACK_EN, L"OpenDMTQ가 자기 폴더를 찾지 못했습니다.", UNPACK_KO);
+        return fail(L"OpenDMTQ could not find its own folder.", UNPACK_EN, L"OpenDMTQ 폴더를 찾지 못했습니다.", UNPACK_KO);
     }
     wchar_t *slash = wcsrchr(dir, L'\\');
     if (!slash) {
-        return fail(L"OpenDMTQ could not find its own folder.", UNPACK_EN, L"OpenDMTQ가 자기 폴더를 찾지 못했습니다.", UNPACK_KO);
+        return fail(L"OpenDMTQ could not find its own folder.", UNPACK_EN, L"OpenDMTQ 폴더를 찾지 못했습니다.", UNPACK_KO);
     }
     *slash = 0;
     /* The bundle's Python and the host program, by full path. */

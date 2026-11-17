@@ -272,6 +272,20 @@ class KoreanParticles(unittest.TestCase):
         for key, (_en, ko) in i18n.TEXT.items():
             self.assertIsNone(re.search(r"\((으|을|를|이|가|은|는|와|과)\)|(을|이|은|와)\((를|가|는|과)\)", ko), key)
 
+    def test_one_korean_word_for_each_thing(self):
+        # One word for each thing, as the admin pages say it: a sign-in that ran out is 만료, a game that closed on its
+        # own 예기치 않게 종료, this PC's id 기기 ID, the Music volume 음악 and the Custom preset 커스텀 (the in-game panel
+        # says the same).
+        for key, (_en, ko) in i18n.TEXT.items():
+            for old in ("로그인이 끝났", "저절로 닫", "플레이어 ID", "배경음", "바쁜 PC", "잠시만요"):
+                self.assertNotIn(old, ko, key)
+        self.assertEqual(i18n.TEXT["sound.volume.music"][1], "음악")
+        self.assertEqual(i18n.TEXT["sound.eq.custom"][1], "커스텀")
+        with open(os.path.join(PACKAGE, "..", "..", "arm32", "desktop", "overlay_win32.cpp"), encoding="utf-8") as f:
+            panel = f.read()
+        self.assertIn('L"마스터", L"음악", L"효과음"', panel)
+        self.assertIn('L"트레블", L"커스텀"}', panel)
+
 
 if __name__ == "__main__":
     unittest.main()

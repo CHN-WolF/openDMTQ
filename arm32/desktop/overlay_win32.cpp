@@ -1029,7 +1029,7 @@ const wchar_t* sound_title() { return g_korean ? L"사운드" : L"Sound"; }
 const wchar_t* eq_title() { return g_korean ? L"이퀄라이저" : L"Equaliser"; }
 const wchar_t* control_name(int c) {
     static const wchar_t* const en[] = {L"Master", L"Music", L"Effects", L"Low", L"Mid", L"High", L"Flat", L"Bass", L"Vocal", L"Treble", L"Custom"};
-    static const wchar_t* const ko[] = {L"마스터", L"배경음", L"효과음", L"저음", L"중음", L"고음", L"기본", L"베이스", L"보컬", L"트레블", L"직접"};
+    static const wchar_t* const ko[] = {L"마스터", L"음악", L"효과음", L"저음", L"중음", L"고음", L"기본", L"베이스", L"보컬", L"트레블", L"커스텀"};
     return c >= 0 && c < kSoundControls ? (g_korean ? ko[c] : en[c]) : L"";
 }
 // A band's corner under its name, quieter.

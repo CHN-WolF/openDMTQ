@@ -176,7 +176,7 @@ bool unpack_libraries(const std::string& apk_name, const std::string& libs, std:
     struct stat st {};
     if (stat(app().host_apk.c_str(), &st) != 0) {
         error = say("The app is not beside the player: unzip the download again, whole, and start the player in its folder.",
-                    "플레이어 옆에 앱이 없습니다. 다운로드한 파일을 다시 통째로 압축 풀고, 그 폴더에서 플레이어를 실행하세요.") +
+                    "플레이어 옆에 앱이 없습니다. 다운로드한 파일의 압축을 다시 통째로 풀고, 그 폴더에서 플레이어를 실행하세요.") +
                 "\n(" + apk_name + ")";
         return false;
     }
@@ -280,20 +280,20 @@ bool use_own_folder(const std::string& folder, std::string& error) {
     std::string text;
     if (!read_text(here + "/player.conf", text)) {
         error = say("The app's folder is missing player.conf: download the app again in the OpenDMTQ launcher (Online).",
-                    "앱 폴더에 player.conf가 없습니다. OpenDMTQ 런처의 온라인에서 앱을 다시 받으세요.");
+                    "앱 폴더에 player.conf가 없습니다. OpenDMTQ 런처의 ONLINE 페이지에서 앱을 다시 받으세요.");
         return false;
     }
     std::map<std::string, std::string> conf = settings(text);
     if (conf["package"].empty() || conf["apk"].empty()) {
         error = say("player.conf names no app: download the app again in the OpenDMTQ launcher (Online).",
-                    "player.conf에 앱이 적혀 있지 않습니다. OpenDMTQ 런처의 온라인에서 앱을 다시 받으세요.");
+                    "player.conf에 앱이 적혀 있지 않습니다. OpenDMTQ 런처의 ONLINE 페이지에서 앱을 다시 받으세요.");
         return false;
     }
     // The package names the app's folder in the user's (below), and the server wrote it: only a name as Android's are
     // made, which can name no other folder ("..", a slash, a drive).
     if (!paths::valid_package(conf["package"])) {
         error = say("The app's package name in player.conf is not a valid one: download the app again in the OpenDMTQ launcher (Online).",
-                    "player.conf에 적힌 앱의 패키지 이름이 올바르지 않습니다. OpenDMTQ 런처의 온라인에서 앱을 다시 받으세요.") +
+                    "player.conf에 적힌 앱의 패키지 이름이 올바르지 않습니다. OpenDMTQ 런처의 ONLINE 페이지에서 앱을 다시 받으세요.") +
                 "\n(" + shown(conf["package"]) + ")";
         return false;
     }
@@ -332,7 +332,7 @@ void show_error(const std::string& what) {
         std::string where = g_log_path;
         for (char& c : where)
             if (c == '/') c = '\\';
-        detail += (korean ? "\n\n기록: " : "\n\nThe log: ") + where;
+        detail += (korean ? "\n\n로그: " : "\n\nThe log: ") + where;
     }
     overlay::error_box(korean ? "게임을 시작하지 못했습니다." : "The game could not start.", detail, korean);
 #endif
