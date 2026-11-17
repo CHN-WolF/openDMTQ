@@ -174,7 +174,7 @@ def admin_address():
     if setup.IN_KUBERNETES:
         return "http://localhost:8000/opendmtq/admin/", "server.admin_local_kubernetes"
     # A host install has no HTTPS: there an internet address keeps them on the server PC whatever .env says.
-    return f"http://localhost:{port}/opendmtq/admin/", "server.admin_local" + ("" if setup.HOST_INSTALL else "_docker")
+    return f"http://localhost:{port}/opendmtq/admin/", "server.admin_local" if setup.HOST_INSTALL else "server.admin_local_docker"
 
 
 def env_setting(name):
