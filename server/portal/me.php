@@ -22,8 +22,10 @@ const ME_TABS = ['profile' => 'me.tab_profile', 'plays' => 'me.tab_plays', 'reco
 $tab = isset(ME_TABS[(string)($_GET['tab'] ?? '')]) ? (string)$_GET['tab'] : 'profile';
 // A page of a long list: the first when none is named.
 $page = max(1, (int)($_GET['page'] ?? 1));
-// The words of each in-game item (me_game() names them by the game's own codes), and of each change once it is done.
-const ME_ITEMS = ['fp' => 'me.item_fp', 'gr' => 'me.item_gr', 'ab' => 'me.item_ab'];
+// The in-game items by the game's own names for them, which it shows in every language (me_game() keys them by its codes),
+// the words of the four slots the game's MY PAGE shows, and of each change once it is done.
+const ME_ITEMS = ['fp' => 'FEVER PLUS', 'gr' => 'GAUGE REFILL', 'ab' => 'ANTI BREAK'];
+const ME_SLOTS = ['character' => 'me.slot_character', 'addon' => 'me.slot_addon', 'note' => 'me.slot_note', 'skin' => 'me.slot_skin'];
 const ME_DONE = ['password' => 'me.done_password', 'id' => 'me.done_id', 'signout' => 'me.done_signout'];
 
 /* One JSON answer with its status, and the end: never kept by a cache, as it is one account's own. */
@@ -242,13 +244,17 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
         <div class="stat"><span class="lbl"><?= t('me.level') ?></span><span class="num"><?= (int)$game['level'] ?></span></div>
         <div class="stat"><span class="lbl">EXP</span><span class="num"><?= number_format($game['exp']) ?></span></div>
         <div class="stat"><span class="lbl">MAX POINT</span><span class="num"><?= number_format($game['mpoint']) ?></span></div>
-        <div class="stat"><span class="lbl"><?= t('me.points') ?></span><span class="num"><?= number_format($game['points']) ?></span></div>
-        <div class="stat"><span class="lbl"><?= t('me.cash') ?></span><span class="num"><?= number_format($game['cash']) ?></span></div>
+        <div class="stat"><span class="lbl">Q POINT</span><span class="num"><?= number_format($game['q']) ?></span></div>
         <div class="stat"><span class="lbl"><?= t('me.owned') ?></span><span class="num"><?= number_format($game['owned']) ?></span></div>
       </div>
+      <?php // The in-game items by the game's own names, each with its level; then what is in each of the four slots the game's
+            // MY PAGE shows, by the item's number (the server has no names for them). ?>
       <ul class="me-items">
         <?php foreach ($game['items'] as $code => $level): ?>
-          <li><span><?= t(ME_ITEMS[$code]) ?></span><b><?= t('me.item_level', ['n' => $level]) ?></b></li>
+          <li><span><?= ME_ITEMS[$code] ?></span><b><?= t('me.item_level', ['n' => $level]) ?></b></li>
+        <?php endforeach; ?>
+        <?php foreach ($game['equipped'] as $slot => $item): ?>
+          <li><span><?= t(ME_SLOTS[$slot]) ?></span><b><?= $item ? t('me.item_no', ['n' => $item]) : t('me.item_none') ?></b></li>
         <?php endforeach; ?>
       </ul>
       <p class="meta"><?= t('me.game_note') ?></p>
@@ -334,6 +340,9 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
       <div class="btn-line"><a class="btn" href="/opendmtq/admin/server#password"><?= t('me.owner_go') ?></a></div>
     </section>
   <?php else: ?>
+    <?php // The two changes that ask for the current password side by side where there is room, one under the other on a
+          // phone. ?>
+    <div class="two">
     <?php // The password: the current one, then the new one twice. The page's one main button: what one comes here for. ?>
     <?php $said_here = ($form === 'password' && is_array($said)) ? $said : []; ?>
     <section class="card" id="password">
@@ -368,6 +377,7 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
         <div class="btn-line"><button class="btn"><?= t('me.id_button') ?></button></div>
       </form>
     </section>
+    </div>
   <?php endif; ?>
   <?php // Every other sign-in of the account ended; this browser's stays. ?>
   <section class="card" id="signout">

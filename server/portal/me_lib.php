@@ -257,17 +257,18 @@ function me_change_id(string $new, string $current)
     return '';
 }
 
-/* Every sign-in of the signed-in account but this browser's ended: the moment from which its sign-ins count is now, and
-   this browser's cookie is made again from now. The server's own account keeps that moment in a file of its own beside
-   the database (auth.php, OWNER_SIGNED_OUT). Returns '' when done, else ['', key]. */
+/* Every sign-in of the signed-in account but this browser's ended: the moment from which its sign-ins count is the next
+   second, and this browser's cookie is made again as from that second. Every other sign-in was made before it, one made
+   in this very second too (a cookie tells its time to the second only). The server's own account keeps that moment in a
+   file of its own beside the database (auth.php, OWNER_SIGNED_OUT). Returns '' when done, else ['', key]. */
 function me_sign_out_others()
 {
     $account = me_account();
     if ($account === null) {
         return ['', 'me.signed_out'];
     }
-    // The moment first, then the cookie: this browser's is made at that second or later, and so it counts.
-    $now = time();
+    // The moment first, then the cookie as made from it: this browser's counts, and no other made up to now does.
+    $now = time() + 1;
     if ($account['owner']) {
         $path = odq_state_dir() . '/' . OWNER_SIGNED_OUT;
         // A new file moved over the old one: the sign-in never reads half of one.
@@ -287,7 +288,7 @@ function me_sign_out_others()
         }
         $db->close();
     }
-    dl_cookie($account['id']);
+    dl_cookie($account['id'], $now);
     site_user(true);
     me_note('site:signout', $account['id'], $account['id']);
     return '';
@@ -296,20 +297,21 @@ function me_sign_out_others()
 /* ---------------------------------------------------------------------- the player, as the game knows them */
 
 /* The player's profile as the game's own replies give it (the same functions the game's requests are answered by, so
-   that MY PAGE shows what the game shows): 'level', 'exp', 'mpoint' (MAX POINT), 'points' and 'cash' (the reply's
-   amt_point and amt_cash), 'items' (the three in-game items by the reply's codes: fp the fever plus, gr the gauge refill,
-   ab the anti break, game.getPreviewPlayInfo, each with its level), 'owned' (how many items they own) and 'equipped' (the
-   item numbers in their four slots, 0 for an empty one). */
+   that MY PAGE shows what the game shows): 'level' and 'exp' (the reply's lev and exp, the experience in all), 'mpoint'
+   (MAX POINT) and 'q' (Q POINT, the reply's amt_total: the two the game's top bar shows), 'items' (the three in-game items
+   by the game's codes: fp FEVER PLUS, gr GAUGE REFILL, ab ANTI BREAK, each with its level), 'owned' (how many items they
+   own, as shop.getOwnItemList lists them) and 'equipped' (the item in each of the four slots the game's MY PAGE shows:
+   the character, the add-on, the note and the skin; 0 for none). */
 function me_game(int $guid): array
 {
     $asset = odq_game_user_asset([$guid]);
     // As numbers, whatever shape the reply gives them in (text for the amounts, as the client reads them).
     $int = fn(string $key): int => (int)($asset[$key] ?? 0);
-    return ['level' => $int('lev'), 'exp' => $int('exp'), 'mpoint' => $int('mpoint'), 'points' => $int('amt_point'),
-            'cash' => $int('amt_cash'),
+    return ['level' => $int('lev'), 'exp' => $int('exp'), 'mpoint' => $int('mpoint'), 'q' => $int('amt_total'),
             'items' => ['fp' => $int('in_game_item1'), 'gr' => $int('in_game_item2'), 'ab' => $int('in_game_item3')],
             'owned' => count(odq_shop_own_items([$guid])),
-            'equipped' => [$int('slot_item1'), $int('slot_item2'), $int('slot_item3'), $int('slot_item4')]];
+            // The slots as game.setSlotItem keeps them: 1 the character partner, 2 the add-on, 3 the note skin, 4 the skin.
+            'equipped' => ['character' => $int('slot_item1'), 'addon' => $int('slot_item2'), 'note' => $int('slot_item3'), 'skin' => $int('slot_item4')]];
 }
 
 /* The words for one of the game's achievements, made from its condition (OPENDMTQ_ACHIEVEMENTS in achievement.php): the

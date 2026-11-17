@@ -5,7 +5,8 @@
 # recordings, players on air, under maintenance, what people do on the pages, and broadcasts off again with all of that. Layout findings, screenshots and the list of results go to the report folder.
 #
 # Usage: tests/ui/run.sh [report folder, default _work/ui-report]
-# ONLY="full flows" runs those stages (the checker's own, self, and the setup always run first); keys is the keyboard's marks.
+# ONLY="full flows" runs those stages (the checker's own, self, and the setup always run first); keys is the keyboard's marks,
+# mine MY PAGE.
 # KEEP=1 leaves the stack up afterwards.
 # NO_BUILD=1 uses the images already tagged opendmtq-*:uitest.
 set -euo pipefail
@@ -163,6 +164,27 @@ stage empty
 
 # Players and plays. An app, as the builder leaves one: the real thing needs the game's own file.
 docker exec -i "$SITE" php < "$UI/seed.php"
+# MY PAGE's own account (stage mine), whose password and ID that stage changes, so that the account every stage signs in
+# with stays as it is: with admin rights (an ID's change takes its API tokens along), linked to the seed's first player,
+# and a read token of its own, made as an admin makes one, beside the report for the stage.
+JAR=$DATA/admin-jar
+curl -sf -m 10 -c "$JAR" -b "$JAR" -o /dev/null --data-urlencode name=admin --data-urlencode "password=$PASSWORD" "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/login"
+CSRF=$(curl -sf -m 10 -b "$JAR" "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts" | grep -o 'name="csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
+curl -sf -m 10 -b "$JAR" -o /dev/null --data-urlencode "csrf=$CSRF" --data-urlencode action=create --data-urlencode name=mypage \
+  --data-urlencode password=mypage-pass-1 --data-urlencode password2=mypage-pass-1 --data-urlencode admin=1 --data-urlencode player=1 \
+  --data-urlencode "note=my page's checks" "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts"
+rm -f "$JAR"
+curl -sf -m 10 -c "$JAR" -b "$JAR" -o /dev/null --data-urlencode name=mypage --data-urlencode password=mypage-pass-1 "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/login"
+CSRF=$(curl -sf -m 10 -b "$JAR" "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts" | grep -o 'name="csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
+curl -sf -m 10 -b "$JAR" -c "$JAR" -L --data-urlencode "csrf=$CSRF" --data-urlencode action=token --data-urlencode "token_name=my page check" \
+  --data-urlencode scope=read "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts" | grep -o 'id="token-secret">[^<]*' | cut -d'>' -f2 > "$REPORT/mypage-token.txt"
+rm -f "$JAR"
+# MY PAGE's account changes inside the server, on accounts of the check's own (tests/ui/account.php): its lines with the
+# stages', what failed said here.
+docker exec -i "$SITE" php < "$UI/account.php" > "$REPORT/account.txt" || FAILED=1
+cat "$REPORT/account.txt" >> "$REPORT/results.txt"
+grep '^FAIL' "$REPORT/account.txt" || true
+echo "stage account: $(grep -c '^PASS' "$REPORT/account.txt") passed, $(grep -c '^FAIL' "$REPORT/account.txt") failed"
 APP=OpenDMTQ-127.0.0.1-$SITE_PORT-v2026.11.02.apk
 head -c 1048576 /dev/zero > "$DATA/apk/out/$APP"
 # With its SHA-256, as the builder writes it: the site tags the download with it, for a broken download to go on.
@@ -262,6 +284,8 @@ stage maint
 # The owner's notice on the site: put up, on every page, closed for a visit, new words, and the pages left open.
 stage notice
 stage flows
+# MY PAGE: the account's own page for an account linked to its player, one that is not and the owner's; its changes.
+stage mine
 # Nothing said only under a mouse pointer, switches that change the page where it is, the forms' words under their fields.
 stage patterns
 

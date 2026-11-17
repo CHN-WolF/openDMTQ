@@ -235,14 +235,16 @@ function require_sign_in(bool $json = false): void
 }
 
 /* This browser's cookie for the account $name, as the account is now: made again after its password or its ID changed on
-   MY PAGE, so that this browser stays signed in while every other one's sign-in ends. False when there is no such account. */
-function dl_cookie(string $name): bool
+   MY PAGE, so that this browser stays signed in while every other one's sign-in ends. $made: the moment it counts as made
+   from (now when not given; MY PAGE's Sign out everywhere else gives the moment from which sign-ins count). False when
+   there is no such account. */
+function dl_cookie(string $name, ?int $made = null): bool
 {
     $row = site_account($name);
     if (!$row) {
         return false;
     }
-    $expires = (string)(time() + DL_DAYS * 86400);
+    $expires = (string)(($made ?? time()) + DL_DAYS * 86400);
     setcookie(DL_COOKIE, $expires . '.' . bin2hex((string)$row['name']) . '.' . dl_mac($expires, (string)$row['name'], (string)$row['pass']),
         ['expires' => (int)$expires, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => visit_is_https()]);
     // The rest of this request reads the new cookie as the browser will send it: MY PAGE's answer shows the account as it is.

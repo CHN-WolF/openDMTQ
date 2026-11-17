@@ -43,11 +43,16 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - Notices in the game at every change of a broadcast switch, the player's or the server's under it, also when a
   broadcast ends and while the server's broadcasts are off, each with its own number (`toast_id`, `toast_kind` in
   `/live/state`); and at every change of the maintenance notice for players already in the game.
-- The owner's notice: one line the owner sets on the admin pages, with an end of its own if wanted, at the top of every
-  page of the players' site for everyone signed in. A visitor closes it until their next visit, and new words show again;
-  the pages that look again by themselves take it up and drop it without being opened anew. The Maintenance page is now
-  the Notices page, which holds it, maintenance, and the messages to Discord and Slack; its API routes are `GET`, `PUT`
-  and `DELETE /notice`.
+- MY PAGE on the players' site, from the name and badge at the top of every page: the player's profile as the game shows
+  it (level, EXP, MAX POINT and Q POINT, the in-game items, the items owned and equipped), their achievements with the day each
+  was earned, their places overall and this month, their broadcasts, and every play and best record a page at a time.
+  The account tab shows everything the site keeps about the account and changes the password and the ID (with the
+  current password, under the sign-in's limit; the plays and the API tokens stay with the account) and signs out
+  everywhere else; each change is in the admin pages' log of changes. Its JSON twin, `me.php?json`, for a script with the
+  site's cookie.
+- The owner's password on the admin pages' Server page, by the owner alone: it works at once for the admin pages and the
+  players' site, and the owner's other sign-ins end. `./opendmtq password` does it on Docker Compose, and the API's
+  `POST /server/password`.
 
 ### Changed
 
@@ -70,6 +75,8 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   again for the new address, and the site's download page tells players to install it over the old one.
 - The owner's ID and password from `.env` sign in to the players' site too. A sign-in to the admin pages outlives a
   restart of the server.
+- The name and badge at the top of the site lead to MY PAGE for every account (an account linked to its player led to
+  the player's public page, which MY PAGE now links to).
 - Sign-in and password forms: labels, Show inside the password field, what is missing said under the field, the ID kept
   for the next time, Enter sends; the other forms of the admin pages say what is wrong under the field, and every field
   and search box has the sign-in's look.

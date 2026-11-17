@@ -140,8 +140,14 @@ In `tests/ui/run.sh` a real browser then takes the server through a life, in sta
 | `maint` | Maintenance on, by the owner's form, with a long message | Every page that shows the notice; then off again |
 | `notice` | The owner's notice put up on the Notices page, with words that wrap on a phone | Every page of the site with it under the bar, at five widths in both languages, none of it for a stranger; closed for a visit and back on the next, back with new words; the home page and the live page left open taking it up, changing it and dropping it by themselves |
 | `flows` | | What people do: language, sign-in, searches, the replay player on a laptop and a phone, the owner's forms |
+| `mine` | An account of the stage's own, linked to a player, with admin rights and an API token (`run.sh` makes it) | MY PAGE for that account, for one linked to no player and for the owner's, at 360, 744, 1024, 1280 and 1920, in both languages; its password, its ID and Sign out everywhere else with other browsers signed in; its JSON twin, for a visitor who has not signed in and from another site |
 | `quiet` | Broadcasts off for the server, with the players, records and recordings in place | The pages that showed broadcasts, at 360, 744, 1024, 1280 and 1920, in both languages: nothing of broadcasts left on the site, each page whole without them; the owner's pages say they are off |
 | `down` | The game server stopped | The owner's pages keep their look and say what is wrong |
+
+Between the seed and the stages, `tests/ui/account.php` checks MY PAGE's account changes inside the running server, on
+accounts of its own and from an address of its own (the browser's sign-ins are never held back by it): a wrong current
+password refused and counted toward the sign-in's limit, the limit reached, a new password, a new ID with its game player
+and API tokens, Sign out everywhere else, the server's own account, and each change in the log of changes.
 
 On each view `layout.js` measures what can be measured about a page: text cut off, past its box, on other text or under another
 box; rows and columns out of line; anything past the screen; a box that scrolls sideways; an ordinary word split over two

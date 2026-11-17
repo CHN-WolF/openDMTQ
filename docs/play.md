@@ -6,7 +6,8 @@ on. The server's owner runs it and makes your account.
 ## What you need
 
 - **An account:** an ID and a password from the server's owner. Nobody makes their own: the owner makes each one on
-  the admin pages, with a message to send that has the server's address, the ID and the password.
+  the admin pages, with a message to send that has the server's address, the ID and the password. You can change both
+  later on [MY PAGE](#my-page).
 - **A phone, a tablet or a PC** the game runs on ([which devices](#which-devices)).
 - **The server's network:** the same Wi-Fi as the server, or any internet connection when the server is reachable from
   outside. The server's download page says which.
@@ -79,6 +80,34 @@ that score), and beside a total says how many such scores it counts; the ranking
   player and its records over: on the device that has the player, **OPTION**, **CONNECT ACCOUNT** shows a code; on the
   other, **OPTION**, **RESTORE DATA** takes it.
 - **Uninstalling the app** deletes the game's data on the phone; a new install downloads it again.
+
+## My page
+
+Your name or badge at the top of every page of the site opens **MY PAGE**. Only you see it:
+
+- **Profile:** what the game keeps for you, as the game shows it: your level and EXP, MAX POINT and Q POINT, the levels
+  of FEVER PLUS, GAUGE REFILL and ANTI BREAK, what is in your four slots (character, add-on, note and skin), and how many
+  items you own. These change in the game, not on the site. Then your
+  achievements, each with the day you earned it, your place overall and this month, and your broadcasts while the server
+  has them on. **My public page** shows what other players see of you.
+- **Plays** and **Records:** every play you made and every best record, fifty to a page, a play with the PC's keys
+  marked as everywhere on the site.
+- **Account:** everything the site keeps about your account: its ID, when it was made, when it last signed in and when
+  this browser did, which game player it is, the owner's note on it and whether it opens the admin pages (the owner
+  sets those three), and this browser's language. Here you change:
+  - **the password:** your current one, then the new one twice, 6 to 64 characters (10 to 64 for an account that opens
+    the admin pages);
+  - **the ID:** the new one and your current password. Your plays, records and broadcasts stay yours: they go with your
+    game player, not the ID. An account's API tokens go with it;
+  - **Sign out everywhere else.**
+
+  After any of the three, every other browser and the PC client sign in again; this browser stays signed in. Wrong
+  current passwords count as wrong sign-ins do: after ten from one place in ten minutes, the next waits. Each change is
+  in the owner's log of changes.
+- **The server's own account,** the owner's ID and password from `.env`, changes its password on the admin pages'
+  **Server** page instead, which MY PAGE links to.
+
+A script that holds the site's cookie reads and changes the same as JSON: [the site's own JSON](api.md#the-sites-own-json).
 
 ## Broadcasting
 

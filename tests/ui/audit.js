@@ -17,6 +17,8 @@
 //                          word and the sentence under it come and go by themselves each time
 //   node audit.js away     the owner's pages left open while the game server stops and starts again, twice (run.sh does
 //                          that when this says it is ready, through files in OUT): the word and the sentence come and go
+//   node audit.js mine     MY PAGE: for an account linked to its player, one that is not and the owner's, at every width in
+//                          both languages; the account's changes and the other sign-ins; its JSON twin
 // Exit status 1 when anything failed. Reads SITE, ADMIN (addresses), PASSWORD and OUT from the environment.
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -1239,39 +1241,10 @@ async function portalFlows(contexts) {
   };
   await linkTo('1');
   await linker.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
-  // The profile in the bar: the player's name (beside the badge and over the place and the account's ID), leading to their page.
+  // The profile in the bar: the player's name (beside the badge and over the place and the account's ID), leading to MY PAGE.
   const me = await linker.$eval('.auth-who', e => [e.tagName, (e.querySelector('.who-name') || e).textContent, e.getAttribute('href') || '']).catch(() => []);
   const marked = (await linker.$$('.pod.me, .board tr.me')).length;
-  check('a linked account shows its player and marks their place', me[0] === 'A' && me[1] === 'Sena' && me[2].endsWith('player.php?id=1') && marked === 1, `${me} ${marked}`);
-  // The PC client's records of a linked account (client.php?records with the client's sign-in): Sena's, who plays by
-  // touch, then 민호's, who plays with the keyboard. Each list newest or best first, each row's chart named, its place on
-  // the chart among those with a record there, and the keyboard's mark as the play had it. Sena linked again after.
-  const pcSide = await contexts.browser.createBrowserContext();
-  const pc = await pcSide.newPage();
-  await pc.goto(`${P}/client.php?about`, { waitUntil: 'domcontentloaded' });
-  await pc.evaluate(async password => {
-    await fetch('/opendmtq/client.php?signin', { method: 'POST', body: new URLSearchParams({ user: 'dmtq', password }) });
-  }, PASSWORD);
-  const recordsNow = async () => pc.evaluate(async () => {
-    const r = await fetch('/opendmtq/client.php?records');
-    return [r.status, await r.json()];
-  });
-  // Rows as the PC client shows them, in their list's order.
-  const rowsFit = (list, inOrder) => Array.isArray(list) && list.length > 0 && list.every((r, i) => Number.isInteger(r.score)
-    && typeof r.title === 'string' && typeof r.chart_name === 'string' && Number.isInteger(r.rank) && r.rank >= 1
-    && r.rank <= r.players && (i === 0 || inOrder(list[i - 1], r)));
-  const newestFirst = (a, b) => a.at >= b.at, bestFirst = (a, b) => a.score >= b.score;
-  const [senaStatus, sena] = await recordsNow();
-  check("the PC client's records of a linked account: its player's latest plays and best records, each placed on its chart",
-    senaStatus === 200 && !!sena.player && sena.player.id === 1 && sena.player.name === 'Sena' && rowsFit(sena.recent, newestFirst)
-      && rowsFit(sena.best, bestFirst) && [...sena.recent, ...sena.best].every(r => r.keys === false), JSON.stringify(sena).slice(0, 400));
-  await linkTo('2');
-  const [, minho] = await recordsNow();
-  check("and of a player who plays with the keyboard, each row with the keyboard's mark",
-    !!minho.player && minho.player.id === 2 && rowsFit(minho.recent, newestFirst) && rowsFit(minho.best, bestFirst)
-      && [...minho.recent, ...minho.best].every(r => r.keys === true), JSON.stringify(minho).slice(0, 400));
-  await pcSide.close();
-  await linkTo('1');
+  check('a linked account shows its player and marks their place', me[0] === 'A' && me[1] === 'Sena' && me[2] === '/opendmtq/me.php' && marked === 1, `${me} ${marked}`);
   // Measured while linked too, where the player's own place shows: the name in the bar is a key of its own (a finger
   // can hit it), and the marked rows and podium card carry their ring.
   // Korean first and English last: a sweep leaves its last language in the browser's cookie, and the flows after this
@@ -2181,126 +2154,149 @@ async function adminFlows(contexts) {
   await out.close();
 }
 
-// PAGE-65..68: the owner's notice on the site (the Notices page's first card, admin/notice.py; lib.php notice_band()). Put up
-// by the owner's own form with words that wrap on a phone: under the bar on every page for those signed in, never for a
-// stranger; every page whole with it at every width in both languages; closed for this visit by its cross, back on the next
-// visit and with new words; on the pages left open it comes, changes and goes by itself. Before: there was no notice.
-async function ownersNotice(contexts) {
-  const LONG = 'Tonight the server stays open until 1 AM. Three new songs come on Friday, and the monthly ranking starts again on the first at nine.';
-  const owner = await contexts.signed.newPage();
-  await owner.setViewport({ width: 1280, height: 900 });
-  // The card's Show, with these words and no end.
-  // The owner's tab in front first: a tab out of sight for minutes has its timers held back by the browser, and the press
-  // would wait for a page that looks only once a minute.
-  const putUp = async text => {
-    await owner.bringToFront();
-    await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
-    await owner.$eval('#notice input[name=text]', (e, v) => { e.value = v; }, text);
-    await press(owner, '#notice button[name=action][value=show]');
-  };
-  // The card's Take down.
-  const takeDown = async () => {
-    await owner.bringToFront();
-    await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
-    await press(owner, '#notice button[name=action][value=clear]');
-  };
-  await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
-  check('the Notices page has the notice card first, saying there is none', /No notice/.test(await textOf(owner, '#notice'))
-    && await owner.evaluate(() => document.querySelector('#notice').compareDocumentPosition(document.querySelector('#maintenance')) === Node.DOCUMENT_POSITION_FOLLOWING));
-  // Refused (an end that has passed): said on the same page, in place, with the words typed still in their field.
-  await owner.$eval('#notice input[name=text]', e => { e.value = 'Words for a moment gone by.'; });
-  await owner.$eval('#notice input[name=until]', e => { e.value = '2020-01-01T09:00'; });
-  await press(owner, '#notice button[name=action][value=show]');
-  check('PAGE-69: a refused notice is said on the Notices page, its words kept in the field',
-    new URL(owner.url()).pathname === '/opendmtq/admin/maintenance' && /That moment has passed already/.test(await textOf(owner, '.bar .flash'))
-    && await owner.$eval('#notice input[name=text]', e => e.value) === 'Words for a moment gone by.', `${owner.url()} | ${await textOf(owner, '.bar .flash')}`);
-  await putUp(LONG);
-  check("the owner's form puts it up, and the card says so in place", /Shown on the site/.test(await textOf(owner, '#notice')), await textOf(owner, '#notice .auto-line'));
-  // Under the bar on the site, for someone signed in; nothing of it for a stranger at the sign-in.
-  const site = await contexts.signed.newPage();
-  await site.setViewport({ width: 1280, height: 900 });
-  await site.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
-  check('PAGE-65: every page of the site has it under the bar, its words whole', await textOf(site, 'body > .site-notice .notice-text') === LONG
-    && await site.evaluate(() => document.querySelector('body > .site-notice').compareDocumentPosition(document.querySelector('body > h1.page-title')) === Node.DOCUMENT_POSITION_FOLLOWING));
-  // On every page of the site the sweep looks at, its words whole there too.
-  const without = [];
-  for (const [name, url] of NOTICE.filter(([n]) => !n.startsWith('admin'))) {
-    await site.goto(url, { waitUntil: 'domcontentloaded' });
-    if (await textOf(site, 'body > .site-notice .notice-text') !== LONG) without.push(name);
+// MY PAGE (PAGE-60 to PAGE-64): a signed-in player's own page, from the bar's name and badge, for an account linked to its
+// game player, one that is not and the server's own, at every width in both languages; what each change of the account
+// does to the other sign-ins; its JSON twin, refused to a visitor who has not signed in and to another site. Its changes are
+// made on an account of this stage's own (run.sh makes it: mypage, with admin rights, linked to the seed's Sena, with a read
+// token in OUT/mypage-token.txt), so that the account every stage signs in with stays as it is.
+const MINE = { id: 'mypage', password: 'mypage-pass-1', next: 'mypage-pass-2', moved: 'mypage2' };
+
+// A browser of its own signed in to the site; true when the sign-in led to MY PAGE.
+async function siteSignIn(context, id, password) {
+  const page = await context.newPage();
+  await page.goto(`${P}/login.php?next=%2Fopendmtq%2Fme.php`, { waitUntil: 'domcontentloaded' });
+  await typeId(page, 'input[name=user]', id);
+  await page.type('input[name=password]', password);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.keyboard.press('Enter')]);
+  const inside = new URL(page.url()).pathname === '/opendmtq/me.php';
+  await page.close();
+  return inside;
+}
+
+// Whether a browser is still signed in: MY PAGE answers it, not the sign-in.
+async function stillIn(context) {
+  const page = await context.newPage();
+  await page.goto(`${P}/me.php`, { waitUntil: 'domcontentloaded' });
+  const inside = new URL(page.url()).pathname === '/opendmtq/me.php';
+  await page.close();
+  return inside;
+}
+
+// One of the account tab's forms, filled in and sent as a person does it: its fields by their ids, then its button.
+async function sendForm(page, form, fields) {
+  for (const [id, text] of Object.entries(fields)) {
+    await page.$eval(`#${id}`, e => { e.value = ''; });
+    await page.type(`#${id}`, text);
   }
-  check('PAGE-65: and on every other page of the site', without.length === 0, without.join(' '));
+  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click(`form[action*="do=${form}"] button:not([type=button])`)]);
+}
+
+async function myPage(contexts) {
+  // The bar's name and badge, for the account every stage signs in with (linked to no player): MY PAGE, which says so.
+  const page = await contexts.signed.newPage();
+  await page.setViewport({ width: 1280, height: 900 });
+  await page.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
+  const href = await page.$eval('.auth-who', e => e.getAttribute('href')).catch(() => '');
+  check("the bar's name and badge open MY PAGE, for an account linked to no player too", href === '/opendmtq/me.php', href);
+  await page.goto(`${P}/me.php`, { waitUntil: 'domcontentloaded' });
+  const unlinked = await textOf(page, '.me-head');
+  const tabs = await page.$$eval('.tabs a', as => as.map(a => a.textContent.trim()));
+  check("an account linked to no player says so, and has no tabs of plays", /not linked to a game player/.test(unlinked) && tabs.join() === 'Profile,Account',
+    `${unlinked.slice(0, 80)} ${tabs}`);
+  await page.close();
+  await sweep(contexts, [['my page, not linked', `${P}/me.php`], ['my account, not linked', `${P}/me.php?tab=account`]], ALL_WIDTHS);
+
+  // The linked account in a browser of its own: every tab, at every width, in both languages.
+  const linked = await contexts.browser.createBrowserContext();
+  check("MY PAGE's account signs in to the site", await siteSignIn(linked, MINE.id, MINE.password));
+  const mine = { signed: linked, anon: contexts.anon };
+  await sweep(mine, [['my page', `${P}/me.php`], ['my plays', `${P}/me.php?tab=plays`], ['my records', `${P}/me.php?tab=records`],
+                     ['my account', `${P}/me.php?tab=account`]], ALL_WIDTHS);
+  const me = await linked.newPage();
+  await me.setViewport({ width: 1280, height: 900 });
+  await me.setCookie({ name: 'opendmtq_lang', value: 'en', url: P });
+  // The profile against the JSON twin, and the twin against what the game's player is.
+  await me.goto(`${P}/me.php`, { waitUntil: 'domcontentloaded' });
+  const facts = await me.evaluate(async () => (await fetch('/opendmtq/me.php?json')).json());
+  const head = await textOf(me, '.me-head h2');
+  check("the linked account's profile is its game player's, as its JSON twin says", head.startsWith('Sena') && facts.player && facts.player.name === 'Sena'
+    && facts.account.id === MINE.id && facts.game && facts.game.level > 0 && Array.isArray(facts.achievements.held), `${head} ${JSON.stringify(facts).slice(0, 200)}`);
+  check('its public page is one link away', await me.$eval('.me-public a', a => a.getAttribute('href')).catch(() => '') === '/opendmtq/player.php?id=1');
+  const total = facts.player.total;
+  // Every play of the player, a page at a time: the twin counts them as the page does.
+  await me.goto(`${P}/me.php?tab=plays`, { waitUntil: 'domcontentloaded' });
+  const listed = (await me.$$('table.plays tr')).length;
+  const plays = await me.evaluate(async () => (await fetch('/opendmtq/me.php?json&tab=plays')).json());
+  check('every play, as its JSON twin pages them', listed > 15 && listed === Math.min(50, plays.plays.total) && plays.plays.items.length === listed, `${listed} ${plays.plays.total}`);
+  // Nothing of the account on what others see of the player.
+  const public_ = await contexts.signed.newPage();
+  await public_.goto(`${P}/player.php?id=1`, { waitUntil: 'domcontentloaded' });
+  const seen = await public_.content();
+  check("nothing of the player's account on their public page", !seen.includes(MINE.id) && !seen.includes("my page's checks"), '');
+  await public_.close();
+
+  // A wrong current password: said under its field, and nothing changes.
+  await me.goto(`${P}/me.php?tab=account`, { waitUntil: 'domcontentloaded' });
+  await sendForm(me, 'password', { 'me-current': 'not-my-password', 'me-new': MINE.next, 'me-new2': MINE.next });
+  const wrong = await textOf(me, '#me-current-error');
+  check('a wrong current password is said under its field', wrong === 'That is not your current password.' && await me.$eval('#me-current', e => e.getAttribute('aria-invalid')) === 'true', wrong);
+  await noFindings(me, 'a wrong current password on MY PAGE');
+  // Another browser of the account's, signed in before the change: its sign-in ends; this one's stays.
+  const other = await contexts.browser.createBrowserContext();
+  await siteSignIn(other, MINE.id, MINE.password);
+  await sendForm(me, 'password', { 'me-current': MINE.password, 'me-new': MINE.next, 'me-new2': MINE.next });
+  check('the password changed, said so, this browser still signed in', new URL(me.url()).searchParams.get('done') === 'password'
+    && /Your password is changed/.test(await textOf(me, '.done')) && await stillIn(linked));
+  check("another browser's sign-in ended with the old password", !(await stillIn(other)));
+  const fresh = await contexts.browser.createBrowserContext();
+  check('the old password signs in no more, the new one does', !(await siteSignIn(fresh, MINE.id, MINE.password)) && await siteSignIn(fresh, MINE.id, MINE.next));
+  // Sign out everywhere else: the browser signed in just now ends, this one stays.
+  await sendForm(me, 'signout', {});
+  check('signed out everywhere else, this browser still signed in', new URL(me.url()).searchParams.get('done') === 'signout' && await stillIn(linked));
+  check("the other browser's sign-in ended", !(await stillIn(fresh)));
+  // A change sent from another site (a page of the admin pages' address, another origin): refused, nothing changed. The
+  // browser signs in again a second after the sign-out, which ended every sign-in up to its own second.
+  const elsewhere = await linked.newPage();
+  await elsewhere.goto(`${A}/login`, { waitUntil: 'domcontentloaded' });
+  await pause(1200);
+  await siteSignIn(fresh, MINE.id, MINE.next);
+  await elsewhere.evaluate(async url => { await fetch(url, { method: 'POST', mode: 'no-cors', credentials: 'include' }).catch(() => null); }, `${P}/me.php?json&do=signout`);
+  check('a change sent from another site is refused', await stillIn(fresh) && await stillIn(linked));
+  await elsewhere.close();
+  // The ID: the plays and records stay (they go with the game player), and the account's API token follows it.
+  await sendForm(me, 'id', { 'me-id': MINE.moved, 'me-id-current': MINE.next });
+  check('the ID changed and said so', new URL(me.url()).searchParams.get('done') === 'id' && (await textOf(me, '.done')).includes(MINE.moved));
+  const after = await me.evaluate(async () => (await fetch('/opendmtq/me.php?json')).json());
+  check('the plays and records stay with it', after.account.id === MINE.moved && after.player && after.player.name === 'Sena' && after.player.total === total,
+    JSON.stringify(after.account) + JSON.stringify(after.player));
+  const token = fs.readFileSync(path.join(OUT, 'mypage-token.txt'), 'utf8').trim();
+  const listing = await fetch(`${ADMIN}/opendmtq/api/v1/tokens`, { headers: { Authorization: `Bearer ${token}` } });
+  const items = listing.ok ? (await listing.json()).items : [];
+  check('its API token follows it, and works', listing.status === 200 && items.some(i => i.admin === MINE.moved && i.works), `${listing.status} ${JSON.stringify(items).slice(0, 160)}`);
+  check('the old ID signs in no more, the new one does', !(await siteSignIn(fresh, MINE.id, MINE.next)) && await siteSignIn(fresh, MINE.moved, MINE.next));
+  await me.close();
+  await fresh.close();
+  await other.close();
+  await linked.close();
+
+  // Nothing of MY PAGE or its twin for a visitor who has not signed in: the sign-in, and the twin's refusal in its shape.
   const stranger = await contexts.anon.newPage();
-  await stranger.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
-  check('PAGE-65: a stranger at the sign-in sees nothing of it', (await stranger.$('.site-notice')) === null && !(await stranger.content()).includes('Three new songs'));
+  await stranger.goto(`${P}/me.php`, { waitUntil: 'domcontentloaded' });
+  const door = new URL(stranger.url()).pathname;
+  const twin = await stranger.evaluate(async () => { const r = await fetch('/opendmtq/me.php?json'); return [r.status, await r.text()]; });
+  check('nothing of MY PAGE for a visitor who has not signed in', door === '/opendmtq/login.php' && twin[0] === 403 && JSON.parse(twin[1]).error.code === 'signin', `${door} ${twin}`);
   await stranger.close();
-  // Every page with it, at every width, in both languages: nothing cut off, touching or under another box.
-  await sweep(contexts, NOTICE, ALL_WIDTHS);
-  // Its cross: a key a finger can hit, named in the page's language.
-  check('PAGE-66: its cross is named for what it does', await site.$eval('.notice-close', b => b.getAttribute('aria-label')) === 'Close the notice');
-  await site.setCookie({ name: 'opendmtq_lang', value: 'ko', url: `${P}/` });
-  await site.goto(`${P}/songs.php`, { waitUntil: 'domcontentloaded' });
-  check('PAGE-66: and in Korean in Korean', await site.$eval('.notice-close', b => b.getAttribute('aria-label')) === '공지 닫기');
-  await site.setCookie({ name: 'opendmtq_lang', value: 'en', url: `${P}/` });
-  // Closed: gone at once, and for the rest of this visit (this tab) before it is ever drawn; back on the next visit.
-  await site.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
-  await site.click('.notice-close');
-  check('PAGE-66: its cross closes it at once', (await site.$('body > .site-notice')) === null);
-  await site.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
-  check('PAGE-66: and it stays closed on the next page of the visit, never drawn', await site.$eval('body > .site-notice', b => getComputedStyle(b).display).catch(() => 'gone') === 'none');
-  await site.reload({ waitUntil: 'domcontentloaded' });
-  check('PAGE-66: and after a reload', await site.$eval('body > .site-notice', b => getComputedStyle(b).display).catch(() => 'gone') === 'none');
-  const next = await contexts.signed.newPage();
-  await next.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
-  check('PAGE-66: the next visit shows it again', !['none', 'gone'].includes(await next.$eval('body > .site-notice', b => getComputedStyle(b).display).catch(() => 'gone')));
-  await next.close();
-  // New words: shown again where the old ones were closed.
-  await putUp('Open late tonight.');
-  await site.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
-  check('PAGE-67: new words show again where the old were closed', await textOf(site, 'body > .site-notice .notice-text') === 'Open late tonight.'
-    && await site.$eval('body > .site-notice', b => getComputedStyle(b).display) !== 'none');
-  await site.close();
-  // PAGE-68: the home page and the live page left open (both look at the server by themselves): a notice put up, given new
-  // words and taken down comes, changes and goes there by itself, the page not opened anew.
-  await takeDown();
-  const open = [];
-  for (const url of [`${P}/`, `${P}/live.php`]) open.push(await openAlone(contexts, url));
-  const says = words => {
-    const band = document.querySelector('body > .site-notice');
-    return words === null ? !band : !!band && band.textContent.includes(words) && getComputedStyle(band).display !== 'none';
-  };
-  const all = async (words, name) => {
-    const came = [];
-    for (const page of open) came.push(await until(page, says, words) && await keptOpen(page));
-    check(name, came.every(Boolean), came.join(' '));
-  };
-  await putUp('The server is open all night.');
-  await all('The server is open all night.', 'PAGE-68: put up, the pages left open show it by themselves');
-  // Closed on the home page left open; the live page keeps it.
-  const [home, live] = open;
-  await home.click('.notice-close');
-  // Maintenance begun: both pages put its sentence in place by themselves. On the live page the notice comes under it; on
-  // the home page, where it was closed, it stays closed (the page's own look takes the page again).
-  await owner.bringToFront();
-  await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
-  await pressAndConfirm(owner, '#maintenance button[name=action][value=on]');
-  const ordered = await until(live, () => {
-    const alert = document.querySelector('body > .site-alert'), band = document.querySelector('body > .site-notice');
-    return !!alert && !!band && alert.compareDocumentPosition(band) === Node.DOCUMENT_POSITION_FOLLOWING;
-  });
-  check('PAGE-68: with maintenance begun, its sentence comes above the notice', ordered);
-  const stayed = await until(home, () => !!document.querySelector('body > .site-alert')) && await home.evaluate(() => {
-    const band = document.querySelector('body > .site-notice');
-    return !band || getComputedStyle(band).display === 'none';
-  });
-  check('PAGE-68: and where it was closed it stays closed as the page takes maintenance in', stayed && await keptOpen(home));
-  await owner.bringToFront();
-  await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
-  await press(owner, '#maintenance button[name=action][value=off]');
-  await putUp('Back to normal hours tomorrow.');
-  await all('Back to normal hours tomorrow.', 'PAGE-68: new words, the pages left open say them by themselves, where the old were closed too');
-  await takeDown();
-  await all(null, 'PAGE-68: taken down, it goes from the pages left open by themselves');
-  for (const page of open) await page.browserContext().close();
+
+  // The server's own account (from .env) on the site: its password is the server's, changed on the Server page.
+  const owner = await contexts.browser.createBrowserContext();
+  check("the server's own account signs in to the site", await siteSignIn(owner, 'admin', PASSWORD));
+  const own = await owner.newPage();
+  await own.setCookie({ name: 'opendmtq_lang', value: 'en', url: P });
+  await own.goto(`${P}/me.php?tab=account`, { waitUntil: 'domcontentloaded' });
+  check("its account tab says the password is the server's, with the way to the Server page, and no password form",
+    /server's own account/.test(await textOf(own, 'main')) && (await own.$('a[href="/opendmtq/admin/server#password"]')) !== null && (await own.$('#me-current')) === null);
+  await own.close();
+  await sweep({ signed: owner, anon: contexts.anon }, [['my page, the owner', `${P}/me.php`], ['my account, the owner', `${P}/me.php?tab=account`]], ALL_WIDTHS);
   await owner.close();
 }
 
@@ -2388,6 +2384,8 @@ async function ownersNotice(contexts) {
     // have none of the items run.sh's stand-in catalog gives a player's page.
     await gameFlows(contexts);
     await adminFlows(contexts);
+  } else if (stage === 'mine') {
+    await myPage(contexts);
   } else if (stage === 'patterns') {
     await hoverOnly(contexts);
     await inPlace(contexts);

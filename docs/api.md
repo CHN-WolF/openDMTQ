@@ -262,6 +262,42 @@ after a change to the table, write the reference again with
 `python3 tools/opendmtq_tools/admin/api_routes.py docs/api.md`. The repository's checks fail while this page and the
 table differ.
 
+## The site's own JSON
+
+The token API is the admin's. A player's own page on the site, **MY PAGE** (`/opendmtq/me.php`), has a twin of its own
+for a script that holds the site's sign-in cookie (`opendmtq_dl`, which the sign-in page and the PC client's
+`client.php?signin` give): everything the page shows, and each change it makes, as JSON. No token, and nothing of any
+other account: it answers for the account the cookie signs in as.
+
+| Method | Address | What it answers or does |
+|:---|:---|:---|
+| GET | `/opendmtq/me.php?json` | `account` (`id`, `owner`, `admin`, `note`, `made`, `last_in`, `this_in`, `player` with its `id`, `name` and `page`, `language`); for an account linked to its game player also `player` (`id`, `name`, `charts`, `total`), `game` (`level`, `exp`, `mpoint` for MAX POINT, `q` for Q POINT, `items` with the levels of `fp`, `gr` and `ab`, `owned`, `equipped` with the item numbers of `character`, `addon`, `note` and `skin`, 0 for none), `achievements` (`held`, each with `id`, `words`, `points` and `at`; `count` and `points` of all), `ranks` (`all`, `total`, `month`, `score`) and `broadcasts` (`switch`, `on_air`, `recordings`, `seconds`, `newest`; `null` while broadcasts are off for the server). `null` in their place for an account with no game player |
+| GET | `/opendmtq/me.php?json&tab=plays&page=N` | `plays`: a page of the player's plays, newest first, 50 to a page: `page`, `pages`, `total` and `items`, each with `chart`, `song`, `title`, `chart_name`, `score`, `grade`, `accuracy`, `keys`, `record` and `at` |
+| GET | `/opendmtq/me.php?json&tab=records&page=N` | `records`: a page of the player's best records, best score first, with `all_combo`, `perfect` and `set_at` in place of `record` and `at` |
+| POST | `/opendmtq/me.php?json&do=password` | Fields `current`, `password` and `password2`: the password changed. Every other sign-in of the account ends (the PC client's too), this cookie is made again and stays |
+| POST | `/opendmtq/me.php?json&do=id` | Fields `id` and `current`: the ID changed. The game player, and with it the plays, records and broadcasts, stay; the account's API tokens follow it. Every other sign-in ends, this cookie is made again |
+| POST | `/opendmtq/me.php?json&do=signout` | Every other sign-in of the account ends; this cookie is made again and stays |
+
+A change answers `{"done": "<what>", "account": {...}}` with the account as it is now. Its fields come as a form
+(`application/x-www-form-urlencoded`) or as a JSON object (`Content-Type: application/json`). A refusal answers
+`{"error": {"code", "message", "field"}}`, where `field` names the field it is about (empty for none):
+
+| Status | Code | When |
+|:---|:---|:---|
+| 400 | `missing_field`, `bad_password`, `password_mismatch`, `bad_id`, `bad_json` | A field empty, a password not 6 to 64 characters (10 to 64 for an account with admin rights), the two new ones not the same, an ID not 3 to 20 Latin letters, digits and `. _ -`, a body that is no JSON object |
+| 401 | `wrong_password` | Not the account's current password. It counts toward the sign-in's limit, and takes a second |
+| 403 | `signin`, `cross_site` | No cookie that signs in; a change sent from another site's page |
+| 409 | `id_taken`, `same_id`, `owner_account` | Another account's ID in any letter case, or the owner's; the ID it has; the server's own account, whose password is changed on the admin pages' Server page |
+| 429 | `throttled` | Too many wrong passwords from this address lately, as at the sign-in (`Retry-After: 600`) |
+| 503 | `not_saved` | The server could not write its database just then |
+
+```sh
+# Sign in once, keeping the cookie; then MY PAGE's facts, and a new password.
+curl -s -c jar -d user=sena -d password=old-password "$SITE/opendmtq/login.php" -o /dev/null
+curl -s -b jar "$SITE/opendmtq/me.php?json"
+curl -s -b jar -c jar -d current=old-password -d password=new-password -d password2=new-password "$SITE/opendmtq/me.php?json&do=password"
+```
+
 <!-- reference: made from tools/opendmtq_tools/admin/api_routes.py -->
 
 ## Reference

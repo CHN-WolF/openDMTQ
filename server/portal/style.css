@@ -1856,7 +1856,7 @@ html:not(.notice-closed) .site-notice ~ .stage { --bar-h: 0px; }
 .me-game .num { font-size: 26px; }
 .me-items { display: grid; gap: 6px; margin: 18px 0 0; padding: 0; list-style: none; }
 .me-items li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 12px; background: var(--rail); }
-.me-items b { font: 800 var(--t-md)/1.2 var(--display); color: #fff; white-space: nowrap; }
+.me-items b { font: 800 var(--t-lg)/1.2 var(--display); color: #fff; white-space: nowrap; }
 .me-game + .me-items + .meta { margin-top: 12px; }
 /* The achievements held, newest first: what each asked for, its points and its day, a line between them; two columns
    where there is room for both. */

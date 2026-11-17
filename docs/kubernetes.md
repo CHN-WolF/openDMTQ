@@ -31,8 +31,8 @@ each part needs.
   only when `admin.onPublicPort` allows it: by default over HTTPS with `router.tls`, and otherwise only for
   a private IPv4 `publicHost`, where the password crosses the LAN in clear. Otherwise use
   `kubectl port-forward` (the release notes print the command). Password from
-  `admin.existingSecret`, or generated into `<release>-opendmtq-admin`. An init container creates the
-  shared folders as uid 33 first.
+  `admin.existingSecret`, or generated into `<release>-opendmtq-admin`; the admin pages' Server page names the commands
+  that put a new one in that Secret and restart the pod. An init container creates the shared folders as uid 33 first.
 - **Broadcasts.** `live.default` is `LIVE_DEFAULT` of the compose setup: `on` starts a new player's switch on until the
   owner chooses on the Broadcasts page, where broadcasts are also turned on for the server at all ([live.md](live.md)).
   Those settings are rows of the database, so they come back with it when the api pod is replaced.
