@@ -463,12 +463,18 @@ def tell(app, kind, title, message, detail=None, ok=None):
         app.dialog = None
 
 
-def window_root(title="OpenDMTQ", language="en"):
-    """A window of its own for dialogs, when there is no launcher window to draw over: (root, ui)."""
+def window_root(title="OpenDMTQ", language="en", frameless=False):
+    """A window of its own for dialogs, when there is no launcher window to draw over: (root, ui). `frameless`: one the
+    installer opens, which comes without Windows' title bar as the installer's own window does (window() shows it once
+    the title bar is gone)."""
     safety.refuse_windows_in_tests("a dialog window")
-    from opendmtq_client import i18n, widgets
+    from opendmtq_client import frameless as bare, i18n, widgets
     theme.register_fonts()
     root = tk.Tk()
+    # Out of sight until Windows' title bar is gone, where there is one to take off: nothing flashes.
+    hidden = frameless and bare.supported()
+    if hidden:
+        root.withdraw()
     root.title(title)
     root.configure(bg=theme.BG)
     set_icon(root)
@@ -479,10 +485,12 @@ def window_root(title="OpenDMTQ", language="en"):
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     root.geometry("%dx%d+%d+%d" % (width, height, (sw - width) // 2, (sh - height) // 3))
     root.resizable(False, False)
-    # Shown once before a dialog is drawn, so the window has its real size to draw for.
+    # Shown once before a dialog is drawn, so the window has its real size to draw for (laid out out of sight when it is
+    # to have no title bar: Tk knows its size all the same).
     root.update()
-    # The person just started it: it takes the keyboard, so Enter and Esc answer it at once.
-    root.focus_force()
+    if not hidden:
+        # The person just started it: it takes the keyboard, so Enter and Esc answer it at once.
+        root.focus_force()
     return root, ui
 
 
@@ -503,19 +511,44 @@ def set_icon(root):
         pass
 
 
-def window(kind, title, message, detail=None, buttons=(), default=0, cancel=None, language="en"):
+def window(kind, title, message, detail=None, buttons=(), default=0, cancel=None, language="en", frameless=False):
     """A dialog in a window of its own, over the site's shards, for when the launcher cannot open its window. Returns
-    (root, dialog); the window closes itself once the dialog is answered."""
-    root, ui = window_root(language=language)
+    (root, dialog); the window closes itself once the dialog is answered. `frameless`: one the installer opens, without
+    Windows' title bar as the installer's own window is (frameless.py): its card and the shards round it move it."""
+    root, ui = window_root(language=language, frameless=frameless)
     dialog = Dialog(root, ui, kind, title, message, detail, buttons, default=default, cancel=cancel,
                     window=lambda w, h: art.backdrop(w, h, ui.scale), on_close=lambda value: root.destroy())
     fit(root, ui, dialog)
+    # Alt+F4 and the taskbar's Close window answer as Esc does.
     root.protocol("WM_DELETE_WINDOW", lambda: dialog.close(cancel))
+    if frameless:
+        _without_title_bar(root, dialog)
     return root, dialog
 
 
-def standalone(kind, title, message, detail=None, buttons=(), default=0, cancel=None, language="en"):
+def _without_title_bar(root, dialog):
+    """A dialog window with no title bar of Windows': a press anywhere but on its buttons moves it, as the title bar
+    did; on Windows the title bar comes off before the window shows (it was laid out out of sight)."""
+    from opendmtq_client import frameless as bare
+
+    def off_the_buttons(event):
+        # The press in the card's own pixels: on a button it is that button's, never a move.
+        c = dialog.canvas
+        x, y = c.canvasx(event.x) - dialog.origin[0], c.canvasy(event.y) - dialog.origin[1]
+        return not any(left <= x < right and top <= y < bottom for left, top, right, bottom in dialog._boxes)
+
+    bare.Mover(root).bind(dialog.canvas, off_the_buttons)
+    if bare.supported():
+        # Its size as fit() left it, where window_root() put it.
+        root.update_idletasks()
+        bare.apply(root, (root.winfo_width(), root.winfo_height()) + bare.place(root))
+        root.deiconify()
+        # The person just met it: it takes the keyboard, so Enter and Esc answer it at once.
+        root.focus_force()
+
+
+def standalone(kind, title, message, detail=None, buttons=(), default=0, cancel=None, language="en", frameless=False):
     """window() and wait for the answer: the chosen button's value (`cancel` when the window is closed)."""
-    root, dialog = window(kind, title, message, detail, buttons, default, cancel, language)
+    root, dialog = window(kind, title, message, detail, buttons, default, cancel, language, frameless)
     root.mainloop()
     return dialog.result

@@ -858,6 +858,49 @@ def button_face(size, margin, look, state, focused, scale, under=None, bg=None):
     return img
 
 
+# The glyphs' colours on the window's buttons: quiet at rest, as bright as words under the pointer and with the
+# keyboard, the dark ink on the close button's red.
+WINDOW_GLYPH = {"normal": theme.MUTED, "hover": theme.TEXT, "pressed": theme.TEXT, "focus": theme.TEXT,
+                "danger": BUTTON_LOOKS["danger_quiet"]["hover_text"]}
+
+
+def window_button(size, glyph, state, focused, scale=1.0, under=None, bg=None):
+    """One of the installer's own window buttons, `size` pixels square: the launcher's button face cut at two corners in
+    quiet metal, as the overlay bar's minimise and full screen chips are, raised, sunk while pressed, with the keyboard's
+    ring inside its outline; the close button turns the red of removing under the pointer and while pressed, never lime.
+    Its glyph as the overlay bar draws its own, a little smaller for a smaller button: minimise a bar across (12 px at
+    100 %), close an X with round ends (10 px across), 2 px strokes. `under` is the picture the button lies on (its cut
+    corners show it), else `bg` a plain colour."""
+    danger = glyph == "close" and state in ("hover", "pressed")
+    img = button_face((size, size), 0, "danger_quiet" if danger else "neutral", state, focused, scale, under=under,
+                      bg=bg)
+    ink = WINDOW_GLYPH["danger"] if danger else WINDOW_GLYPH["focus" if focused and state == "normal" else state]
+    # Strokes of whole pixels, 2 at 100 %, so that the bar stays crisp.
+    stroke = max(2, int(round(2 * scale)))
+    mask = Image.new("L", (size, size), 0)
+    if glyph == "minimize":
+        # A bar across the middle, on whole pixels; as long as the button's width leaves an even room either side.
+        length = int(round(12 * scale))
+        length += (size - length) % 2
+        top = (size - stroke) // 2
+        ImageDraw.Draw(mask).rectangle([(size - length) // 2, top, (size + length) // 2 - 1, top + stroke - 1], fill=255)
+    else:
+        # An X from corner to corner of a 10 px square, drawn four times larger with round ends, then made smaller.
+        k = 4
+        big = Image.new("L", (size * k, size * k), 0)
+        draw = ImageDraw.Draw(big)
+        middle, half, width = size * k / 2.0, 5 * scale * k, stroke * k
+        for (x0, y0), (x1, y1) in (((-1, -1), (1, 1)), ((-1, 1), (1, -1))):
+            ends = [(middle + x0 * half, middle + y0 * half), (middle + x1 * half, middle + y1 * half)]
+            draw.line(ends, fill=255, width=int(width))
+            for x, y in ends:
+                # Each end rounded: a disc as wide as the stroke.
+                draw.ellipse([x - width / 2, y - width / 2, x + width / 2, y + width / 2], fill=255)
+        mask = big.resize((size, size), Image.LANCZOS)
+    img.paste(_rgb(ink), (0, 0), mask)
+    return img
+
+
 def corner(size, inside, outside, seam=None):
     """A panel's top-right corner, cut: what covers a card's square corner, the page's colour beyond the cut (a seam
     along the cut when one is given)."""

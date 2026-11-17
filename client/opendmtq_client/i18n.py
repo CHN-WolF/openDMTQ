@@ -630,6 +630,9 @@ TEXT = {
 
     # ------------------------------------------------------------------------------------- the installer
     "setup.window": ("OpenDMTQ Setup", "OpenDMTQ 설치"),
+    # The window's own buttons at the top right of its header, as screen readers say them (Windows' names for its own).
+    "setup.window.minimize": ("Minimize", "최소화"),
+    "setup.window.close": ("Close", "닫기"),
     # Velopack's setup makes both shortcuts (vpk's default places): the one on the desktop and the one in the Start menu.
     "setup.install": ("Install", "설치"),
     "setup.update": ("Update", "업데이트"),

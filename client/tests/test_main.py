@@ -685,10 +685,14 @@ class Maintenance(Folder):
         copy.assert_called_once_with(self.install)
         hooks.assert_not_called()
         entry.assert_not_called()
+        from opendmtq_client import stopped
         with mock.patch.object(installer, "uninstall_main", return_value=0) as uninstall, \
                 mock.patch.object(removal, "remove_later") as later, \
-                mock.patch.object(main, "_velopack_hooks") as hooks, mock.patch.object(main.dpi, "aware"):
+                mock.patch.object(main, "_velopack_hooks") as hooks, mock.patch.object(main.dpi, "aware"), \
+                mock.patch.object(stopped, "FRAMELESS", False):
             code, said = self.run_main([main.UNINSTALL_FROM, self.install])
+            # The installer's own window: an error that ends it is said without Windows' title bar (stopped.py).
+            self.assertTrue(stopped.FRAMELESS)
         self.assertEqual(code, 0)
         uninstall.assert_called_once_with(self.install)
         later.assert_called_once_with(os.path.dirname(os.path.abspath(sys.executable)))
@@ -705,8 +709,10 @@ class Maintenance(Folder):
         from opendmtq_client import installer
         import shutil
         shutil.rmtree(removal.data_root(), ignore_errors=True)
+        from opendmtq_client import stopped
         with mock.patch.object(installer, "uninstall_main", return_value=0), \
-                mock.patch.object(removal, "remove_later"), mock.patch.object(main.dpi, "aware"):
+                mock.patch.object(removal, "remove_later"), mock.patch.object(main.dpi, "aware"), \
+                mock.patch.object(stopped, "FRAMELESS", False):
             self.run_main([main.UNINSTALL_FROM, self.install])
         self.assertFalse(os.path.exists(os.path.dirname(st.launcher_log())))
 
@@ -871,3 +877,36 @@ class Stopped(unittest.TestCase):
                 mock.patch.object(actions, "open_folder") as opened:
             stopped.show(OSError("x"), os.path.join("logs", "launcher.log"))
         opened.assert_not_called()
+
+    def test_the_installers_stopped_window_has_no_title_bar(self):
+        # The installer's window has no title bar of Windows' (frameless.py), and the window an error ends it in has
+        # none either; the launcher's keeps its own.
+        from opendmtq_client import dialogs, stopped
+
+        def fails():
+            raise OSError("x")
+
+        for given, frameless in (({}, False), ({"frameless": True}, True)):
+            with mock.patch.object(stopped, "windowed", return_value=True), \
+                    mock.patch.object(dialogs, "standalone", return_value="close") as standalone, \
+                    self.assertLogs("opendmtq_client", "ERROR"):
+                self.assertEqual(stopped.run(fails, lambda: "setup.log", **given), 1)
+            self.assertEqual(standalone.call_args.kwargs["frameless"], frameless)
+        # The uninstall Windows' Apps opens is the installer's own window too (main sets it for that run).
+        with mock.patch.object(stopped, "FRAMELESS", True), mock.patch.object(stopped, "windowed", return_value=True), \
+                mock.patch.object(dialogs, "standalone", return_value="close") as standalone, \
+                self.assertLogs("opendmtq_client", "ERROR"):
+            stopped.run(fails, lambda: "launcher.log")
+        self.assertTrue(standalone.call_args.kwargs["frameless"])
+
+    def test_the_programs_entries_ask_for_their_own_stopped_windows(self):
+        # OpenDMTQ-Setup.exe's entry asks for the stopped window without a title bar; OpenDMTQ.exe's for the launcher's.
+        import runpy
+        from opendmtq_client import stopped
+        here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "packaging", "windows")
+        for name, frameless in (("setup_entry.py", True), ("entry.py", False)):
+            with mock.patch.object(stopped, "run", return_value=0) as run, self.assertRaises(SystemExit) as ended:
+                runpy.run_path(os.path.join(here, name))
+            with self.subTest(name):
+                self.assertEqual(ended.exception.code, 0)
+                self.assertEqual(run.call_args.kwargs.get("frameless", False), frameless)

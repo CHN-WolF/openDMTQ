@@ -3,16 +3,20 @@ is: a column down its left with the wordmark, the version and the steps of what 
 title in the site's leaning face over the site's field, the page's card, and a strip along the foot with the buttons,
 the main one lime (or red to remove for good) and the others quiet.
 
+It has no title bar of Windows' (frameless.py): its own header holds the page's title and, at the top right, the
+window's minimise and close buttons in the launcher's quiet metal, and the window's top (the header and the column above
+its steps) moves the window.
+
 installer.py decides what each page says and does; this module only draws: SetupWindow.page() starts a page,
 Options a list of choices on it, Progress the work under way, and lines() what came of it. Nothing here asks the
-system anything.
+system anything but frameless.py's calls for the window itself.
 """
 
 import tkinter as tk
 
-from PIL import ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
-from opendmtq_client import art, safety, theme, widgets
+from opendmtq_client import art, frameless, safety, theme, widgets
 
 # The window's size when the screen has room for it, the column's width and the strip's height along the foot, and the
 # room inside the column and the strip (logical pixels).
@@ -22,6 +26,25 @@ COLUMN, FOOT, EDGE = 220, 72, 20
 PAGE_LIGHT = 300
 # The room between two lines of a card (what came of the work, a card's facts), on the launcher's spacing scale.
 LINE_GAP = 12
+# The window's own buttons at the right of its header: their size, the room between them, how far down from the window's
+# top they start (level with the wordmark's top in the column) and how far in from its right edge (the column's own
+# edge, mirrored), and the least room between the page's title and them (logical pixels).
+BUTTON, BUTTON_GAP, BUTTON_TOP, BUTTON_RIGHT, TITLE_ROOM = 32, 8, EDGE + 2, EDGE, 16
+# The smallest the page's title is drawn where the window is too narrow for it beside the buttons (the site's 42 px
+# otherwise).
+TITLE_LEAST = 24
+# The title's picture in the header: its top (its capitals then start level with the wordmark's and the buttons' top),
+# and the room under it, which keeps the letters that reach under the line clear of the header's seam once the page has
+# moved (logical pixels).
+TITLE_TOP, TITLE_FOOT = 18, 6
+
+
+def placement(root, px, caption=0):
+    """The window's (width, height, x, y) inside the room windows have (the screen less the taskbar), as the launcher's
+    window opens: its size where there is room, a third of the way down, never under the taskbar. `caption` is a title
+    bar of Windows' to count above it: none, as the window has none (frameless.py), unless taking it off failed."""
+    from opendmtq_client import window_room
+    return window_room.window_box(window_room.work_area(root), caption, px(WIDTH), px(HEIGHT))
 
 
 class SetupWindow:
@@ -33,28 +56,63 @@ class SetupWindow:
         safety.refuse_windows_in_tests("the installer's window")
         from opendmtq_client import dialogs
         theme.register_fonts()
-        self.words = words
+        self.words, self.on_close, self.shown = words, on_close, False
+        # What the page on show gave the keyboard (focus_later), given it again as the window first shows.
+        self.wanted = None
         self.root = tk.Tk()
+        # Out of sight until its first page is laid out and Windows' title bar is gone (show()): nothing flashes.
+        self.root.withdraw()
+        # The window's name on the taskbar, in Alt+Tab and for screen readers, as before.
         self.root.title(title)
         self.root.configure(bg=theme.BG)
-        # The mark in the title bar and on the taskbar, as the launcher's.
+        # The mark on the taskbar and in Alt+Tab, as the launcher's.
         dialogs.set_icon(self.root)
         self.scale = theme.scale_of(self.root)
         self.ui = widgets.Ui(self.root, theme.Fonts(self.root, language), self.scale, words)
         # The page's scroll bar in the launcher's dark style.
         widgets.style_ttk(self.ui)
-        px = self.ui.px
-        from opendmtq_client.window_room import title_bar_height, window_box, work_area
-        # Inside the room windows have (the screen less the taskbar), as the launcher's window opens: a third of the way
-        # down, never under the taskbar.
-        w, h, x, y = window_box(work_area(self.root), title_bar_height(), px(WIDTH), px(HEIGHT))
-        self.root.geometry("%dx%d+%d+%d" % (w, h, x, y))
+        # Inside the room windows have, with no title bar of Windows' to count: the window has none (show()).
+        self.box = placement(self.root, self.ui.px)
+        self.root.geometry("%dx%d+%d+%d" % self.box)
         # One size: an installer's window is not made larger or smaller.
         self.root.resizable(False, False)
+        # Alt+F4 and the taskbar's Close window ask what the header's close button asks.
         self.root.protocol("WM_DELETE_WINDOW", on_close)
         # Esc answers the page as its quiet button does (Cancel, Close, Back), while it has one.
         self.root.bind("<Escape>", lambda e: self._escape())
+        # What moves the window by its top, now that Windows' title bar is gone.
+        self.mover = frameless.Mover(self.root)
         self._build(version)
+
+    def show(self):
+        """Bring the window up once its first page is laid out: on Windows without Windows' title bar, rounded and
+        shadowed where Windows 11 does it (frameless.py), its own buttons named for screen readers; then in front,
+        with the keyboard."""
+        if self.shown:
+            return
+        self.shown = True
+        # Laid out out of sight: on Windows Tk makes the window it wraps the installer in now, hidden.
+        self.root.update_idletasks()
+        if frameless.supported():
+            if not frameless.apply(self.root, self.box):
+                # Windows' title bar stayed: placed again with it counted, so that the strip stays above the taskbar.
+                from opendmtq_client.window_room import title_bar_height
+                self.box = placement(self.root, self.ui.px, title_bar_height())
+                self.root.geometry("%dx%d+%d+%d" % self.box)
+            for button in self.header.buttons:
+                frameless.name(button, button.words)
+        # Shown and raised (Tk's deiconify brings a window to the front on Windows)...
+        self.root.deiconify()
+        # ...where Tk gives the keyboard to the window itself, dropping what the page asked for while it was out of
+        # sight: back to what the page gave it (its main button, its choices), in front.
+        if self.wanted is not None and self.wanted.winfo_exists():
+            self.wanted.focus_force()
+
+    def focus_later(self, widget):
+        """The keyboard to `widget` once the window has drawn what is new (Tk's idle work), and again as the window first
+        shows (show())."""
+        self.wanted = widget
+        self.root.after_idle(lambda: widget.winfo_exists() and widget.focus_set())
 
     # --------------------------------------------------------------------------------------------- the frame
 
@@ -69,7 +127,7 @@ class SetupWindow:
         tk.Frame(column, bg="#2a3038", width=max(1, px(1))).pack(side="right", fill="y")
         brand = art.brand(self.scale, "v" + version, mark=24, label="SETUP")
         self._brand = ImageTk.PhotoImage(brand, master=column)
-        mark = tk.Label(column, image=self._brand, bg=theme.STRIP, bd=0)
+        mark = self.mark = tk.Label(column, image=self._brand, bg=theme.STRIP, bd=0)
         # A dialog would draw the window from its widgets: the mark's own picture.
         mark.odq_picture = brand
         mark.pack(side="top", anchor="w", padx=(px(EDGE), 0), pady=(px(EDGE + 2), px(26)))
@@ -93,11 +151,24 @@ class SetupWindow:
         self.note.pack(side="left", fill="x", expand=True, padx=(0, px(16)))
         self.button_row = tk.Frame(self.strip, bg=theme.STRIP)
         self.button_row.pack(side="right")
-        self.page_area = widgets.ScrollArea(right, ui, offset=0, light=px(PAGE_LIGHT))
+        # ---- the header along the page's top: the page's title, and the window's minimise and close at its right.
+        self.header = Header(right, ui, px(PAGE_LIGHT), self.words, lambda: frameless.minimize(self.root),
+                             self.on_close)
+        self.header.pack(side="top", fill="x")
+        # The page under it, its picture going on from the header's without a seam.
+        self.page_area = PageArea(right, ui, offset=self.header.tall, light=px(PAGE_LIGHT),
+                                  on_moved=self.header.moved)
         self.page_area.pack(side="top", fill="both", expand=True)
-        # Tab goes as the window reads: the page, then the strip's buttons (Tk follows the order of making; the strip
-        # was made first so that it holds the foot, so it is raised after the page).
+        # Tab goes as the window reads its work: the page, the strip's buttons, then the window's own minimise and close
+        # (Tk follows the order of making: the strip, made first so that it holds the foot, and the header, made before
+        # the page so that it holds the top, are raised after the page in that order).
         tk.Misc.tkraise(strip)
+        tk.Misc.tkraise(self.header)
+        # The window's top moves the window, as Windows' title bar did: the header (its title and its picture; its
+        # buttons are widgets of their own) and the column as far down as the header reaches, its wordmark with it.
+        self.mover.bind(self.header)
+        for widget in (column, mark):
+            self.mover.bind(widget, lambda e: e.y_root - self.root.winfo_rooty() < self.header.tall)
         self.buttons = []
         self.escape = None
 
@@ -113,7 +184,9 @@ class SetupWindow:
         frame the page's cards go in; the strip's buttons and note are cleared for it (set_buttons, say)."""
         for child in self.page_area.inner.winfo_children():
             child.destroy()
-        self.page_area.set_heading(title, lead)
+        # The title in the header, the line under it at the page's top, where the title's foot is.
+        self.header.set_title(title)
+        self.page_area.set_heading("", lead)
         self.steps.show(steps, step)
         content = tk.Frame(self.page_area.inner, bg=theme.BG)
         content.pack(fill="both", expand=True)
@@ -142,8 +215,7 @@ class SetupWindow:
         self.escape = escape
         if default is not None and 0 <= default < len(self.buttons):
             # After the window is drawn, so that the keyboard lands there and not on the page before it.
-            target = self.buttons[default]
-            self.root.after_idle(lambda: target.winfo_exists() and target.focus_set())
+            self.focus_later(self.buttons[default])
         return self.buttons
 
     def say(self, text, colour=theme.MUTED):
@@ -176,6 +248,171 @@ class SetupWindow:
 
     def run(self):
         self.root.mainloop()
+
+
+class PageArea(widgets.ScrollArea):
+    """The page under the header: the header holds the page's title, so the line under the title starts at the area's
+    top, where the title's foot is, as it did under the title on the launcher's pages."""
+
+    TOP = 0
+
+
+class Header(tk.Canvas):
+    """The page's top: its title as the launcher's pages set theirs (its capitals level with the wordmark's top, on one
+    baseline in both languages, a little smaller only where the window is too narrow for it beside the buttons), and the
+    window's own minimise and close at its right. At the page's top it shows the page's own picture (the light and the shards, which the page under
+    it goes on with); once the page has moved from its top, the strip's solid colour with a seam along its foot, as the
+    site's bar does then, so that the cards go under an edge and not into the picture."""
+
+    def __init__(self, parent, ui, light, words, on_minimize, on_close):
+        px = ui.px
+        # A title in Latin letters, the tallest: the header's height round it, whatever the page and the language, and
+        # the baseline every title stands on.
+        latin, self.baseline = art.page_title("H", ui.scale)
+        self.tall = px(TITLE_TOP) + latin.height + px(TITLE_FOOT)
+        super().__init__(parent, height=self.tall, bg=theme.BG, highlightthickness=0, bd=0, takefocus=0)
+        self.ui, self.light = ui, light
+        # The page's title, whether the page has moved from its top, and the title's picture drawn for a room.
+        self.title, self.moved_off, self._titles = "", False, {}
+        # Where the title is on the header (for the tests' measures).
+        self.title_box = None
+        self.buttons = [WindowButton(self, ui, "minimize", on_minimize, words("setup.window.minimize")),
+                        WindowButton(self, ui, "close", on_close, words("setup.window.close"))]
+        self.bind("<Configure>", lambda e: self._draw())
+
+    def set_title(self, title):
+        """Another page's title."""
+        if title != self.title:
+            self.title = title
+            self._draw()
+
+    def moved(self, on):
+        """The page has moved from its top (True) or come back to it."""
+        if on != self.moved_off:
+            self.moved_off = on
+            self._draw()
+
+    def places(self, width):
+        """Where the buttons go on a header `width` wide: their (x, y), the close button last, at the right end."""
+        px = self.ui.px
+        size, gap, right = px(BUTTON), px(BUTTON_GAP), width - px(BUTTON_RIGHT)
+        return [(right - 2 * size - gap, px(BUTTON_TOP)), (right - size, px(BUTTON_TOP))]
+
+    def _title_picture(self, room):
+        """The title's picture and its baseline, at the site's size, or smaller until it fits `room` pixels."""
+        key = (self.title, room)
+        if key not in self._titles:
+            size = 42
+            picture, base = art.page_title(self.title, self.ui.scale, size=size)
+            while picture.width > room and size > TITLE_LEAST:
+                # As much smaller as the room asks, a step at least, never under the least size.
+                size = max(TITLE_LEAST, min(size - 1, int(size * room / float(picture.width))))
+                picture, base = art.page_title(self.title, self.ui.scale, size=size)
+            # One title's pictures kept at a time: the window shows one page.
+            self._titles = {key: (picture, base)}
+        return self._titles[key]
+
+    def _draw(self):
+        px = self.ui.px
+        width, height = max(1, self.winfo_width()), self.tall
+        if self.moved_off:
+            # The strip's colour and its seam along the foot, as the strip along the window's foot has along its top.
+            picture = Image.new("RGB", (width, height), art._rgb(theme.STRIP))
+            seam = max(1, px(1))
+            ImageDraw.Draw(picture).rectangle([0, height - seam, width - 1, height - 1], fill=art._rgb(theme.SEAM))
+        else:
+            # The page's own picture, its first rows: the page area under it draws the rest (its offset).
+            picture = art.backdrop(width, height, self.ui.scale, offset=0, top=self.light)
+        places = self.places(width)
+        self.title_box = self.title_picture = None
+        if self.title:
+            # Where the launcher's pages put their title (ScrollArea.set_heading), as large as the room before the
+            # buttons leaves it, standing on the Latin title's baseline.
+            x = px(widgets.ScrollArea.MARGIN) - px(2)
+            title, base = self._title_picture(places[0][0] - px(TITLE_ROOM) - x)
+            y = px(TITLE_TOP) + self.baseline - base
+            picture.paste(title, (x, y), title)
+            self.title_box, self.title_picture = (x, y, x + title.width, y + title.height), title
+        # Kept for the buttons' faces and for a dialog, which draws the window from its widgets (snapshot.py).
+        self.picture = self.odq_picture = picture
+        self._image = ImageTk.PhotoImage(picture, master=self)
+        self.delete("all")
+        self.create_image(0, 0, image=self._image, anchor="nw")
+        size = px(BUTTON)
+        for button, (x, y) in zip(self.buttons, places):
+            button.place(x=x, y=y)
+            # Each button over the header's own pixels: its cut corners show them.
+            button.set_under(picture.crop((x, y, x + size, y + size)))
+
+
+class WindowButton(tk.Canvas):
+    """One of the window's own buttons in the header, minimise or close (art.window_button): quiet metal, the close button
+    red under the pointer; pressed by a click that ends on it, or by Enter or Space once Tab has reached it (its ring
+    shows). `words` name it for the tests and, on Windows, for screen readers (frameless.name in SetupWindow.show)."""
+
+    def __init__(self, parent, ui, glyph, command, words):
+        size = ui.px(BUTTON)
+        super().__init__(parent, width=size, height=size, bg=theme.BG, highlightthickness=0, bd=0, cursor="hand2",
+                         takefocus=1)
+        self.ui, self.glyph, self.command, self.words = ui, glyph, command, words
+        # Its look now: under the pointer or pressed or neither, and whether the keyboard is on it.
+        self.state, self.focused = "normal", False
+        # The header's pixels it lies on, and its faces drawn over them.
+        self.under, self._faces, self._item = None, {}, None
+        # The spacing checks measure it as the button it is (tests/ui/spacing.py).
+        self.odq_button = True
+        self.bind("<Enter>", lambda e: self._paint("hover"))
+        self.bind("<Leave>", lambda e: self._paint("normal"))
+        self.bind("<ButtonPress-1>", lambda e: self._paint("pressed"))
+        self.bind("<ButtonRelease-1>", self._release)
+        # The keyboard: Tab brings its ring, Enter or Space press it.
+        self.bind("<FocusIn>", lambda e: self._focus(True))
+        self.bind("<FocusOut>", lambda e: self._focus(False))
+        for key in ("<Return>", "<KP_Enter>", "<space>"):
+            self.bind(key, lambda e: self.press())
+
+    def set_under(self, picture):
+        """The header's pixels under the button: its faces drawn again over them."""
+        self.under, self._faces = picture, {}
+        self._paint(self.state)
+
+    def face(self, state, focused):
+        """The button's picture in a state, with the keyboard's ring or without."""
+        key = (state, focused)
+        if key not in self._faces:
+            self._faces[key] = art.window_button(self.ui.px(BUTTON), self.glyph, state, focused, self.ui.scale,
+                                                 under=self.under)
+        return self._faces[key]
+
+    def _paint(self, state):
+        self.state = state
+        picture = self.face(state, self.focused)
+        self._image = ImageTk.PhotoImage(picture, master=self)
+        if self._item is None:
+            self._item = self.create_image(0, 0, image=self._image, anchor="nw")
+        else:
+            self.itemconfigure(self._item, image=self._image)
+        # A dialog draws the window from its widgets (snapshot.py): the button as it looks now.
+        self.odq_picture = picture
+
+    def _focus(self, on):
+        self.focused = on
+        self._paint(self.state)
+
+    def _release(self, event):
+        # Only a release over the button counts, as with the window's other buttons (drag off to change your mind).
+        inside = 0 <= event.x < self.winfo_width() and 0 <= event.y < self.winfo_height()
+        if not inside:
+            self._paint("normal")
+            return
+        # Drawn first, as the window may go: minimise takes it from under the pointer, and it comes back at rest; a close
+        # refused while work is under way leaves it under the pointer still.
+        self._paint("normal" if self.glyph == "minimize" else "hover")
+        self.command()
+
+    def press(self):
+        """What a click does, for the keyboard and the tests."""
+        self.command()
 
 
 class Steps(tk.Canvas):

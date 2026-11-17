@@ -49,7 +49,8 @@ def _kind(widget):
         return "foot"
     if isinstance(widget, (widgets.Field, widgets.KeyBox)) or widget.winfo_class() == "TCombobox":
         return "field"
-    if isinstance(widget, (widgets.Button, widgets.PlaySlab)):
+    if isinstance(widget, (widgets.Button, widgets.PlaySlab)) or getattr(widget, "odq_button", False):
+        # The launcher's buttons, and any other that says it is one (the installer's own minimise and close).
         return "button"
     if isinstance(widget, (widgets.Toggle, widgets.Segmented)):
         return "control"

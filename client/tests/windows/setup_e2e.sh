@@ -1,17 +1,23 @@
 #!/bin/bash
 # The installer from end to end under Wine, as a person uses it, with no server and no game:
+#   0. its window has no title bar of Windows' (Wine draws Windows' own caption for a window that has one): no caption
+#      and no frame in its styles, a pop-up with its system menu and minimise, an application window; its own area the
+#      whole window, the screen showing its own colours at its top; its header moves it by Windows' own move and its
+#      wordmark moves it back; its own minimise and close buttons found by their names (the words screen readers get),
+#      minimise by a click and by Tab and Enter, each time back from the taskbar at its size, still without a title bar;
+#      its close button refused while the install is under way
 #   1. OpenDMTQ-Setup.exe on a PC without OpenDMTQ: its Install page, Enter, the progress, the end page; Windows' entry
 #      opens OpenDMTQ's own uninstall (UninstallString) and Velopack's quiet one stays (QuietUninstallString); both
 #      shortcuts made; Enter on the end page's Open OpenDMTQ starts the launcher
 #   2. OpenDMTQ-Setup.exe again, the launcher open: what to do with it; Repair puts back a file of the program that went,
-#      the launcher closed for it
+#      the launcher closed for it; the window's close button closes its end page
 #   3. OpenDMTQ-Setup.exe again: Uninstall, keeping the data: the program, both shortcuts, Windows' entry and OpenDMTQ's
 #      logs elsewhere gone, the data kept
 #   4. installed again with --silent; Windows' quiet uninstall (QuietUninstallString, as a tool runs it): nothing on
 #      screen, the program gone, the data kept
 #   5. installed again with --silent; Windows' Settings, Apps' Uninstall (UninstallString): the same uninstall page from a
 #      copy of the launcher outside the program's folder; Delete everything: nothing of OpenDMTQ's left on the PC (its
-#      folders, its shortcuts, its entry, its logs, the copy itself)
+#      folders, its shortcuts, its entry, its logs, the copy itself); Alt+F4 closes its end page
 # Every step leaves a screenshot of the virtual screen in OUT_DIR, and the installer's logs.
 #
 #   client/tests/windows/setup_e2e.sh BUILD_DIR OUT_DIR
@@ -29,6 +35,14 @@ docker image inspect opendmtq-arm32-wine >/dev/null 2>&1 \
   || docker build -q -t opendmtq-arm32-wine -f "$ROOT/arm32/wine.Dockerfile" "$ROOT/arm32" >/dev/null
 docker image inspect opendmtq-client-e2e:local >/dev/null 2>&1 \
   || docker build -q -t opendmtq-client-e2e:local "$ROOT/client/tests/windows" >/dev/null
+# What Windows makes of the installer's window (frame.c: its styles, its place, its buttons by their names, its state,
+# the taskbar's restore), built with the player's toolchain into OUT_DIR; a Windows program, never run as one here.
+docker image inspect opendmtq-arm32-windows >/dev/null 2>&1 \
+  || docker build -q -t opendmtq-arm32-windows -f "$ROOT/arm32/windows.Dockerfile" "$ROOT/arm32" >/dev/null
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$ROOT/client/tests/windows:/src:ro" -v "$OUT:/out" opendmtq-arm32-windows \
+  x86_64-w64-mingw32-clang -O2 -Wall -municode -o /out/frame.exe /src/frame.c -luser32 \
+  || { echo "FAIL: the window's helper did not build" >&2; exit 1; }
+chmod a-x "$OUT/frame.exe"
 docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD/releases:/rel:ro" -v "$OUT:/out" -w /out \
   -e WINEPREFIX=/tmp/wine -e WINEDEBUG=-all -e TZ=Asia/Seoul opendmtq-client-e2e:local bash -c '
   set -u
@@ -36,6 +50,9 @@ docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD
   export DISPLAY=:99
   for i in $(seq 1 30); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.3; done
   WINEDLLOVERRIDES="mscoree=;mshtml=" wineboot -i >/dev/null 2>&1
+  # Wine draws a window'"'"'s title bar itself, as Windows does, instead of leaving it to an X window manager (there is
+  # none here, so without this no window would show one): a title bar on the screen is one Windows would draw.
+  wine reg add "HKCU\\Software\\Wine\\X11 Driver" /v Decorated /d N /f >/dev/null 2>&1
   LOCAL=$(winepath -u "C:\\users\\root\\AppData\\Local" 2>/dev/null)
   TEMPDIR=$(winepath -u "C:\\users\\root\\AppData\\Local\\Temp" 2>/dev/null)
   PROGRAM="$LOCAL/OpenDMTQ.Client"
@@ -71,13 +88,68 @@ docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD
   }
   collect() { cp "$TEMPDIR"/OpenDMTQ-setup*.log /out/ 2>/dev/null; cp "$LOCAL"/velopack/*.log /out/ 2>/dev/null; chmod -R a+rwX /out; }
   trap collect EXIT
+  # The installer window as Windows sees it (frame.c): COMMAND [NAME].
+  frame() { local command=$1; shift; wine /out/frame.exe "$command" "OpenDMTQ Setup" "$@" 2>/dev/null | tr -d "\r"; }
+  # One pixel of a screenshot, as #RRGGBB.
+  pixel() { convert "$1" -crop "1x1+$2+$3" -depth 8 txt:- 2>/dev/null | grep -o "#[0-9A-Fa-f]\{6\}" | head -n 1 | tr a-f A-F; }
+  # A drag with the mouse as a person makes it: pressed at X Y, moved by DX DY in two steps, let go.
+  drag() {
+    xdotool mousemove "$1" "$2" mousedown 1; sleep 0.5
+    xdotool mousemove_relative -- $(($3 / 2)) $(($4 / 2)); sleep 0.4
+    xdotool mousemove_relative -- $(($3 - $3 / 2)) $(($4 - $4 / 2)); sleep 0.4
+    xdotool mouseup 1; sleep 1
+  }
 
   # ---- 1. install through the window: Enter on Install, the end page.
   wine /tmp/OpenDMTQ-Setup.exe > /out/setup-1.log 2>&1 &
   wait_for 120 "[ -n \"\$(setup_window)\" ]" || { snap no-window; echo "FAIL: no installer window"; exit 1; }
   sleep 4; snap install-page
+
+  # ---- 0. on its Install page: the window without a title bar of Windows.
+  style=$(frame style); echo "the window: $style"
+  case "$style" in "caption=no sizeframe=no sysmenu=yes minimize=yes popup=yes appwindow=yes "*) ;;
+    *) echo "FAIL: the installer window keeps the title bar of Windows: $style"; exit 1;; esac
+  read -r wx wy ww wh cw ch <<< "$(frame rect)"
+  echo "its place: $wx,$wy ${ww}x${wh}, its own area ${cw}x${ch}; $(frame focus)"
+  [ "$ww $wh" = "$cw $ch" ] || { echo "FAIL: a frame of ${ww}x${wh} round its own area of ${cw}x${ch}"; exit 1; }
+  # Its top on the screen is its own column, no caption drawn over it.
+  shot="/out/$(printf %02d $step)-install-page.png"
+  for at in "$((wx + 4)) $((wy + 2))" "$((wx + 100)) $((wy + 8))"; do
+    [ "$(pixel "$shot" $at)" = "#151A20" ] || { echo "FAIL: the top of the window shows $(pixel "$shot" $at) at $at, not its column"; exit 1; }
+  done
+  # Its header, between the title and its buttons, moves it by the move of Windows itself; its wordmark moves it back.
+  drag $((wx + ww - 150)) $((wy + 40)) 60 40
+  read -r nx ny rest <<< "$(frame rect)"
+  [ "$nx $ny" = "$((wx + 60)) $((wy + 40))" ] || { snap not-moved; echo "FAIL: dragged by its header from $wx,$wy by 60,40, the window is at $nx,$ny"; exit 1; }
+  snap moved
+  drag $((nx + 60)) $((ny + 30)) -60 -40
+  read -r nx ny rest <<< "$(frame rect)"
+  [ "$nx $ny" = "$wx $wy" ] || { echo "FAIL: dragged back by its wordmark, the window is at $nx,$ny, not $wx,$wy"; exit 1; }
+  # Its own buttons, found by the names screen readers get for them, at its top right.
+  read -r mx my mw mh <<< "$(frame button Minimize)"
+  read -r cx cy cw2 ch2 <<< "$(frame button Close)"
+  echo "its buttons: Minimize ${mw}x${mh} at $mx,$my, Close ${cw2}x${ch2} at $cx,$cy"
+  [ "$mw $mh $cw2 $ch2" = "32 32 32 32" ] && [ "$my" = "$cy" ] && [ "$cx" -gt "$mx" ] && [ "$cx" -gt $((wx + ww - 60)) ] \
+    && [ "$cy" -lt $((wy + 60)) ] || { echo "FAIL: no minimise and close buttons at the top right of the window"; exit 1; }
+  # Minimise by a click, then back as the taskbar brings it: its size as it was, still no title bar.
+  xdotool mousemove "$mx" "$my" click 1; sleep 1.5
+  [ "$(frame state)" = minimised ] || { snap not-minimised; echo "FAIL: its minimise button did not minimise it"; exit 1; }
+  echo "minimised by its button; the taskbar: $(frame restore)"; sleep 1.5; snap restored
+  read -r rx ry rw rh rcw rch <<< "$(frame rect)"
+  [ "$rw $rh $rcw $rch" = "$ww $wh $cw $ch" ] || { echo "FAIL: back from the taskbar ${rw}x${rh} (${rcw}x${rch}), not ${ww}x${wh}"; exit 1; }
+  case "$(frame style)" in "caption=no "*) ;; *) echo "FAIL: back from the taskbar with a title bar: $(frame style)"; exit 1;; esac
+  # By the keyboard: Tab from Install reaches minimise, Enter presses it; back again, and Shift+Tab to Install.
+  press Tab; sleep 0.5; press Return; sleep 1.5
+  [ "$(frame state)" = minimised ] || { snap keys-not-minimised; echo "FAIL: Tab and Enter did not minimise it"; exit 1; }
+  frame restore >/dev/null; sleep 1.5
+  press shift+Tab; sleep 0.5
+  echo "0. no title bar of Windows: moved by its header and back by its wordmark, minimised by its button and by Tab and Enter, back from the taskbar at its size"
+
   press Return
   sleep 1.5; snap installing
+  # The close button while the install is under way: the window stays, as it did for the X of Windows.
+  xdotool mousemove "$cx" "$cy" click 1; sleep 1
+  [ -n "$(setup_window)" ] || { echo "FAIL: its close button closed the window while the install was under way"; exit 1; }
   wait_for 240 "[ \"\$(setups_done)\" -ge 1 ]" || { snap install-stuck; echo "FAIL: the install did not end"; exit 1; }
   sleep 3; snap install-done
   echo "installed: $(grep -o "<version>[^<]*" "$PROGRAM/current/sq.version" | cut -c10-)"
@@ -107,9 +179,11 @@ docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD
   (cd "$PROGRAM/current" && echo "$sum" | md5sum -c --quiet) || { echo "FAIL: the repair did not put the file back"; exit 1; }
   # The launcher that was open was closed for it (Velopack ends what runs from the program'"'"'s folder).
   [ -z "$(launcher_window)" ] || { echo "FAIL: the launcher stayed open through the repair"; exit 1; }
-  press Escape
-  wait_for 20 "[ -z \"\$(setup_window)\" ]" || { echo "FAIL: Esc did not close the repair'"'"'s end page"; exit 1; }
-  echo "2. repaired through the window: $damaged back as installed"
+  # The window closed by its own close button, as the X of Windows closed it.
+  read -r cx cy rest <<< "$(frame button Close)"
+  xdotool mousemove "$cx" "$cy" click 1
+  wait_for 20 "[ -z \"\$(setup_window)\" ]" || { echo "FAIL: its close button did not close the repair'"'"'s end page"; exit 1; }
+  echo "2. repaired through the window: $damaged back as installed; its close button closed it"
 
   # ---- 3. Uninstall through the window, keeping the data.
   make_data
@@ -155,8 +229,9 @@ docker run --rm --name "${E2E_NAME:-odq-setup-e2e-$$}" --network none -v "$BUILD
   press Return
   wait_for 120 "[ ! -e \"\$PROGRAM\" ] && [ ! -e \"\$DATA\" ]" || { snap apps-stuck; echo "FAIL: left: $(leftovers)"; exit 1; }
   sleep 3; snap apps-uninstalled
-  press Escape
-  wait_for 20 "[ -z \"\$(setup_window)\" ]" || { echo "FAIL: Esc did not close the Apps uninstall'"'"'s end page"; exit 1; }
+  # Alt+F4 closes it, as it did with the title bar of Windows.
+  press alt+F4
+  wait_for 20 "[ -z \"\$(setup_window)\" ]" || { echo "FAIL: Alt+F4 did not close the Apps uninstall'"'"'s end page"; exit 1; }
   # The copy goes a few seconds after its window (Windows'"'"' command processor removes it).
   wait_for 30 "[ -z \"\$(leftovers)\" ]" || { echo "FAIL: left after Delete everything: $(leftovers)"; exit 1; }
   has_entry && { echo "FAIL: Windows'"'"' entry stayed after the Apps uninstall"; exit 1; }

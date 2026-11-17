@@ -118,6 +118,10 @@ def _uninstall_window(argv):
             return 2
         removal.start_uninstall_window(root)
         return 0
+    # The installer's own window from here on: an error that ends it is said in a window like it, without Windows'
+    # title bar (stopped.py).
+    from opendmtq_client import stopped
+    stopped.FRAMELESS = True
     code = installer.uninstall_main(argv[1])
     removal.remove_later(os.path.dirname(os.path.abspath(sys.executable)))
     return code

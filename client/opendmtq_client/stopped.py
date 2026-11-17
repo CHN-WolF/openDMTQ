@@ -11,6 +11,9 @@ import os
 import sys
 
 log = logging.getLogger("opendmtq_client")
+# The window an error ends in comes without Windows' title bar where the program that failed is the installer's own
+# window, which has none (frameless.py): set for the uninstall Windows' Apps opens (main.py), which is the installer's.
+FRAMELESS = False
 
 
 def windowed():
@@ -18,9 +21,10 @@ def windowed():
     return sys.stdout is None or sys.stderr is None
 
 
-def run(main, log_path):
+def run(main, log_path, frameless=False):
     """main() as the programs start it; its exit code, or 1 after an error nobody expected. `log_path()` names the log
-    the error went to (asked only then: finding it may itself need what failed)."""
+    the error went to (asked only then: finding it may itself need what failed). `frameless`: the installer's, whose
+    window has no title bar of Windows', nor has the one an error ends it in."""
     try:
         return main()
     except SystemExit:
@@ -36,7 +40,7 @@ def run(main, log_path):
             print("OpenDMTQ stopped: %s (the log: %s)" % (e, path), file=sys.stderr)
             return 1
         try:
-            show(e, path)
+            show(e, path, frameless=frameless or FRAMELESS)
         except Exception:  # noqa: BLE001  (Tk itself failing: there is nothing left to show it with)
             log.exception("could not show the error")
         return 1
@@ -53,13 +57,14 @@ def dialog(w, error, path):
             choices, len(choices) - 1, "close")
 
 
-def show(error, path):
+def show(error, path, frameless=False):
     """The launcher's dialog for an error that ended the program, in a window of its own, in Windows' language (the
-    launcher's settings may be what failed). Open the log folder opens the folder the log is in, then the window goes."""
+    launcher's settings may be what failed); without Windows' title bar for the installer (`frameless`). Open the log
+    folder opens the folder the log is in, then the window goes."""
     from opendmtq_client import actions, dialogs, i18n
     from opendmtq_client import state as st
     language = st.system_language()
-    answer = dialogs.standalone(*dialog(i18n.Words(language), error, path), language=language)
+    answer = dialogs.standalone(*dialog(i18n.Words(language), error, path), language=language, frameless=frameless)
     if answer == "logs":
         # The log's own folder, where the launcher keeps its older logs beside it.
         actions.open_folder(os.path.dirname(path))

@@ -290,6 +290,8 @@ class Installer:
             self.uninstall_page()
         else:
             self.ask()
+        # On the screen once its first page is there, with no title bar of Windows' (setup_window.SetupWindow.show).
+        self.window.show()
 
     # ------------------------------------------------------------------------------------------------ pages
 
@@ -452,7 +454,7 @@ class Installer:
                                           escape=self.root.destroy)
         main_button = buttons[1]
         # The keyboard on the choices first: the arrow keys move them, Enter does the main button's.
-        self.root.after_idle(lambda: options_list.winfo_exists() and options_list.focus_set())
+        self.window.focus_later(options_list)
 
     def uninstall_page(self):
         """Uninstall: the data kept or deleted, each with its size (counted on a worker thread), then Uninstall."""
@@ -487,7 +489,8 @@ class Installer:
         self.window.set_buttons([(back[0], back[1], "secondary"),
                                  (w("setup.do.uninstall"), lambda: self.uninstall(choice["value"]), "danger")],
                                 escape=back[1])
-        self.root.after_idle(lambda: options_list.winfo_exists() and options_list.focus_set())
+        # The keyboard on the choices first, as on the page before it.
+        self.window.focus_later(options_list)
 
         def counted(sizes):
             self.sizes = sizes

@@ -17,4 +17,5 @@ def setup_log():
     return os.path.join(tempfile.gettempdir(), "OpenDMTQ-setup.log")
 
 
-sys.exit(stopped.run(install, setup_log))
+# An error that ends it is said in a window without Windows' title bar, as the installer's own window is.
+sys.exit(stopped.run(install, setup_log, frameless=True))

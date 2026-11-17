@@ -1,6 +1,11 @@
 """The installer's window (OpenDMTQ-Setup.exe, and the uninstall Windows' Settings, Apps opens) on the test container's
 virtual screen: every page and state it shows, a screenshot of each, and the layout measured as the launcher's pages
 are (text cut off, a control past the window's edge or squeezed, a line running under the strip with the buttons).
+Its own header, in place of Windows' title bar, on every page: the minimise and close buttons at its top right, in
+the launcher's quiet metal (the close button red under the pointer, never lime), clear of the title; Tab reaching them
+after the strip's buttons with their ring, Enter, Space and a click pressing them; its top moving the window; the close
+button refused while work is under way and closing the window when none is; and the window an error ends the installer
+in, moved by its shards and its card.
 
 Run inside the opendmtq-client-ui container only (client/tests/ui/run.sh); it refuses anywhere else, because it opens
 windows. Nothing is installed or removed: Velopack's setup and uninstaller are stand-ins that write what the real ones
@@ -16,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tkinter as tk
 from unittest import mock
 
 # Run from client/ (the container mounts the repository and works there).
@@ -95,6 +101,74 @@ def measure(window, name, problems):
     # The launcher's own measure of boxes and room (tests/ui/spacing.py): nothing touching, words inside their card's
     # padding, the gaps on the spacing scale.
     problems.extend(spacing.check(root, window.ui, name))
+    # The header the installer draws instead of Windows' title bar.
+    problems.extend(header_problems(window, name))
+
+
+def near(pixel, colour, slack):
+    """A pixel within `slack` of a colour (#rrggbb) on each channel."""
+    from opendmtq_client import art
+    return all(abs(a - b) <= slack for a, b in zip(pixel, art._rgb(colour)))
+
+
+def header_problems(window, name):
+    """The header in place of Windows' title bar: its minimise and close at the top right, level with the wordmark's
+    top, the right size and room apart, clear of the page's title; quiet metal at rest, the close button red under the
+    pointer, never the lime of the screen's one main button; the title's letters clear of the header's foot."""
+    from opendmtq_client import setup_window, theme, widgets
+    found, root, px = [], window.root, window.ui.px
+    header = getattr(window, "header", None)
+    buttons = list(getattr(header, "buttons", []))
+    if [getattr(b, "glyph", None) for b in buttons] != ["minimize", "close"]:
+        return ["%s: the header has no minimise and close buttons of its own" % name]
+    size = px(setup_window.BUTTON)
+    ox, oy = root.winfo_rootx(), root.winfo_rooty()
+    places = [(b.winfo_rootx() - ox, b.winfo_rooty() - oy, b.winfo_width(), b.winfo_height()) for b in buttons]
+    for button, (x, y, w, h) in zip(buttons, places):
+        if not button.winfo_ismapped():
+            found.append("%s: the %s button is not shown" % (name, button.glyph))
+        if (w, h) != (size, size):
+            found.append("%s: the %s button is %dx%d, not %d square" % (name, button.glyph, w, h, size))
+    # Level with the wordmark's top in the column, the close button the column's own room in from the right edge, the
+    # minimise button the buttons' gap before it.
+    mark_top = window.mark.winfo_rooty() - oy
+    for button, (x, y, w, h) in zip(buttons, places):
+        if y != mark_top or y != px(setup_window.BUTTON_TOP):
+            found.append("%s: the %s button's top is at %d, the wordmark's at %d" % (name, button.glyph, y, mark_top))
+    if places[1][0] + size != root.winfo_width() - px(setup_window.BUTTON_RIGHT):
+        found.append("%s: the close button ends %d px from the window's right edge" % (
+            name, root.winfo_width() - places[1][0] - size))
+    if places[1][0] - (places[0][0] + size) != px(setup_window.BUTTON_GAP):
+        found.append("%s: %d px between minimise and close" % (name, places[1][0] - places[0][0] - size))
+    # The page's title ends the title's room before the buttons, and its letters end clear of the header's foot.
+    if header.title_box is None:
+        found.append("%s: the header shows no title" % name)
+    else:
+        if header.title_box[2] + px(setup_window.TITLE_ROOM) > buttons[0].winfo_x():
+            found.append("%s: the title reaches %d px of the minimise button" % (
+                name, buttons[0].winfo_x() - header.title_box[2]))
+        ink = header.title_picture.split()[-1].getbbox()
+        if header.title_box[1] + ink[3] > header.tall - max(1, px(1)) - px(spacing.LEAST_TEXT_GAP):
+            found.append("%s: the title's letters reach %d px of the header's foot" % (
+                name, header.tall - header.title_box[1] - ink[3]))
+    # Their looks: quiet metal at rest (no lime, no red), the close button red under the pointer and minimise metal.
+    for button in buttons:
+        rest = button.face("normal", False)
+        middle = rest.getpixel((size // 4, size * 5 // 8))
+        if not near(middle, theme.RAIL_UP, 8):
+            found.append("%s: the %s button at rest is #%02x%02x%02x, not quiet metal" % ((name, button.glyph) + middle))
+        for state in ("normal", "hover", "pressed"):
+            for ring in (False, True):
+                if any(near(p, theme.OK, 40) for p in button.face(state, ring).getdata()):
+                    found.append("%s: the %s button is lime %s" % (name, button.glyph, state))
+    hover = [b.face("hover", False).getpixel((size // 4, size * 5 // 8)) for b in buttons]
+    if near(hover[0], theme.BAD, 40) or not near(hover[1], theme.BAD, 8):
+        found.append("%s: under the pointer minimise is %s and close %s" % (name, hover[0], hover[1]))
+    # The screen keeps its one main button: never more than one lime button anywhere in the window.
+    lime = [w for w in widgets_of(root) if isinstance(w, widgets.Button) and w.look == "home" and w.winfo_ismapped()]
+    if len(lime) > 1:
+        found.append("%s: %d main buttons" % (name, len(lime)))
+    return found
 
 
 def shot(root, out, name):
@@ -112,6 +186,59 @@ def settle(root, seconds):
     while time.time() < end:
         root.update()
         time.sleep(0.02)
+
+
+def stopped_window(args, tag, problems):
+    """The window an error that ends the installer is said in (stopped.py), as the installer opens it: without Windows'
+    title bar on Windows, so its shards and its card move it (here by its geometry); its buttons are pressed, never
+    dragged; measured as the launcher's dialogs are."""
+    from opendmtq_client import dialogs, i18n, stopped
+    w = i18n.Words(args.lang)
+    log_path = "C:\\Users\\player\\AppData\\Local\\Temp\\OpenDMTQ-setup.log"
+    error = OSError(28, "No space left on device", log_path)
+    name = "setup-%s_stopped" % tag
+    try:
+        root, dialog = dialogs.window(*stopped.dialog(w, error, log_path), language=args.lang, frameless=True)
+    except TypeError as e:
+        # A launcher from before the installer drew its own header: its dialog window keeps Windows' title bar.
+        problems.append("%s: the installer's error window cannot come without a title bar (%s)" % (name, e))
+        return
+    settle(root, 1.0)
+    shot(root, args.out, name)
+    problems.extend(spacing.check_dialog(dialog, name))
+    canvas, start = dialog.canvas, (root.winfo_rootx(), root.winfo_rooty())
+
+    def drag(x, y, dx, dy):
+        rx, ry = canvas.winfo_rootx() + x, canvas.winfo_rooty() + y
+        canvas.event_generate("<Motion>", x=x, y=y, rootx=rx, rooty=ry)
+        canvas.event_generate("<ButtonPress-1>", x=x, y=y, rootx=rx, rooty=ry)
+        canvas.event_generate("<B1-Motion>", x=x + dx, y=y + dy, rootx=rx + dx, rooty=ry + dy)
+        settle(root, 0.4)
+        moved = (root.winfo_rootx() - start[0], root.winfo_rooty() - start[1])
+        canvas.event_generate("<ButtonRelease-1>", x=x + dx, y=y + dy, rootx=rx + dx, rooty=ry + dy)
+        settle(root, 0.4)
+        return moved
+
+    # By the shards round the card, then back by the card's words.
+    if drag(6, 6, 30, 20) != (30, 20):
+        problems.append("%s: a drag on the shards did not move the window" % name)
+    x0, y0 = dialog.origin
+    if drag(x0 + dialog.ui.px(dialogs.PAD) + 4, y0 + dialog.ui.px(dialogs.PAD) + 4, -30, -20) != (0, 0):
+        problems.append("%s: a drag on the card did not move the window back" % name)
+    # A press on its last button (Close), dragged off it: the window stays where it is, and the button, let go off
+    # itself, answers nothing (a person changing their mind), as on the launcher's dialogs.
+    left, top, right, bottom = dialog._boxes[-1]
+    if drag(x0 + (left + right) // 2, y0 + (top + bottom) // 2, 0, -dialog.ui.px(60)) != (0, 0) or dialog.closed:
+        problems.append("%s: a press on its Close moved it, or answered when let go off it" % name)
+    # Then Enter answers it as Close does, and the window goes (as shots.py's stopped_check closes the launcher's): the
+    # keyboard on the card first, which the presses made by hand above leave elsewhere on this screen with no window
+    # manager (Tk sends a key to the window with the keyboard).
+    dialog.canvas.focus_force()
+    settle(root, 0.2)
+    dialog.canvas.event_generate("<Return>")
+    root.update()
+    if not dialog.closed or dialog.result != dialog.buttons[-1][1]:
+        problems.append("%s: Enter did not answer it as its Close (%r)" % (name, dialog.result))
 
 
 def main():
@@ -169,12 +296,17 @@ def main():
         made = make()
         window = made.window
         settle(window.root, 1.0)
-        for step in steps:
-            step(made)
-            settle(window.root, 0.6)
         full = "setup-%s_%s" % (tag, name)
-        shot(window.root, args.out, full)
-        measure(window, full, problems)
+        try:
+            for step in steps:
+                step(made)
+                settle(window.root, 0.6)
+            shot(window.root, args.out, full)
+            measure(window, full, problems)
+        except tk.TclError as e:
+            # A window that went when it should have stayed (its step says why): nothing left to look at.
+            problems.append("%s: the window went: %s" % (full, e))
+            return
         try:
             # Its timers first (a bar's easing, a look at the work): they would call widgets that are gone.
             for job in window.root.tk.splitlist(window.root.tk.call("after", "info")):
@@ -212,8 +344,29 @@ def main():
 
         return Process(60, 0, during=fill)
 
+    def close_while_busy(made):
+        """The close button while Velopack's setup is under way: the window stays, as it did for Windows' X."""
+        if not hasattr(made.window, "header"):
+            problems.append("setup-%s: the window has no header of its own (%s)" % (tag, "close_while_busy"))
+            return
+        button = made.window.header.buttons[1]
+        rx, ry = button.winfo_rootx() + 16, button.winfo_rooty() + 16
+        if not made.busy:
+            problems.append("setup-%s: the install was not under way when its close button was pressed" % tag)
+        button.event_generate("<ButtonPress-1>", x=16, y=16, rootx=rx, rooty=ry)
+        button.event_generate("<ButtonRelease-1>", x=16, y=16, rootx=rx, rooty=ry)
+        try:
+            alive = bool(made.root.winfo_exists())
+        except tk.TclError:
+            alive = False
+        if not alive:
+            problems.append("setup-%s: the close button closed the window while the install was under way" % tag)
+            return
+        settle(made.root, 0.3)
+
     with mock.patch.object(installer, "run_setup", setup_runs):
-        run("installing", installer.Installer, [lambda made: made.work("install"), lambda made: settle(made.root, 1.5)])
+        run("installing", installer.Installer, [lambda made: made.work("install"), lambda made: settle(made.root, 1.5),
+                                                close_while_busy])
     shutil.rmtree(folder, ignore_errors=True)
     with mock.patch.object(installer, "run_setup", lambda path: Process(0.3, 0, during=lambda: program(__version__))):
         run("installed", installer.Installer, [lambda made: made.work("install"), lambda made: settle(made.root, 2.0)])
@@ -256,6 +409,120 @@ def main():
             problems.append("setup-%s: Esc on the uninstall's page did not go back (%r)" % (tag, made.flow))
 
     run("choose-keys", installer.Installer, [keys])
+
+    # The window's own buttons and its top, in place of Windows' title bar (WIN-220).
+    def press_at(widget, x, y, dx=0, dy=0):
+        """A press of the pointer on `widget` at (x, y), moved by (dx, dy) and let go, as a person drags or clicks."""
+        rx, ry = widget.winfo_rootx() + x, widget.winfo_rooty() + y
+        widget.event_generate("<Enter>", x=x, y=y, rootx=rx, rooty=ry)
+        widget.event_generate("<ButtonPress-1>", x=x, y=y, rootx=rx, rooty=ry)
+        if dx or dy:
+            widget.event_generate("<B1-Motion>", x=x + dx, y=y + dy, rootx=rx + dx, rooty=ry + dy)
+        widget.event_generate("<ButtonRelease-1>", x=x + dx, y=y + dy, rootx=rx + dx, rooty=ry + dy)
+
+    def moves(made):
+        """The header and the column's top move the window; the steps under them and the window's buttons do not."""
+        if not hasattr(made.window, "header"):
+            problems.append("setup-%s: the window has no header of its own (%s)" % (tag, "moves"))
+            return
+        root, window = made.root, made.window
+        settle(root, 0.3)
+        start = (root.winfo_rootx(), root.winfo_rooty())
+        header = window.header
+        press_at(header, header.winfo_width() // 2, header.tall - 4, 40, 30)
+        settle(root, 0.5)
+        if (root.winfo_rootx(), root.winfo_rooty()) != (start[0] + 40, start[1] + 30):
+            problems.append("setup-%s: a drag on the header moved the window from %r to %r, not by (40, 30)" % (
+                tag, start, (root.winfo_rootx(), root.winfo_rooty())))
+        # Back by the wordmark at the column's top.
+        press_at(window.mark, 10, 10, -40, -30)
+        settle(root, 0.5)
+        if (root.winfo_rootx(), root.winfo_rooty()) != start:
+            problems.append("setup-%s: a drag on the wordmark did not move the window back (%r, not %r)" % (
+                tag, (root.winfo_rootx(), root.winfo_rooty()), start))
+        # The steps, under the header's reach, and a press on the window's own buttons move nothing.
+        with mock.patch.object(root, "iconify"):
+            for widget in (window.steps, window.header.buttons[0]):
+                press_at(widget, 12, 12, 40, 30)
+                settle(root, 0.5)
+                if (root.winfo_rootx(), root.winfo_rooty()) != start:
+                    problems.append("setup-%s: a drag on %s moved the window" % (tag, type(widget).__name__))
+                    root.geometry("+%d+%d" % start)
+                    settle(root, 0.5)
+
+    def window_keys(made):
+        """Tab reaches minimise, then close, after the strip's buttons, each with its ring; Enter and a click on
+        minimise minimise; the close button's answer is the window's own, what Alt+F4 and the taskbar's Close ask."""
+        if not hasattr(made.window, "header"):
+            problems.append("setup-%s: the window has no header of its own (%s)" % (tag, "window_keys"))
+            return
+        from opendmtq_client import theme
+        root, window = made.root, made.window
+        buttons = window.header.buttons
+        settle(root, 0.3)
+        widget, order = window.buttons[-1], []
+        for _ in range(3):
+            widget = widget.tk_focusNext()
+            order.append(widget)
+        if order[:2] != buttons:
+            problems.append("setup-%s: Tab goes %r after the strip's buttons" % (
+                tag, [getattr(w, "words", type(w).__name__) for w in order]))
+        for button in buttons:
+            button.focus_set()
+            settle(root, 0.3)
+            ring = [p for p in button.odq_picture.getdata() if near(p, theme.CYAN, 30)]
+            if not button.focused or len(ring) < 20:
+                problems.append("setup-%s: the %s button shows no ring with the keyboard" % (tag, button.glyph))
+        with mock.patch.object(root, "iconify") as iconify:
+            buttons[0].focus_set()
+            settle(root, 0.2)
+            buttons[0].event_generate("<Return>")
+            settle(root, 0.3)
+            press_at(buttons[0], 16, 16)
+            settle(root, 0.3)
+        if iconify.call_count != 2:
+            problems.append("setup-%s: Enter and a click on minimise minimised %d times, not twice" % (
+                tag, iconify.call_count))
+        if buttons[1].command != made._close or window.on_close != made._close:
+            problems.append("setup-%s: the close button does not do what closing the window does" % tag)
+        if [b.words for b in buttons] != [made.words("setup.window.minimize"), made.words("setup.window.close")]:
+            problems.append("setup-%s: the buttons are named %r" % (tag, [b.words for b in buttons]))
+
+    def close_under_pointer(made):
+        """The pointer over the close button, the keyboard on the page: the button red, for the picture."""
+        if not hasattr(made.window, "header"):
+            problems.append("setup-%s: the window has no header of its own (%s)" % (tag, "close_under_pointer"))
+            return
+        made.window.buttons[-1].focus_set()
+        button = made.window.header.buttons[1]
+        button.event_generate("<Enter>", x=16, y=16)
+
+    run("header", installer.Installer, [moves, window_keys, close_under_pointer])
+
+    def ring_on_minimise(made):
+        if hasattr(made.window, "header"):
+            made.window.header.buttons[0].focus_set()
+
+    run("header-keys", installer.Installer, [ring_on_minimise])
+
+    # The close button on a page with nothing under way closes the window, as the title bar's X did.
+    made = installer.Installer()
+    settle(made.root, 1.0)
+    # Its timers first, as run() does before it closes a window: Tcl's one event loop would call them from the next one.
+    for job in made.root.tk.splitlist(made.root.tk.call("after", "info")):
+        made.root.after_cancel(job)
+    if hasattr(made.window, "header"):
+        made.window.header.buttons[1].focus_set()
+        settle(made.root, 0.2)
+        made.window.header.buttons[1].event_generate("<space>")
+    try:
+        alive = bool(made.root.winfo_exists())
+    except tk.TclError:
+        # Tk itself gone with its window: closed, as it should be.
+        alive = False
+    if alive:
+        problems.append("setup-%s: Space on the close button left the window open" % tag)
+        made.root.destroy()
     # The notices follow the PC each time: a launcher opened while the page shows says so, closed again it goes; the
     # game too.
     notice = {"launcher": False, "game": False}
@@ -340,6 +607,7 @@ def main():
         [lambda made: settle(made.root, 1.5)])
     for patch in patches:
         patch.stop()
+    stopped_window(args, tag, problems)
     report = os.path.join(args.out, "setup-problems-%s.txt" % tag)
     with open(report, "w", encoding="utf-8") as f:
         f.write("\n".join(problems) + ("\n" if problems else ""))
