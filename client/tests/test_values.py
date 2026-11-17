@@ -269,6 +269,12 @@ class Values(unittest.TestCase):
         self.assertEqual(max(numbers(pages.fps_choices([fixed], "auto"))), 180)
         main = {"width": 2560, "height": 1600, "hz": 60, "top": 180, "drr": False}
         self.assertEqual(pages.displays_line(w, main, [fixed]), "Main display: 2560 × 1600 at 60 Hz (up to 180 Hz)")
+        # Windows saying nothing of a dynamic rate (no divider): the player plays at the rate it is set to, so that is
+        # the one named, with its highest beside it (main named the highest as if it were dynamic).
+        unsaid = displays.summarise("\\.\DISPLAY1", 2560, 1600, 60, [(2560, 1600, 60), (2560, 1600, 180)], None, main=True)
+        self.assertEqual((pages.game_rate(unsaid), unsaid["drr"]), (60, None))
+        self.assertEqual(pages.displays_line(w, unsaid, [unsaid]), "Main display: 2560 × 1600 at 60 Hz (up to 180 Hz)")
+        self.assertEqual(pages.game_rate(drr), 180)
         # What the launcher's log says of each at its start: the rate now, the top, and the dynamic rate.
         self.assertEqual(displays.describe([drr]), [
             "\\\\.\\DISPLAY1 (main): 2560 x 1600, now 60 Hz, up to 180 Hz at this size, dynamic refresh rate on"])

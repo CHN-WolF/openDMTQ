@@ -692,12 +692,12 @@ def screen_rows(app, parent, full=True):
 
 
 def game_rate(display):
-    """The rate a display runs a game at: the highest of its modes at its size (Windows runs a panel with a dynamic
-    refresh rate at 60 Hz while the desktop is still, and at its full rate once a game asks, as the player does), unless
-    Windows says its rate is not dynamic, when the rate it is set to now is the one."""
-    if display.get("drr") is False and display.get("hz"):
-        return display["hz"]
-    return display.get("top") or display.get("hz")
+    """The rate a display runs a game at: the highest of its modes at its size where Windows says its rate is dynamic
+    (Windows runs such a panel at 60 Hz while the desktop is still, and at its full rate once a game asks, as the player
+    does); otherwise, Windows saying it is not or saying nothing, the rate it is set to now, which the player plays at."""
+    if display.get("drr") is True and display.get("top"):
+        return display["top"]
+    return display.get("hz") or display.get("top")
 
 
 def displays_line(w, display, found):
