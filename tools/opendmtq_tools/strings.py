@@ -788,6 +788,14 @@ STRINGS = {
         "app.no_runtime": "no arm32 runtime",
         "app.windows": "The site also offers the installer for Windows, set up for this server ({size})",
         "app.windows_download": "Download the installer for Windows",
+        # The PC client's updates the server hands its launchers (client_updates.py), and the size of what they download.
+        "app.updates": "PC clients that play here update themselves from this server to {v}, which the OpenDMTQ project signed ({size})",
+        "app.updates_size": "{size}, or {delta} from {base}",
+        "app.updates_none": "PC clients look for their updates on GitHub: this server hands out none.",
+        # A release's file refused for its signature (signing.py's words, which the tools note in English).
+        "release.unsigned_file": "{file} is not the file the OpenDMTQ release signed, so the server did not take it.",
+        "release.unsigned_sums": "{file} is not signed by the OpenDMTQ project, so the server took nothing of that release.",
+        "release.no_sums": "The release {v} has no signed checksums, so the server took nothing of it.",
         # Play on this PC (admin/this_pc.py): the PC client on the server PC itself, for a visit from it alone.
         "here.title": "The PC client on this PC",
         "here.lead": "Installs the PC client on this PC, set up for this server, and opens it with your ID ({id}) filled in to sign in.",
@@ -1781,6 +1789,12 @@ STRINGS = {
         "app.no_runtime": "arm32 런타임 없음",
         "app.windows": "사이트에서 이 서버에 맞춰진 Windows용 설치 파일도 받을 수 있습니다({size})",
         "app.windows_download": "Windows용 설치 파일 내려받기",
+        "app.updates": "PC 클라이언트는 이 서버에서 OpenDMTQ 프로젝트가 서명한 {v} 버전으로 업데이트합니다({size})",
+        "app.updates_size": "{size}, {base} 버전에서는 {delta}",
+        "app.updates_none": "이 서버는 PC 클라이언트 업데이트를 제공하지 않아 PC 클라이언트가 GitHub에서 업데이트를 찾습니다.",
+        "release.unsigned_file": "{file} 파일은 OpenDMTQ 릴리스가 서명한 파일이 아니어서 서버가 받지 않았습니다.",
+        "release.unsigned_sums": "{file} 파일은 OpenDMTQ 프로젝트가 서명한 것이 아니어서 서버가 그 릴리스의 파일을 받지 않았습니다.",
+        "release.no_sums": "{v} 릴리스에는 서명한 체크섬이 없어 서버가 그 릴리스의 파일을 받지 않았습니다.",
         "here.title": "이 PC의 PC 클라이언트",
         "here.lead": "이 서버에 맞춘 PC 클라이언트를 이 PC에 설치하고, 로그인할 아이디({id})를 채운 채로 엽니다.",
         "here.lead_installed": "이 PC에 설치된 OpenDMTQ {v} 버전을 이 서버에 맞춰, 로그인할 아이디({id})를 채운 채로 엽니다.",

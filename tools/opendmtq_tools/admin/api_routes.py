@@ -764,6 +764,11 @@ ROUTES = [
                                                "or other details on its end): download it again from the start."),
                   (416, "range_not_satisfiable", "The part asked for begins past the end; `Content-Range: bytes */length` says the "
                                                  "length.")]),
+    # What the site hands the launchers that play here (client_updates.py, apps.pc_updates).
+    Route("GET", "/app/windows/updates", "read", "app_windows_updates", "App", "The PC client's updates the site hands out "
+          "to the launchers that play on this server, and what the builder refused for its signature.",
+          "Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks "
+          "there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.", answer="PcClientUpdates"),
     Route("POST", "/app/play-here", "write", "app_play_here", "App", "Installs the PC client on the server PC and opens it, as the "
           "App page's Play on this PC does.",
           "From the server PC itself only, on the Windows bundle: the installer this server keeps, set up for this server with "

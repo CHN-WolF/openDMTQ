@@ -607,9 +607,9 @@ game judged its notes by type.
 ## For server owners
 
 Nothing to do, unless the server has no internet: the site's **Download** page offers the installer to signed-in
-players, set up for the server as it is handed out, and the launcher signs in with the site's accounts. Where the
-server gets the installer, and what it needs without internet:
-[the PC client's installer](admin.md#the-pc-clients-installer).
+players, set up for the server as it is handed out, and the launcher signs in with the site's accounts. The server hands
+the launchers their updates too, of the installer's version ([updates](#updates)). Where the server gets the installer
+and the updates, and what it needs without internet: [the PC client's installer](admin.md#the-pc-clients-installer).
 
 To play on the server PC itself, nothing needs downloading: the admin pages' **App** page and the setup's last step,
 opened on that PC, have **Play on this PC**, which installs the PC client set up for the server and opens it with the

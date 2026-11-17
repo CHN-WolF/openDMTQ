@@ -324,6 +324,7 @@ The App page: the app on offer, its builds, the way players get it.
 |:---|:---:|:---|
 | [`GET /app`](#get-app) | read | The app players get: its build, whether it is right for this server, a build running now. |
 | [`GET /app/windows`](#get-appwindows) | read | The installer for Windows as the site hands it to computers, set up for this server (its address on the installer's end). |
+| [`GET /app/windows/updates`](#get-appwindowsupdates) | read | The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. |
 | [`POST /app/play-here`](#post-appplay-here) | write | Installs the PC client on the server PC and opens it, as the App page's Play on this PC does. |
 | [`GET /app/icon`](#get-appicon) | read | The launcher icon of the app on offer, as the builder kept it. |
 | [`GET /builds`](#get-builds) | read | Every build of the app, newest first. |
@@ -352,6 +353,12 @@ Refusals:
 - `404 not_found`: This server keeps no installer for Windows.
 - `412 precondition_failed`: `If-Match` names another file than this server hands out now (another installer, or other details on its end): download it again from the start.
 - `416 range_not_satisfiable`: The part asked for begins past the end; `Content-Range: bytes */length` says the length.
+
+#### `GET /app/windows/updates`
+
+The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.
+
+Answer: `200` with [PcClientUpdates](#pcclientupdates).
 
 #### `POST /app/play-here`
 
