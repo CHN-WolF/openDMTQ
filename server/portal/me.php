@@ -125,8 +125,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($said !== '') {
             me_refuse($said[1], $said[0]);
         }
-        // Done: what was changed, and the account as it is now.
-        me_answer(200, ['done' => $form, 'account' => me_account_json(me_account(), db())]);
+        // Done: what was changed, and the account as it is now; a sign-in that ended with it (it cannot, but a change of
+        // another browser's in the same moment could) is said as one that ended.
+        $now = me_account();
+        if ($now === null) {
+            me_refuse('me.signed_out');
+        }
+        me_answer(200, ['done' => $form, 'account' => me_account_json($now, db())]);
     }
     // Done: the account tab again, saying so (a reload then sends nothing again). Refused: the page with the words under
     // the field they are about, and what was typed kept but the passwords.
@@ -138,6 +143,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $account = me_account();
+// A sign-in that ended in the middle of this request (the account deleted, or changed in another browser at that moment):
+// the sign-in page, which comes back here, or the twin's refusal.
+if ($account === null) {
+    if ($json) {
+        me_refuse('me.signed_out');
+    }
+    header('Location: /opendmtq/login.php?next=' . rawurlencode('/opendmtq/me.php'), true, 303);
+    exit;
+}
 $db = db();
 $guid = $account['player'];
 // The player as every page shows them, with their figures; null for an account not linked to one (or one gone since).

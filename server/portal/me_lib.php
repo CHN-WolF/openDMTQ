@@ -88,21 +88,22 @@ function me_note(string $what, string $target, string $who): void
 }
 
 /* The current password checked as the sign-in checks one: under the sign-in's own limit on wrong passwords (the attempt
-   counted before the password is compared, and a right one gives its place back), a wrong one taking a second. Returns ''
-   when it is right, else the words' key: signin.throttled or me.wrong_current. */
-function me_check_current(array $row, string $current): string
+   counted before the password is compared), a wrong one taking a second. Returns ['', the attempt's id] when it is right,
+   else [the words' key, null]: signin.throttled or me.wrong_current. The attempt stays counted until the caller gives its
+   place back (dl_attempt_succeeded()), once the change it was for is done: a change refused after the right password (an
+   ID another account has) counts as a failed try, so that the right password does not make a way to learn IDs. */
+function me_begin_current(array $row, string $current): array
 {
     $attempt = dl_attempt_begin((string)$row['name']);
     if ($attempt === null) {
-        return 'signin.throttled';
+        return ['signin.throttled', null];
     }
     if (!site_pass_ok((string)$row['pass'], $current)) {
         // The attempt stays counted as a failure. Slow down guessing, as the sign-in page does.
         sleep(1);
-        return 'me.wrong_current';
+        return ['me.wrong_current', null];
     }
-    dl_attempt_succeeded($attempt);
-    return '';
+    return ['', $attempt];
 }
 
 /* A password as the accounts' table keeps one, the same way the admin pages write it (account_hash() in
@@ -152,22 +153,15 @@ function me_change_password(string $current, string $new, string $again)
     if (!$row) {
         return ['', 'me.signed_out'];
     }
-    $wrong = me_check_current($row, $current);
+    [$wrong, $attempt] = me_begin_current($row, $current);
     if ($wrong !== '') {
         return [$wrong === 'signin.throttled' ? '' : 'current', $wrong];
     }
-    $db = me_db_write();
-    $q = $db ? @$db->prepare('UPDATE SiteUser SET pass = :pass WHERE name = :name') : false;
-    if (!$q) {
+    // The right password: its place in the limit given back, whatever the database does next (that is no guess).
+    dl_attempt_succeeded($attempt);
+    if (!me_write_password((string)$row['name'], (string)$row['pass'], me_hash($new))) {
         return ['', 'me.failed'];
     }
-    $q->bindValue(':pass', me_hash($new), SQLITE3_TEXT);
-    $q->bindValue(':name', (string)$row['name'], SQLITE3_TEXT);
-    // Saved, or the database could not take it now (another writer past the wait, a read-only disk): said so.
-    if (!@$q->execute() || $db->changes() !== 1) {
-        return ['', 'me.failed'];
-    }
-    $db->close();
     // This browser signed in with the new password; the rest of this request reads it so.
     dl_cookie((string)$row['name']);
     site_user(true);
@@ -175,11 +169,33 @@ function me_change_password(string $current, string $new, string $again)
     return '';
 }
 
+/* An account's password written as $hash, only while it is still the one checked ($checked, as it was read): a new one
+   the owner gave the account on the Accounts page in between stands, and nothing is written. True when written. */
+function me_write_password(string $name, string $checked, string $hash): bool
+{
+    $db = me_db_write();
+    $q = $db ? @$db->prepare('UPDATE SiteUser SET pass = :pass WHERE name = :name AND pass = :checked') : false;
+    if (!$q) {
+        return false;
+    }
+    $q->bindValue(':pass', $hash, SQLITE3_TEXT);
+    $q->bindValue(':name', $name, SQLITE3_TEXT);
+    $q->bindValue(':checked', $checked, SQLITE3_TEXT);
+    // Saved, or the database could not take it now (another writer past the wait, a read-only disk), or the password
+    // changed in between: no row then.
+    $written = @$q->execute() && $db->changes() === 1;
+    $db->close();
+    return $written;
+}
+
 /* The signed-in account's ID changed to $new, its current password ($current) checked first. The ID is unique whatever
-   the letter case, and never the owner's (theirs lives in .env). What the account is linked to goes by the game player,
-   not the ID: its plays, records, broadcasts and recordings stay; its API tokens (an account with admin rights) follow
-   it. Other browsers' sign-ins name the old ID and end; this browser's cookie is made again for the new one. Returns ''
-   when done, else [field, key] as me_change_password() does (fields: id, current). */
+   the letter case, and never the owner's (theirs lives in .env); whether another account or the owner has it is said only
+   after the right password, and such a try counts toward the sign-in's limit as a wrong password does: no way to learn
+   the IDs there are. What the account is linked to goes by the game player, not the ID: its plays, records, broadcasts and
+   recordings stay; its API tokens (an account with admin rights) follow it. Every sign-in made before the change ends,
+   by the account's own moment from which sign-ins count (an ID changed away and back gives an old cookie no new life);
+   this browser's cookie is made again from that moment. Returns '' when done, else [field, key] as me_change_password()
+   does (fields: id, current). */
 function me_change_id(string $new, string $current)
 {
     $account = me_account();
@@ -197,11 +213,6 @@ function me_change_id(string $new, string $current)
     if ($new === $account['id']) {
         return ['id', 'me.same_id'];
     }
-    // The owner's ID opens the server's own account: no account may have it, whatever its letter case.
-    $owner = site_owner();
-    if ($owner !== null && strcasecmp($owner['name'], $new) === 0) {
-        return ['id', 'me.id_taken'];
-    }
     if ($current === '') {
         return ['current', 'me.missing_current'];
     }
@@ -209,52 +220,82 @@ function me_change_id(string $new, string $current)
     if (!$row) {
         return ['', 'me.signed_out'];
     }
-    $wrong = me_check_current($row, $current);
+    [$wrong, $attempt] = me_begin_current($row, $current);
     if ($wrong !== '') {
         return [$wrong === 'signin.throttled' ? '' : 'current', $wrong];
     }
+    // The owner's ID opens the server's own account: no account may have it, whatever its letter case. Said as another
+    // account's would be, and counted as a try (the attempt keeps its place).
+    $owner = site_owner();
+    if ($owner !== null && strcasecmp($owner['name'], $new) === 0) {
+        sleep(1);
+        return ['id', 'me.id_taken'];
+    }
+    $moved = me_rename((string)$row['name'], (string)$row['pass'], $new);
+    if ($moved === 'taken') {
+        // Another account's: counted as a try, as the owner's is.
+        sleep(1);
+        return ['id', 'me.id_taken'];
+    }
+    // The right password and a free ID: the try is no failure, whatever the database did.
+    dl_attempt_succeeded($attempt);
+    if ($moved !== 'moved') {
+        return ['', 'me.failed'];
+    }
+    dl_cookie($new);
+    site_user(true);
+    me_note('site:id', $row['name'] . ' > ' . $new, $new);
+    return '';
+}
+
+/* The account $old renamed $new in one transaction, while its password is still the one checked ($checked): its API
+   tokens of an admin's own (never the owner's, which are kept under the owner's ID) under the new ID too, and the moment
+   from which its sign-ins count set to the next second, so that every cookie made before ends. Returns "moved", "taken"
+   (another account has that ID, in any letter case) or "failed" (the database could not take it now, or the password
+   changed in between). */
+function me_rename(string $old, string $checked, string $new): string
+{
     $db = me_db_write();
     if (!$db || !@$db->exec('BEGIN IMMEDIATE')) {
-        return ['', 'me.failed'];
+        return 'failed';
     }
     // Another account with that ID in any letter case (this one's own, in other letters, is the same account).
     $taken = @$db->prepare('SELECT COUNT(*) FROM SiteUser WHERE name = :new AND name <> :old');
-    $rename = @$db->prepare('UPDATE SiteUser SET name = :new WHERE name = :old');
+    $rename = @$db->prepare('UPDATE SiteUser SET name = :new, signed_out_at = :cut WHERE name = :old AND pass = :checked');
     // The API's tokens are kept under their admin's ID (tokens.py): a table from before them has none to move.
-    $tokens = @$db->prepare('UPDATE ApiToken SET admin = :new WHERE admin = :old');
+    $tokens = @$db->prepare('UPDATE ApiToken SET admin = :new WHERE admin = :old AND owner = 0');
     $found = false;
     if ($taken) {
         $taken->bindValue(':new', $new, SQLITE3_TEXT);
-        $taken->bindValue(':old', (string)$row['name'], SQLITE3_TEXT);
+        $taken->bindValue(':old', $old, SQLITE3_TEXT);
         $answer = @$taken->execute();
         $found = $answer ? $answer->fetchArray(SQLITE3_NUM) : false;
     }
     if (!$rename || !$found) {
         @$db->exec('ROLLBACK');
-        return ['', 'me.failed'];
+        return 'failed';
     }
     if ((int)$found[0] > 0) {
         @$db->exec('ROLLBACK');
-        return ['id', 'me.id_taken'];
+        return 'taken';
     }
     $rename->bindValue(':new', $new, SQLITE3_TEXT);
-    $rename->bindValue(':old', (string)$row['name'], SQLITE3_TEXT);
+    $rename->bindValue(':cut', time() + 1, SQLITE3_INTEGER);
+    $rename->bindValue(':old', $old, SQLITE3_TEXT);
+    $rename->bindValue(':checked', $checked, SQLITE3_TEXT);
     $moved = @$rename->execute() && $db->changes() === 1;
     if ($moved && $tokens) {
         $tokens->bindValue(':new', $new, SQLITE3_TEXT);
-        $tokens->bindValue(':old', (string)$row['name'], SQLITE3_TEXT);
+        $tokens->bindValue(':old', $old, SQLITE3_TEXT);
         $moved = (bool)@$tokens->execute();
     }
     // Both or neither: an account under its new ID with its tokens left under the old one would lose them.
     if (!$moved || !@$db->exec('COMMIT')) {
         @$db->exec('ROLLBACK');
-        return ['', 'me.failed'];
+        return 'failed';
     }
     $db->close();
-    dl_cookie($new);
-    site_user(true);
-    me_note('site:id', $row['name'] . ' > ' . $new, $new);
-    return '';
+    return 'moved';
 }
 
 /* Every sign-in of the signed-in account but this browser's ended: the moment from which its sign-ins count is the next
@@ -288,7 +329,7 @@ function me_sign_out_others()
         }
         $db->close();
     }
-    dl_cookie($account['id'], $now);
+    dl_cookie($account['id']);
     site_user(true);
     me_note('site:signout', $account['id'], $account['id']);
     return '';
