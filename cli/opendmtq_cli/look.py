@@ -22,6 +22,14 @@ LETTERS = {
     "T": ["████████", "   ██   ", "   ██   ", "   ██   "],
     "Q": ["▄█████▄ ", "██   ██ ", "██  ▄██ ", "▀█████▀▄"],
 }
+# The same letters in ASCII, for a console that draws the blocks above two columns wide (ambiguous_wide): each mark keeps
+# one column, so the wordmark keeps its width and its lean.
+ASCII_LETTERS = {
+    "D": ["#####, ", "##   ##", "##   ##", "#####' "],
+    "M": ["###, ,###", "## '#' ##", "##     ##", "##     ##"],
+    "T": ["########", "   ##   ", "   ##   ", "   ##   "],
+    "Q": [",#####, ", "##   ## ", "##  ,## ", "'#####',"],
+}
 # Each row's colour, top to bottom: the letters' metal (white, a dark band, light again) and the Q's white into lime,
 # as the logo's own gradients on the site.
 METAL = ["#ffffff", "#e4e9ee", "#9aa4ae", "#d5dbe1"]
@@ -44,6 +52,52 @@ _CODE = re.compile(r"\033\[[0-9;]*m")
 
 # Whether the terminal was set up for colour already (Windows' virtual terminal), and the answer, per stream.
 _decided = {}
+
+# The console code pages of Japanese, simplified Chinese, Korean and traditional Chinese, and the console fonts made for
+# them (their names as the console gives them, in lower case): with either, Windows' own console window draws East Asian
+# ambiguous-width characters, the wordmark's blocks and the headings' lines among them, two columns wide.
+CJK_CODE_PAGES = (932, 936, 949, 950)
+CJK_FONTS = ("gulimche", "굴림체", "gulim", "굴림", "batangche", "바탕체", "dotumche", "돋움체", "gungsuhche", "궁서체",
+             "ms gothic", "ｍｓ ゴシック", "ms mincho", "ｍｓ 明朝", "nsimsun", "新宋体", "simsun", "宋体", "mingliu",
+             "細明體", "simhei", "黑体")
+# The answer of ambiguous_wide, per stream.
+_wide = {}
+
+
+def _console_font(kernel, stream):
+    """The name of the font Windows' console draws the stream in, in lower case; "" when it does not say."""
+    import ctypes
+    import msvcrt
+
+    class FontInfo(ctypes.Structure):
+        # CONSOLE_FONT_INFOEX: its size, the font's number, its cell size (a COORD), family, weight and face name.
+        _fields_ = [("cbSize", ctypes.c_ulong), ("nFont", ctypes.c_ulong), ("dwFontSize", ctypes.c_short * 2),
+                    ("FontFamily", ctypes.c_uint), ("FontWeight", ctypes.c_uint), ("FaceName", ctypes.c_wchar * 32)]
+    info = FontInfo()
+    info.cbSize = ctypes.sizeof(FontInfo)
+    if not kernel.GetCurrentConsoleFontEx(msvcrt.get_osfhandle(stream.fileno()), False, ctypes.byref(info)):
+        return ""
+    return info.FaceName.strip().lower()
+
+
+def ambiguous_wide(stream=None):
+    """True where the console draws East Asian ambiguous-width characters two columns wide: Windows' own console window
+    with a CJK code page (932, 936, 949, 950) or a CJK font. Windows Terminal draws them in one column whatever its code
+    page, and so do the terminals of Linux and macOS as they come. The wordmark and the headings' lines are then drawn in
+    ASCII, which keeps their width."""
+    stream = stream or sys.stdout
+    key = id(stream)
+    if key not in _wide:
+        wide = False
+        if os.name == "nt" and not os.environ.get("WT_SESSION"):
+            try:
+                import ctypes
+                kernel = ctypes.windll.kernel32
+                wide = kernel.GetConsoleOutputCP() in CJK_CODE_PAGES or _console_font(kernel, stream) in CJK_FONTS
+            except (AttributeError, OSError, ValueError, ImportError):
+                wide = False
+        _wide[key] = wide
+    return _wide[key]
 
 
 def _windows_vt(stream):
@@ -135,20 +189,23 @@ def wordmark(version="", stream=None):
         return [f"OpenDMTQ {version}".rstrip()]
     colour = colour_on(stream)
     letters = "DMTQ"
-    span = sum(len(LETTERS[c][0]) for c in letters) + len(GAP) * (len(letters) - 1)
+    # In ASCII where the console draws the blocks two columns wide (ambiguous_wide): the same width and lean.
+    wide = ambiguous_wide(stream)
+    font, mark = (ASCII_LETTERS, "=") if wide else (LETTERS, "━")
+    span = sum(len(font[c][0]) for c in letters) + len(GAP) * (len(letters) - 1)
     head = "O P E N "
     # The line after OPEN runs to the wordmark's right end, grey into lime.
     run = span - len(head)
     if colour:
-        rule = "".join(_code(_mix("#5d6670", "#8cf23d", i / max(run - 1, 1))) + "━" for i in range(run)) + "\033[0m"
+        rule = "".join(_code(_mix("#5d6670", "#8cf23d", i / max(run - 1, 1))) + mark for i in range(run)) + "\033[0m"
         head = paint(head, "ash", stream)
     else:
-        rule = "━" * run
+        rule = mark * run
     lines = [INDENT + " " * LEAN + head + rule]
     for row in range(4):
         parts = []
         for c in letters:
-            glyph = LETTERS[c][row]
+            glyph = font[c][row]
             parts.append(_code((LIME if c == "Q" else METAL)[row]) + glyph + "\033[0m" if colour else glyph)
         line = INDENT + " " * (LEAN - row) + GAP.join(parts)
         # The version beside the last row, as the site's logo carries it.
@@ -251,7 +308,8 @@ def rule(title="", stream=None):
     """A section's heading: its title, then a line to the one right edge (room())."""
     span = room(stream) - len(INDENT)
     head = f"{title} " if title else ""
-    line = "─" * max(span - len(head), 4)
+    # ASCII where the console draws box lines two columns wide (ambiguous_wide): the line then ends where it should.
+    line = ("-" if ambiguous_wide(stream) else "─") * max(span - len(head), 4)
     if not is_terminal(stream):
         # A pipe or a log: a plain heading line, nothing drawn.
         return f"{INDENT}{title}" if title else ""

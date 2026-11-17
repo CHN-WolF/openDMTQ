@@ -120,6 +120,42 @@ class LookTest(unittest.TestCase):
         finally:
             close(tty)
 
+    def test_a_console_that_draws_blocks_two_columns_wide(self):
+        # Windows' own console window with a CJK code page or a CJK font draws the blocks and box lines two columns
+        # wide: there the wordmark and the headings' lines are ASCII, with the same width, rows and lean; Windows
+        # Terminal draws them in one column, so it keeps the blocks.
+        def wide(code_page, font="consolas", terminal=False):
+            look._wide.clear()
+            kernel32 = types.SimpleNamespace(GetConsoleOutputCP=lambda: code_page)
+            fake = types.SimpleNamespace(windll=types.SimpleNamespace(kernel32=kernel32))
+            env = {"WT_SESSION": "1"} if terminal else {}
+            with mock.patch.dict(sys.modules, {"ctypes": fake}), mock.patch.object(look.os, "name", "nt"), \
+                    mock.patch.object(look, "_console_font", lambda kernel, stream: font), \
+                    mock.patch.dict(os.environ, env):
+                if not terminal:
+                    os.environ.pop("WT_SESSION", None)
+                return look.ambiguous_wide(io.StringIO())
+        self.assertTrue(wide(949))
+        self.assertTrue(wide(932))
+        self.assertFalse(wide(437))
+        self.assertTrue(wide(437, "gulimche"))
+        self.assertTrue(wide(65001, "굴림체"))
+        self.assertFalse(wide(949, terminal=True))
+        tty = terminal()
+        try:
+            look._wide.clear()
+            blocks = [plain(line) for line in look.wordmark("0.11.0", tty)]
+            look._wide[id(tty)] = True
+            ascii_ = [plain(line) for line in look.wordmark("0.11.0", tty)]
+            heading = plain(look.rule("Addresses", tty))
+        finally:
+            look._wide.clear()
+            close(tty)
+        self.assertTrue(all(line.isascii() for line in ascii_ + [heading]), ascii_ + [heading])
+        self.assertEqual([len(line) for line in ascii_], [len(line) for line in blocks])
+        self.assertEqual([len(line) - len(line.lstrip()) for line in ascii_], [len(line) - len(line.lstrip()) for line in blocks])
+        self.assertTrue(heading.rstrip().endswith("---"), heading)
+
     def test_sentences_wrap_on_the_left_edge_without_a_lone_last_word(self):
         tty = terminal()
         try:
