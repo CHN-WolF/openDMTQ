@@ -74,6 +74,12 @@ const FULL = [
   ['admin-app', `${A}/app`],
   ['admin-songs', `${A}/songs`],
   ['admin-players', `${A}/players`],
+  // A player's own page (PAGE-75): one who plays much with nothing changed, one with a balance of his own and purchases,
+  // and the longest name banned with the longest reason, unlimited, items given and taken, and changes listed (seed.php).
+  ['admin-player', `${A}/players/1`],
+  ['admin-player-kept', `${A}/players/2`],
+  ['admin-player-banned', `${A}/players/6`],
+  ['admin-player-no-plays', `${A}/players/10`],
   ['admin-accounts', `${A}/accounts`],
   ['admin-recordings', `${A}/recordings`],
   ['admin-backups', `${A}/backups`],
@@ -647,7 +653,8 @@ async function signInForms(contexts) {
 const PATTERN_PAGES = [
   ['home', `${P}/`], ['rankings', `${P}/ranking.php`], ['player', `${P}/player.php?id=1`], ['song', `${P}/song.php?id=1`],
   ['songs', `${P}/songs.php`], ['live', `${P}/live.php`], ['download', `${P}/download.php`],
-  ['admin-status', `${A}/`], ['admin-players', `${A}/players`], ['admin-accounts', `${A}/accounts`],
+  ['admin-status', `${A}/`], ['admin-players', `${A}/players`], ['admin-player', `${A}/players/2`], ['admin-player-banned', `${A}/players/6`],
+  ['admin-accounts', `${A}/accounts`],
   ['admin-recordings', `${A}/recordings`], ['admin-songs', `${A}/songs`], ['admin-requests', `${A}/logs`],
   ['admin-plays', `${A}/logs?tab=plays`], ['admin-changes', `${A}/logs?tab=changes`], ['admin-maintenance', `${A}/maintenance`],
   ['admin-backups', `${A}/backups`], ['admin-app', `${A}/app`],
@@ -1725,6 +1732,68 @@ async function escapedOnce(contexts, admin) {
   await rename(was);
 }
 
+// PAGE-78, PAGE-79: a player's own page (game.py, seed.php's 민호 with a balance of his own): a currency set, a level set and
+// an item given, each in place (the page not opened anew, its figure changed, the server's words as the band); a refusal said
+// in the server's words with nothing changed; the questions before a ban and before a reset in the page's own look, whole
+// and on top, naming the player, Cancel leaving everything as it was; the layout clean after each. At a phone's width and a
+// laptop's.
+async function gameFlows(contexts) {
+  for (const [width, height] of [[360, 740], [1280, 800]]) {
+    const page = await contexts.signed.newPage();
+    await page.setViewport({ width, height, ...(width < 700 ? { isMobile: true, hasTouch: true } : {}) });
+    const at = `${width}px`;
+    await page.goto(`${A}/players/2`, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => { window.keptOpen = true; });
+    // A press of one of the page's buttons: the server's words, from the message it brings at the foot of the screen
+    // (none left from the press before).
+    const said = async selector => {
+      await page.evaluate(() => { for (const m of document.querySelectorAll('.flash.float')) m.remove(); });
+      await press(page, selector);
+      await page.waitForSelector('.flash.float', { timeout: 5000 }).catch(() => {});
+      return page.$eval('.flash.float', e => e.textContent.trim()).catch(() => '');
+    };
+    // A figure of its own at each width, so that the second run is not the first one's figure left over.
+    const figure = (width === 360 ? 7000 : 8000) + 77;
+    await page.$eval('#game-currency .purse input[name=amount]', (e, v) => { e.value = String(v); }, figure);
+    const setWords = await said('#game-currency .purse button[value=set]');
+    check(`a player's MAX POINT set changes the page in place, the figure and the words (${at})`,
+      await keptOpen(page) && (await textOf(page, '#purse-max')) === figure.toLocaleString('en-US') && /MAX POINT of 민호/.test(setWords),
+      `${await textOf(page, '#purse-max')} | ${setWords}`);
+    await page.$eval('#game-currency .purse input[name=amount]', e => { e.value = '99999999'; });
+    const tooMuch = await said('#game-currency .purse button[value=add]');
+    check(`more than the game shows is refused in the server's words, nothing changed (${at})`,
+      /99,999,999 at most/.test(tooMuch) && (await textOf(page, '#purse-max')) === figure.toLocaleString('en-US'), tooMuch);
+    await page.$eval('#game-level input[name=level]', e => { e.value = '20'; });
+    const levelWords = await said('#game-level button[value=level]');
+    check(`a level set in place: the badge and the gauge follow (${at})`,
+      await keptOpen(page) && (await page.$eval('#game-level .lv-badge b', e => e.textContent)) === '20' && /Lv\.20/.test(levelWords), levelWords);
+    // Every kind open, as a person opens the one they want: the first item to give is a note.
+    await page.$$eval('#game-items details', ds => ds.forEach(d => { d.open = true; }));
+    const giveWords = await said('#game-items button[value=give]');
+    check(`an item given in place (${at})`, await keptOpen(page) && /given to 민호/.test(giveWords), giveWords);
+    await noFindings(page, `a player's page after its changes (${at})`);
+    // The question before a ban: whole, on top, naming the player; Cancel leaves no ban.
+    await page.$eval('#game-ban textarea[name=reason]', e => { e.value = 'Made-up scores'; });
+    await page.click('#game-ban button[value=ban]');
+    await page.waitForSelector('#ask[open]');
+    const ban = await wholeOnTop(page, '#ask[open] > *');
+    check(`the question before a ban is whole and on top, and names the player (${at})`, ban.ok && (await textOf(page, '#ask p')).includes('민호'), ban.detail);
+    await noFindings(page, `the question before a ban (${at})`);
+    await page.click('#ask [value=no]');
+    await pause(400);
+    check(`cancel leaves the player unbanned (${at})`, !(await page.$('#game-ban button[value=unban]')) && await keptOpen(page));
+    // The question before a reset of the game state, likewise.
+    await page.click('#game-player button[value=reset]');
+    await page.waitForSelector('#ask[open]');
+    const reset = await wholeOnTop(page, '#ask[open] > *');
+    check(`the question before a game reset is whole and on top, and says a backup comes first (${at})`,
+      reset.ok && /backup/i.test(await textOf(page, '#ask p')), reset.detail);
+    await page.click('#ask [value=no]');
+    await page.screenshot({ path: path.join(OUT, 'shots', `game-flows-${width}.jpg`), type: 'jpeg', quality: 72, fullPage: true }).catch(() => {});
+    await page.close();
+  }
+}
+
 async function adminFlows(contexts) {
   // A wrong password says so.
   const login = await contexts.anon.newPage();
@@ -2212,6 +2281,7 @@ async function thisPc(contexts) {
     await portalFlows(contexts);
     await replayFlows(contexts);
     await adminFlows(contexts);
+    await gameFlows(contexts);
   } else if (stage === 'patterns') {
     await hoverOnly(contexts);
     await inPlace(contexts);

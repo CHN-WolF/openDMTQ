@@ -69,4 +69,24 @@ foreach ($players as $i => [$name, $skill, $plays, [$every, $from]]) {
     }
 }
 $db->exec('COMMIT');
+
+// The players' game state as the admin pages and the game leave it (src/player.php, admin/game.py): 민호 with a balance of
+// his own at level 12 and two things bought; a player with a long name (not one the broadcasts' feed puts on air: a ban
+// keeps a player off it) banned for a week with the longest reason there may be, his currency unlimited, an item given and
+// one taken, a purchase made while unlimited. What the owner did about him, as the admin pages note it in the log of
+// changes (his player's page lists it).
+$db->exec("INSERT INTO PlayerState (guid, mpoint, qpoint, exp, unlimited, changed_at) VALUES (2, 1234567, 45, 644, 0, $now), (6, 2000, 9, 5669, 1, $now)");
+$db->exec("INSERT INTO PlayerItem (guid, item_id, owned, how, at) VALUES (2, 90001, 1, 'bought', $now), (6, 90002, 1, 'given', $now), (6, 30001, 0, 'taken', $now)");
+$db->exec("INSERT INTO PlayerPurchase (guid, product_id, item_id, currency, price, paid, at) VALUES
+           (2, 90001, 90001, 'max', 2000, 2000, " . ($now - 7200) . "), (2, 1050001, 50001, 'q', 10, 10, " . ($now - 3600) . "),
+           (6, 100002, 100002, 'max', 25000, 0, " . ($now - 600) . ")");
+$reason = str_repeat('Made-up scores on the monthly rankings, sent from a program and not from the game. ', 3);
+$db->exec("INSERT INTO PlayerBan (guid, reason, since, until, by) VALUES (6, '" . substr(trim($reason), 0, 200) . "', $now, " . ($now + 7 * 86400) . ", 'admin')");
+$log = '';
+foreach ([['player_game:max', 'W: 999,999 → 2,000', 999999, 2000], ['player_game:unlimited-on', 'W', false, true],
+          ['player_game:ban', 'W: Made-up scores', false, true]] as $n => [$what, $target, $before, $after]) {
+    $log .= json_encode(['at' => $now - 300 + $n, 'what' => $what, 'target' => str_replace('W', 'abcdefghijklmnop', $target), 'named' => true,
+                         'who' => 'admin', 'player' => 6, 'before' => $before, 'after' => $after], JSON_UNESCAPED_UNICODE) . "\n";
+}
+file_put_contents('/data/changes.log', $log, FILE_APPEND);
 echo 'seed: ' . count($players) . ' players, ' . $db->querySingle('SELECT COUNT(*) FROM PlayLog') . " plays\n";
