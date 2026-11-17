@@ -4,7 +4,7 @@ How the parts of OpenDMTQ fit together, for anyone who wants to change them. The
 server are in [README.md](README.md).
 
 <p align="center">
-  <img src="images/diagram-architecture.svg" alt="How OpenDMTQ fits together: phones, PCs and browsers reach the server's one public port, where site.conf sends each path to the game server, the game's files, live broadcasts, the players' site or the admin pages, which keep their data in data/. The setup imports the owner's game files, and the app builder patches the owner's APK for this server at every start" width="100%">
+  <img src="images/diagram-architecture.svg" alt="How OpenDMTQ fits together: phones, PCs and browsers reach the server's one port, 8791 on a new install, where site.conf sends each path to the game server, the game's files, live broadcasts, the players' site or the admin pages and their API, which keep their data in data/. The setup imports the owner's game files, and the app builder patches the owner's APK for this server at every start, with the PC client's installer and updates beside it" width="100%">
 </p>
 
 ## The parts
@@ -14,41 +14,42 @@ game's files, or a run by hand ([testing](testing.md)).
 
 | Part | What it does | Code, and where to start | Checked by |
 | :--- | :--- | :--- | :--- |
-| Edge | The one public port with Docker Compose: plain HTTP for the game, HTTPS for browsers | `server/edge` (`nginx.conf`) | its two configurations (CI) |
-| Game server | Every request of the game and of its platform SDK | `server/game`: `index.php`, then `src/rpc.php` (`odq_methods`) | `tests/game/protocol.sh` (CI); `tests/live/run.sh` and `tests/load/run.sh` on the real files (`qa.sh`) |
-| Server's start | The server image's start: the database, the settings, then Apache | `server/entrypoint.sh`, top to bottom | the images' start without game files (CI) |
+| Edge | The server's one port with Docker Compose (`LISTEN_PORT`, 8791 on a new install): plain HTTP for the game and the PC client, HTTPS for browsers | `server/edge` (`nginx.conf`) | its two configurations (CI) |
+| Game server | Every request of the game and of its platform SDK, and each player's game state (currencies, level, items, bans) | `server/game`: `index.php`, then `src/rpc.php` (`odq_methods`); the game state in `src/player.php` | `tests/game/protocol.sh` (CI); `tests/live/run.sh` and `tests/load/run.sh` on the real files (`qa.sh`) |
+| Server's start | The server image's start: the database, the settings, the admin pages' place on the one port, then Apache | `server/entrypoint.sh`, top to bottom | the images' start without game files (CI), `tests/access/run.sh` (CI) |
 | Routing | Which path goes to which part, for every kind of install | `server/apache/site.conf` | the contract and the pages (CI) |
-| Players' site | Rankings, songs, players, the app's download, live broadcasts, MY PAGE, the owner's notice | `server/portal`: `lib.php`, then the page (MY PAGE: `me.php`, `me_lib.php`) | `tests/ui/run.sh`, every page at five widths in both languages (CI) |
+| Players' site | Rankings, songs, players, the app's download, live broadcasts, MY PAGE, the owner's notice, and what the PC client asks of the site (`client.php`, `updates.php`) | `server/portal`: `lib.php`, then the page (MY PAGE: `me.php`, `me_lib.php`) | `tests/ui/run.sh`, every page at five widths in both languages (CI) |
 | Live broadcasts | The uploads of phones and PCs, the live window, recordings | `server/game/live`, `server/portal/live.php` | `tests/live/run.sh` (`qa.sh`), the transport stream writer (CI) |
-| Admin pages and API | The setup, app builds, songs, players, accounts, recordings, backups, the Notices page (the site's notice, maintenance, Discord and Slack), the server ([api.md](api.md)) | `tools/opendmtq_tools/admin`, a module per page (`status.py`, `apps.py`, `song_pages.py`, `players.py`, `accounts.py`, `recordings.py`, `backups.py`, `logs.py`, `setup.py`, `lifecycle.py`; the Notices page's frame `notices.py` and its cards `notice.py`, `song_pages.py`, `webhooks.py`, whose loop sends the chats' messages); what they share in `core.py` (settings, language, database) and `auth.py` (sign-in); the API in `api.py`, its routes in `api_routes.py`. Start at the page's module, then `core.py` | `tools/tests` (`test_admin.py`, `test_api.py`, `test_setup.py`), the pages, `tests/upgrade/run.sh` (CI) |
-| App builder | Patches the owner's APK for this server's address | `tools/opendmtq_tools/builder.py`, `patch_apk.py` (the tools are plain Python, the one you change is where to start) | `tools/tests` (CI); `test_real_client.py` on the real clients (`qa.sh`); `tests/game/tour.sh` on an emulator (by hand) |
+| Admin pages and API | The setup, app builds and Play on this PC, songs, players and their game state, accounts, recordings, backups, the Notices page (the site's notice, maintenance, Discord and Slack), the Server page (restart, stop, repair, the data, uninstall, the owner's password) ([api.md](api.md)) | `tools/opendmtq_tools/admin`, a module per page (`status.py`, `apps.py` with `this_pc.py`, `song_pages.py`, `players.py` with `game.py` for a player's own page, `accounts.py` with `tokens.py`, `recordings.py`, `backups.py`, `logs.py`, `setup.py`, `lifecycle.py` for the Server page; the Notices page's frame `notices.py` and its cards `notice.py`, `song_pages.py`, `webhooks.py`, whose loop sends the chats' messages); what they share in `core.py` (settings, language, database) and `auth.py` (sign-in); the API in `api.py`, its routes in `api_routes.py`. Start at the page's module, then `core.py` | `tools/tests` (`test_admin.py`, `test_api.py`, `test_setup.py`, and a file for each newer page: `test_lifecycle.py`, `test_game.py`, `test_notice.py`, `test_webhooks.py`, `test_this_pc.py`), the pages, `tests/access/run.sh`, `tests/upgrade/run.sh` (CI); `tests/lifecycle/compose.sh` (by hand) |
+| App builder | Patches the owner's APK for this server's address, and puts the PC client's installer and its updates beside the app | `tools/opendmtq_tools/builder.py`, `patch_apk.py`; `windows_client.py` and `client_updates.py` for the PC client's files (the tools are plain Python, the one you change is where to start) | `tools/tests` (CI); `test_real_client.py` on the real clients (`qa.sh`); `tests/game/tour.sh` on an emulator (by hand) |
 | Import | Takes the game's data files from the owner's folder or archive | `tools/opendmtq_tools/importer.py` | `tools/tests/test_importer.py` (CI), `tests/host/run.sh` |
 | Song list | The song list and the client's tables, from what was imported and added | `tools/opendmtq_tools/songs.py` | `tools/tests/test_songs.py`, `test_song_files.py` (CI) |
 | arm32 runtime | Runs the 32-bit game on phones without 32-bit support | `arm32/` ([its guide](../arm32/README.md)); handed out by `tools/opendmtq_tools/runtime.py` | built in CI; `arm32/test.sh` on a device (by hand) |
-| PC client | The installer and the launcher for Windows PCs | `client/` ([its guide](../client/README.md)) | `client/tests` and its screens (CI), the installer on Windows (CI), `client/tests/windows/e2e.sh` (by hand) |
-| Player for Windows | Runs the server's app on Windows: the arm32 runtime on a layer for Windows, a Java VM of its own, ANGLE, WASAPI, Media Foundation, the overlay | `arm32/desktop`, `arm32/jvm`, `arm32/src/win`; the installer handed out by `tools/opendmtq_tools/windows_client.py` | `arm32/test_windows.sh` under Wine and `arm32/test_windows.ps1` on Windows, `arm32/tests/host` (CI) |
-| Command line | Setup, import, start and stop, deploy, checks, backups | `./opendmtq` with `cli/`: start at `cli/opendmtq_cli/app.py` (`main`); `cli/install.sh` puts it on the PATH and, with `--service`, starts the server at boot; `cli/firewall.ps1` lets phones reach a server in WSL | `cli/tests` (CI) |
-| Host install | The same server without containers, and the Windows bundle | `host/`: `get.sh` and `install.sh` for Linux and macOS, `windows/` for the Windows bundle, and the program itself, a package in layers (`paths`, `settings`, `apache`, `server`, `commands`, `setup`): start at `opendmtq_host/server.py` (`Server`) | `tests/host/run.sh`, `tests/windows/wine.sh`, `tests/windows/run.ps1` (CI) |
+| PC client | The installer, the launcher and their updates, for Windows PCs | `client/` ([its guide](../client/README.md)): start at `client/opendmtq_client/main.py`; the window in `app.py` and its pages in `pages.py`, the server's calls in `server.py`, the updates in `updates.py`, the connection test in `connection.py`, the report in `report.py` | `client/tests` and its screens (CI), the installer on Windows (CI), `client/tests/windows/e2e.sh` and `setup_e2e.sh`, `tests/release/update.sh` and `update_signed.sh` under Wine (by hand) |
+| Player for Windows | Runs the server's app on Windows: the arm32 runtime on a layer for Windows, a Java VM of its own, ANGLE, WASAPI, Media Foundation, the game's sound mixed as on a phone, the overlay with its sound panel | `arm32/desktop`, `arm32/jvm`, `arm32/src/win`; the installer handed out by `tools/opendmtq_tools/windows_client.py` | `arm32/test_windows.sh` under Wine and `arm32/test_windows.ps1` on Windows, `arm32/tests/host` (CI) |
+| Command line | Setup, import, start and stop, the port, the owner's password, repair, the data, uninstall, deploy, checks, backups | `./opendmtq` with `cli/`: start at `cli/opendmtq_cli/app.py` (`main`); `cli/install.sh` puts it on the PATH and, with `--service`, starts the server at boot; `cli/firewall.ps1` lets phones reach a server in WSL | `cli/tests` (CI); `tests/upgrade/compose.sh` and `tests/lifecycle/compose.sh` (by hand) |
+| Host install | The same server without containers, and the Windows bundle | `host/`: `get.sh` and `install.sh` for Linux and macOS, `windows/` for the Windows bundle, and the program itself, a package in layers (`paths`, `settings`, `apache`, `server`, `commands`, `setup`): start at `opendmtq_host/server.py` (`Server`) | `tests/host/run.sh`, `tests/windows/wine.sh`, `tests/windows/run.ps1` (CI); `tests/host/update.sh`, `tests/windows/update.sh`, `tests/windows/play_here.sh` (by hand) |
 | Helm chart | The same images on Kubernetes, with a router in front ([kubernetes.md](kubernetes.md)) | `deploy/helm` (`values.yaml`) | the chart against Kubernetes' schemas (CI), `tests/ha/failover.sh` (by hand) |
 | Database | One SQLite file shared by the game server, the site and the admin pages ([below](#the-database)) | `server/game/bin/setup-db.php` | `tests/upgrade/run.sh` (CI) |
-| The tests | The tests beyond unit tests: the contract, the pages, an upgrade, the live server, the host install, the Windows bundle | `tests/` ([testing.md](testing.md)) | [what runs where](testing.md#what-runs-where) |
+| Releases | The release's files under their names, their checksums and the project's signature over them ([below](#releases-and-their-signature)) | `.github/release_assets.py` (`layout`, `check`), `.github/release_notes.py`, `.github/workflows/release.yml`; the signature in `tools/opendmtq_tools/signing.py` | `cli/tests/test_release.py` (CI); `tests/release/update.sh` and `update_signed.sh` under Wine (by hand) |
+| The tests | The tests beyond unit tests: the contract, the pages, who reaches the admin pages, an upgrade, the live server, the host install, the Windows bundle, the updates of each kind of install and of the PC client | `tests/` ([testing.md](testing.md)) | [what runs where](testing.md#what-runs-where) |
 
 How each part runs, with Docker Compose and without containers:
 
 | Part | With Docker Compose | Without containers |
 | :--- | :--- | :--- |
-| Edge | `edge` (nginx) | none: Apache holds the port, plain HTTP only |
+| Edge | `edge` (nginx), on the one port | none: Apache holds the port, plain HTTP only |
 | Server: the game server, the platform's login, the players' site, live broadcasts, the files the game downloads | `server` (Apache with PHP) | Apache with PHP's module, started by `host/opendmtq_host` |
-| Admin pages | `admin` (Flask on gunicorn) | Flask on waitress |
+| Admin pages and their API | `admin` (Flask on gunicorn) at `admin:8000`, which the server passes `/opendmtq/admin` and `/opendmtq/api` to; no port of its own on the computer | Flask on waitress, on a loopback port the host program picks at each start, which Apache passes them to |
 | App builder | `builder`, at every start | run at every start |
 | Import | `importer`, one-shot | plain Python |
 | Song list | `tools`, before every start | before every start |
 | arm32 runtime | ready-made from a release into `data/apk/arm32`, added to the app by the app builder | the same |
-| PC client | in a release's tools image, which the Helm chart runs too; images built from the source have none, and the app builder fetches the latest release's into `data/apk` | the Windows bundle has it; a host install takes it from its kit or fetches the latest release's into `data/apk` |
+| PC client's installer and its updates | in a release's tools image, which the Helm chart runs too; images built from the source have none, and the app builder fetches the release of the server's own version (else the latest) into `data/apk` | the Windows bundle has the installer and fetches the updates of its version; a host install takes both from its kit or fetches them the same way |
 | Command line | `./opendmtq` | `./opendmtq`, passed on to `host/opendmtq_host`; `OpenDMTQ.exe` on Windows |
 
 <p align="center">
-  <img src="images/fig-parts-docker.svg" alt="The parts with Docker Compose. Phones (plain HTTP) and browsers (HTTPS) reach the edge, nginx on the one public port, which ends HTTPS and passes each connection to one of Apache's two doors; site.conf sends it to the game server, the players' site or, for /opendmtq/admin, the admin pages, on the same port: the owner opens them there too. The game server, the site and the admin pages work on data/; the builder puts the app, and the PC client's installer beside it, in data/apk/out at every start" width="100%">
+  <img src="images/fig-parts-docker.svg" alt="The parts with Docker Compose. Phones and the PC client (plain HTTP) and browsers (HTTPS) reach the edge, nginx on the server's one port, which ends HTTPS and passes each connection to one of Apache's two doors; site.conf sends it to the game server or the players' site, and /opendmtq/admin and /opendmtq/api go on to the admin service, which has no port of its own: the owner opens the admin pages on the same port. The game server, the site and the admin pages work on data/; the builder puts the app, the PC client's installer and its updates in data/apk/out at every start" width="100%">
 </p>
 
 ## One address for four hosts
@@ -64,31 +65,41 @@ collide:
 | `static.pmangplus.com` | `/inspection` | The maintenance notice |
 
 OpenDMTQ adds `/` (sends a visitor to the site), `/opendmtq/` (the site and `health.php`), `/thumbs` (small jackets for
-the site), `/apk` (the newest app), `/windows` (the PC client's installer, set up for this server; both go on from where a broken download stopped), `/ca.crt` (the server's own certificate authority), `/live/` (the live view's
-uploads from phones and PCs), `/opendmtq/admin/` (passed to the admin pages; the old `/admin/` leads there) and `/opendmtq/api/` (their
-API, passed on with them).
+the site), `/apk` (the newest app), `/windows` (the PC client's installer, set up for this server; both go on from where
+a broken download stopped), `/updates/` (the PC client's updates this server hands out), `/ca.crt` (the server's own
+certificate authority), `/live/` (the live view's uploads from phones and PCs), `/opendmtq/admin/` (passed to the admin
+pages; the old `/admin/` leads there) and `/opendmtq/api/` (their API, passed on with them). All of it is on the
+server's one port.
 
 The PC client talks to the site through `/opendmtq/client.php`: `?about` says whether the address is an OpenDMTQ server
-(its version, name and address, and whether its app is built; no sign-in), `?signin` signs in with a site ID and password as the sign-in page
-does (the same throttle, and the site's cookie back), and `?app` describes the app on offer to a signed-in player, which
-the client then downloads from `/apk`. With that sign-in, `?link` gives a one-time link that signs a browser in to the same
-account once, within a minute (`/opendmtq/login.php?once=...`, kept beside the database by the hash of its token), and
-`?records` the account's player's latest plays and best records, each with its place on its chart.
+(its version, name and address, and whether its app is built; no sign-in), `?signin` signs in with a site ID and
+password as the sign-in page does (the same throttle, and the site's cookie back; a banned player's accounts are refused
+with the reason), and `?app` describes the app on offer to a signed-in player, which the client then downloads from
+`/apk`. With that sign-in, `?link` gives a one-time link that signs a browser in to the same account once, within a
+minute, and opens MY PAGE (`/opendmtq/login.php?once=...`, kept beside the database in `signin-links/` by the SHA-256 of
+its token, which is written nowhere; the admin API makes the same for its token's admin, `POST /site/link`), and
+`?records` the account's player's latest plays and best records, each with its place on its chart. Its updates are
+under [The PC client](#the-pc-client).
 
 ## How a request is answered
 
 A game request on its way to the database and back:
 
 <p align="center">
-  <img src="images/fig-request-flow.svg" alt="A game request on its way: a signed batch of calls to /DMQ/rpc passes the edge (with Docker Compose) and Apache's site.conf to index.php and src/rpc.php, which checks its size and signature and runs each call's handler against the SQLite database; the results go back in order as JSON, gzip-compressed when asked" width="100%">
+  <img src="images/fig-request-flow.svg" alt="A game request on its way: a signed batch of calls to /DMQ/rpc from a phone or a PC passes the edge (with Docker Compose) and Apache's site.conf to index.php and src/rpc.php, which checks its size and signature and runs each call's handler against the SQLite database; the results go back in order as JSON, gzip-compressed when asked, and a method it does not know answers SVC.05008" width="100%">
 </p>
 
 `server/apache/site.conf` is the whole site. Each of the server's doors includes it (`server/apache/opendmtq.conf`), and
 a host install includes it in the Apache configuration it writes. Its folders come from environment variables
 (`OPENDMTQ_APP`, `OPENDMTQ_CONTENT`, `OPENDMTQ_CUSTOM` and the others), so one file serves every kind of install.
 
+The admin pages and their API are passed on beside it, on the same doors: the image's start (`server/entrypoint.sh`)
+writes the proxy to `ADMIN_URL` (the compose service `admin:8000`, or the Helm chart's sidecar on the pod's loopback),
+and a host install's program writes it to the admin service's loopback port (`host/opendmtq_host/apache.py`), each with
+the rule of who may use them ([Security model](#security-model)).
+
 <p align="center">
-  <img src="images/fig-request-routing.svg" alt="How a request is answered. A file of the game (/DMQ/Songs, /DMQ/Patterns, /viewImg, /patch, /static) is served from the admin pages' overlay in data/custom/web, else from the imported content, else gets Apache's short 404. Other paths: the game's RPC, SDK and window go to server/game/index.php, /inspection/status.json to the overlay's notice while one is on, /live/ to server/game/live; OpenDMTQ's own: /opendmtq/admin to the admin pages, /opendmtq/, /apk, /thumbs and /ca.crt to server/portal, / to a redirect to /opendmtq/, anything else to the site's 404 page" width="100%">
+  <img src="images/fig-request-routing.svg" alt="How a request is answered. A file of the game (/DMQ/Songs, /DMQ/Patterns, /viewImg, /patch, /static) is served from the admin pages' overlay in data/custom/web, else from the imported content, else gets Apache's short 404. Other paths: the game's RPC, SDK and window go to server/game/index.php, /inspection/status.json to the overlay's notice while one is on, /live/ to server/game/live; OpenDMTQ's own: /opendmtq/admin and /opendmtq/api to the admin pages and their API, /opendmtq/, /apk, /windows, /updates/, /thumbs and /ca.crt to server/portal and its files, / to a redirect to /opendmtq/, anything else to the site's 404 page" width="100%">
 </p>
 
 A request for one of the game's files (`/DMQ/Songs`, `/DMQ/Patterns`, `/viewImg`, `/patch`, `/static`) is looked up in
@@ -101,8 +112,9 @@ this order:
 
 Every other path of the game, its SDK and its window goes to the game server's one door, `server/game/index.php`. The
 live broadcasts' three endpoints (`/live/state`, `/live/upload`, `/live/end`) have doors of their own in `site.conf`, with
-their own size limits. `/opendmtq/` is the site (`server/portal`). Apache denies notes, backups and databases
-wherever one is left in a served folder (`*.txt`, `*.bak`, `*.db3`, `*.log`, `*.md`).
+their own size limits. `/opendmtq/` is the site (`server/portal`), and `/updates/<file>` goes to its `updates.php`.
+Apache denies notes, backups and databases wherever one is left in a served folder (`*.txt`, `*.bak`, `*.db3`, `*.log`,
+`*.md`), but for the site's `robots.txt` and a release's checksums among the PC client's updates.
 
 Text answers go out gzip-compressed to a client that asks for it: the game's JSON and HTML, and the site's pages,
 stylesheets and scripts. Phones ask for it, and so does the player for Windows, whose song list comes in 17 KB instead
@@ -116,11 +128,12 @@ more, its FREE PASS, and goes on without it (`rpc.php`). It needs PHP 8.1 or new
 | File | What it answers |
 |---|---|
 | `server/game/index.php` | The door: sends each path to the part below |
-| `src/rpc.php` | `POST /DMQ/rpc`: the list of calls in, a list of results out; `odq_methods()` names every method and its handler |
+| `src/rpc.php` | `POST /DMQ/rpc`: the list of calls in, a list of results out; `odq_methods()` names every method and its handler; a banned player's calls refused |
 | `src/game.php` | The `game.*` methods: assets, song and chart addresses, saving a play |
 | `src/ranking.php` | The in-game rankings, this month's, and the monthly board the site's months read too |
 | `src/achievement.php` | MY PAGE's achievements and the dates they were earned |
-| `src/shop.php` | The `shop.*` methods: everything is owned, nothing is sold |
+| `src/player.php` | A player's game state: the two currencies, the experience the level comes from, the items, unlimited currency, a ban, and the server's game settings |
+| `src/shop.php` | The `shop.*` methods: what the shop still sells, paid for with MAX POINT or Q and kept |
 | `src/user.php` | The `user.*` methods, the news, the mail and `service.getInfo` |
 | `src/platform.php` | The platform SDK: its login (one account per phone), push registration, price list, reports |
 | `src/live.php` | Who is in a song, for the live view (watches the game's own calls) |
@@ -165,17 +178,20 @@ What the replies rely on, as the client behaves:
   marks stay once any play earned them. The game's replies and its rankings are the same with or without the header: the
   site and the admin pages show the mark, and the rankings are one for touch and keys.
 - **A player's game state** (`src/player.php`, the admin pages' `game.py`). The two currencies the top bar shows (MAX
-  POINT, `mpoint`; Q POINT, `amt_total` as text), the level and its experience, and the items a player equips, kept in
-  `PlayerState` and `PlayerItem`. The level is worked out of the experience with the client's own table, so that the top
-  bar's gauge (the share of the way from the level's start to the next one's) is always right. A player the server has
-  kept nothing of has what a new player starts with (`GameSetting`: 999,999 of each and level 99 until the owner sets
-  others). A saved play adds 150 MAX POINT and 10 experience; `getPreviewPlayInfo` takes a chart's MAX POINT cost as its
-  play starts; the shop takes a product's price from the client's own tables (`catalog.json`'s `products`), keeps the item
-  and notes the purchase in `PlayerPurchase`: a MAX POINT price through `shop.buyFreeProduct` (the client's call for its
-  free currency), a Q price through `shop.buyProductByQPoint`, the currency the product's whichever call it comes by. The
-  client asks for the balance and the items in the same request and shows them. Unlimited currency (the player's own switch or the server's) tells the game 99,999,999 of each and takes nothing,
-  the purchase kept as usual. Every song from 1 to the highest id is owned, and every item of the client's tables but the
-  notes; no quests, no coupons (every code is invalid, in the client's own popup), no terms popup.
+  POINT, `mpoint`; Q POINT, `amt_total` as text) and the experience the level comes from, kept in `PlayerState`, and
+  the items a player has beyond or short of what everyone has, in `PlayerItem` (the ones equipped stay in `Member`'s
+  slots). The level is worked out of the experience with the client's own table, so that the top bar's gauge (the
+  share of the way from the level's start to the next one's) is always right. A player the server has kept nothing of
+  has what a new player starts with (`GameSetting`: 999,999 of each and level 99 until the owner sets others). A saved
+  play adds 150 MAX POINT and 10 experience; `getPreviewPlayInfo` takes a chart's price as its play starts (MAX POINT,
+  or Q for a chart priced in it); the shop takes a product's price from the client's own tables (`catalog.json`'s
+  `products`), keeps the item and notes the purchase in `PlayerPurchase`: a MAX POINT price through
+  `shop.buyFreeProduct` (the client's call for its free currency), a Q price through `shop.buyProductByQPoint`, the
+  currency the product's whichever call it comes by. The client asks for the balance and the items in the same request
+  and shows them. Unlimited currency (the player's own switch or the server's) tells the game 99,999,999 of each and
+  takes nothing, the purchase kept as usual. Every song from 1 to the highest id is owned, and every item of the
+  client's tables but the note items and the partners a coupon gave (`NOT_OWNED` in `tools/opendmtq_tools/songs.py`;
+  the shop sells the notes); no quests, no coupons (every code is invalid, in the client's own popup), no terms popup.
 - **A ban** (`PlayerBan`, with a reason and an end). The client shows only words of its own for a refused sign-in: a
   platform login refused leaves it waiting with nothing on the screen, and RPC codes it knows are silent. So the game's
   login (`user.loginV2`) and every call of the player's are answered with a code it does not know (`SVC.05403`), which
@@ -220,7 +236,7 @@ logins and the start batch.
 ### A play is saved
 
 <p align="center">
-  <img src="images/fig-play-saved.svg" alt="A play is saved: at the start the phone asks for the items' effects and the chart; at the end it sends the result with a signature; a wrong signature gets a 403 and nothing is kept; otherwise the game server works out the score and grade and keeps the best, the play and what it earned in one transaction, or answers SVC.05099 and the client offers to retry" width="100%">
+  <img src="images/fig-play-saved.svg" alt="A play is saved: at the start the phone or the PC asks for the items' effects and the chart, and a chart with a price takes it (nothing while the player's currency is unlimited); at the end it sends the result with a signature; a wrong signature gets a 403 and nothing is kept; otherwise the game server works out the score and grade and keeps the best, the play, the 150 MAX POINT and 10 EXP it earned and its achievements in one transaction, or answers SVC.05099 and the client offers to retry" width="100%">
 </p>
 
 ## The content
@@ -262,7 +278,7 @@ fetches the images of its screens from the server), so the server reports itself
 `tools/opendmtq_tools/patch_apk.py`, run by the builder.
 
 <p align="center">
-  <img src="images/fig-app-build.svg" alt="How the app is built: the owner's APK is read for which client it is, pointed at this server, changed where the bytes match, given the shim and the arm32 runtime, named for this server and signed with its key, then offered at /apk to phones and to the PC client's launcher" width="100%">
+  <img src="images/fig-app-build.svg" alt="How the app is built: the owner's APK is read for which client it is, pointed at this server, changed where the bytes match, given the shim and the arm32 runtime, named for this server and signed with its key, then offered at /apk to phones and to the PC client's launcher as opendmtq-phone-app-&lt;date&gt;-android-&lt;address&gt;.apk" width="100%">
 </p>
 
 - **Which client** (`inspect`): from its contents, never its name. The original has the official game RPC literal. A
@@ -327,15 +343,65 @@ and `./opendmtq doctor` read.
 ## The PC client
 
 <p align="center">
-  <img src="images/fig-pc-client.svg" alt="The PC client's parts: the installer from the site, the launcher that signs in through client.php and gets the app from /apk, and the player: the server's app on the arm32 runtime, its picture on ANGLE over Direct3D 11 with the upscalers and anti-aliasing, its sound and video, its glass overlay and its broadcasts, which reach the server as a phone's do" width="100%">
+  <img src="images/fig-pc-client.svg" alt="The PC client's parts: the installer, from the server's site set up for it or from a release, which run again opens, repairs, updates or uninstalls the PC client; the launcher, with its menu down the left, which signs in through client.php, keeps the server's app from /apk, sets the picture and the sound up, tests the connection, saves a report, shows My records and opens MY PAGE by a one-time link, and takes its own updates from the server's /updates/ before GitHub, only those the project signed; and the player: the server's app on the arm32 runtime, its picture on ANGLE over Direct3D 11 with the upscalers and anti-aliasing at the display's highest rate, its sound on WASAPI with a low buffer, mixed at 44,100 Hz as on a phone, its video, its glass overlay with the bar and the sound panel, and its broadcasts, which reach the server as a phone's do" width="100%">
 </p>
 
 The installer (`client/packaging/windows`, Velopack) puts the launcher and the player for Windows in the user's
-folder. The launcher (`client/opendmtq_client`) is the person's side: it talks to the site through `client.php` and
-`/apk` (above), keeps each server's app, and writes the player's settings into a file it starts the player with. The
+folder. Run again, it offers to open, repair, update or uninstall the PC client, and Windows' Apps opens the same
+uninstall (`setup_window.py`, `removal.py`). The launcher (`client/opendmtq_client`) is the person's side: it talks to
+the site through `client.php` and `/apk` (above), keeps each server's app, and writes the player's settings into a file
+it starts the player with. Its pages run down a menu column on the left; each setting changes its own row only. The
 player (`arm32/desktop`) is the game's side: the server's app on the arm32 runtime, its picture, sound, video, overlay
 and broadcasts; its requests reach the server as a phone's do. What each does for a player, and how the player's
 picture and overlay work, is in [the PC client](windows-player.md#how-it-works).
+
+The two share two files beside the launcher's settings. `player-settings.txt` is the player's settings: the launcher
+writes it at every change, and the player reads it at its start. The player's sound panel writes the sound's keys
+back into it (only the keys it changed, in their places, as a new file renamed over the old), and the launcher takes them
+back when the game ends and when its window comes to the front. `last-game-sound.txt` is what the player measured of the
+game's sound (shared or exclusive, the device's period, the time to the device's output, any gaps), written every five
+seconds and at the end: the Sound page's Last game card and `--status` read it.
+
+On the PC the game's sound goes the way a phone's does. The game's OpenAL Soft would mix at 22,050 Hz on the only
+device it can open there (Android's AudioTrack, as Windows has no OpenSL ES), so the player gives the game's context the
+44,100 Hz a phone mixes at (`soundmix.cpp`, `openal_rate.h`). It keeps the music apart from the effects without
+changing any of the game's code, by calls of the game's own taken over by name: in the menus by OpenAL's sources (a
+streaming one is music, one of a whole buffer an effect), in a song by the game's score player (its background tracks
+are music, the tracks the player plays are effects), each at its share. The player's mixer then takes the master volume
+and the equaliser's three bands, and hands the sound to WASAPI with the low buffer by default (`mixer.cpp`,
+`output_wasapi.cpp`, `sound_mix.h`).
+
+Three of the launcher's parts reach past its own pages:
+
+- **The connection test** (`connection.py`; the Online page's Test connection, and `OpenDMTQ-cmd.exe --test-server`)
+  follows the way to the server a step at a time: the address, the name's lookup, the port, the answer as an OpenDMTQ
+  server (`client.php?about`) and its certificate over HTTPS, the version, the sign-in, the game server's health, the
+  broadcast state, the downloads by their heads, and the round trip. When nothing answers on the port, it looks for a
+  server on 8791 and the ports after it: a server updated to 0.11.0 left port 80.
+- **The report** (`report.py`; Help's Save a report, and `--report FILE`) puts the launcher's and the end of the
+  player's logs, the settings, the displays, the sound devices, Windows, the graphics cards and the last connection
+  test in one zip, with the Windows user's name, the site IDs, the servers' addresses and names, sign-ins, tokens and
+  this PC's player id replaced by a word, and says what it left out.
+- **My records and My page on the site** (`server.py`): the PLAY page's card asks `client.php?records` with the
+  launcher's sign-in, and its button opens MY PAGE in the browser through a one-time link (`client.php?link`).
+
+### Updates
+
+A launcher installed by its installer updates itself, and its player with it (`client/opendmtq_client/updates.py`). It
+asks the server it plays on first, at `/updates/`, then the project's releases on GitHub, and goes no further than the
+version its server hands out (or, from a server older than 0.11.0 that hands out none, than the server's own version):
+launchers stay matched to their server, on a network with no way out too. It takes an update only from a release whose
+checksums carry the project's signature ([below](#releases-and-their-signature)), fetches it into a folder of its own,
+and checks it there before anything goes into the program's folder: the delta package when the version installed is the
+one the release's delta starts from (the installed `Update.exe` puts the new package together from it), else the whole
+package. A package is checked by its bytes against the checksums, or, put together from a delta package, by the files
+it holds against the feed's `FilesSHA256`. Velopack then puts it in once the launcher has ended.
+
+The server hands out the updates of the version of the installer it hands out (`tools/opendmtq_tools/client_updates.py`,
+`server/portal/updates.php`): its own release's, from beside its code in a release's tools image, from
+`data/apk/pc-client-updates` (a host install's kit, or put there by hand), else fetched from that release. The app
+builder checks them against the signed checksums and keeps them in `data/apk/out/updates`, described in
+`data/apk/out/updates.json`; the site hands out only those files, without a sign-in.
 
 ## Start-up
 
@@ -343,19 +409,33 @@ picture and overlay work, is in [the PC client](windows-player.md#how-it-works).
 
 - `server/game/bin/setup-db.php` prepares the database: a new one gets the game's two tables (`Member`, `Play`); every
   start adds what later versions need (`PlayLog`, `AchievementDate`, `LiveSwitch`, `LiveSetting`, `SiteUser`,
-  `ApiToken`, the indexes, the keyboard's column `keys` on `Play` and `PlayLog` with 0 in every older row: where it
-  cannot be added the server does not start, as every save would fail), merges a player's duplicate score rows on one
-  chart (the best of each), caps scores a forged result left out of range, stores players' names that are no UTF-8 as
-  UTF-8 (read as CP949 where they are that, else with U+FFFD in place of each bad byte), and deletes plays older than a
-  year. It picks the journal mode the disk allows.
+  `ApiToken`, the players' game state in `PlayerState`, `PlayerItem`, `PlayerUnlock`, `PlayerPurchase`, `PlayerBan` and
+  `GameSetting`, the indexes, the keyboard's column `keys` on `Play` and `PlayLog` with 0 in every older row: where it
+  or the game state cannot be added the server does not start, as every save would fail), merges a player's duplicate
+  score rows on one chart (the best of each), caps scores a forged result left out of range, stores players' names that
+  are no UTF-8 as UTF-8 (read as CP949 where they are that, else with U+FFFD in place of each bad byte), and deletes
+  plays and purchases older than a year. It picks the journal mode the disk allows. Last, it notes the address this
+  start serves (`address.json`): a start at another address than the last notes the move, and the site's download page
+  tells players for a month to install the app built for the new one.
 - The live broadcasts' window (`data/state/live`) starts empty; the recordings stay.
 - The key that signs the site's sign-in cookie (`data/state/download.key`) is made once.
 - A small process keeps one database handle open while the server runs, so that closing a request's handle does not fold
   the write-ahead log back in each time.
 
-The image's start script also writes Apache's door settings for this install: whether the edge's doors are there,
-the admin pages on the public port (proxied on a local network address, sent to HTTPS where it works, refused in
-clear on an internet one), and the time zone PHP's dates follow.
+The image's start script also writes Apache's door settings for this install: whether the edge's doors are there, the
+admin pages and their API on the one port (passed to `ADMIN_URL` from anywhere on a local network address, sent to
+HTTPS where it works, and on an exposed server from the server PC only, [below](#security-model)), and the time zone
+PHP's dates follow.
+
+The admin pages, at their own start, write the owner's sign-in for the players' site beside the database (`owner.pass`,
+the ID and password of `.env`), keep their sign-ins there (`admin-session.key`, `admin-sessions.json`), so that a restart
+signs nobody out, and add their own tables when they first need them (the Notices page's `Webhook` and its queue).
+
+Before any of this, the command line's `up` and a host install's start move a server set up on port 80 before 0.11.0
+to the port its admin pages had (8791 unless its owner set another, else the first free one after it), as `port` moves
+a server: `LISTEN_PORT` and `PUBLIC_HOST` take the new port, the app is built again for the new address, the site's
+download page tells players to install it over the old one, and the start, `status` and the Server page each say it once
+(`port-moved.json`). Port 80 chosen with `port 80` stays.
 
 ## The database
 
@@ -372,8 +452,10 @@ erDiagram
   SiteUser |o--o{ ApiToken : "an admin's tokens"
   Member ||--o| PlayerState : "currencies and experience"
   Member ||--o{ PlayerItem : "items given, taken, bought"
+  Member ||--o{ PlayerUnlock : "products a level unlock opened"
   Member ||--o{ PlayerPurchase : "purchases"
   Member ||--o| PlayerBan : "a ban"
+  Webhook ||--o{ WebhookMessage : "its queued messages"
   Member {
     INTEGER id "no key: the game's own table"
     NVARCHAR nickname
@@ -421,6 +503,8 @@ erDiagram
     INTEGER playing
     INTEGER pattern_id
     INTEGER play_at
+    INTEGER toast_id "the waiting notice's number"
+    INTEGER maint_seen "the last maintenance change told in the game"
   }
   SiteUser {
     TEXT name PK
@@ -431,6 +515,7 @@ erDiagram
     INTEGER signed_in_at
     INTEGER off
     INTEGER guid
+    INTEGER signed_out_at "sign-ins made before it no longer count"
   }
   ApiToken {
     TEXT id PK "the token's first part"
@@ -475,6 +560,44 @@ erDiagram
     INTEGER until "null: until lifted"
     TEXT by
   }
+  PlayerUnlock {
+    INTEGER guid PK
+    INTEGER product_id PK
+    INTEGER at
+  }
+  GameSetting {
+    TEXT name PK "unlimited, start_mpoint, start_qpoint, start_level"
+    TEXT value
+  }
+  Webhook {
+    INTEGER id PK
+    TEXT url "the chat's address, a secret"
+    TEXT kind "discord or slack"
+    TEXT lang
+    TEXT events
+    INTEGER ok_at
+    INTEGER fail_at
+    INTEGER gave_up
+  }
+  WebhookMessage {
+    INTEGER id PK
+    INTEGER hook
+    TEXT key "one event, once per webhook"
+    TEXT event
+    REAL next_at
+    INTEGER tries
+    TEXT claim "the process sending it"
+    TEXT state "waiting, sending, sent, failed, dropped"
+  }
+  WebhookState {
+    TEXT name PK
+    TEXT value "what the loop knew at its last look"
+  }
+  WebhookTop {
+    INTEGER pattern_id PK
+    INTEGER user_id "each chart's #1, as last seen"
+    INTEGER score
+  }
 ```
 
 | Table | Holds |
@@ -484,9 +607,13 @@ erDiagram
 | `PlayLog` | Every saved play, a year of them: the monthly rankings, the site's recent plays and new records; whether each was played with the keyboard |
 | `AchievementDate` | When each player earned each achievement |
 | `BoardStamp` | The rankings' change number, one row: what the kept boards were worked out at |
-| `LiveSwitch` | The live view's switch per player, the upload token, who is in a song |
-| `SiteUser` | The site's accounts, made on the admin pages |
+| `LiveSwitch` | The live view's switch per player, the upload token, who is in a song, the notice waiting for the game and its number |
+| `LiveSetting` | The owner's settings for broadcasts as a whole: whether there are any, what new players start with, the quality |
+| `SiteUser` | The site's accounts, made on the admin pages; when an account last signed out everywhere else |
 | `ApiToken` | The API's tokens, made on the admin pages: a hash of each, and the admin it belongs to |
+| `PlayerState`, `PlayerItem`, `PlayerUnlock`, `PlayerPurchase`, `PlayerBan` | Each player's game state beyond their scores: the currencies, the experience, their own unlimited switch, the items given, taken and bought, what a level unlock opened, a year of purchases, a ban |
+| `GameSetting` | The server's game settings: unlimited currency for everyone, and what a new player starts with |
+| `Webhook`, `WebhookMessage`, `WebhookState`, `WebhookTop` | The Notices page's Discord and Slack webhooks, the queue of their messages, and what the sending loop knew at its last look (each chart's #1 among it) |
 
 `Member` and `Play` keep the names and types of the tables earlier DMTQ servers used, so their databases open
 unchanged; `Play`'s one column more, `keys`, comes last, with 0 for every row that was there. The
@@ -500,31 +627,69 @@ hand.
 - Containers run as the invoking user's uid (33, www-data, when that is root), with no capabilities,
   `no-new-privileges` and a read-only root filesystem. The content is mounted read-only. Apache and PHP do not announce
   their versions.
-- The stack publishes one port: `LISTEN_PORT`, 8791 (a server set up on port 80 before 0.11.0 moves there at its first start), on every interface (`BIND_ADDRESS` narrows it), held by
-  the edge. It carries plain HTTP and HTTPS; HTTPS ends in the edge, whose certificate is signed by an authority the
-  server makes for itself, limited to the server's own names ([internet.md](internet.md#https)). Only the edge holds
-  the certificate's key, and no running container holds the authority's.
+- The stack publishes one port: `LISTEN_PORT`, 8791 on a new install or the first free port after it (a server set up
+  on port 80 before 0.11.0 moves off it at its first start), on every interface (`BIND_ADDRESS` narrows it), held by the
+  edge. It carries plain HTTP and HTTPS; HTTPS ends in the edge, whose certificate is signed by an authority the server
+  makes for itself, limited to the server's own names ([internet.md](internet.md#https)). Only the edge holds the
+  certificate's key, and no running container holds the authority's.
 - The import opens the owner's archives with 7-Zip in a container of its own, which sees the folder it imports from,
   `data/content` and `data/apk/base`; the keys, the backups, the database and what phones download are hidden from it,
   and it has no network (compose service `importer`).
-- The admin pages have no port of their own: the server passes `/opendmtq/admin` to them on its one port. With
-  `ADMIN_ON_PUBLIC_PORT=no` (an exposed server) only the server PC's own visits are passed on: those that reach the
-  server from the stack network's gateway, which Docker Engine uses for a visit to localhost (`ADMIN_LOCAL=gateway`,
-  which the command line sets; under Docker Desktop and rootless Docker, which pass every visit that way, none), and that
-  carry none of the headers a proxy adds to say whom it passes on (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`,
-  `X-Forwarded-Host`, `X-Forwarded-Proto`, `Via`): a reverse proxy on the server PC passes on visits from elsewhere. A
-  host install keeps them to loopback on the same terms. No header a visit brings exempts it from the sign-in throttle.
-  Once HTTPS is set up a plain-HTTP visit from elsewhere is sent to HTTPS; one to localhost stays on plain HTTP.
+- The admin pages and their API have no port of their own: the server passes `/opendmtq/admin` and `/opendmtq/api` to
+  the admin service on its one port. On a local network address they are open to the network. On an exposed server
+  (`ADMIN_ON_PUBLIC_PORT=no`, which `./opendmtq expose` writes unless `--admin-public`) only the server PC's own visits
+  are passed on: with Docker those that reach the server from the stack network's gateway, which Docker Engine uses for
+  a visit to localhost (`ADMIN_LOCAL=gateway`, which the command line sets; under Docker Desktop and rootless Docker,
+  which pass every visit that way, none, so that there an exposed server's admin pages are off without
+  `--admin-public`), and on a host install loopback, which is all it allows for an internet address. Either way only a
+  visit that carries none of the headers a proxy adds to say whom it passes on (`X-Forwarded-For`, `Forwarded`,
+  `X-Real-IP`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `Via`) counts as the server PC's: a reverse proxy on the server
+  PC passes on visits from elsewhere. No header a visit brings exempts it from the sign-in throttle, and the server drops
+  any `X-Server-PC` a visitor sends. Once HTTPS is set up a plain-HTTP visit from elsewhere is sent to HTTPS; one to
+  localhost stays on plain HTTP.
 - Their API (`/opendmtq/api`) is passed on where they are, with a token on each request. Once HTTPS is set up, a
   plain-HTTP request to it is refused (`403 use_https`) and passed on nowhere: its token has gone out in clear already.
   The database keeps a SHA-256 of each token, compared in constant time; a token that works is never throttled, and
   wrong ones count with the sign-in throttle; a token works while its admin can open the pages ([api.md](api.md)).
+- Sign-ins. The admin pages keep theirs beside the database (`admin-sessions.json`, the cookie signed with
+  `admin-session.key`, both readable by the server's user only), so a restart signs nobody out and a sign-out ends one
+  for good. A new owner's password, on the Server page or the command line, ends the owner's other sign-ins; MY PAGE's
+  new password, new ID and Sign out everywhere else end the account's other sign-ins on the site and the admin pages
+  (`SiteUser.signed_out_at`). A one-time sign-in link works once, within a minute, and the server keeps only the SHA-256
+  of its token. A banned player's accounts are refused at the site's and the PC client's sign-in.
+- A webhook's address is a secret, as whoever has it can post to the chat: it stays in the database and leaves it only
+  for the chat, and the pages, the API and the log of changes show it masked. One that leads to the server itself or its
+  network link's own addresses (loopback, link-local such as a cloud's metadata address, the unspecified one) is refused
+  when it is added, and not sent to when its name leads there later.
+- What comes from the project's releases is checked against the release's checksums, which carry the project's Ed25519
+  signature ([below](#releases-and-their-signature)): the runtime for newer phones, the PC client's installer and its
+  updates on the server before it uses or hands out any, and each update in the PC client before anything goes into the
+  program's folder. A file that does not check out is refused, in words on the admin pages or the launcher, and what was
+  there stays.
 - The game's own protocol has no real authentication: the platform login trusts the phone's device id, and the game
-  login the player id in its token. Anyone who reaches the port can make accounts and act as any player. `./opendmtq expose` puts the server on the
-  internet ([internet.md](internet.md)).
+  login the player id in its token. Anyone who reaches the port can make accounts and act as any player. `./opendmtq
+  expose` puts the server on the internet ([internet.md](internet.md)).
 - The signing key's password is random per install and kept next to the key in `data/` (never tracked). keytool reads
   it from its environment, and the signer from a Java argument file only the server's user can read: neither has it on
   its command line, which every user of the machine can see.
+
+## Releases and their signature
+
+A release is laid out, checked and signed by `.github/release_assets.py` on the machine that holds the project's
+signing key (`OPENDMTQ_SIGNING_KEY` names its file; it never enters the repository or GitHub), and published with
+`release.yml`'s steps ([CONTRIBUTING.md](../CONTRIBUTING.md#releases)). Its files carry what each is, the version, the
+system and the architecture in lower case, and `opendmtq-<version>-sha256sums.txt` lists the SHA-256 of every other
+file, the PC client's update feed and its packages among them. `opendmtq-<version>-sha256sums.txt.sig` is the project's
+signature over that file's bytes: 64 bytes of Ed25519 as RFC 8032 defines it (`signing.py`, plain Python, the same
+file in `tools/opendmtq_tools` and `client/opendmtq_client`, with the public key built in). Whoever hands a release's file
+on, a server over plain HTTP, a mirror or a disk carried to a closed network, can change the file and the checksums
+beside it, but not the signature.
+
+The update feed (`releases.win.json`) gives the full package's `FilesSHA256` too, the SHA-256 of each file it holds by
+name: a package Velopack puts together from a delta package holds the same files zipped again, so it is checked by its
+files. The delta package (`opendmtq.client-<version>-delta.nupkg`) is made from the previous release's full package,
+which the PC client's build is given (`OPENDMTQ_PREVIOUS_RELEASE`). A PC client of 0.10.0 or older checks no
+signature: it updates from GitHub over HTTPS as it always did, and every update after that is checked.
 
 ## Without containers
 
@@ -532,14 +697,15 @@ A host install (`host/install.sh`, then `./opendmtq setup`) and the Windows bund
 `.env` and `data/`:
 
 <p align="center">
-  <img src="images/fig-host-parts.svg" alt="Without containers: ./opendmtq after host/install.sh, or OpenDMTQ.exe on Windows, passes the command to host/opendmtq_host, which prepares the start (the database, the song list, the live window, the download key, Apache's configuration), starts Apache with PHP's module, the admin pages on waitress, the PHP keeper and, once, the app builder, and starts again one that stops; on Windows a job object ends them all with the window" width="100%">
+  <img src="images/fig-host-parts.svg" alt="Without containers: ./opendmtq after host/install.sh, or OpenDMTQ.exe on Windows, passes the command to host/opendmtq_host, which prepares the start (the admin service's port, the database, the song list, the live window, the download key, Apache's configuration), starts Apache with PHP's module on the server's one port, 8791 by default, which passes /opendmtq/admin and /opendmtq/api on to the admin pages on waitress on a loopback port chosen at each start, the PHP keeper and, once, the app builder with the PC client's installer and updates; it starts again one that stops, and restarts, stops or removes the server when the Server page asks; on Windows a job object ends them all with the window" width="100%">
 </p>
 
 - `host/install.sh` leaves a marker, `.host/installed`; from then on the repository's `./opendmtq` passes every command
-  to `host/opendmtq_host`. Its commands are `setup`, `start`, `stop`, `restart`, `status`, `run`, `import`, `apk`,
-  `host`, `check`, `runtime` and `service`; the others (`expose`, `firewall`, `deploy` and the rest) are for Docker
-  Compose only. On Windows the same commands are `OpenDMTQ.exe <command>` in a terminal, and a double click on
-  `OpenDMTQ.exe` runs `setup`, then the server.
+  to `host/opendmtq_host`. Its commands are `setup`, `run`, `start`, `stop`, `restart`, `status`, `import`, `apk`,
+  `runtime`, `password`, `port`, `host`, `check`, `repair`, `delete-data`, `uninstall` and `service`; the others
+  (`up`, `down`, `deploy`, `backup`, `restore`, `expose`, `firewall` and the rest) are for Docker Compose only. On
+  Windows the same commands are `OpenDMTQ.exe <command>` in a terminal, and a double click on `OpenDMTQ.exe` runs
+  `setup`, then the server.
 - `host/opendmtq_host` writes Apache's configuration at every start (`.host/run/httpd.conf`): the modules, the
   logs, one door on `LISTEN_PORT` with `server/apache/site.conf`, and the admin pages behind it. The folder variables
   point into `data/`.
@@ -550,6 +716,13 @@ A host install (`host/install.sh`, then `./opendmtq setup`) and the Windows bund
   image. If a program stops by itself, it is started again.
 - There is no edge, so no HTTPS: the admin pages and their API are on the server's one port from anywhere for a local
   network address, and for an internet one from the server PC only, at `http://localhost:<port>/opendmtq/admin/`.
+- The Server page's Restart, Stop and Uninstall leave `restart.request`, `stop.request` or `uninstall.request` in
+  `.host/run`, which the host program's watch loop acts on (the uninstall once every program has stopped, keeping
+  `data/` and `.env` when asked: `host/opendmtq_host/remove.py`). Its repair checks the program's own files against the
+  install's list of them, `app/MANIFEST.sha256` in the Windows bundle (written when the bundle is made) and
+  `.host/manifest.sha256` in a host install (written by `host/get.sh`), and puts back each it can from the install's
+  release (`tools/opendmtq_tools/manifest.py`, `repair.py`). With Docker Compose and Kubernetes the page names the
+  commands that do these instead.
 - The setup pages (`tools/opendmtq_tools/admin/setup.py`) know they run on the server PC from `OPENDMTQ_HOST_INSTALL`,
   which the host program sets. They then look in the owner's folders, run the import as a job, and change the
   address: they write `PUBLIC_HOST` to `.env` and leave `.host/run/restart.request`, and the host program's watch loop
@@ -567,20 +740,22 @@ A host install (`host/install.sh`, then `./opendmtq setup`) and the Windows bund
 | Path | Contents | Backed up |
 | :--- | :--- | :--- |
 | `data/content/` | What was imported: the client data and the song data, read only | No (import again) |
-| `data/state/dmtq.db3` (and its `-wal`, `-shm`) | Accounts and scores; the players' broadcast switches and the server's broadcast settings (the admin Broadcasts page) | Yes (a restore keeps today's accounts and API tokens, and on the admin pages today's switches and settings) |
+| `data/state/dmtq.db3` (and its `-wal`, `-shm`) | Accounts and scores; the players' game state (currencies, levels, items, purchases, bans); the players' broadcast switches and the server's broadcast settings (the admin Broadcasts page); the Notices page's webhooks and their queue | Yes (a restore keeps today's accounts, API tokens and webhooks, and on the admin pages today's switches and settings) |
 | `data/state/live/` | The live view's window: the last segments of each broadcast. Cleared at start | No |
 | `data/state/live-rec/` | Recordings of broadcasts, up to the limits on the admin Broadcasts page | No |
 | `data/state/logs/` | The request log the admin Logs page reads (three files of 10 MB), and a host install's other logs | No |
 | `data/state/admin-cache/` | The admin pages' copies of the site's stylesheet, fonts and icon | No (fetched again) |
+| `data/state/` beside the database | The site's notice (`notice.json`); the owner's sign-in for the site (`owner.pass`); the admin pages' sign-ins (`admin-sessions.json`, `admin-session.key`); the key of the site's sign-in cookie (`download.key`); one-time sign-in links (`signin-links/`); the address the last start served and a move off port 80 (`address.json`, `port-moved.json`) | No |
 | `data/apk/base/` | The owner's APK | No (import again) |
-| `data/apk/out/` | Patched apps with a manifest each, `latest.json` (the one the site offers), `build.json` (the builder's last run), the QR code, and the PC client's installer (`OpenDMTQ-Setup.exe`, described in `windows.json`) | No (rebuilt) |
-| `data/apk/OpenDMTQ-Setup.exe` | The PC client's installer, where a server without one beside its code keeps it, with `OpenDMTQ-Setup.exe.version`: fetched from the latest release, or put there by hand | No (the app builder fetches it again) |
+| `data/apk/out/` | Patched apps (`opendmtq-phone-app-<date>-android-<address>.apk`) with a manifest each, `latest.json` (the one the site offers), `build.json` (the builder's last run), the QR code, the PC client's installer (`OpenDMTQ-Setup.exe`, described in `windows.json`, handed out as `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`), and its updates (`updates/`, described in `updates.json`) | No (rebuilt) |
+| `data/apk/OpenDMTQ-Setup.exe` | The PC client's installer, where a server without one beside its code keeps it, with `OpenDMTQ-Setup.exe.version`: fetched from the release of the server's version (else the latest), or put there by hand | No (the app builder fetches it again) |
+| `data/apk/pc-client-updates/` | The PC client's updates of a release with its signed checksums, put there by a host install's kit or by hand for a server without internet | No |
 | `data/apk/keystore/` | The signing key and its password | Yes |
 | `data/apk/arm32/` | The arm32 runtime bundle | No (the app builder brings it back) |
 | `data/custom/` | Added songs (`songs/`, `ids.json`) and hidden flags (`hidden.json`); the song list, `catalog.json`, the overlay and the site's jackets made from them | The songs and flags; the rest is rebuilt |
 | `data/https/` | The server's certificate authority and certificate, with their keys (Docker Compose) | No (`./opendmtq up` makes a new authority) |
-| `.env` | Address, ports, passwords | By `./opendmtq backup`, for reference: a restore does not put it back |
-| `data/backups/` | Backup archives, the newest 30 kept, readable by their owner only | |
+| `.env` | Address, the one port, passwords | By `./opendmtq backup`, for reference: a restore does not put it back |
+| `data/backups/` | Backup archives (`opendmtq-server-backup-<time>-<why>.tar.gz`; backups named before still count), the newest 30 kept, readable by their owner only | |
 
 hls.js, the live and recording pages' video player, is in `server/portal/hls/` (version 1.5.17 as published, Apache
 License 2.0), served by the site (`server/portal`), and by the admin pages from a copy they keep. Video therefore works on a server
