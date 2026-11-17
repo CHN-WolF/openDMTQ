@@ -602,10 +602,10 @@ def on_air(con, now):
 
 
 def maintenance_now():
-    """The maintenance notice now: {"on", "id" (its last change's number), "message"}."""
+    """The maintenance notice now: {"on", "id" (its last change's number), "at" (when that change was made), "message"}."""
     on, message = songs.maintenance()
     stamp = songs.maintenance_stamp() or {}
-    return {"on": bool(on), "id": int(stamp.get("id") or 0), "message": message if on else ""}
+    return {"on": bool(on), "id": int(stamp.get("id") or 0), "at": int(stamp.get("at") or 0), "message": message if on else ""}
 
 
 def month_leader(con, start):
@@ -679,8 +679,9 @@ def ended(guid, was, now):
 
 
 def look(con, state, now):
-    """What happened since the last look (state), read without writing anything: [(kind, key, data)] and the state and
-    the charts' #1s to keep. Each event's key is the same whoever looks, so that a message is queued once."""
+    """What the plays since the last look (state) made, read without writing anything, from one moment of the database
+    (the caller's read transaction): the charts' and the month's new #1s, [(kind, key, data, when it happened)], with the
+    state and the charts' #1s to keep (look_live() adds who is on air and the notice). Each event's key is the same whoever looks, so that a message is queued once."""
     events, tops = [], {}
     new = json.loads(json.dumps(state))
     # The plays since the last look, in the order they were saved; the cursor and its mark at the last of them.
@@ -727,11 +728,13 @@ def look(con, state, now):
         if info["song"] is None or by_id[info["song"]].get("hidden_yn", "N") == "Y":
             continue
         guid = int(current["user_id"])
+        # When it was taken: the holder's last play of this chart in this look's share.
+        taken = max(int(p["played_at"] or 0) for p in plays if p["pattern_id"] == pattern and p["user_id"] == guid)
         events.append(("chart_top", f"chart_top:{pattern}:{guid}:{int(current['score'] or 0)}:{current['judgement']}",
                        {"player": guid, "name": site.player_name(current["nickname"], guid), "pattern": pattern, "song_id": info["song"],
                         "song": info["title"], "chart": info["chart_name"], "score": int(current["score"] or 0),
                         "before_player": int(before["user_id"]), "before": site.player_name(before["nickname"], before["user_id"]),
-                        "before_score": int(before["score"] or 0)}))
+                        "before_score": int(before["score"] or 0)}, taken))
     # This month's #1, once someone played this month: whoever leads now, against whom the loop knew to lead.
     start = site.month_start()
     month_plays = [p for p in plays if int(p["played_at"] or 0) >= start]
@@ -746,14 +749,24 @@ def look(con, state, now):
         if leader and leader["id"] != known and leader["id"] in players:
             before = next((b for b in board[1:] if b["id"] == known), None) if known is not None else None
             # The one before: the runner-up now, when that is the leader the loop knew.
+            # When it was taken: the leader's last play of the month in this look's share.
+            taken = max(int(p["played_at"] or 0) for p in month_plays if p["user_id"] == leader["id"])
             events.append(("month_top", f"month_top:{start}:{leader['id']}:{leader['score']}",
                            {"player": leader["id"], "name": leader["name"], "score": leader["score"], "start": start, "first": known is None,
-                            "before": before["name"] if before else None, "before_score": before["score"] if before else None}))
+                            "before": before["name"] if before else None, "before_score": before["score"] if before else None}, taken))
             new["month"] = {"start": start, "leader": leader["id"]}
         elif leader and leader["id"] != known:
             new["month"] = {"start": start, "leader": known}
         else:
             new["month"] = {"start": start, "leader": leader["id"] if leader else known}
+    return events, new, tops
+
+
+def look_live(con, new, now):
+    """Who is on air and the maintenance notice since the last look, into new (the state look() made): [(kind, key, data,
+    when it happened)]. Apart from look()'s one moment of the database: who is on air asks the broadcasts' settings
+    through a connection of its own, which would wait on look()'s while a disk without write-ahead logging is written to."""
+    events = []
     # Who is on air. A broadcast is a player on air, from the first look that sees them until they have been off air for
     # OFF_AIR seconds: whatever its recordings do meanwhile (none for a while, a new one each hour, a new one after a short
     # drop), it is one start and one end. Its key is when it began, as the look that first saw it kept it.
@@ -764,7 +777,7 @@ def look(con, state, now):
         if was is None:
             started = air[str(guid)] = broadcast(p, now)
             events.append(("live_on", f"live_on:{guid}:{started['began']}", {"player": guid, "name": p["name"], "song": p["song"],
-                                                                             "chart": p["chart"], "rec": p["rec"]}))
+                                                                             "chart": p["chart"], "rec": p["rec"]}, started["began"]))
             continue
         # The same broadcast, seen now: its end counts from the last look that saw it. Its first recording is the one it
         # is watched again from, kept once there is one.
@@ -775,15 +788,17 @@ def look(con, state, now):
         # Off air for OFF_AIR seconds: ended. One on air at the loop's first look ends too, though its start was before.
         if int(guid) not in air_now and now - int(air[guid].get("seen", now)) >= OFF_AIR:
             was = air.pop(guid)
-            events.append(("live_off", f"live_off:{guid}:{was['began']}", ended(int(guid), was, now)))
+            # It ended when a look last saw it on air.
+            events.append(("live_off", f"live_off:{guid}:{was['began']}", ended(int(guid), was, now), int(was.get("seen", now))))
     new["air"] = air
     # The maintenance notice turned on or off since the last look.
     maint = maintenance_now()
     if maint["on"] != bool(new.get("maint", {}).get("on")):
         kind = "maint_on" if maint["on"] else "maint_off"
-        events.append((kind, f"{kind}:{maint['id'] or int(now)}", {"message": maint["message"]}))
+        # When the owner turned it on or off, as its change was noted.
+        events.append((kind, f"{kind}:{maint['id'] or int(now)}", {"message": maint["message"]}, int(maint.get("at") or now)))
     new["maint"] = maint
-    return events, new, tops
+    return events
 
 
 def write(con, rev, events, new, tops, now):
@@ -797,11 +812,15 @@ def write(con, rev, events, new, tops, now):
             return 0
         queued = 0
         hooks = [(int(h["id"]), h["events"].split(",")) for h in con.execute("SELECT id, events FROM Webhook")]
-        for kind, key, data in events:
+        for kind, key, data, at in events:
+            # News as old as what it tells: older than GIVE_UP (the admin service was away), it is no news now.
+            if at < now - GIVE_UP:
+                continue
             for hook, wanted in hooks:
                 if kind in wanted:
+                    # Queued with the time of what it tells, which the giving up counts from.
                     cur = con.execute("INSERT OR IGNORE INTO WebhookMessage (hook, key, kind, event, made_at, next_at) VALUES (?, ?, ?, ?, ?, ?)",
-                                      (hook, key, kind, json.dumps(data, ensure_ascii=False), int(now), now))
+                                      (hook, key, kind, json.dumps(data, ensure_ascii=False), int(at), now))
                     queued += cur.rowcount
         for pattern, top in tops.items():
             if top is None:
@@ -841,12 +860,13 @@ def detect(now=None):
                 con.execute("ROLLBACK")
                 raise
             return 0
-        # Everything the look reads, from one moment of the database: the plays and the best scores they made, together.
+        # The plays and the best scores they made, read from one moment of the database; then who is on air and the notice.
         con.execute("BEGIN")
         try:
             events, new, tops = look(con, state, now)
         finally:
             con.execute("COMMIT")
+        events += look_live(con, new, now)
         return write(con, state["rev"], events, new, tops, now)
     finally:
         con.close()

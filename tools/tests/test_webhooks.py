@@ -308,9 +308,10 @@ class RulesTest(unittest.TestCase):
             con.commit()
             con.close()
             webhooks.detect()
-            inst.play(7, 12, 100, at=month + 10)
-            inst.play(7, 21, 100, at=month + 11)
-            inst.play(8, 11, 960000, at=month + 20)
+            base = max(month, int(time.time()) - 600)
+            inst.play(7, 12, 100, at=base + 10)
+            inst.play(7, 21, 100, at=base + 11)
+            inst.play(8, 11, 960000, at=base + 20)
             for _ in range(3):
                 webhooks.detect()
             self.assertEqual([(d["name"], d["first"]) for _, k, d, _ in inst.queued()], [("Yuna", True)])
@@ -385,12 +386,14 @@ class RulesTest(unittest.TestCase):
             con.commit()
             con.close()
             webhooks.detect()
-            inst.play(7, 12, 500000, at=month + 10)
+            # This month's plays, a few minutes old.
+            base = max(month, int(time.time()) - 600)
+            inst.play(7, 12, 500000, at=base + 10)
             webhooks.detect()
-            inst.play(8, 11, 960000, at=month + 20)
+            inst.play(8, 11, 960000, at=base + 20)
             webhooks.detect()
             # Sena raises her own month: still second, no news.
-            inst.play(7, 11, 300000, at=month + 30)
+            inst.play(7, 11, 300000, at=base + 30)
             webhooks.detect()
             months = [(d["name"], d["first"], d.get("before")) for _, k, d, _ in inst.queued() if k == "month_top"]
             self.assertEqual(months, [("Sena", True, None), ("Yuna", False, "Sena")])
@@ -399,10 +402,12 @@ class RulesTest(unittest.TestCase):
         with Server() as inst:
             inst.hook()
             now = time.time()
+            # Its recording began a moment ago, as the server opens one.
+            rec = int(now) - 3
             webhooks.detect(now)
-            inst.on_air(7, 1793000000)
+            inst.on_air(7, rec)
             webhooks.detect(now + 5)
-            inst.on_air(7, 1793000000, on=False)
+            inst.on_air(7, rec, on=False)
             # Off air for less than a minute: a drop, no end.
             webhooks.detect(now + 30)
             webhooks.detect(now + 60)
@@ -410,8 +415,8 @@ class RulesTest(unittest.TestCase):
             self.assertEqual(kinds, ["live_on"])
             webhooks.detect(now + 70)
             (_, k1, on, _), (_, k2, off, _) = inst.queued()
-            self.assertEqual((k1, on["name"], on["rec"]), ("live_on", "Sena", 1793000000))
-            self.assertEqual((k2, off["rec"]), ("live_off", 1793000000))
+            self.assertEqual((k1, on["name"], on["rec"]), ("live_on", "Sena", rec))
+            self.assertEqual((k2, off["rec"]), ("live_off", rec))
 
     def test_one_broadcast_is_one_start_and_one_end_whatever_its_recordings(self):
         with Server() as inst:
@@ -424,23 +429,24 @@ class RulesTest(unittest.TestCase):
                 inst.on_air(7, 0)
                 webhooks.detect(now + 5 * (i + 1))
             # Its recording opens, then the next hour's: the same broadcast still.
-            inst.on_air(7, 1793000000)
+            first = int(now) + 20
+            inst.on_air(7, first)
             webhooks.detect(now + 25)
-            inst.on_air(7, 1793003600)
+            inst.on_air(7, first + 3600)
             webhooks.detect(now + 30)
             self.assertEqual([k for _, k, _, _ in inst.queued()], ["live_on"])
             # Ended, and on again within the minute: still the one broadcast.
-            inst.on_air(7, 1793003600, on=False)
+            inst.on_air(7, first + 3600, on=False)
             webhooks.detect(now + 50)
-            inst.on_air(7, 1793007200)
+            inst.on_air(7, first + 7200)
             webhooks.detect(now + 60)
             self.assertEqual([k for _, k, _, _ in inst.queued()], ["live_on"])
             # Off air for a minute: one end, watched again from its first recording.
-            inst.on_air(7, 1793007200, on=False)
+            inst.on_air(7, first + 7200, on=False)
             webhooks.detect(now + 130)
-            self.assertEqual([(k, d.get("rec")) for _, k, d, _ in inst.queued()], [("live_on", 0), ("live_off", 1793000000)])
-            # On again after that: a new broadcast.
-            inst.on_air(7, 1793010000)
+            self.assertEqual([(k, d.get("rec")) for _, k, d, _ in inst.queued()], [("live_on", 0), ("live_off", first)])
+            # On again after that: a new broadcast, its recording opened a moment ago.
+            inst.on_air(7, int(time.time()) - 2)
             webhooks.detect(now + 140)
             self.assertEqual([k for _, k, _, _ in inst.queued()], ["live_on", "live_off", "live_on"])
 
@@ -610,6 +616,27 @@ class SendingTest(unittest.TestCase):
             webhooks.deliver(now + webhooks.GIVE_UP + 1)
             hook = webhooks.listing()[0]
             self.assertEqual((hook["waiting"], hook["given_up"]), (0, 1))
+
+    def test_news_is_as_old_as_what_it_tells(self):
+        # The admin service away for two hours: a first place taken then is no news now, and is not sent.
+        with Server() as inst:
+            inst.hook(events=["chart_top"])
+            webhooks.detect()
+            inst.play(8, 11, 950000, at=int(time.time()) - 7200)
+            webhooks.detect()
+            self.assertEqual(webhooks.deliver(), 0)
+            self.assertEqual((inst.queued(), inst.chat.got), ([], []))
+        # One taken 25 minutes ago, whose chat does not take it: given up 5 minutes on, half an hour after the play.
+        with Server() as inst:
+            inst.chat.answers = [(503, b"", {})]
+            inst.hook(events=["chart_top"])
+            now = time.time()
+            webhooks.detect(now)
+            inst.play(8, 11, 950000, at=int(now) - 1500)
+            webhooks.detect(now)
+            webhooks.deliver(now)
+            webhooks.deliver(now + 301)
+            self.assertEqual([s for _, _, _, s in inst.queued()], ["dropped"])
 
     def test_no_answer_in_time_and_no_chat_there(self):
         with Server() as inst:
