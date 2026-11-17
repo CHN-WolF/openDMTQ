@@ -71,7 +71,9 @@ API, passed on with them).
 The PC client talks to the site through `/opendmtq/client.php`: `?about` says whether the address is an OpenDMTQ server
 (its version, name and address, and whether its app is built; no sign-in), `?signin` signs in with a site ID and password as the sign-in page
 does (the same throttle, and the site's cookie back), and `?app` describes the app on offer to a signed-in player, which
-the client then downloads from `/apk`.
+the client then downloads from `/apk`. With that sign-in, `?link` gives a one-time link that signs a browser in to the same
+account once, within a minute (`/opendmtq/login.php?once=...`, kept beside the database by the hash of its token), and
+`?records` the account's player's latest plays and best records, each with its place on its chart.
 
 ## How a request is answered
 
