@@ -464,6 +464,8 @@ class SendingTest(unittest.TestCase):
             self.assertEqual(webhooks.deliver(now + 3), 2)
             titles = [title_of(m["body"]) for m in inst.chat.got]
             self.assertEqual(titles, ["Maintenance", "Maintenance", "Maintenance is over"])
+            # Asked to wait is no failure: the card never showed one.
+            self.assertIsNone(webhooks.listing()[0]["last_failure"])
 
     def test_a_webhook_gone_stops_its_message_and_says_so(self):
         with Server() as inst:
@@ -640,6 +642,21 @@ class LoopTest(unittest.TestCase):
                 webhooks._loop()
         self.assertEqual(len(turns), 3)
         self.assertIn("database is locked", str(warned.call_args_list[0]))
+
+    def test_a_lasting_failure_is_said_once(self):
+        turns = []
+
+        def turn():
+            turns.append(1)
+            if len(turns) == 5:
+                raise SystemExit
+            raise sqlite3.OperationalError("no such table: Play")
+
+        with mock.patch.object(webhooks, "run_once", turn), mock.patch.object(webhooks, "EVERY", 0), \
+                mock.patch.object(webhooks.app.logger, "warning") as warned:
+            with self.assertRaises(SystemExit):
+                webhooks._loop()
+        self.assertEqual(warned.call_count, 1)
 
 
 if __name__ == "__main__":

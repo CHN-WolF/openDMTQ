@@ -326,7 +326,9 @@ def send_test(hook):
     note_result(hook, result)
     changed("webhook_action:test", masked(row["url"]))
     return {"sent": result["ok"], "status": result["status"], "code": None if result["ok"] else result["code"],
-            "message": t("hook.test_sent", address=masked(row["url"])) if result["ok"] else failure_words(result["code"], result["status"])}
+            # A test is not sent again: a chat that asked to wait has its own words for it.
+            "message": t("hook.test_sent", address=masked(row["url"])) if result["ok"] else
+            (tp("hook.fail_limited_test", status=result["status"]) if result["code"] == "limited" else failure_words(result["code"], result["status"]))}
 
 
 # ------------------------------------------------------------------------------ the messages
@@ -494,7 +496,10 @@ def post(url, body, timeout=TIMEOUT):
 
 
 def note_result(hook, result):
-    """How a message to a webhook went, on the webhook: when the last one went through, or the last failure."""
+    """How a message to a webhook went, on the webhook: when the last one went through, or the last failure. A chat that
+    asked to wait (429) failed nothing: the message waits, and the card counts it."""
+    if result["code"] == "limited":
+        return
     con = connect()
     try:
         if result["ok"]:
@@ -613,7 +618,8 @@ def look(con, state, now):
     for p in plays:
         if p["pattern_id"] is not None and p["user_id"] is not None:
             touched.setdefault(int(p["pattern_id"]), set()).add(int(p["user_id"]))
-    charts, by_id = site.chart_map(), site.songs_by_id()
+    # The song list only when a chart was played: a look with nothing new reads no file.
+    charts, by_id = (site.chart_map(), site.songs_by_id()) if touched else ({}, {})
     for pattern, players in touched.items():
         current = con.execute(TOP_OF, (core.CHECK_UDID, pattern)).fetchone()
         known = con.execute("SELECT user_id, score, judgement FROM WebhookTop WHERE pattern_id = ?", (pattern,)).fetchone()
@@ -832,14 +838,20 @@ def run_once(now=None):
 
 
 def _loop():
-    """The thread: a turn every EVERY seconds. A turn that fails (the database busy or away) is tried again at the next."""
+    """The thread: a turn every EVERY seconds. A turn that fails (the database busy or away) is tried again at the next; the
+    log says why once, not every few seconds while it lasts."""
+    said = ""
     while True:
         time.sleep(EVERY)
         try:
             run_once()
+            said = ""
         except Exception as e:  # pylint: disable=broad-except
-            # The next turn tries again; the log says why.
-            app.logger.warning("webhooks: %s: %s", e.__class__.__name__, e)
+            # The next turn tries again; the log says why, once for the same reason.
+            why = f"{e.__class__.__name__}: {e}"
+            if why != said:
+                app.logger.warning("webhooks: %s", why)
+            said = why
 
 
 # The loop runs in this service from its start, with or without a page open. OPENDMTQ_WEBHOOK_LOOP=off leaves it out: the
