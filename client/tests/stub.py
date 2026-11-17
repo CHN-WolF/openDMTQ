@@ -57,7 +57,10 @@ class Site:
         self.records = made_up_records()   # client.php?records' answer; None: a server from before records (404)
         self.links = True              # client.php?link answers; False: a server from before one-time links (404)
         self.version = "0.8.0"         # the OpenDMTQ version client.php?about says
-        self.health = {"ok": True, "patch": "1.003.005", "maintenance": False}   # what its health page answers
+        # What its health page answers, as the real one does (server/portal/health.php), and the owner's maintenance
+        # notice the game asks for at its start (/inspection/status.json).
+        self.health = {"ok": True, "patch": "1.003.005", "game_data": True, "database": True, "writable": True}
+        self.maintenance = False
         self.broadcasts = False        # broadcasts on for the server (/live/state)
         # The client data's list of files for its patch, as the game downloads it (its first bytes).
         self.listing = b"\x02" + b"patch list " * 300
@@ -107,6 +110,9 @@ class Site:
                 if self.path == "/opendmtq/client.php?about":
                     return self._json(200, {"opendmtq": site.version, "name": "Stand-in", "address": "127.0.0.1:8080",
                                             "app": site.app_state == "ok"})
+                if self.path == "/inspection/status.json":
+                    return self._json(200, {"value": {"open_yn": "Y" if site.maintenance else "N", "disable_apps": [],
+                                                      "non_kill_apps": []}, "result_code": "000", "resulr_msg": "API_OK"})
                 if self.path == "/live/state?ids=0":
                     # What the player asks between songs, for nobody's number.
                     return self._json(200, {"on": False, "fps": 30, "height": 720, "bitrate": 2000000, "segment": 2,

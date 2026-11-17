@@ -159,7 +159,7 @@ the clipboard:
 | OpenDMTQ server | Its answer as an OpenDMTQ server: its name and version, and over HTTPS whether Windows or the server's own authority vouches for its certificate |
 | Version | The server's version against the launcher's |
 | Sign-in | Whether the server still takes the launcher's sign-in (asked with it, no password) |
-| Game server | The game server's own answer: its patch, maintenance |
+| Game server | The game server's own answers: its patch, and the owner's maintenance notice as the game asks for it at its start; or what keeps it from serving the game (no client data, no database or one it cannot write, no address of its own) |
 | Broadcasts | The broadcast state the player asks for between songs |
 | Downloads | The app and the client data's list of files, by their headers alone: nothing is downloaded |
 | Round trip | Five small asks: the time in the middle, the fastest and the slowest |

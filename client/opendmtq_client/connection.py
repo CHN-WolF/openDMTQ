@@ -274,20 +274,36 @@ def _steps(result, address, server, end, stop, cancel):
             # holds all the same.
             cookie = server["cookie"]
             end(result.step("signin").done("ok", "ok_app", _ms(started), account=server.get("account") or "?", error=e))
-    # 7. The game server's own answer.
+    # 7. The game server's own answers: its health page (the client data, the database), and the maintenance check the
+    # game makes at its start (/inspection/status.json: open_yn Y while the owner's notice is on).
     started = time.perf_counter()
     health = None
     try:
         status, health, _ = srv._call(url, "/opendmtq/health.php", timeout=srv.TIMEOUT)
     except srv.ServerError as e:
         status, health = None, e
+    try:
+        _, inspection, _ = srv._call(url, "/inspection/status.json", timeout=srv.TIMEOUT)
+    except srv.ServerError:
+        inspection = None
+    maintenance = isinstance(inspection, dict) and (inspection.get("value") or {}).get("open_yn") == "Y"
     if isinstance(health, dict) and "patch" in health:
-        if health.get("maintenance"):
-            end(result.step("game").done("warn", "maintenance", _ms(started), patch=health.get("patch") or "?"))
-        elif health.get("ok") and status == 200:
-            end(result.step("game").done("ok", "ok", _ms(started), patch=health.get("patch") or "?"))
+        patch = health.get("patch") or "?"
+        if health.get("ok") and status == 200:
+            end(result.step("game").done("warn" if maintenance else "ok", "maintenance" if maintenance else "ok",
+                                         _ms(started), patch=patch))
+        elif health.get("game_data") is False:
+            # Without the client data the game cannot start: the server says so first.
+            end(result.step("game").done("bad", "no_data", _ms(started)))
+        elif health.get("database") is False:
+            end(result.step("game").done("bad", "no_database", _ms(started)))
+        elif health.get("writable") is False:
+            end(result.step("game").done("bad", "read_only", _ms(started)))
+        elif not health.get("host"):
+            # The address the server's app is made for, not set yet: the server's setup has not given it one.
+            end(result.step("game").done("bad", "no_host", _ms(started)))
         else:
-            end(result.step("game").done("bad", "down", _ms(started), problem=health.get("problem") or status))
+            end(result.step("game").done("bad", "down", _ms(started), problem="HTTP %s" % status))
     else:
         end(result.step("game").done("bad", "no_answer", _ms(started), error=_reason(health) or status))
     # 8. The broadcast state, as the player asks it between songs (for nobody's number: no notice is taken).

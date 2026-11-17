@@ -187,13 +187,23 @@ class ConnectionTest(Folder):
                                                         "downloads after a sign-in.")
 
     def test_the_game_under_maintenance_and_down(self):
-        self.site.health = {"ok": True, "patch": "1.003.005", "maintenance": True}
+        # The owner's maintenance notice, as the game asks for it at its start.
+        self.site.maintenance = True
         _, steps, _ = self.run_test()
         self.assertEqual((steps["game"].state, self.said(steps["game"])),
                          ("warn", "The game server answers, under maintenance: patch 1.003.005."))
-        self.site.health = {"ok": False, "patch": "1.003.005", "maintenance": False, "problem": "no client data"}
-        _, steps, _ = self.run_test()
-        self.assertEqual(self.said(steps["game"]), "The game server answers that it cannot serve the game: no client data.")
+        self.site.maintenance = False
+        # What the health page says of a server that cannot serve the game, each in words.
+        for health, said in (({"game_data": False}, "The game server answers without its client data: the game cannot start."),
+                             ({"database": False}, "The game server answers without its database."),
+                             ({"writable": False}, "The game server cannot write its database: plays are not kept."),
+                             ({"host": ""}, "The game server answers with no address of its own set.")):
+            self.site.health = dict({"ok": False, "patch": "1.003.005", "game_data": True, "database": True, "writable": True,
+                                     "host": "192.168.1.10:8791"}, **health)
+            _, steps, _ = self.run_test()
+            self.assertEqual((steps["game"].state, self.said(steps["game"])), ("bad", said))
+        # The last of them in Korean.
+        self.assertEqual(self.said(steps["game"], KO), "게임 서버에 자기 주소가 정해져 있지 않습니다.")
 
     def test_not_an_address_and_a_name_that_leads_nowhere(self):
         result, steps, _ = self.run_test("not an address", signed=False)
