@@ -62,6 +62,8 @@ CHANGE_WORDS = {
     "server:repair": "change.server_repair", "server:delete-data": "change.server_delete_data",
     # Play on this PC (this_pc.py): the PC client installed or opened on the server PC, by whoever pressed it.
     "app:play_here": "change.play_here",
+    # A one-time sign-in link to the players' site the API made (site_links.py), for its token's admin.
+    "site:link": "change.site_link",
 }
 
 

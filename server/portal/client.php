@@ -5,9 +5,16 @@
      POST client.php?signin   an account's ID and password (user, password): the site's sign-in cookie, as the sign-in
                               page gives a browser, which the launcher keeps instead of the password
      GET  client.php?app      the app on offer for this address, to download from /apk (signed in)
+     POST client.php?link     a one-time link that signs a browser in to the same account and opens the player's page
+                              (My page on the site): {"url", "page", "expires"} (signed in)
+     GET  client.php?records  the account's player's latest plays and best records, each with its place on the chart
+                              and the keyboard's mark, as the player's page lists them (signed in)
 
    The app itself comes from /apk with the cookie, as a phone's browser gets it. */
 require __DIR__ . '/lib.php';
+
+// How many of each list the launcher's PLAY page shows: a few, the rest is on the player's page.
+const CLIENT_RECORDS = 5;
 
 /* One answer as JSON with its status, and the end. Never kept by a cache: each says how things stand now. */
 function answer(int $status, array $body): void
@@ -75,4 +82,99 @@ if (isset($_GET['app'])) {
         'address' => public_host()]);
 }
 
+if (isset($_GET['link'])) {
+    // A link is a sign-in: asked for with a POST, as client.php?signin is.
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        answer(405, ['error' => 'post']);
+    }
+    $who = site_user();
+    if ($who === null) {
+        answer(403, ['error' => 'signin']);
+    }
+    // The player's own page when the account is linked to its game player, else the site's home.
+    $me = site_me();
+    $page = $me !== null ? '/opendmtq/player.php?id=' . $me : '/opendmtq/';
+    $token = once_issue($who, $page);
+    if ($token === null) {
+        answer(503, ['error' => 'down']);
+    }
+    answer(200, ['url' => '/opendmtq/login.php?once=' . $token, 'page' => $page, 'expires' => time() + ONCE_LIFE]);
+}
+
+if (isset($_GET['records'])) {
+    $who = site_user();
+    if ($who === null) {
+        answer(403, ['error' => 'signin']);
+    }
+    $me = site_me();
+    $db = db();
+    // An account linked to no game player has no records of its own to show: said so, with nothing in the lists.
+    $figures = ($me !== null && $db) ? player_figures($db, $me) : null;
+    if ($me === null || !$figures) {
+        answer(200, ['account' => $who, 'player' => null, 'recent' => [], 'best' => []]);
+    }
+    answer(200, ['account' => $who, 'player' => ['id' => $me, 'name' => (string)$figures['name'], 'rank' => $figures['rank'],
+        'total' => (int)$figures['total'], 'charts' => (int)$figures['charts']], 'page' => '/opendmtq/player.php?id=' . $me]
+        + client_records($db, $me));
+}
+
 answer(404, ['error' => 'unknown']);
+
+/* A player's latest plays and best records as the PC client shows them, CLIENT_RECORDS of each: the chart (its song's
+   title and its name in the game's words), the score, the grade, whether the keyboard played it, and the player's place
+   on that chart's leaderboard (as song.php ranks it: by score, then accuracy, then the older account) out of how many
+   have a record there; a play also when it was and whether it set a record, a best when it was set (null for records
+   older than the play log). */
+function client_records(SQLite3 $db, int $me): array
+{
+    $charts = charts();
+    $songs = songs_by_id();
+    // The chart as a list names it; a chart the song list has no more stays by its number.
+    $chart = function (int $pid) use ($charts, $songs): array {
+        [$sid, $line, $diff, $sig] = $charts[$pid] ?? [0, 0, 0, 0];
+        $song = $songs[$sid] ?? null;
+        return ['chart' => $pid, 'title' => $song ? song_title($song) : null,
+            'chart_name' => $song ? chart_label($line, $diff, $sig) : null];
+    };
+    // Each chart's place once, from the player's best there: [place, how many have a record].
+    $places = [];
+    $place = function (int $pid) use ($db, $me, &$places): array {
+        if (!isset($places[$pid])) {
+            $mine = rows($db, 'SELECT score, judgement FROM Play WHERE user_id = :me AND pattern_id = :pid', [':me' => $me, ':pid' => $pid])[0] ?? null;
+            $all = rows($db, "SELECT COUNT(*) AS n FROM Play p JOIN (" . PLAYER_ROWS . ") m ON m.guid = p.user_id WHERE p.pattern_id = :pid",
+                [':check' => CHECK_UDID, ':pid' => $pid])[0]['n'] ?? 0;
+            $ahead = $mine === null ? null : rows($db,
+                "SELECT COUNT(*) AS n FROM Play p JOIN (" . PLAYER_ROWS . ") m ON m.guid = p.user_id
+                  WHERE p.pattern_id = :pid AND (p.score > :score OR (p.score = :score AND p.judgement > :j)
+                        OR (p.score = :score AND p.judgement = :j AND p.user_id < :me))",
+                [':check' => CHECK_UDID, ':pid' => $pid, ':score' => (int)$mine['score'], ':j' => (int)$mine['judgement'], ':me' => $me])[0]['n'] ?? 0;
+            $places[$pid] = [$ahead === null ? null : (int)$ahead + 1, (int)$all];
+        }
+        return $places[$pid];
+    };
+    $recent = [];
+    if (has_playlog($db)) {
+        foreach (rows($db, 'SELECT * FROM PlayLog WHERE user_id = :me ORDER BY played_at DESC, id DESC LIMIT ' . CLIENT_RECORDS, [':me' => $me]) as $r) {
+            [$rank, $of] = $place((int)$r['pattern_id']);
+            $recent[] = $chart((int)$r['pattern_id']) + ['score' => (int)$r['score'], 'grade' => (string)$r['grade'],
+                'keys' => !empty($r['keys']), 'new_record' => (bool)$r['is_record'], 'at' => (int)$r['played_at'],
+                'rank' => $rank, 'players' => $of];
+        }
+    }
+    // When each best was set: the newest play that set a record on its chart.
+    $set_at = [];
+    if (has_playlog($db)) {
+        foreach (rows($db, 'SELECT pattern_id, MAX(played_at) AS at FROM PlayLog WHERE user_id = :me AND is_record = 1 GROUP BY pattern_id', [':me' => $me]) as $r) {
+            $set_at[(int)$r['pattern_id']] = (int)$r['at'];
+        }
+    }
+    $best = [];
+    foreach (rows($db, 'SELECT * FROM Play WHERE user_id = :me ORDER BY score DESC, pattern_id ASC LIMIT ' . CLIENT_RECORDS, [':me' => $me]) as $r) {
+        [$rank, $of] = $place((int)$r['pattern_id']);
+        $best[] = $chart((int)$r['pattern_id']) + ['score' => (int)$r['score'], 'grade' => (string)$r['grade'],
+            'keys' => !empty($r['keys']), 'all_combo' => ($r['isAllCombo'] ?? 'N') === 'Y',
+            'perfect_play' => ($r['isPerfectPlay'] ?? 'N') === 'Y', 'set_at' => $set_at[(int)$r['pattern_id']] ?? null,
+            'rank' => $rank, 'players' => $of];
+    }
+    return ['recent' => $recent, 'best' => $best];
+}

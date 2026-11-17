@@ -236,6 +236,70 @@ function from_another_site(): bool
     return $from === '' || $from !== $here;
 }
 
+/* ---------------------------------------------------------------------- one-time sign-in links
+
+   A link that signs a browser in to an account once, for the minute after it was made: the PC client asks for one for
+   its own sign-in (client.php?link: My page on the site), the admin API for its token's admin (POST /site/link), and the
+   browser opens login.php?once=<token>. Kept beside the database, where the admin pages write them too
+   (tools/opendmtq_tools/admin/site_links.py), a file a link under the SHA-256 of its token (the token itself is written
+   nowhere), {"account", "next", "expires"}; taken by renaming it, so that the same link opened twice signs in once. */
+
+// How long a link works after it was made (seconds): the launcher opens the browser with it at once.
+const ONCE_LIFE = 60;
+
+/* The folder of the links, beside the database. */
+function once_dir(): string
+{
+    return odq_state_dir() . '/signin-links';
+}
+
+/* A new link for the account $name, to go on to $next (a page of this site) once it has signed in: its token, or null
+   when it cannot be kept (a folder that cannot be written). The links that ran out go first. */
+function once_issue(string $name, string $next): ?string
+{
+    $dir = once_dir();
+    if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+        return null;
+    }
+    // What ran out, and what a taking cut off left (a .taken or a .new a minute old): gone.
+    foreach (glob($dir . '/*') ?: [] as $old) {
+        if (@filemtime($old) < time() - ONCE_LIFE) {
+            @unlink($old);
+        }
+    }
+    // 32 random bytes, in the letters an address keeps as they are (base64url without its padding): 43 of them.
+    $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+    $path = $dir . '/' . hash('sha256', $token) . '.json';
+    $temp = $path . '.' . bin2hex(random_bytes(4)) . '.new';
+    $data = json_encode(['account' => $name, 'next' => safe_next($next), 'expires' => time() + ONCE_LIFE]);
+    // Written beside it, then put in its place: never read half written.
+    if (@file_put_contents($temp, $data) === false || !@rename($temp, $path)) {
+        @unlink($temp);
+        return null;
+    }
+    return $token;
+}
+
+/* The link of $token, taken once: ['account', 'next'], or null (no such link, used already, or run out). */
+function once_take(string $token): ?array
+{
+    if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $token)) {
+        return null;
+    }
+    $path = once_dir() . '/' . hash('sha256', $token) . '.json';
+    // Renamed first: of two takings at once, one gets it.
+    $taken = $path . '.' . bin2hex(random_bytes(4)) . '.taken';
+    if (!@rename($path, $taken)) {
+        return null;
+    }
+    $link = json_decode((string)@file_get_contents($taken), true);
+    @unlink($taken);
+    if (!is_array($link) || (int)($link['expires'] ?? 0) < time() || !is_string($link['account'] ?? null)) {
+        return null;
+    }
+    return ['account' => $link['account'], 'next' => safe_next((string)($link['next'] ?? '/opendmtq/'))];
+}
+
 /* ---------------------------------------------------------------------- wrong passwords
 
    How many guesses a sign-in takes: the sign-in page's (login.php) and the PC client's (client.php) alike, beside the

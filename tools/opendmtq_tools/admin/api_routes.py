@@ -672,6 +672,10 @@ SHAPES = {
         Field("bitrate", "integer", "The picture's bitrate (bit/s)."), Field("segment", "integer", "A segment's length (seconds)."),
         Field("hour_bytes", "integer", "What an hour of broadcast takes on the disk, about (bytes)."),
         Field("viewer_bits", "integer", "Each viewer's connection, about (bit/s), picture and sound.")]),
+    "SiteLink": Shape("A one-time link that signs a browser in to the players' site.", [
+        Field("url", "string", "Its address on the site, after the server's address: it works once, for a minute."),
+        Field("account", "string", "The site account it signs in to: the token's admin's own."),
+        Field("expires", "integer", "When it stops working (Unix time).")]),
     "SiteLive": Shape("The site's broadcasts.", [
         Field("on", "boolean", "True while broadcasts are on for the server; while off, the site shows none of them."),
         Field("live", "[LiveNow]", "Who is on air now."),
@@ -1125,6 +1129,15 @@ ROUTES = [
                  Field("player", "integer", "One player's only.", optional=True),
                  Field("limit", "integer", "How many, 1 to 100 (20).", optional=True)],
           answer="SitePlays", errors=[(400, "bad_query", "A limit or a player that is not a number.")]),
+    Route("POST", "/site/link", "write", "site_link", "Site", "A one-time link that signs a browser in to the players' site as the "
+          "token's admin, as the PC client's My page on the site does for its own sign-in.",
+          "The link is a path on the site (`/opendmtq/login.php?once=...`): opened in a browser on the server's address within a "
+          "minute, it signs that browser in to the token's admin's account (the owner's ID for the owner's token) and opens "
+          "`next`. It works once.",
+          body=[Field("next", "string", "The site's page to open once signed in, a path on the site (default `/opendmtq/`).",
+                      optional=True, max_length=200)],
+          answer="SiteLink", errors=[(400, "bad_field", "next is not a path on the site."),
+                                     (503, "links_unavailable", "The link could not be kept beside the database.")]),
     Route("GET", "/site/live", "read", "site_live", "Site", "Who is on air now, and the recordings players may watch.", answer="SiteLive"),
     Route("GET", "/site/live/{player}/files/{part}", "read", "site_live_file", "Site", "A broadcast's live playlist or one of its segments, as the live page plays them.",
           "Only while the player's broadcast is switched on. The playlist names its segments relatively, so a player such as "

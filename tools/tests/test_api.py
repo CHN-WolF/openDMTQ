@@ -288,6 +288,23 @@ def windows_bundle_with_the_pc_client(inst):
                                  mock.patch.object(admin.this_pc, "start_program", start_program)]
 
 
+def site_link_kept(t, inst, r):
+    """The link POST /site/link made: its token's hash names the site's file, which holds the account, the page and when
+    it ends, and the token itself is nowhere on the disk."""
+    answer = r.get_json()
+    token = answer["url"].split("once=", 1)[1]
+    t.assertRegex(token, r"^[A-Za-z0-9_-]{43}$")
+    path = os.path.join(inst.path("state/signin-links"), hashlib.sha256(token.encode()).hexdigest() + ".json")
+    with open(path, encoding="utf-8") as f:
+        kept = json.load(f)
+    t.assertEqual((kept["account"], kept["next"], kept["expires"]), ("admin", "/opendmtq/player.php?id=7", answer["expires"]))
+    t.assertEqual(answer["account"], "admin")
+    t.assertLessEqual(answer["expires"] - time.time(), 60)
+    for name in os.listdir(inst.path("state/signin-links")):
+        with open(os.path.join(inst.path("state/signin-links"), name), encoding="utf-8") as f:
+            t.assertNotIn(token, f.read())
+
+
 def host_install(inst):
     """The setup's pages as a host install has them: its run folder, its .env and a home folder to look in."""
     for d in ("run", "home/Downloads/game", "home/Desktop"):
@@ -741,6 +758,9 @@ def CASES():
         C("site_plays_recent", "GET", "/site/plays/recent?records=true", 200, check=lambda t, inst, r: t.assertEqual(len(r.get_json()["items"]), 3)),
         C("site_plays_recent", "GET", "/site/plays/recent?limit=0", 400, "bad_query"),
         C("site_live", "GET", "/site/live", 200, setup=on_air, check=lambda t, inst, r: t.assertEqual([p["name"] for p in r.get_json()["live"]], ["Yuna"])),
+        # A one-time link to the players' site for the token's admin, kept where the site takes it (auth.php once_take()).
+        C("site_link", "POST", "/site/link", 200, json={"next": "/opendmtq/player.php?id=7"}, check=site_link_kept),
+        C("site_link", "POST", "/site/link", 400, "bad_field", json={"next": "//elsewhere.example/"}),
         C("site_live_file", "GET", "/site/live/8/files/index.m3u8", 200, setup=on_air),
         C("site_live_file", "GET", "/site/live/7/files/index.m3u8", 404, "not_found"),
         # The routes that read and have no refusal of their own: what every route refuses, one way or another.
@@ -2059,7 +2079,8 @@ SITE_PAGES = {
     "health.php": ["status_health"],
     "licenses.php": "the license texts, which are in the repository",
     "login.php": "the site's sign-in: the API takes a token instead",
-    "client.php": "the PC client's sign-in by the site's cookie and its look at the app on offer: the API takes a token, and GET /app has the app",
+    # The PC client's: its look at the server, at the app on offer, its one-time link to the site and its records.
+    "client.php": ["status_health", "app_get", "site_link", "site_player", "site_player_records"],
     "lang.php": "the site's language switch: the API answers in English",
     "notfound.php": "the site's page for an address that leads nowhere",
 }
@@ -2139,6 +2160,9 @@ GET_ARGS = {
     "client.php?about": ("view", "status_health"),
     "client.php?signin": "the PC client's sign-in by the site's cookie: the API takes a token instead",
     "client.php?app": ("view", "app_get"),
+    "client.php?link": "the PC client's one-time sign-in link, by the site's cookie: POST /site/link makes one by a token",
+    "client.php?records": ("view", "site_player", "site_player_records"),
+    "login.php?once": "a one-time sign-in link opened in a browser: the API takes a token instead",
     "lang.php?to": "the site's language: the API answers in English",
     "lang.php?next": "the page a browser goes back to after the language switch",
 }

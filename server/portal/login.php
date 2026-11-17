@@ -13,6 +13,23 @@ if (isset($_GET['logout'])) {
     header('Location: /opendmtq/', true, 303);
     exit;
 }
+// The message to show, as a key of STRINGS (in the page's language).
+$error = '';
+// A one-time link (the PC client's My page on the site, the admin API's): this browser signed in to its account, once,
+// in the minute after it was made, whoever it was signed in as, then on to its page. Not from another site's page, which
+// would sign a visitor in to an account of its own choosing; an account that is off now signs in nobody.
+if (isset($_GET['once'])) {
+    $link = from_another_site() ? null : once_take((string)$_GET['once']);
+    $row = $link !== null ? site_account($link['account']) : null;
+    if ($row !== null && !$row['off'] && dl_key() !== '') {
+        dl_sign_in((string)$row['name']);
+        header('Cache-Control: no-store');
+        header('Location: ' . $link['next'], true, 303);
+        exit;
+    }
+    // Used, run out or refused: the sign-in page says so, above its form (signed in already, on to the page as below).
+    $error = 'signin.once_used';
+}
 // Already signed in (this form sent again, a back button): on to the page, but not into a second
 // download; the install box has the button.
 if (dl_signed_in()) {
@@ -27,8 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && from_another_site()) {
     exit;
 }
 
-// The message to show, as a key of STRINGS (in the page's language).
-$error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // The ID as typed, without the space a phone's keyboard may add after a word.
     $user = trim((string)($_POST['user'] ?? ''));

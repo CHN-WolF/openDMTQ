@@ -21,7 +21,7 @@ from flask import g, jsonify, request, send_file
 from werkzeug.exceptions import HTTPException
 
 from .. import server_data, songs
-from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, this_pc, tokens
+from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, site_links, song_pages, this_pc, tokens
 # The status page's module by another name: the route's handler is called status.
 from . import status as status_page
 from .core import Refused, app, changed, db, json_error, plain, tp
@@ -1367,6 +1367,16 @@ def site_plays_recent(args):
         raise bad("bad_query", "?limit= must be 1 to 100.")
     with db() as con:
         return {"items": site.recent_plays(con, limit, bool(args.get("records")), args.get("player"))}
+
+
+@handler
+def site_link(args):
+    """POST /site/link: a one-time link that signs a browser in to the players' site as the token's admin (site_links.py),
+    as client.php?link gives the PC client one for its own sign-in."""
+    account = g.api_token["admin"]
+    url, expires = site_links.issue(account, args.get("next") or "/opendmtq/")
+    changed("site:link", account)
+    return {"url": url, "account": account, "expires": expires}
 
 
 @handler
