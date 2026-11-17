@@ -10,8 +10,8 @@ them on, on the admin pages' Broadcasts page. A server updated from a version wi
 when it did: with a player switched on, or with `LIVE_DEFAULT=on`, it starts with them on. With them on, the owner turns
 them on for each player on the Players page, or for every new player at once (a setting on the Broadcasts page). The
 game then shows that player a short notice between songs at every change of their own switch, and of the server's while
-theirs is on: on, off, and with broadcasts off for the server, that theirs waits for them or stays off then. Playing is not affected: the phone or the PC encodes and uploads on its own threads, and
-drops video rather than hold the game up.
+theirs is on: on, off, and with broadcasts off for the server, that theirs waits for them or stays off then. Playing is
+not affected: the phone or the PC encodes and uploads on its own threads, and drops video rather than hold the game up.
 
 Broadcasting needs Android 8 or newer on a phone or a tablet, for its video encoder, or the player for Windows
 ([from a PC](#from-a-pc)). The app must include the arm32 bundle, which the server's app builder adds by itself. The
@@ -53,6 +53,10 @@ running time on the picture, and the player's name and profile under it.
   one.
 - **Turn it off:** Turn off in the same place. The next upload is refused, which stops the device. The live window is
   deleted at once; the recording stays.
+- **Tell a chat:** the Notices page's Discord and Slack webhooks send a message when a player starts broadcasting and,
+  when ticked, when the broadcast ends ([the Notices page](admin.md#the-notices-page)).
+- **A banned player** is off air until the ban ends: their uploads are refused, and their own switch is kept for after
+  it ([a player's page](admin.md#a-players-page)).
 
 While a broadcast is live, the video player shows a LIVE mark and a few controls: play and pause, sound, connection
 details, picture in picture, a wider view, full screen. It has no timeline, because viewers see what is going out now. A

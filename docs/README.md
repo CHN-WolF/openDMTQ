@@ -14,8 +14,8 @@ quick start for each way to run a server, and [Questions and answers](faq.md) co
 
 | Guide | For |
 | :--- | :--- |
-| [Playing on a server](play.md) | Players: the app from the server's site on an Android phone or tablet, signing in, updates, broadcasting, which devices, what to tell the server's owner |
-| [The PC client](windows-player.md) | Playing on a Windows PC, or on Linux under Wine: the installer from the site, the launcher, keyboard play and the other controls, the bar over the game, the picture and the sound settings, broadcasting, what it needs and keeps |
+| [Playing on a server](play.md) | Players: the app from the server's site on an Android phone or tablet, signing in, MY PAGE with your records and account, updates and a server that moved, broadcasting, which devices, what to tell the server's owner |
+| [The PC client](windows-player.md) | Playing on a Windows PC, or on Linux under Wine: the installer from the site, the launcher and its pages, your records, the connection test and a report, signed updates from the server, keyboard play and the other controls, the bar over the game and its sound panel, the picture and the sound settings, broadcasting, what it needs and keeps |
 | [Troubleshooting for players](troubleshooting.md#for-players) | What a phone or a PC can check when the site, the app or the game does not work |
 
 <a id="running-a-server"></a>
@@ -24,9 +24,9 @@ quick start for each way to run a server, and [Questions and answers](faq.md) co
 
 | Guide | For |
 | :--- | :--- |
-| [Installing](install.md) | Each system step by step, the players' accounts, everyday use, updates, backups and moving to another computer, the `.env` settings, what it runs on |
+| [Installing](install.md) | Each system step by step, the players' accounts, everyday use, the server's one port and moving it, updates, backups and moving to another computer, the `.env` settings, a release's files and their signature, what it runs on |
 | [The game's files](game-files.md) | What your APK, client data and song data have to be, the forms they come in, how to check them |
-| [The site and the admin pages](admin.md) | The setup in the browser, the players' site, building the app, players, accounts, recordings, backups, the maintenance notice, the PC client's installer |
+| [The site and the admin pages](admin.md) | The setup in the browser, the players' site and MY PAGE, building the app, players and each player's game, accounts, recordings, backups, the Notices page (the site's notice, maintenance, Discord and Slack), the Server page (restart, repair, the port, the data, uninstall), the PC client's installer and its updates, Play on this PC |
 | [Songs](songs.md) | Importing the songs, hiding them, adding your own as song packages |
 | [Playing from outside your home](internet.md) | A host name, one forwarded port, HTTPS |
 | [Live broadcasts](live.md) | Turning broadcasts on for the server and its players, recordings, their limits |
@@ -34,7 +34,7 @@ quick start for each way to run a server, and [Questions and answers](faq.md) co
 | [Without internet](closed-network.md) | A server and phones on a network with no way out: what to carry in for each way of running it |
 | [The API](api.md) | All the admin pages show and do, and what the players' site shows, as JSON |
 | [Troubleshooting](troubleshooting.md#for-server-owners) | When a phone cannot connect, the app does not install or build, or the server does not start |
-| [Questions and answers](faq.md) | What it needs, which phones, playing from outside your home, what leaves your computer |
+| [Questions and answers](faq.md) | What it needs, which phones, which port, playing from outside your home, what leaves your computer |
 | [License and notice](notice.md) | What the project is, its license, what it asks of whoever runs a server |
 | [Third-party notices](THIRD_PARTY_NOTICES.md) | The libraries, fonts and programs OpenDMTQ brings with it, and their licenses |
 

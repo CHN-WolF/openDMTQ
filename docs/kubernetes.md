@@ -196,7 +196,7 @@ helm install opendmtq oci://ghcr.io/kanggu12/charts/opendmtq -n opendmtq \
 helm test opendmtq -n opendmtq
 ```
 
-Phones then open `http://192.168.1.50/` exactly as with Docker Compose. On a network with no way out, the images and the chart
+Phones then open `http://192.168.1.50:8791/` exactly as with Docker Compose. On a network with no way out, the images and the chart
 are carried in: [Without internet](closed-network.md#kubernetes).
 
 The chart and its own two images (`ghcr.io/kanggu12/opendmtq-server`, `opendmtq-tools`) are published with each
@@ -242,7 +242,7 @@ The main ones; see `values.yaml` for all.
 
 | Value | Default | Meaning |
 |---|---|---|
-| `publicHost` | (required) | The IPv4 address or host name phones use, with `:port` when it is not 80; goes into server URLs and the app. |
+| `publicHost` | (required) | The IPv4 address or host name phones use, with its `:port` (8791 when it names none); goes into server URLs and the app. |
 | `data.existingClaim` / `data.hostPath` | (one required) | Game files volume. |
 | `router.replicas` | 2 | |
 | `router.service.type` | LoadBalancer | Or NodePort (`router.service.nodePort`). |

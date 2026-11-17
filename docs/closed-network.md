@@ -204,7 +204,7 @@ Phones reach the server by its address, so they only have to be on its network. 
 | :--- | :--- | :--- |
 | The one command, `git pull`, `./opendmtq` building its own images | They fetch from the internet | The steps above, with each new release |
 | `./opendmtq runtime --build` | It fetches Android's tools | The release's `opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip` in `data/apk`, or a release's tools image |
-| The PC client's installer on a host install without the kit's copy | The builder fetches it from the latest release, and after a fetch that failed it waits a day to try again | The release's `opendmtq-pc-client-1.2.3-windows-x64-setup.exe` in `data/apk` ([the PC client's installer](admin.md#the-pc-clients-installer)), which the builder keeps as `OpenDMTQ-Setup.exe` with the version from its name. It stays there: once it is a week old the builder looks for a newer one, at most once a day, and keeps it when there is none to be had |
+| The PC client's installer on a host install without the kit's copy | The builder fetches it from the release of the server's version (else the latest), and after a fetch that failed it waits a day to try again | The release's `opendmtq-pc-client-1.2.3-windows-x64-setup.exe` in `data/apk` ([the PC client's installer](admin.md#the-pc-clients-installer)), which the builder keeps as `OpenDMTQ-Setup.exe` with the version from its name. It stays there: once it is a week old the builder looks for a newer one, at most once a day, and keeps it when there is none to be had |
 | Playing from outside, `./opendmtq expose` | There is no outside | |
 
 If the runtime for newer phones did not make it, the app is still built and runs on phones that run 32-bit apps. The setup says
