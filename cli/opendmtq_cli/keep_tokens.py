@@ -1,7 +1,8 @@
-"""The API's tokens and the site's accounts kept across `./opendmtq restore`, as the admin pages' restore keeps them: the
-restored database gets the server's tokens and accounts of now, and none of the backup's. An old backup must not bring
-back a token revoked since, an account deleted since or an old password, nor end what was made since. A server with no
-account yet (a new machine) takes the backup's accounts.
+"""The API's tokens, the site's accounts and the Notices page's webhooks kept across `./opendmtq restore`, as the admin
+pages' restore keeps them: the restored database gets the server's tokens, accounts and webhooks of now, and none of the
+backup's. An old backup must not bring back a token revoked since, an account deleted since, an old password or a webhook
+deleted since, nor end what was made since. A server with no account yet (a new machine) takes the backup's accounts. What
+the webhooks' loop knew and had waiting in the backup goes: it looks at the restored data anew and sends nothing of it.
 
 The restore runs this in the tools container, beside the database (backup.restore copies it there), before the restored
 database takes the live one's place:
@@ -37,6 +38,24 @@ ACCOUNT_SIGNED_OUT = "ALTER TABLE SiteUser ADD COLUMN signed_out_at INTEGER"
 
 # What is copied of each account, as the admin pages' restore copies it (auth.ACCOUNT_COLUMNS there).
 ACCOUNT_COLUMNS = ("name", "pass", "note", "admin", "created_at", "signed_in_at", "off", "guid", "signed_out_at")
+
+# The webhooks' tables, as the admin pages make them (tools/opendmtq_tools/admin/webhooks.py: HOOK_TABLE, MESSAGE_TABLE,
+# STATE_TABLE, TOP_TABLE): the chats, the queue of messages, what the loop knew at its last look, each chart's #1 it knew.
+WEBHOOK_TABLES = (
+    """CREATE TABLE IF NOT EXISTS Webhook (id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, kind TEXT NOT NULL,
+       lang TEXT NOT NULL, events TEXT NOT NULL, made_by TEXT NOT NULL DEFAULT '', made_at INTEGER NOT NULL,
+       ok_at INTEGER, fail_at INTEGER, fail_code TEXT, fail_status INTEGER, gave_up INTEGER NOT NULL DEFAULT 0)""",
+    """CREATE TABLE IF NOT EXISTS WebhookMessage (id INTEGER PRIMARY KEY, hook INTEGER NOT NULL, key TEXT NOT NULL,
+       kind TEXT NOT NULL, event TEXT NOT NULL, made_at INTEGER NOT NULL, next_at REAL NOT NULL,
+       tries INTEGER NOT NULL DEFAULT 0, claim TEXT, claim_until INTEGER, state TEXT NOT NULL DEFAULT 'waiting',
+       done_at INTEGER, UNIQUE (hook, key))""",
+    "CREATE TABLE IF NOT EXISTS WebhookState (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    """CREATE TABLE IF NOT EXISTS WebhookTop (pattern_id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL,
+       score INTEGER NOT NULL, judgement INTEGER)""",
+)
+
+# What is copied of each webhook, as the admin pages' restore copies it (webhooks.COLUMNS there): its address whole.
+WEBHOOK_COLUMNS = ("id", "url", "kind", "lang", "events", "made_by", "made_at", "ok_at", "fail_at", "fail_code", "fail_status", "gave_up")
 
 
 def tokens_now(live):
@@ -132,13 +151,58 @@ def keep_accounts(live, restored):
     return len(rows)
 
 
+def webhooks_now(live):
+    """The live database's webhooks, as rows of WEBHOOK_COLUMNS: none when there is no database yet (a new machine), no
+    table (nobody added a webhook), or one that cannot be read (damaged)."""
+    if not os.path.isfile(live):
+        return []
+    try:
+        con = sqlite3.connect(live)
+        try:
+            if not con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'Webhook'").fetchone():
+                return []
+            return con.execute(f"SELECT {', '.join(WEBHOOK_COLUMNS)} FROM Webhook").fetchall()
+        finally:
+            con.close()
+    except sqlite3.DatabaseError:
+        return []
+
+
+def keep_webhooks(live, restored):
+    """Gives the restored database the live one's webhooks, and only them, as the admin pages' restore does (webhooks.put
+    there): the backup's own go (a webhook deleted since must not post to its chat again), and with them what the backup's
+    loop knew (who was on air, how far it read) and had waiting, so that the loop looks at the restored data anew and sends
+    nothing of it. Returns how many were kept."""
+    rows = webhooks_now(live)
+    try:
+        con = sqlite3.connect(restored)
+    except sqlite3.Error:
+        return 0
+    try:
+        with con:
+            for statement in WEBHOOK_TABLES:
+                con.execute(statement)
+            for table in ("Webhook", "WebhookMessage", "WebhookState", "WebhookTop"):
+                con.execute(f"DELETE FROM {table}")
+            con.executemany(f"INSERT INTO Webhook ({', '.join(WEBHOOK_COLUMNS)}) VALUES ({', '.join('?' for _ in WEBHOOK_COLUMNS)})", rows)
+    except sqlite3.DatabaseError:
+        # No database to put them in (the restore's own checks stand before this): nothing kept.
+        return 0
+    finally:
+        con.close()
+    return len(rows)
+
+
 def keep_all(live, restored):
-    """Both, as the restore runs this file: (tokens kept, accounts kept or None when the backup's stay)."""
-    return keep(live, restored), keep_accounts(live, restored)
+    """All three, as the restore runs this file: (tokens kept, accounts kept or None when the backup's stay, webhooks
+    kept)."""
+    return keep(live, restored), keep_accounts(live, restored), keep_webhooks(live, restored)
 
 
 if __name__ == "__main__":
-    # Said on the way, for the restore's log: how many tokens and accounts stay. Never the tokens or passwords themselves.
-    tokens, accounts = keep_all(sys.argv[1], sys.argv[2])
+    # Said on the way, for the restore's log: how many tokens, accounts and webhooks stay. Never the tokens, passwords or
+    # webhooks' addresses themselves.
+    tokens, accounts, hooks = keep_all(sys.argv[1], sys.argv[2])
     print(f"API tokens kept: {tokens}")
     print("accounts: the backup's (this server has none)" if accounts is None else f"accounts kept: {accounts}")
+    print(f"webhooks kept: {hooks}")

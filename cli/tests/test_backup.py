@@ -259,6 +259,68 @@ class RealDatabaseTest(unittest.TestCase):
             self.assertIn(f"'{keep_tokens.ACCOUNT_SIGNED_OUT}'", f.read())
         self.assertIn(f"ACCOUNT_COLUMNS = {keep_tokens.ACCOUNT_COLUMNS!r}".replace("'", '"'), pages)
 
+    def with_webhooks(self, con, *urls, queued=True):
+        """Webhooks in a database, as the admin pages keep them, with what their loop knew and a message waiting for each."""
+        for statement in keep_tokens.WEBHOOK_TABLES:
+            con.execute(statement)
+        con.executemany("INSERT INTO Webhook (url, kind, lang, events, made_at) VALUES (?, 'slack', 'en', 'maint_on', 1)", [(u,) for u in urls])
+        if queued:
+            con.execute("""INSERT INTO WebhookState (name, value) VALUES ('state', '{"gen": "old", "rev": 3, "cursor": 1, "air": {"7": {"began": 1, "rec": 1, "name": "Sena", "seen": 1}}}')""")
+            con.execute("INSERT INTO WebhookTop (pattern_id, user_id, score) VALUES (11, 7, 900000)")
+            con.executemany("INSERT INTO WebhookMessage (hook, key, kind, event, made_at, next_at) VALUES (?, ?, 'maint_on', '{}', 1, 1)",
+                            [(i + 1, f"maint_on:{i}") for i in range(len(urls))])
+        con.commit()
+
+    def webhooks_in(self, path):
+        """A database's webhooks by address, and how many rows its loop's state, chart #1s and queue hold."""
+        con = sqlite3.connect(path)
+        try:
+            return (sorted(r[0] for r in con.execute("SELECT url FROM Webhook")),
+                    [con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("WebhookState", "WebhookTop", "WebhookMessage")])
+        finally:
+            con.close()
+
+    def test_a_restore_keeps_todays_webhooks_and_sends_nothing_of_the_backups(self):
+        # A webhook deleted since stays deleted, one added since stays; what the backup's loop knew (who was on air) and
+        # had waiting goes, so that the restored database is looked at anew and nothing old is sent: as the admin pages'
+        # restore does it.
+        with Sandbox() as sb:
+            with tempfile_folder() as tmp:
+                old = self.database(os.path.join(tmp, "old.db3"))
+                self.with_webhooks(old, "https://chat.example/hooks/deleted-since")
+                old.close()
+                with open(os.path.join(tmp, "old.db3"), "rb") as f:
+                    name = sb.archive("data/backups/opendmtq-20260101-120000-manual.tar.gz", {"dmtq.db3": f.read()})
+            live = self.database(backup.DB, rows=5)
+            self.with_webhooks(live, "https://chat.example/hooks/added-since", queued=False)
+            live.close()
+            self.assertEqual(sb.call(app.cmd_restore, name=name, with_key=False), 0, sb.output())
+            self.assertEqual(self.webhooks_in(backup.DB), (["https://chat.example/hooks/added-since"], [0, 0, 0]))
+            self.assertEqual(sb.webhooks_kept, 1)
+
+    def test_a_restore_on_a_server_without_webhooks_brings_none_back(self):
+        with Sandbox() as sb:
+            with tempfile_folder() as tmp:
+                old = self.database(os.path.join(tmp, "old.db3"))
+                self.with_webhooks(old, "https://chat.example/hooks/from-the-backup")
+                old.close()
+                with open(os.path.join(tmp, "old.db3"), "rb") as f:
+                    name = sb.archive("data/backups/opendmtq-20260101-120000-manual.tar.gz", {"dmtq.db3": f.read()})
+            self.database(backup.DB).close()
+            self.assertEqual(sb.call(app.cmd_restore, name=name, with_key=False), 0, sb.output())
+            self.assertEqual(self.webhooks_in(backup.DB), ([], [0, 0, 0]))
+
+    def test_the_webhooks_tables_are_the_ones_the_admin_pages_make(self):
+        # Two copies of each statement: the admin pages' (webhooks.py, which makes them) and this restore's.
+        def words(text):
+            return " ".join(text.split())
+        with open(os.path.join(REPO, "tools", "opendmtq_tools", "admin", "webhooks.py"), encoding="utf-8") as f:
+            pages = f.read()
+        made = [re.search(rf'{name} = """(.*?)"""', pages, re.S) or re.search(rf'{name} = "(.*?)"\n', pages, re.S)
+                for name in ("HOOK_TABLE", "MESSAGE_TABLE", "STATE_TABLE", "TOP_TABLE")]
+        self.assertEqual([words(t) for t in keep_tokens.WEBHOOK_TABLES], [words(m.group(1)) for m in made])
+        self.assertIn(f"COLUMNS = {keep_tokens.WEBHOOK_COLUMNS!r}".replace("'", '"'), pages)
+
     def test_the_tokens_table_is_the_one_the_server_makes(self):
         # Three copies of one statement: the server's start, the admin pages, and this restore.
         def words(text):

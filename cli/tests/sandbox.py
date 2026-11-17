@@ -59,6 +59,8 @@ class Sandbox:
         # (keep_tokens.keep_accounts), None too when the backup's stayed.
         self.tokens_kept = None
         self.accounts_kept = None
+        # How many webhooks of the Notices page it kept (keep_tokens.keep_webhooks), None before one ran.
+        self.webhooks_kept = None
         # Tool module -> function(args, extra_env) run in its place, returning its exit code, or its whole result (done())
         # where what it prints matters.
         self.tools = {}
@@ -161,7 +163,7 @@ class Sandbox:
                 os.replace(here(words[1]), here(words[2]))
             elif words[:2] == ["python3", "/in/keep_tokens.py"]:
                 # The script the restore put beside the archive's files: the package's own module.
-                self.tokens_kept, self.accounts_kept = keep_tokens.keep_all(here(words[2]), here(words[3]))
+                self.tokens_kept, self.accounts_kept, self.webhooks_kept = keep_tokens.keep_all(here(words[2]), here(words[3]))
             else:
                 raise AssertionError(f"the restore's line has a step this sandbox does not know: {step.strip()}")
 
