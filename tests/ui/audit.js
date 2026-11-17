@@ -543,8 +543,8 @@ async function floatingLayers(contexts) {
     // The tooltips: a mark brought to the middle of the window and pointed at (a finger presses it: the same words), its
     // tooltip measured. The marks pointed at are those a person can reach: drawn, a few pixels at least, and the mark itself
     // under its middle (not one under the bar).
-    const tipOf = async (index, of) => {
-      const mark = (await page.$$('[data-tip]'))[index];
+    const tipOf = async (index, of = '[data-tip]') => {
+      const mark = (await page.$$(of))[index];
       await mark.evaluate(e => e.scrollIntoView({ block: 'center', inline: 'nearest' }));
       await pause(80);
       const box = await mark.boundingBox();
@@ -553,7 +553,7 @@ async function floatingLayers(contexts) {
       await pause(150);
       return wholeOnTop(page, '.chart-tip:not([hidden])');
     };
-    const reachable = () => page.$$eval('[data-tip]', all => all.map((e, i) => {
+    const reachable = (of = '[data-tip]') => page.$$eval(of, all => all.map((e, i) => {
       const r = e.getBoundingClientRect();
       return r.width >= 4 && r.height >= 4 && getComputedStyle(e).visibility !== 'hidden' ? i : -1;
     }).filter(i => i >= 0));
@@ -564,12 +564,13 @@ async function floatingLayers(contexts) {
       const tip = await tipOf(index);
       check(`a chart's tooltip on the status page is whole and on top: mark ${index + 1}, ${at}`, tip.ok, tip.detail);
     }
-    // The site's: a player's days of plays, the first and the last.
+    // The site's: a player's days of plays, the first and the last: the grid's own marks (the bar's name and badge, which
+    // carry words too, lead to MY PAGE when pressed).
     await page.goto(`${P}/player.php?id=1`, { waitUntil: 'domcontentloaded' });
-    const days = await reachable();
+    const days = await reachable('.activity [data-tip]');
     check(`a player's page has days to point at, ${at}`, days.length > 0);
     for (const index of [days[0], days[days.length - 1]].filter((v, i, a) => v !== undefined && a.indexOf(v) === i)) {
-      const tip = await tipOf(index);
+      const tip = await tipOf(index, '.activity [data-tip]');
       check(`a player's day tooltip on the site is whole and on top: mark ${index + 1}, ${at}`, tip.ok, tip.detail);
     }
     await page.close();
@@ -736,11 +737,14 @@ async function hoverOnly(contexts) {
         await page.keyboard.press('Escape');
         await page.evaluate(() => document.activeElement && document.activeElement.blur());
       }
-      // The first mark and the last one on the page that a person can reach: drawn, a few pixels at least.
-      const marks = await page.$$eval('[data-tip]', all => all.map((e, i) => {
+      // The first mark and the last one on the page that a person can reach: drawn, a few pixels at least. On a touch
+      // screen those a press shows the words of: a mark that is itself a link or a button (the bar's name and badge, which
+      // lead to MY PAGE) does what it does when pressed, and shows its words to the pointer and the focus (tips.js).
+      const marks = await page.$$eval('[data-tip]', (all, touchScreen) => all.map((e, i) => {
         const r = e.getBoundingClientRect();
-        return r.width >= 4 && r.height >= 4 && getComputedStyle(e).visibility !== 'hidden' ? i : -1;
-      }).filter(i => i >= 0));
+        const acts = e.matches('a, button, summary, input, select, textarea, label');
+        return r.width >= 4 && r.height >= 4 && getComputedStyle(e).visibility !== 'hidden' && !(touchScreen && acts) ? i : -1;
+      }).filter(i => i >= 0), touch);
       for (const index of [marks[0], marks[marks.length - 1]].filter((v, i, a) => v !== undefined && a.indexOf(v) === i)) {
         const mark = (await page.$$('[data-tip]'))[index];
         if (!mark) continue;
