@@ -160,7 +160,7 @@ next start.
   to 99 (its experience goes to that level's start), or the experience itself, 0 to 130,408 (the level follows it). A
   song played adds 10 EXP; past a level's end the game shows its level-up after the song.
 - **Items.** The items a player equips, kind by kind as MY PAGE's inventory has them (characters, add-ons, notes,
-  skins), each given or taken. Every player has every item but the notes from the start; a note bought in the shop stays
+  skins), each by the name the game shows it by in the page's language and with its number, given or taken. Every player has every item but the notes from the start; a note bought in the shop stays
   theirs. An item taken while equipped is unequipped, and the game shows its own default in its place.
 - **Ban.** A reason (up to 200 characters, which the player sees) and an end: in 1, 3, 7 or 30 days, or until lifted.
   The game stops the player's sign-in, and any request of a game already in, at its own "Network connection error."
