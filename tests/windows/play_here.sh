@@ -9,6 +9,8 @@
 #   4. pressed again, the PC client installed: the launcher open already takes the server and comes to the front, and no
 #      second launcher stays
 #   5. the same through the API (POST /opendmtq/api/v1/app/play-here) with a token made on the Accounts page
+#   6. the PC client's connection test (OpenDMTQ-cmd.exe --test-server) against this server, then against port 80 of the
+#      same host as a launcher set up before 0.11.0 has it: nothing there, and the server found on 8791 (run with PORT=8791)
 # Every step leaves a screenshot of the virtual screen and the pages' HTML in OUT_DIR.
 #
 #   tests/windows/play_here.sh BUNDLE_DIR OUT_DIR      (BUNDLE_DIR: host/windows/build.sh's OUT/OpenDMTQ)
@@ -168,6 +170,28 @@ status=$(curl -s -m 60 -H "Authorization: Bearer $secret" -X POST -o /out/api-pl
   "http://127.0.0.1:$PORT/opendmtq/api/v1/app/play-here")
 expect "the API's POST /app/play-here answers 202 ($status) with its job" \
   sh -c "test '$status' = 202 && grep -Eq '\"kind\": ?\"pc-client\"' /out/api-play-here.json"
+
+# 6. The connection test from the PC client the press installed, against this server: each step's line as it ends, the
+# exit code 1 exactly when a step failed (this server has no game files: its game server says so).
+cmd="$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe"
+wine "$cmd" --test-server > /out/test-server.txt 2>&1
+code=$?
+cat /out/test-server.txt
+for step in Address "Name lookup" Port "OpenDMTQ server" Version Sign-in; do
+  expect "--test-server: $step through" grep -q "^  \[ok  \] $step: " /out/test-server.txt
+done
+expect "--test-server: the game server, the broadcasts, the downloads and the round trip each said" \
+  sh -c "for s in 'Game server' Broadcasts Downloads 'Round trip'; do grep -q \"^  \\[[a-z ]*\\] \$s: \" /out/test-server.txt || exit 1; done"
+expect "--test-server: exit $code, 1 exactly when a step failed" \
+  sh -c "if grep -q '^  \[fail\]' /out/test-server.txt; then test $code = 1; else test $code = 0; fi"
+if [ "$PORT" = 8791 ]; then
+  # A launcher set up for port 80, before 0.11.0: nothing answers there, and the test finds the server on 8791.
+  wine "$cmd" --test-server http://127.0.0.1:80 > /out/test-server-80.txt 2>&1
+  code=$?
+  cat /out/test-server-80.txt
+  expect "--test-server on port 80 finds the server on 8791 ($code)" sh -c "test $code = 1 && grep -q \
+    'refuses the connection on port 80. An OpenDMTQ server answers at http://127.0.0.1:8791.' /out/test-server-80.txt"
+fi
 
 echo "play here under Wine: $failures failed"
 [ "$failures" -eq 0 ]
