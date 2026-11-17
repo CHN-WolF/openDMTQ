@@ -71,7 +71,7 @@ Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $bundle ".h
 
 # The settings setup would write, with this test's ports.
 Set-Content -Path (Join-Path $bundle ".env") -Encoding utf8 -Value @(
-    "PUBLIC_HOST=127.0.0.1:$Port", "LISTEN_PORT=$Port", "ADMIN_PORT=$($Port + 1)", "ADMIN_PASSWORD=ci")
+    "PUBLIC_HOST=127.0.0.1:$Port", "LISTEN_PORT=$Port", "ADMIN_PASSWORD=ci")
 $import = & $exe import $game --songs 2>&1 | Out-String
 if ($LASTEXITCODE -eq 0 -and $import -match "client data and") { Pass "OpenDMTQ.exe imports the client data and the song data from a folder" }
 else { Write-Output $import; Fail "OpenDMTQ.exe imports the client data and the song data from a folder" }
@@ -107,8 +107,8 @@ if ($up) {
     python (Join-Path $repo "tests\game\protocol.py") "http://127.0.0.1:$Port"
     if ($LASTEXITCODE -eq 0) { Pass "the game server's contract on Windows" } else { Fail "the game server's contract on Windows" }
     $checks = @(
-        @("the admin pages answer on this machine", "http://127.0.0.1:$($Port + 1)/opendmtq/admin/login", 200),
-        @("the admin pages answer on the public port", "http://127.0.0.1:$Port/opendmtq/admin/login", 200),
+        # The admin pages on the server's one port, as everything else (0.11.0: no port of their own any more).
+        @("the admin pages answer on the server's one port, on this machine", "http://127.0.0.1:$Port/opendmtq/admin/login", 200),
         @("signed out, the site asks to sign in", "http://127.0.0.1:$Port/opendmtq/index.php", 302),
         @("a song's jacket is served from the imported content", "http://127.0.0.1:$Port/viewImg/eye/fixture1.png", 200))
     foreach ($c in $checks) {
@@ -136,7 +136,7 @@ if ($up) {
 # 5. Stopped from the admin pages (Maintenance), signed in with the password in .env: the window's program ends every
 # part, then itself, and says so; nothing keeps the port.
 $jar = Join-Path $env:RUNNER_TEMP "odq-cookies.txt"
-$admin = "http://127.0.0.1:$($Port + 1)/opendmtq/admin"
+$admin = "http://127.0.0.1:$Port/opendmtq/admin"
 & curl.exe -s -o NUL -m 30 -c $jar -b $jar -d "name=admin&password=ci" "$admin/login"
 $maintenance = (& curl.exe -s -m 30 -c $jar -b $jar "$admin/maintenance") -join "`n"
 $csrf = if ($maintenance -match 'name="csrf" value="([^"]+)"') { $Matches[1] } else { "" }

@@ -69,7 +69,9 @@ docker run --rm -u 33:33 -v "$DATA/content:/content" -v "$UI:/ui:ro" --entrypoin
 # Written now and again before MY PAGE's stage: the admin flows hide a song and show it again, which rebuilds the
 # catalog from the stand-in game files, which have none of these items or names.
 stand_in_catalog() {
-  cat > "$DATA/custom/catalog.json" <<'CATALOG'
+  local file
+  file=$(mktemp)
+  cat > "$file" <<'CATALOG'
 {"items": [30001, 30002, 30003, 40001, 100001, 100002], "unlock_product": null, "point_charts": [],
  "products": {"90001": {"item": 90001, "kind": "N", "point": 2000, "cash": 0, "amount": 0},
                 "1050001": {"item": 50001, "kind": "M", "point": 0, "cash": 10, "amount": 2500}},
@@ -79,7 +81,14 @@ stand_in_catalog() {
             "K": [[100001, "Yellow Metal Skin"], [100002, "워터멜론 메탈 스킨"]]},
  "names": {"en": {"100001": "Yellow", "30001": "Jimmy"}, "ko": {"100001": "옐로메탈", "30001": "지미"}}}
 CATALOG
-  chmod a+rw "$DATA/custom/catalog.json"
+  # The admin flows' rebuild leaves the file the containers' user's: written through a container where this user
+  # cannot write it (a CI runner; root here can).
+  if ! cp "$file" "$DATA/custom/catalog.json" 2>/dev/null; then
+    docker run --rm -i -u 0 -v "$DATA/custom:/c" --entrypoint sh "opendmtq-tools:$TAG" -c 'cat > /c/catalog.json' < "$file"
+  fi
+  chmod a+rw "$DATA/custom/catalog.json" 2>/dev/null \
+    || docker run --rm -u 0 -v "$DATA/custom:/c" --entrypoint chmod "opendmtq-tools:$TAG" a+rw /c/catalog.json
+  rm -f "$file"
 }
 stand_in_catalog
 # Started as tests/live/run.sh starts them, and as compose does: read-only, unprivileged, capped.
