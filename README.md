@@ -130,9 +130,9 @@ players sign in and get the app.
 ### The PC client
 
 A Windows installer from the server's site, set up for that server, which runs on Linux under Wine too. Its launcher
-signs in and keeps the game up to date. The game runs at the display's refresh rate (up to 240 Hz) and plays with the
-keyboard (the keys you choose for each lane) or a touch screen; an overlay bar has minimise, full screen and quit
-([the PC client](docs/windows-player.md)).
+signs in and keeps the game up to date. The game runs at the display's refresh rate (up to 240 Hz) and plays with a
+touch screen, the mouse or the keyboard (the keys you choose for each lane); a bar over the game has its sound,
+minimise, full screen and quit ([the PC client](docs/windows-player.md)).
 
 <p align="center">
   <img src="docs/images/client-play.png" alt="The launcher's PLAY page: the server and the sign-in, the ready check, how to play, the last game, and PLAY" width="100%">

@@ -205,6 +205,24 @@ class Wording(unittest.TestCase):
             for text in pair:
                 self.assertNotRegex(text, r"F11|Alt\+Enter", key)
 
+    def test_the_bar_over_the_game_is_said_as_it_is(self):
+        # The bar holds Sound, minimise, full screen and X, and comes down by the pointer, a finger or the mouse drawing
+        # it down: each line about it names the Sound button, in both languages; the PC's needs name the keyboard too.
+        for key in ("play.how.3", "controls.menu"):
+            en, ko = i18n.TEXT[key]
+            self.assertIn("Sound", en, key)
+            self.assertIn("사운드", ko, key)
+            self.assertIn("drawn down", en, key)
+            self.assertIn("끌어내리면", ko, key)
+        en, ko = i18n.TEXT["guide.power.need.2"]
+        self.assertIn("keyboard", en)
+        self.assertIn("키보드", ko)
+        # The player's own guide (its README.txt) says the same, and that Esc does nothing in a song.
+        with open(os.path.join(PACKAGE, "..", "..", "arm32", "desktop", "README-windows.txt"), encoding="utf-8") as f:
+            guide = " ".join(f.read().split())
+        self.assertIn("Sound, minimise, full screen, and X to quit", guide)
+        self.assertNotIn("pauses a song", guide)
+
 
 class KoreanParticles(unittest.TestCase):
     def test_a_particle_after_a_sign_a_letter_or_a_digit_is_attached(self):
