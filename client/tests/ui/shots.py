@@ -1865,8 +1865,15 @@ def main():
     app.root.geometry("%dx%d+0+0" % (w, h))
     settle(app)
     dialogs_check(app, args.out, tag, problems)
-    # Last of the window's checks: the game it starts makes the player's log, which the clearing above would count.
+    # Last of the window's checks: the game it starts makes the player's log, which the clearing above would count. Signed
+    # in as the dialogs' check leaves it: PLAY's records are asked for again once the game has ended, wherever it ends.
+    asked = lambda: sum(1 for r in site.requests if r[1] == "/opendmtq/client.php?records")  # noqa: E731
+    before = asked()
     game_end_check(app, args.out, tag, problems)
+    settle(app, 8, until=lambda: asked() > before)
+    if not app.state.signed_in() or asked() <= before:
+        problems.append("%s: PLAY's records were not asked for again after a game (signed in: %r)"
+                        % (tag, app.state.signed_in()))
     # Jobs the window still has waiting would fire into the next window's event loop once it is gone.
     for job in app.root.tk.splitlist(app.root.tk.call("after", "info")):
         app.root.after_cancel(job)
