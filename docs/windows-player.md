@@ -473,7 +473,8 @@ While broadcasts are on for the server and its owner shows a player live, the pl
 does, with Windows' own video and sound encoders, at the quality the owner chose ([live broadcasts](live.md#from-a-pc)).
 A glass card slides down at the top of the game every time the broadcast's switches change, the player's own or the
 server's: on air, off air, switched on while the server's broadcasts are off and the like, as the server words it, each
-once. The player asks the server every 5 seconds, so a switch flipped in the admin pages shows within that. On air it
+once. The player asks the server every 5 seconds, so a switch flipped in the admin pages shows within that, or when the
+song ends for one flipped during a song: the server keeps its notices until then. On air it
 wears a red LIVE tag like the game's own tags; once over, its title says so alone, and it says where the broadcast can
 be watched. When the server stops answering while the PC broadcasts (three asks in a row, 15 seconds), the card says the
 broadcast has stopped, and when the server answers again on air, that it is back.

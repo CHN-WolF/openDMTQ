@@ -660,7 +660,9 @@ def server_get(args):
             "port": lifecycle.port_now(),
             # A URL as the other addresses are (lifecycle.next_address gives host:port).
             "next_address": f"http://{lifecycle.next_address()}/" if lifecycle.next_address() else None,
-            "moved_from": (lifecycle.moved_off_80(once=False) or {}).get("was")}
+            "moved_from": (lifecycle.moved_off_80(once=False) or {}).get("was"),
+            # What the site's download page says of a move to this address, and the uninstall card's list.
+            "moved": lifecycle.address_moved(), "removes": lifecycle.removes()}
 
 
 @handler

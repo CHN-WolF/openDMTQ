@@ -192,6 +192,25 @@ def env_setting(name):
     return None
 
 
+# How long the site's download page says that the server moved (server/game/src/config.php ODQ_MOVED_DAYS).
+MOVED_DAYS = 30
+
+
+def address_moved():
+    """The server's last move to another address while the site's download page says it (address-moved.json, which the
+    server's start writes, server/game/src/config.php odq_note_address: within a month, to the address served now), as
+    {"from", "to", "at"}; None otherwise."""
+    try:
+        with open(os.path.join(os.path.dirname(core.DB), "address-moved.json"), encoding="utf-8") as f:
+            moved = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if (not isinstance(moved, dict) or not isinstance(moved.get("from"), str) or moved.get("to") != core.PUBLIC_HOST
+            or not isinstance(moved.get("at"), int) or time.time() - moved["at"] >= MOVED_DAYS * 86400):
+        return None
+    return {"from": moved["from"], "to": moved["to"], "at": moved["at"]}
+
+
 def moved_off_80(once=True):
     """The server's move off port 80 at its first start with this version (cli/opendmtq_cli/env.py note_move_off_80):
     {"was", "now", "address"}. once: the first time this page asks for it, noted as said here, and None after that (the

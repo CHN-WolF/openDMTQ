@@ -370,7 +370,13 @@ SHAPES = {
         Field("port", "integer", "Its one port: the game, the players' site, the admin pages and this API."),
         Field("next_address", "string", "The address it moves to at its next start (http://host:port/), when it was moved (POST /server/port); null otherwise.", nullable=True),
         Field("moved_from", "integer", "The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.", nullable=True),
+        Field("moved", "Moved", "Its last move to another address, which the site's download page tells players of for a month: null otherwise.", nullable=True),
+        Field("removes", "[string]", "What Uninstall removes on this install, as the Server page lists it: of folder, firewall, startup, service, link, containers, images, clone and release."),
         Field("data", "[DataPart]", "The server's data, part by part.")]),
+    "Moved": Shape("A move of the server to another address.", [
+        Field("from", "string", "The address it served before (host:port)."),
+        Field("to", "string", "The address it serves now (host:port)."),
+        Field("at", "integer", "When its first start there noted it (Unix time).")]),
     "DataPart": Shape("One part of the server's data.", [
         Field("part", "string", "Which part.", enum=["database", "recordings", "songs", "apps", "backups", "logs", "game"]),
         Field("bytes", "integer", "How much it holds."),

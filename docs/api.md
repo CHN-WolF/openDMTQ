@@ -2643,7 +2643,17 @@ The server as the Server page shows it.
 - `port` (integer): Its one port: the game, the players' site, the admin pages and this API.
 - `next_address` (string, or null): The address it moves to at its next start (http://host:port/), when it was moved (POST /server/port); null otherwise.
 - `moved_from` (integer, or null): The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.
+- `moved` ([Moved](#moved), or null): Its last move to another address, which the site's download page tells players of for a month: null otherwise.
+- `removes` (list of string): What Uninstall removes on this install, as the Server page lists it: of folder, firewall, startup, service, link, containers, images, clone and release.
 - `data` (list of [DataPart](#datapart)): The server's data, part by part.
+
+#### Moved
+
+A move of the server to another address.
+
+- `from` (string): The address it served before (host:port).
+- `to` (string): The address it serves now (host:port).
+- `at` (integer): When its first start there noted it (Unix time).
 
 #### DataPart
 

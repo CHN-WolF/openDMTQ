@@ -11,6 +11,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -352,6 +353,33 @@ class ServerPageTest(unittest.TestCase):
             else:
                 self.assertNotIn('id="admin-local"', page, host)
 
+    def test_what_the_pages_show_of_the_server_the_api_gives(self):
+        # The data the pages show, not only their actions: the uninstall card's list on the Server page (as GET /server's
+        # removes, item for item, on each install), and the site's download page's notice of a move to this address
+        # (GET /server's moved, while the page says it: a month, to the address served now).
+        with Install() as inst:
+            server_with_data(inst.root)
+            with admin.app.test_request_context():
+                _, token = admin.tokens.make("test", "write", ("admin", True, None))
+            headers = {"Authorization": f"Bearer {token}"}
+            inst.sign_in()
+            for host_install in (False, True):
+                with mock.patch.multiple(admin.setup, HOST_INSTALL=host_install, RUN_DIR=inst.path("run")):
+                    os.makedirs(inst.path("run"), exist_ok=True)
+                    page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+                    listed = re.search(r'<ul class="removes">(.*?)</ul>', page, re.S)
+                    removes = inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["removes"]
+                    self.assertEqual(listed.group(1).count("<li>"), len(removes), host_install)
+            state = os.path.dirname(admin.core.DB)
+            self.assertIsNone(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["moved"])
+            with open(os.path.join(state, "address-moved.json"), "w", encoding="utf-8") as f:
+                json.dump({"from": "192.168.0.10", "to": admin.core.PUBLIC_HOST, "at": int(time.time())}, f)
+            self.assertEqual(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["moved"]["from"], "192.168.0.10")
+            # To another address than the one served, or a month old: what the page no longer says.
+            with open(os.path.join(state, "address-moved.json"), "w", encoding="utf-8") as f:
+                json.dump({"from": "192.168.0.10", "to": admin.core.PUBLIC_HOST, "at": int(time.time()) - 31 * 86400}, f)
+            self.assertIsNone(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["moved"])
+
     def test_on_a_host_install_it_restarts_stops_and_uninstalls(self):
         with Install() as inst, self.host(inst):
             inst.sign_in()
@@ -399,7 +427,6 @@ class ServerPageTest(unittest.TestCase):
         self.assertIn('data-ping="/opendmtq/admin/setup/ping"', page)
 
 
-@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class PortMoveTest(unittest.TestCase):
     """Moving the server to another port from the Server page and the API (API-43): .env's LISTEN_PORT and the port in
@@ -490,278 +517,6 @@ class PortMoveTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
-class OwnerPasswordTest(unittest.TestCase):
-    """The owner's password on the Server page and the API (ADM-124, API-54): on a host install and the Windows bundle,
-    written to .env and taken at once, the owner's sign-in for the site written again with it, this sign-in kept and the
-    owner's others ended; only the owner changes it; with Docker Compose and Kubernetes the commands that do it."""
-
-    NEW = "Xk3vQ9pLm2Rt7w"
-
-    def host(self, inst):
-        """A host install's pages, with its .env as a server set up on 8791 has it."""
-        env_file = inst.path(".env")
-        with open(env_file, "w", encoding="utf-8") as f:
-            f.write("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=pw\n")
-        return mock.patch.multiple(admin.setup, HOST_INSTALL=True, RUN_DIR=inst.path("run"), ENV_FILE=env_file)
-
-    def post(self, inst, client, password, again=None):
-        """The Server page's form, as the owner's browser sends it."""
-        with client.session_transaction("/opendmtq/admin/") as s:
-            csrf = s["csrf"]
-        return client.post("/opendmtq/admin/server/password",
-                           data={"csrf": csrf, "password": password, "password2": password if again is None else again})
-
-    def env(self, inst):
-        with open(inst.path(".env"), encoding="utf-8") as f:
-            return f.read()
-
-    def test_changed_here_and_taken_at_once(self):
-        with Install() as inst, self.host(inst):
-            inst.sign_in()
-            # A second browser of the owner's, signed in before the change.
-            other = admin.app.test_client()
-            self.assertEqual(other.post("/opendmtq/admin/login", data={"name": "admin", "password": "pw"}).status_code, 302)
-            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
-            self.assertIn('id="password"', page)
-            self.assertIn('action="/opendmtq/admin/server/password"', page)
-            r = self.post(inst, inst.client, self.NEW)
-            self.assertEqual((r.status_code, r.headers["Location"].endswith("/opendmtq/admin/server#password")), (302, True))
-            # In .env, the rest of it as it was; taken by this service now.
-            self.assertEqual(self.env(inst), f"PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD={self.NEW}\n")
-            self.assertEqual(admin.core.PASSWORD, self.NEW)
-            # The owner's sign-in for the players' site, written again with the new one.
-            with open(inst.path("state/owner.pass"), encoding="utf-8") as f:
-                lines = f.read().splitlines()
-            self.assertTrue(admin.auth.account_pass_ok(lines[1], self.NEW))
-            self.assertFalse(admin.auth.account_pass_ok(lines[1], "pw"))
-            # This sign-in goes on, with the words of what was done; the other one ended, and says why.
-            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
-            self.assertIn("The owner's password is changed: <code>admin</code> signs in with the new one", page)
-            ended = other.get("/opendmtq/admin/")
-            self.assertEqual(ended.status_code, 302)
-            self.assertIn("/opendmtq/admin/login", ended.headers["Location"])
-            self.assertIn("your account was changed", other.get(ended.headers["Location"]).get_data(as_text=True))
-            # The old password signs in no more, the new one does.
-            fresh = admin.app.test_client()
-            self.assertEqual(fresh.post("/opendmtq/admin/login", data={"name": "admin", "password": "pw"}).status_code, 200)
-            self.assertEqual(fresh.post("/opendmtq/admin/login", data={"name": "admin", "password": self.NEW}).status_code, 302)
-            # In the log of changes, without the password.
-            notes = [c for c in admin.insights.audit_read(inst.path("state")) if c["what"] == "server:password"]
-            self.assertEqual([c["target"] for c in notes], ["admin"])
-            with open(inst.path("state/changes.log"), encoding="utf-8") as f:
-                self.assertNotIn(self.NEW, f.read())
-
-    def test_an_owners_sign_in_from_before_ends_too(self):
-        # A sign-in an older version made keeps no stamp of the password: it ends with a change made after it began.
-        with Install() as inst, self.host(inst):
-            inst.sign_in()
-            old = admin.app.test_client()
-            old.post("/opendmtq/admin/login", data={"name": "admin", "password": "pw"})
-            with old.session_transaction("/opendmtq/admin/") as s:
-                del s["pw"]
-            self.assertEqual(old.get("/opendmtq/admin/").status_code, 200)
-            # The change at least a second after it began.
-            with mock.patch("time.time", return_value=time.time() + 5):
-                self.post(inst, inst.client, self.NEW)
-            self.assertEqual(old.get("/opendmtq/admin/").status_code, 302)
-
-    def test_what_is_refused_is_said_and_nothing_changes(self):
-        with Install() as inst, self.host(inst):
-            inst.sign_in()
-            for password, again, words in (("short", None, "10 to 64 characters"), ("Xk3vQ9pL$m2Rt7w", None, "10 to 64 characters"),
-                                           ("with a space here", None, "10 to 64 characters"), (self.NEW, "Xk3vQ9pLm2Rt7x", "not the same"),
-                                           ("", None, "Type the new password")):
-                self.post(inst, inst.client, password, again)
-                page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
-                self.assertIn(words, page, password)
-                self.assertIn("ADMIN_PASSWORD=pw\n", self.env(inst), password)
-                self.assertEqual(admin.core.PASSWORD, "pw")
-
-    def test_only_the_owner(self):
-        with Install() as inst, self.host(inst):
-            server_with_data(inst.root)
-            # An account with admin rights opens these pages, but the owner's password is not its to change.
-            self.assertTrue(admin.auth.account_create("keeper", "keeper-password-1", "", True))
-            keeper = admin.app.test_client()
-            self.assertEqual(keeper.post("/opendmtq/admin/login", data={"name": "keeper", "password": "keeper-password-1"}).status_code, 302)
-            page = keeper.get("/opendmtq/admin/server").get_data(as_text=True)
-            self.assertIn("Only the owner changes it", page)
-            self.assertNotIn('action="/opendmtq/admin/server/password"', page)
-            self.post(inst, keeper, self.NEW)
-            self.assertIn("ADMIN_PASSWORD=pw\n", self.env(inst))
-            # Its token cannot either; the owner's can, and still works afterwards.
-            with admin.app.test_request_context():
-                _, theirs = admin.tokens.make("theirs", "write", ("keeper", False, admin.auth.account_find("keeper")["created_at"]))
-                _, owners = admin.tokens.make("owners", "write", ("admin", True, None))
-            refused = inst.client.post("/opendmtq/api/v1/server/password", json={"password": self.NEW}, headers={"Authorization": f"Bearer {theirs}"})
-            self.assertEqual((refused.status_code, refused.get_json()["error"]["code"]), (403, "owner_only"))
-            self.assertIn("ADMIN_PASSWORD=pw\n", self.env(inst))
-            done = inst.client.post("/opendmtq/api/v1/server/password", json={"password": self.NEW}, headers={"Authorization": f"Bearer {owners}"})
-            self.assertEqual((done.status_code, done.get_json()), (200, {"changed": True, "user": "admin"}))
-            self.assertIn(f"ADMIN_PASSWORD={self.NEW}\n", self.env(inst))
-            self.assertEqual(inst.client.get("/opendmtq/api/v1/server", headers={"Authorization": f"Bearer {owners}"}).status_code, 200)
-            bad = inst.client.post("/opendmtq/api/v1/server/password", json={"password": "a$b"}, headers={"Authorization": f"Bearer {owners}"})
-            self.assertEqual((bad.status_code, bad.get_json()["error"]["code"]), (400, "bad_password"))
-
-    def test_a_restart_of_the_admin_service_keeps_the_new_password(self):
-        # The host program starts a stopped admin service again with the settings it read at its own start: the service
-        # takes the owner's password from .env as it is now, not the one it was handed. Before, the old one came back, and
-        # the service wrote it into the site's copy too.
-        with Install() as inst, self.host(inst):
-            inst.sign_in()
-            self.post(inst, inst.client, self.NEW)
-            handed = {"OPENDMTQ_HOST_INSTALL": "yes", "OPENDMTQ_ENV_FILE": inst.path(".env"), "ADMIN_PASSWORD": "pw"}
-            # The service's own start, in a process of its own, with what the host program hands it.
-            here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            folders = {"OPENDMTQ_DB": inst.path("state/dmtq.db3"), "OPENDMTQ_LOGS": inst.path("logs"),
-                       "OPENDMTQ_BACKUPS": inst.path("backups"), "OPENDMTQ_APK": inst.path("apk"), "OPENDMTQ_RUN": inst.path("run")}
-            start = ("import sys; sys.path.insert(0, sys.argv[1]); from opendmtq_tools import admin; "
-                     "print(admin.core.PASSWORD)")
-            r = subprocess.run([sys.executable, "-I", "-B", "-c", start, here], env={**os.environ, **folders, **handed},
-                               capture_output=True, text=True, timeout=120)
-            self.assertEqual(r.stdout.strip().splitlines()[-1:], [self.NEW], r.stderr[-2000:])
-            # The site's copy written with the new one, not the old.
-            with open(inst.path("state/owner.pass"), encoding="utf-8") as f:
-                self.assertTrue(admin.auth.account_pass_ok(f.read().splitlines()[1], self.NEW))
-            with mock.patch.dict(os.environ, handed):
-                self.assertEqual(admin.core.configured_password(), self.NEW)
-            # .env as Notepad and a hand may leave it: a byte order mark, export, quotes; the last line that sets it.
-            with open(inst.path(".env"), "w", encoding="utf-8") as f:
-                f.write("\ufeffADMIN_PASSWORD=first-one-1\nexport ADMIN_PASSWORD=\"second one 2\"\n")
-            with mock.patch.dict(os.environ, handed):
-                self.assertEqual(admin.core.configured_password(), "second one 2")
-            # Docker Compose and Kubernetes start the service anew with .env's or the Secret's: what it is handed.
-            with mock.patch.dict(os.environ, {"ADMIN_PASSWORD": "handed-one-1", "OPENDMTQ_HOST_INSTALL": ""}):
-                self.assertEqual(admin.core.configured_password(), "handed-one-1")
-
-    def test_what_cannot_be_written_puts_back_what_was(self):
-        with Install() as inst, self.host(inst):
-            inst.sign_in()
-            # .env cannot be written (a full disk): refused in words, nothing changed.
-            def no_room(updates):
-                raise OSError(28, "No space left on device")
-            with mock.patch.object(admin.setup, "save_env", no_room):
-                self.post(inst, inst.client, self.NEW)
-            self.assertIn("The password was not changed: .env could not be written", inst.client.get("/opendmtq/admin/server").get_data(as_text=True))
-            self.assertEqual(admin.core.PASSWORD, "pw")
-            # The site's copy (owner.pass) cannot be written: refused in words, .env and these pages as they were.
-            with mock.patch.object(admin.auth, "owner_file_write", lambda: "failed"):
-                self.post(inst, inst.client, self.NEW)
-            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
-            self.assertIn("The password was not changed", page)
-            self.assertIn("ADMIN_PASSWORD=pw\n", self.env(inst))
-            self.assertEqual(admin.core.PASSWORD, "pw")
-            # The settings' file cannot take the moment of the change: the change stands, and this sign-in goes on.
-            def full(**changes):
-                raise OSError(28, "No space left on device")
-            with mock.patch.object(admin.core, "save_settings", full):
-                r = self.post(inst, inst.client, self.NEW)
-            self.assertEqual(r.status_code, 302)
-            self.assertIn(f"ADMIN_PASSWORD={self.NEW}\n", self.env(inst))
-            page = inst.client.get("/opendmtq/admin/server")
-            self.assertEqual(page.status_code, 200)
-            self.assertIn("password is changed", page.get_data(as_text=True))
-
-    def test_two_changes_of_env_at_once_both_stay(self):
-        # Two writers of .env in this service at the same moment (the Server page's port and password from two browsers):
-        # both changes stay. Before, each wrote the file as it had read it, and one change was lost.
-        with Install() as inst, self.host(inst):
-            gate = threading.Barrier(2)
-            real_open = open
-
-            def reading(path, *args, **kwargs):
-                # Both writers held where they read .env, should they read it at once.
-                if path == admin.setup.ENV_FILE and not args and kwargs.get("encoding") == "utf-8-sig":
-                    try:
-                        gate.wait(timeout=0.5)
-                    except threading.BrokenBarrierError:
-                        pass
-                return real_open(path, *args, **kwargs)
-            with mock.patch.object(admin.setup, "open", reading, create=True):
-                one = threading.Thread(target=admin.setup.save_env, args=({"FIRST_KEY": "one"},))
-                two = threading.Thread(target=admin.setup.save_env, args=({"SECOND_KEY": "two"},))
-                one.start()
-                two.start()
-                one.join()
-                two.join()
-            text = self.env(inst)
-            self.assertIn("FIRST_KEY=one\n", text)
-            self.assertIn("SECOND_KEY=two\n", text)
-            # No writer's file left beside it.
-            self.assertEqual([n for n in os.listdir(inst.root) if n.startswith(".env.")], [])
-
-    def test_sign_out_everywhere_else_ends_the_admin_pages_sign_ins(self):
-        # The site's MY PAGE writes the moment from which the account's sign-ins count (signed_out_at; the owner's in
-        # owner-signed-out): its sign-ins to these pages made before it end too.
-        with Install() as inst, self.host(inst):
-            server_with_data(inst.root)
-            self.assertTrue(admin.auth.account_create("keeper", "keeper-password-1", "", True))
-            keeper = admin.app.test_client()
-            keeper.post("/opendmtq/admin/login", data={"name": "keeper", "password": "keeper-password-1"})
-            self.assertEqual(keeper.get("/opendmtq/admin/").status_code, 200)
-            inst.sign_in()
-            self.assertEqual(inst.client.get("/opendmtq/admin/").status_code, 200)
-            with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
-                con.execute("UPDATE SiteUser SET signed_out_at = ? WHERE name = 'keeper'", (int(time.time()) + 1,))
-            self.assertEqual(keeper.get("/opendmtq/admin/").status_code, 302)
-            # The owner's own, from its file; a sign-in made after it goes on.
-            with open(inst.path("state/owner-signed-out"), "w", encoding="ascii") as f:
-                f.write(str(int(time.time()) + 1))
-            self.assertEqual(inst.client.get("/opendmtq/admin/").status_code, 302)
-            later = admin.app.test_client()
-            with mock.patch("time.time", return_value=time.time() + 5):
-                later.post("/opendmtq/admin/login", data={"name": "admin", "password": "pw"})
-                self.assertEqual(later.get("/opendmtq/admin/").status_code, 200)
-
-    def test_a_password_changed_outside_these_pages_ends_the_owners_older_sign_ins(self):
-        # The command line's password (./opendmtq password, opendmtq password on the server PC) or a hand changes .env, and
-        # the service starts again: the site's copy written over the old one, and the moment noted, so that an owner's
-        # sign-in without the password's stamp (an older version's) ends too. Before, nothing noted it.
-        with Install() as inst:
-            inst.sign_in()
-            with inst.client.session_transaction("/opendmtq/admin/") as s:
-                # As an older version's sign-in: no stamp of the password, begun a minute ago.
-                s.pop("pw", None)
-                sid = s["sid"]
-            with admin.auth._sessions_lock:
-                admin.auth._sessions[sid] -= 60
-            self.assertEqual(inst.client.get("/opendmtq/admin/").status_code, 200)
-            # The first start writes the file anew: nothing to note. The same password at the next start keeps it.
-            admin.core.save_settings(owner_password_at=None)
-            with contextlib.suppress(FileNotFoundError):
-                os.remove(admin.auth.owner_file())
-            self.assertEqual(admin.auth.owner_file_at_start(), "written")
-            self.assertFalse(admin.core.settings().get("owner_password_at"))
-            self.assertEqual(admin.auth.owner_file_at_start(), "kept")
-            self.assertFalse(admin.core.settings().get("owner_password_at"))
-            self.assertEqual(inst.client.get("/opendmtq/admin/").status_code, 200)
-            # A new one in .env at this start: the moment noted, and the older sign-in ends.
-            with mock.patch.object(admin.core, "PASSWORD", self.NEW):
-                self.assertEqual(admin.auth.owner_file_at_start(), "written")
-                self.assertTrue(admin.core.settings().get("owner_password_at"))
-                self.assertEqual(inst.client.get("/opendmtq/admin/").status_code, 302)
-
-    def test_in_containers_the_command_line_does_it(self):
-        with Install() as inst:
-            server_with_data(inst.root)
-            with admin.app.test_request_context():
-                _, token = admin.tokens.make("owners", "write", ("admin", True, None))
-            r = inst.client.post("/opendmtq/api/v1/server/password", json={"password": self.NEW}, headers={"Authorization": f"Bearer {token}"})
-            self.assertEqual((r.status_code, r.get_json()["error"]["code"]), (409, "by_command"))
-            self.assertIn("./opendmtq password", r.get_json()["error"]["message"])
-            inst.sign_in()
-            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
-            self.assertIn("./opendmtq password", page)
-            self.assertNotIn('action="/opendmtq/admin/server/password"', page)
-        # Kubernetes: the Secret the chart named, and the restart that takes it.
-        with Install() as inst, mock.patch.object(admin.setup, "IN_KUBERNETES", True), \
-                mock.patch.dict(os.environ, {"OPENDMTQ_RELEASE": "home", "POD_NAMESPACE": "games", "OPENDMTQ_ADMIN_SECRET": "home-opendmtq-admin"}):
-            inst.sign_in()
-            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
-            self.assertIn("kubectl -n games create secret generic home-opendmtq-admin --from-literal=ADMIN_PASSWORD=&lt;password&gt;", page)
-            self.assertIn("kubectl -n games rollout restart deploy -l app.kubernetes.io/instance=home", page)
-
-
 class DeleteAndRepairTest(unittest.TestCase):
     """Deleting the data and the repair from the page and the API, as jobs (ADM-110, ADM-112, API-45, API-46)."""
 
