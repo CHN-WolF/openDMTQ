@@ -48,7 +48,7 @@ expect() {
   shift
   if "$@"; then pass "$name"; else fail "$name"; fi
 }
-wait_for() { local i; for i in $(seq 1 "$1"); do eval "$2" && return 0; sleep 1; done; return 1; }
+wait_for() { local _; for _ in $(seq 1 "$1"); do eval "$2" && return 0; sleep 1; done; return 1; }
 step=0
 snap() { step=$((step + 1)); import -window root "/out/$(printf %02d $step)-$1.png"; echo "screen $step: $1"; }
 # The launcher's window by its title, and how many there are.

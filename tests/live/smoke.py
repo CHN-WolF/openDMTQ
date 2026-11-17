@@ -872,6 +872,9 @@ if media:
             assert upload(token, seq, f.read()) == 204
     assert end(token) == 204
     switch("live-off")
+    # The song the stream stood for ends as a given-up song does, keeping no play: left open, the player stayed in a
+    # song for the checks after it, and the maintenance notices waited behind this broadcast's own.
+    call("game.savePlayResultFailLog", [guid, 1, "smoke", 0])
     print("RECORDING", new_since(before))
 
 # ---- scores: what a save stores, whatever else is happening.
