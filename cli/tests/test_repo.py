@@ -113,6 +113,20 @@ class ApiDocsTest(unittest.TestCase):
             self.assertIsNotNone(self.route_for(path, method), f"{method or ''} {path}")
 
 
+class WindowsLinesTest(unittest.TestCase):
+    def test_the_guides_count_the_windows_lines_as_the_block_has_them(self):
+        # The guides say "the same N lines" of the Windows install's PowerShell block: as many as it has (they said four
+        # after it grew to five).
+        with open(os.path.join(ROOT, "docs", "install.md"), encoding="utf-8") as f:
+            block = re.search(r"```powershell\n(.*?)```", f.read(), re.S).group(1)
+        count = len([line for line in block.splitlines() if line.strip()])
+        word = {3: "three", 4: "four", 5: "five", 6: "six", 7: "seven"}[count]
+        for name in ("docs/install.md", "docs/faq.md", "README.md", "tests/windows/update.sh"):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as f:
+                for said in re.findall(r"\b(three|four|five|six|seven) lines\b", f.read()):
+                    self.assertEqual(said, word, name)
+
+
 class FiguresTest(unittest.TestCase):
     """The guides' figures name what the program has now: no setting it reads no more (ADMIN_PORT, the admin pages' own
     port before 0.11.0), no loopback address with a port, no build's file name a player never has."""

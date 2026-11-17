@@ -122,7 +122,7 @@ Android phone or tablet, or the PC client on a Windows PC: [playing on a server]
 | Start | `OpenDMTQ.exe` | `./opendmtq start` | `./opendmtq up` |
 | Stop | close the window | `./opendmtq stop` | `./opendmtq down` |
 | See the address | the window shows it | `./opendmtq status` | `./opendmtq status` |
-| Update | close the window, then run the [four lines](#windows) again | run the `curl` line again | `git pull`, then `./opendmtq up` |
+| Update | close the window, then run the [five lines](#windows) again | run the `curl` line again | `git pull`, then `./opendmtq up` |
 | Start with the computer | a shortcut in `shell:startup` | `./opendmtq service` | `RESTART=unless-stopped` in `.env`, or `cli/install.sh --service` |
 | Import songs | admin pages, **Songs**, or a folder dropped on `OpenDMTQ.exe` (the game's files in it too) | admin pages, **Songs** | `./opendmtq import --songs <folder>` |
 | Name the app (`TECHNIKA Q (<name>)`) | `SERVER_NAME=<name>` in `.env`, restart, then build the app (admin pages, **App**) | the same | `./opendmtq name <name>` |
