@@ -322,6 +322,9 @@ SHAPES = {
         Field("by", "string", "Who set it: the admin, or through the API the admin whose token it was.", nullable=True)]),
     # The Notices page's Discord and Slack (webhooks.py).
     # The owner's password on the Server page (lifecycle.py).
+    "PasswordChanged": Shape("The owner's password changed.", [
+        Field("changed", "boolean", "True: the new password works from now on, for the admin pages and the players' site alike."),
+        Field("user", "string", "The owner's ID (ADMIN_USER), which signs in with it.")]),
     "Stopping": Shape("A stop asked for.", [Field("stopping", "boolean", "True: the server stops within a few seconds, these pages and the API with it.")]),
     # The Server page.
     "ServerState": Shape("The server as the Server page shows it.", [
@@ -943,6 +946,17 @@ ROUTES = [
                   (409, "same_port", "The server is on that port already."),
                   (409, "port_taken", "Another program holds that port on this computer."),
                   (409, "by_command", "Docker Compose or Kubernetes: the command line moves the server (the message names the command).")]),
+    Route("POST", "/server/password", "write", "server_password", "Server", "Changes the owner's password, as the Server page's Change the password does.",
+          "A host install and the Windows bundle, with a token of the owner's own: ADMIN_PASSWORD in .env, taken at once by the "
+          "admin pages and this API (the owner's tokens keep working), the owner's sign-in for the players' site written again "
+          "with it, and every sign-in of the owner's made with the old one ended. With Docker Compose `./opendmtq password` "
+          "changes it, on Kubernetes the Secret (the refusal names the commands).",
+          body=[Field("password", "string", "The new password: 10 to 64 characters, without spaces, quotes, $, #, \\ or `.", max_length=64)],
+          answer="PasswordChanged",
+          errors=[(400, "missing_password", "No password."),
+                  (400, "bad_password", "Not 10 to 64 characters, or with a space, a quote, $, #, \\ or `."),
+                  (403, "owner_only", "The token is not the owner's: only the owner changes the owner's password."),
+                  (409, "by_command", "Docker Compose or Kubernetes: the command line changes it (the message names the commands).")]),
     Route("POST", "/server/repair", "write", "server_repair", "Server", "Checks and repairs the server, as the Server page's Check and repair does.",
           "Its folders, the database's integrity, the owner's sign-in for the players' site, the song list, the site's look kept here, "
           "the phone app (built again when it is missing or for another address) and the program's own files against the install's "

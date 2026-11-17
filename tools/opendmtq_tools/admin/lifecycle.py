@@ -11,10 +11,11 @@ only the server's folders, which these pages have.
 import datetime
 import json
 import os
+import re
 import socket
 import time
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, session, url_for
 
 from .. import repair as repairing, server_data
 from . import apps, assets, auth, backups, core, jobs, setup, status
@@ -188,6 +189,58 @@ def move_port(raw):
     return {"port": port, "address": f"http://{new}/", "from_next_start": True}
 
 
+# The owner's password as these pages take a new one: it goes into .env as typed, where Docker Compose reads it too, so
+# nothing there could read it as something else (a space, a quote, a $ that names a variable, a # that starts a comment, a
+# backslash or a backquote), and at least as long as an account's with admin rights (accounts.ADMIN_PASSWORD_MIN).
+OWNER_PASSWORD = re.compile(r"[^\s\"'$#\\`]{10,64}")
+
+
+def admin_secret():
+    """The Kubernetes Secret that holds the owner's password, as the chart tells these pages (OPENDMTQ_ADMIN_SECRET), else
+    the name the chart gives its own: the release's full name with -admin."""
+    release, _ = kube_names()
+    full = release if "opendmtq" in release else f"{release}-opendmtq"
+    return os.environ.get("OPENDMTQ_ADMIN_SECRET") or f"{full[:50].rstrip('-')}-admin"
+
+
+def password_commands():
+    """The commands that change the owner's password where these pages cannot write .env: Docker Compose's command line,
+    or the Secret and a restart on Kubernetes. [] on a host install, which changes it here."""
+    kind = install_kind()
+    if kind == "docker":
+        return ["./opendmtq password"]
+    if kind == "kubernetes":
+        release, ns = kube_names()
+        return [f"kubectl -n {ns} create secret generic {admin_secret()} --from-literal=ADMIN_PASSWORD=<password> "
+                "--dry-run=client -o yaml | kubectl apply -f -",
+                f"kubectl -n {ns} rollout restart deploy -l app.kubernetes.io/instance={release}"]
+    return []
+
+
+def change_owner_password(new, again, owner):
+    """The owner's password (ADMIN_PASSWORD in .env) changed to new, typed twice (again), on a host install and the
+    Windows bundle: written to .env, and taken by this service at once (core.PASSWORD), the owner's sign-in for the site
+    written again with it (owner.pass), and the owner's other sign-ins to these pages ended (auth.owner_stamp()). owner:
+    whether the owner asks (only they change it: an admin's account or token cannot). Refused with Docker Compose and
+    Kubernetes, where the command line does it (the message names the command)."""
+    if not owner:
+        raise Refused(403, "owner_only", t("pw.owner_only"))
+    if not (setup.HOST_INSTALL and setup.ENV_FILE):
+        raise Refused(409, "by_command", t("pw.by_command", command=" && ".join(password_commands()) or "./opendmtq password"))
+    if not new:
+        raise Refused(400, "missing_password", t("pw.missing"))
+    if not OWNER_PASSWORD.fullmatch(new):
+        raise Refused(400, "bad_password", t("pw.bad"))
+    if again != new:
+        raise Refused(400, "password_mismatch", t("acc.mismatch"))
+    setup.save_env({"ADMIN_PASSWORD": new})
+    core.PASSWORD = new
+    # When it changed: an owner's sign-in from before sessions kept their password's stamp ends with it too.
+    core.save_settings(owner_password_at=int(time.time()))
+    auth.owner_file_write()
+    changed("server:password", core.ADMIN_USER)
+
+
 def layout():
     """Where the server's data is, as these pages see it."""
     return server_data.Layout()
@@ -299,6 +352,9 @@ def server_page():
                            version=os.environ.get("OPENDMTQ_VERSION") or "", root=repairing.install_root(),
                            port=port_now(), next_address=next_address(),
                            can_move_port=bool(setup.HOST_INSTALL and setup.ENV_FILE),
+                           # The owner's password: changed here by the owner, or the command that changes it.
+                           password_here=bool(setup.HOST_INSTALL and setup.ENV_FILE), password_commands=password_commands(),
+                           is_owner=session.get("stamp") == "owner", owner_id=core.ADMIN_USER,
                            kind_words=KIND_WORDS, command_leads=COMMAND_LEADS, part_words=PART_WORDS,
                            remove_leads=REMOVE_LEADS, remove_words=REMOVE_WORDS,
                            job=wanted or None, job_kind=job["kind"] if job else None)
@@ -328,6 +384,19 @@ def server_port():
     except Refused as e:
         flash(e.words, e.tone)
     return redirect(url_for("server_page") + "#port")
+
+
+@app.route(BASE + "/server/password", methods=["POST"])
+def server_password():
+    """The owner's new password (a host install, the Windows bundle): from now on, this sign-in kept."""
+    try:
+        change_owner_password(request.form.get("password", ""), request.form.get("password2", ""), session.get("stamp") == "owner")
+        # This sign-in goes on with the new password; the owner's others end.
+        session["pw"] = auth.owner_stamp()
+        flash(t("pw.done", user=core.ADMIN_USER), "ok")
+    except Refused as e:
+        flash(e.words, e.tone)
+    return redirect(url_for("server_page") + "#password")
 
 
 @app.route(BASE + "/server/repair", methods=["POST"])

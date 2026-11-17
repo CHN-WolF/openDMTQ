@@ -370,6 +370,63 @@ class PortCommandTest(unittest.TestCase):
             self.assertEqual(sb.env()["LISTEN_PORT"], "8791")
 
 
+class PasswordCommandTest(unittest.TestCase):
+    """./opendmtq password: the owner's password (ADMIN_PASSWORD in .env) typed twice on a terminal, or one made; the
+    running admin service started again with it, as it reads it at its start; one Docker Compose would read otherwise
+    refused (SRV-57)."""
+
+    SET_UP = "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=old-password-1\n"
+
+    def test_one_made_without_a_terminal(self):
+        with Sandbox(self.SET_UP) as sb:
+            self.assertEqual(sb.call(app.cmd_password), 0, sb.output())
+            made = sb.env()["ADMIN_PASSWORD"]
+            # Sixteen of setup's own letters, said once, and nothing else of .env changed.
+            self.assertRegex(made, r"^[A-Za-z0-9_-]{16}$")
+            self.assertIn(f"The new password: {made}", sb.output())
+            self.assertEqual(sb.env()["LISTEN_PORT"], "8791")
+            # Not running: from the next start, nothing started now.
+            self.assertIn("from the server's next start", sb.output())
+            self.assertEqual(sb.compose_calls, [])
+
+    def test_the_running_admin_service_takes_it(self):
+        with Sandbox(self.SET_UP) as sb:
+            sb.state = "running"
+            self.assertEqual(sb.call(app.cmd_password), 0, sb.output())
+            # The admin container made again with the new .env, and nothing else.
+            self.assertEqual(sb.compose_calls, [("up", "-d", "--force-recreate", "admin")])
+            self.assertIn("for the admin pages and the players' site", sb.output())
+
+    def test_typed_twice_on_a_terminal(self):
+        with Sandbox(self.SET_UP) as sb, mock.patch("sys.stdin.isatty", return_value=True), \
+                mock.patch("getpass.getpass", side_effect=["Xk3vQ9pLm2Rt7w", "Xk3vQ9pLm2Rt7w"]):
+            self.assertEqual(sb.call(app.cmd_password), 0, sb.output())
+            self.assertEqual(sb.env()["ADMIN_PASSWORD"], "Xk3vQ9pLm2Rt7w")
+            # A typed password is not printed back.
+            self.assertNotIn("Xk3vQ9pLm2Rt7w", sb.output())
+
+    def test_refused_and_nothing_changed(self):
+        # One Docker Compose would read as something else ($ names a variable there), one too short, two that differ.
+        for typed in (["abc$defghijk"], ["short"], ["Xk3vQ9pLm2Rt7w", "Xk3vQ9pLm2Rt7x"]):
+            with Sandbox(self.SET_UP) as sb, mock.patch("sys.stdin.isatty", return_value=True), \
+                    mock.patch("getpass.getpass", side_effect=typed):
+                self.assertEqual(sb.call(app.cmd_password), 1, typed)
+                self.assertEqual(sb.env()["ADMIN_PASSWORD"], "old-password-1", typed)
+                self.assertEqual(sb.compose_calls, [])
+
+    def test_before_setup(self):
+        with Sandbox(env_text=None) as sb:
+            self.assertEqual(sb.call(app.cmd_password), 1)
+            self.assertIn("setup", sb.output())
+
+    def test_the_same_rule_as_the_admin_pages(self):
+        # One rule for a new owner's password, here and on the Server page (lifecycle.py).
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools",
+                               "opendmtq_tools", "admin", "lifecycle.py"), encoding="utf-8") as f:
+            pages = re.search(r'OWNER_PASSWORD = re\.compile\((r".*?")\)', f.read()).group(1)
+        self.assertEqual(eval(pages), app.OWNER_PASSWORD)  # noqa: S307 - a literal read from our own source
+
+
 class FirewallTest(unittest.TestCase):
     def test_before_setup_opens_nothing(self):
         # Without an address the rule's scope is unknown; it must not default to "from anywhere".

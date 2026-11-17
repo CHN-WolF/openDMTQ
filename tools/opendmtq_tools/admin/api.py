@@ -643,6 +643,15 @@ def server_port(args):
 
 
 @handler
+def server_password(args):
+    """POST /server/password: the Server page's Change the password (lifecycle.change_owner_password), with the owner's own
+    token only. Typed once here: a program does not mistype."""
+    password = args.get("password") or ""
+    lifecycle.change_owner_password(password, password, bool(g.api_token["owner"]))
+    return {"changed": True, "user": core.ADMIN_USER}
+
+
+@handler
 def server_restart(args):
     """POST /server/restart: the Server page's Restart (lifecycle.restart_server). 202: the answer leaves first."""
     lifecycle.restart_server()

@@ -684,6 +684,7 @@ The Server page: the server's state, stopping and restarting it, the repair, its
 | [`POST /server/stop`](#post-serverstop) | write | Stops the server, as the Server page's Stop the server does. |
 | [`POST /server/restart`](#post-serverrestart) | write | Restarts the server, as the Server page's Restart does. |
 | [`POST /server/port`](#post-serverport) | write | Moves the server to another port, as the Server page's Move to this port does. |
+| [`POST /server/password`](#post-serverpassword) | write | Changes the owner's password, as the Server page's Change the password does. |
 | [`POST /server/repair`](#post-serverrepair) | write | Checks and repairs the server, as the Server page's Check and repair does. |
 | [`GET /server/data`](#get-serverdata) | read | The server's data, part by part, with how much each holds. |
 | [`POST /server/data/delete`](#post-serverdatadelete) | write | Deletes parts of the server's data, as the Server page's Delete does. |
@@ -733,6 +734,23 @@ Refusals:
 - `409 same_port`: The server is on that port already.
 - `409 port_taken`: Another program holds that port on this computer.
 - `409 by_command`: Docker Compose or Kubernetes: the command line moves the server (the message names the command).
+
+#### `POST /server/password`
+
+Changes the owner's password, as the Server page's Change the password does. A host install and the Windows bundle, with a token of the owner's own: ADMIN_PASSWORD in .env, taken at once by the admin pages and this API (the owner's tokens keep working), the owner's sign-in for the players' site written again with it, and every sign-in of the owner's made with the old one ended. With Docker Compose `./opendmtq password` changes it, on Kubernetes the Secret (the refusal names the commands).
+
+Body (JSON):
+
+- `password` (string, 64 characters at most): The new password: 10 to 64 characters, without spaces, quotes, $, #, \ or `.
+
+Answer: `200` with [PasswordChanged](#passwordchanged).
+
+Refusals:
+
+- `400 missing_password`: No password.
+- `400 bad_password`: Not 10 to 64 characters, or with a space, a quote, $, #, \ or `.
+- `403 owner_only`: The token is not the owner's: only the owner changes the owner's password.
+- `409 by_command`: Docker Compose or Kubernetes: the command line changes it (the message names the commands).
 
 #### `POST /server/repair`
 
@@ -2407,15 +2425,12 @@ The in-game maintenance notice.
 - `change` (integer): The number of its last change (turned on, a new message, ended), higher with each one; 0 before the first. The game's notice page is asked for under it, and players in the game are told of each change once.
 - `changed_at` (integer, or null): When that change was made (Unix time); null before the first.
 
-#### SiteNotice
+#### PasswordChanged
 
-The notice on the site: one line at the top of every page of the players' site, for everyone signed in.
+The owner's password changed.
 
-- `text` (string): What it says; empty when there is none.
-- `shown` (boolean): True while it is up: there is one, and its end has not come.
-- `until` (integer, or null): When it ends by itself (Unix time); null for no end.
-- `set_at` (integer, or null): When it was set (Unix time); null when there is none.
-- `by` (string, or null): Who set it: the admin, or through the API the admin whose token it was.
+- `changed` (boolean): True: the new password works from now on, for the admin pages and the players' site alike.
+- `user` (string): The owner's ID (ADMIN_USER), which signs in with it.
 
 #### Stopping
 

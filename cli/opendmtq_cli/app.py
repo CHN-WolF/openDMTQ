@@ -546,6 +546,48 @@ def cmd_port(args):
         print(line)
 
 
+# The owner's password as the admin pages take a new one (OWNER_PASSWORD in tools/opendmtq_tools/admin/lifecycle.py): it
+# goes into .env as typed, where Docker Compose reads it too, so nothing there could read it as something else (a space, a
+# quote, a $ that names a variable, a # that starts a comment, a backslash or a backquote).
+OWNER_PASSWORD = r"[^\s\"'$#\\`]{10,64}"
+
+
+def cmd_password(args):
+    """Change the owner's password (ADMIN_PASSWORD in .env), which with the owner's ID (ADMIN_USER) opens the admin pages
+    and the players' site: typed twice on a terminal, or one made when nothing is typed or there is no terminal (a
+    script). The admin pages take it when they start, so a running admin service is started again with it; the owner's
+    sign-ins made with the old one end, as on the Server page."""
+    import getpass
+    import re
+    import secrets
+    values = env.load(ENV_FILE)
+    if env.check_host(values.get("PUBLIC_HOST", "")):
+        die("no server set up yet; run ./opendmtq setup")
+    new = ""
+    # On a terminal: the new password, hidden as it is typed, then again; Enter alone has one made.
+    if sys.stdin.isatty():
+        new = getpass.getpass("New password for the admin pages (Enter to have one made): ")
+        if new:
+            if not re.fullmatch(OWNER_PASSWORD, new):
+                die("a password here is 10 to 64 characters, without spaces, quotes, $, #, \\ or `")
+            if getpass.getpass("The same again: ") != new:
+                die("the two passwords are not the same; nothing changed")
+    made = not new
+    # Sixteen letters, digits, - and _, as setup makes the first one.
+    new = new or secrets.token_urlsafe(12)
+    env.save(ENV_FILE, {"ADMIN_PASSWORD": new})
+    user = values.get("ADMIN_USER") or "admin"
+    if system.container_state("admin") == "running":
+        # The admin service reads the password from its environment at its start: a new container with the new one. The
+        # owner's sign-in for the players' site is written again as it starts.
+        system.compose("up", "-d", "--force-recreate", "admin")
+        ok(f"the owner's password is changed: ID {user}, for the admin pages and the players' site")
+    else:
+        ok(f"the owner's password is changed: ID {user}, from the server's next start (./opendmtq up)")
+    if made:
+        print(f"\nThe new password: {new}  (kept as ADMIN_PASSWORD in .env)")
+
+
 def cmd_name(args):
     values = env.load(ENV_FILE)
     current = values.get("SERVER_NAME", "")
@@ -1179,6 +1221,8 @@ def main(argv=None):
     p = sub.add_parser("name", help="show or change the server's name in the app's title (rebuilds the APK)")
     p.add_argument("name", nargs="?", help='what goes in "TECHNIKA Q (name)"; empty: the address')
     p.set_defaults(fn=cmd_name, base=None)
+    p = sub.add_parser("password", help="change the owner's password for the admin pages and the players' site (typed, or one made)")
+    p.set_defaults(fn=cmd_password)
     p = sub.add_parser("port", help="show the server's one port, or move it to another (from the next start, with a new app)")
     p.add_argument("port", nargs="?", type=int, help="the new port, 1 to 65535; one another program holds is refused")
     p.set_defaults(fn=cmd_port)
