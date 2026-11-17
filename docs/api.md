@@ -229,6 +229,14 @@ curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/j
 curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$API/maintenance"
 ```
 
+Put a notice at the top of the site's pages until an hour from now, then take it down:
+
+```sh
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"text\": \"Open late tonight.\", \"until\": $(( $(date +%s) + 3600 ))}" "$API/notice"
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$API/notice"
+```
+
 On Windows, in PowerShell on the server PC of the Windows bundle or a host install there: the status, then a backup kept
 here.
 
