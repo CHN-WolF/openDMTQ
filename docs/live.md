@@ -3,7 +3,7 @@
 For the server's owner: players' plays shown live on the site, and their recordings. What a player sees of it:
 [broadcasting](play.md#broadcasting).
 
-![The live page: a player's broadcast, who is on air, and past broadcasts](images/live.jpg)
+![The live page: a player's broadcast with its LIVE mark and running time, who else is on air, and past broadcasts with a search by player or song](images/live.jpg)
 
 A player's play can be shown on the site as a live broadcast. Broadcasts are off for the server until the owner turns
 them on, on the admin pages' Broadcasts page. A server updated from a version without that switch keeps broadcasting
