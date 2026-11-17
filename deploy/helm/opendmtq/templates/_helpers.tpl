@@ -98,29 +98,32 @@ no
 {{- end -}}
 {{- end -}}
 
-{{/* publicHost, validated: an IPv4 address or a host name, with :port when it is not 80, as the app patcher takes it. */}}
+{{/*
+publicHost, validated: an IPv4 address or a host name, with its :port, as the app patcher takes it and the app calls it.
+One without a port is on the server's one port, 8791, from 0.11.0 (an install from before then, on port 80, moves there
+at its upgrade, its app built again for the new address).
+*/}}
 {{- define "opendmtq.publicHost" -}}
 {{- $h := required "publicHost is required: the address phones use to reach the router (IPv4 or host name, optionally :port)" .Values.publicHost -}}
 {{- if not (regexMatch "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$" $h) -}}
 {{- fail (printf "publicHost %q must be an IPv4 address or host name, optionally with :port" $h) -}}
 {{- end -}}
+{{- if regexMatch ":[0-9]+$" $h -}}
 {{- $h -}}
+{{- else -}}
+{{- printf "%s:8791" $h -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
-The router Service's port, the server's one port: router.service.port when set; else the port in publicHost, the one the
-phones' app calls (80 when publicHost names none). Worked out from the values alone, so helm template, an upgrade and a
-GitOps tool all agree, and an install from before 0.11.0 (publicHost without a port) stays on 80 where its phones are.
+The router Service's port, the server's one port: router.service.port when set; else the port in publicHost (8791 when
+it names none), the one the phones' app calls. Worked out from the values alone, so helm template, an upgrade and a
+GitOps tool all agree.
 */}}
 {{- define "opendmtq.routerPort" -}}
 {{- if .Values.router.service.port -}}
 {{- .Values.router.service.port -}}
 {{- else -}}
-{{- $last := regexFind ":[0-9]+$" (.Values.publicHost | toString) -}}
-{{- if $last -}}
-{{- trimPrefix ":" $last -}}
-{{- else -}}
-80
-{{- end -}}
+{{- trimPrefix ":" (regexFind ":[0-9]+$" (include "opendmtq.publicHost" .)) -}}
 {{- end -}}
 {{- end -}}

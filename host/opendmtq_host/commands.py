@@ -14,7 +14,7 @@ from opendmtq_cli import checks, env, look
 from .paths import HERE, CLI, DATA, ENV_FILE, LOGS, MAC, ROOT, START_WAIT, WINDOWS
 from .output import die, ok, say, tell
 from .programs import programs
-from .settings import admin_url, listen_port, require_settings, settings, site_url
+from .settings import admin_url, leave_port_80, listen_port, require_settings, settings, site_url
 from .folders import make_folders, tool, version
 from .server import health, running_pid, wait_healthy
 
@@ -23,9 +23,12 @@ def cmd_start(args):
     """Start the server in the background (Linux and macOS), and wait until it answers."""
     if WINDOWS:
         die("on Windows the server runs in its window: start OpenDMTQ.exe")
-    values = require_settings()
+    require_settings()
     # The wordmark first (once per run: the setup that comes here showed it already).
     look.banner(version())
+    # Off port 80, for a server set up on it before 0.11.0: before anything names its address.
+    leave_port_80()
+    values = require_settings()
     programs()
     if running_pid():
         ok(f"already running: http://{values['PUBLIC_HOST']}/")
@@ -132,6 +135,12 @@ def cmd_status(args):
         lines.append(("Phone app", f"{m['file'] if m else 'not built yet'}" + (f" ({b.get('state')})" if b.get("state") else "")))
     for line in look.rows(lines):
         say(line)
+    # A move off port 80 at the first start of this version, said here once too.
+    moved = env.move_off_80_unsaid(os.path.join(DATA, "state"), "status")
+    if moved:
+        say("")
+        tell(f"The server moved from port {moved['from']} to {moved['to']}: http://{moved['address']}/. Phones install the "
+             "app again from that address, and PCs connect to it.")
     return 0
 
 
@@ -235,7 +244,9 @@ def cmd_host(args):
         die(problem)
     host, port = env.split(args.address)
     port = port if ":" in args.address else listen_port(values)
-    env.save(ENV_FILE, {"PUBLIC_HOST": env.join(host, port), "LISTEN_PORT": str(port)})
+    # Port 80 named in the address: the owner's own choice, kept at every start (env.leaves_80).
+    env.save(ENV_FILE, {"PUBLIC_HOST": env.join(host, port), "LISTEN_PORT": str(port),
+                        **({env.CHOSE_80: "chosen"} if port == 80 else {})})
     ok(f"PUBLIC_HOST={env.join(host, port)}")
     # The server picks up the address at its next start; the builder then makes the app for it.
     if running_pid() and not WINDOWS:
@@ -262,7 +273,11 @@ def cmd_port(args):
         die(f"port {args.port} is taken on this computer by another program (or this user may not use it); choose another")
     host, _ = env.split(values["PUBLIC_HOST"])
     new = env.join(host, args.port)
-    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(args.port)})
+    # Port 80 by the owner's own choice: kept at every start (a server only set up on it before 0.11.0 moves off it).
+    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(args.port),
+                        **({env.CHOSE_80: "chosen"} if args.port == 80 else {})})
+    if args.port != 80:
+        env.drop(ENV_FILE, (env.CHOSE_80,))
     ok(f"the server moves to port {args.port} at its next start: http://{new}/")
     tell(("Close the server's window and start OpenDMTQ.exe again" if WINDOWS else f"{CLI} restart") + " to move it "
          "now; the app is built again for the new address then. Players install the new app over the old one, which "

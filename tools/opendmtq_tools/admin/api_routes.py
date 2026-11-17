@@ -369,6 +369,7 @@ SHAPES = {
         Field("commands", "{string}", "Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall, port), on the server PC or the cluster."),
         Field("port", "integer", "Its one port: the game, the players' site, the admin pages and this API."),
         Field("next_address", "string", "The address it moves to at its next start, when it was moved (POST /server/port); null otherwise.", nullable=True),
+        Field("moved_from", "integer", "The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.", nullable=True),
         Field("data", "[DataPart]", "The server's data, part by part.")]),
     "DataPart": Shape("One part of the server's data.", [
         Field("part", "string", "Which part.", enum=["database", "recordings", "songs", "apps", "backups", "logs", "game"]),

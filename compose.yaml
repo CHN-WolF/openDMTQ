@@ -88,10 +88,10 @@ services:
       - ./data/https/serve:/etc/opendmtq/https:ro
     ports:
       # The server's one port, on every interface so phones can reach it: the players' site, the admin pages
-      # (/opendmtq/admin) and the API. 8791 on a new install (./opendmtq setup writes LISTEN_PORT; 80 for one set up
-      # before it did), or the forwarded port when exposed to the internet (./opendmtq expose). On Linux,
-      # Docker-published ports bypass ufw; set BIND_ADDRESS to one address to narrow it.
-      - "${BIND_ADDRESS:-0.0.0.0}:${LISTEN_PORT:-80}:8790"
+      # (/opendmtq/admin) and the API. 8791 (./opendmtq setup writes LISTEN_PORT; ./opendmtq up moves a server set up
+      # on port 80 before 0.11.0 there), or the forwarded port when exposed to the internet (./opendmtq expose). On
+      # Linux, Docker-published ports bypass ufw; set BIND_ADDRESS to one address to narrow it.
+      - "${BIND_ADDRESS:-0.0.0.0}:${LISTEN_PORT:-8791}:8790"
     depends_on: [server]
     logging:
       driver: json-file

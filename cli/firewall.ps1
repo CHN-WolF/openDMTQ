@@ -6,8 +6,8 @@
 # classified Public, where a Domain,Private rule silently never applies.
 # A test from this PC proves nothing (loopback skips the firewall); only another device does.
 param(
-    # Port the server publishes (LISTEN_PORT; 80 unless exposed on another port).
-    [int]$Port = 80,
+    # Port the server publishes (LISTEN_PORT: 8791 on a new install, or the forwarded port when exposed).
+    [int]$Port = 8791,
     # Accept connections from anywhere (exposed to the internet), not only the local subnet.
     [switch]$Internet,
     # Remove the rule instead of creating it.

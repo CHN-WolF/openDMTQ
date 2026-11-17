@@ -42,6 +42,8 @@ class Sandbox:
         # Ports something else on the machine answers on, and the one this server's own edge publishes.
         self.busy_ports = set()
         self.edge_port = None
+        # The port this server's own admin pages publish, as a server set up before 0.11.0 had them (None: none).
+        self.admin_port = None
         # Docker Engine unless a test says Docker Desktop (it decides whether the server PC's visits can be told apart).
         self.docker_desktop = False
         # What `docker inspect` says about the server container, and whether its portal answers.
@@ -218,7 +220,8 @@ class Sandbox:
             system, **paths, compose=self._compose, tool=self._tool, container_state=lambda service="server": self.state if service in ("server", "admin") else self.edge,
             require_docker=lambda: None, own_data_dirs=lambda *a, **k: None, first_build_notice=lambda: False,
             powershell=self._powershell, port_busy=lambda port: port in self.busy_ports, project_folder=lambda name: None,
-            edge_holds=lambda port: port == self.edge_port, docker_desktop=lambda: self.docker_desktop))
+            edge_holds=lambda port: port == self.edge_port, admin_holds=lambda port: port == self.admin_port,
+            docker_desktop=lambda: self.docker_desktop))
         s.enter_context(mock.patch.multiple(app, **paths, wait_builder=lambda since=None: self.built))
         s.enter_context(mock.patch.multiple(
             backup, DATA=self.data, ENV_FILE=self.env_file, BACKUPS=os.path.join(self.data, "backups"),

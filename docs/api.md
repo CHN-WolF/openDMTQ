@@ -2639,6 +2639,7 @@ The server as the Server page shows it.
 - `commands` (object of string): Where it cannot: the command for each action (stop, restart, repair, delete_data, uninstall, port), on the server PC or the cluster.
 - `port` (integer): Its one port: the game, the players' site, the admin pages and this API.
 - `next_address` (string, or null): The address it moves to at its next start, when it was moved (POST /server/port); null otherwise.
+- `moved_from` (integer, or null): The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.
 - `data` (list of [DataPart](#datapart)): The server's data, part by part.
 
 #### DataPart

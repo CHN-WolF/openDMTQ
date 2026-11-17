@@ -37,6 +37,8 @@
   <h2>{{ t('port.title') }}</h2>
   <p class="lead">{{ t('port.lead', port=port) }}</p>
   {% if next_address %}<p class="setup-state"><span class="lamp wait"></span>{{ t('port.pending', address='http://' ~ next_address ~ '/') }}</p>{% endif %}
+  {# A move off port 80 at the first start of this version: said here once. #}
+  {% if moved_80 %}<p class="setup-state" id="moved-80"><span class="lamp ok"></span>{{ t('port.moved_80', was=moved_80.was, now=moved_80.now, address=moved_80.address) }}</p>{% endif %}
   {% if can_move_port %}
   {# Checked on the page (admin.js, novalidate), as the other forms: what is wrong said under the field. #}
   <form method="post" action="{{ url_for('server_port') }}" class="form-row" novalidate>

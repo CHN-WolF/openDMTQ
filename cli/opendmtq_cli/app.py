@@ -22,8 +22,8 @@ def require_host():
 def ensure_env(host=None, quiet=False, reset=None, adopt=True, retry="./opendmtq setup"):
     """Make sure .env has a usable PUBLIC_HOST; detect it when not given. Returns it.
 
-    A given address must be a LAN address, and the server then listens on its port (80 when it has
-    none). Internet addresses go through `expose`, which also sets up what they need.
+    A given address must be a LAN address, and the server then listens on its port (the one it has
+    now when it names none). Internet addresses go through `expose`, which also sets up what they need.
 
     reset: settings to write together with the address (expose --off). The address is chosen as if
     they were in .env already, and nothing at all is written when none can be chosen: a .env left
@@ -50,7 +50,16 @@ def ensure_env(host=None, quiet=False, reset=None, adopt=True, retry="./opendmtq
         if current and not env.check_host(current) and not env.is_lan_only(current):
             die(f"the server is exposed to the internet as {current}. To go back to the local network, "
                 "run ./opendmtq expose --off (then ./opendmtq host <address> for another LAN address)")
-        chosen = host
+        # Without a port, on the port the server has now: for a new one 8791, or the first free one after it when
+        # another program has it (not this server itself, whose .env is gone). Port 80 only when named.
+        port = env.listen_port(values)
+        if (":" not in host and env.check_host(current) and not values.get("LISTEN_PORT") and system.port_busy(port)
+                and not system.edge_holds(port)):
+            taken = port
+            port = system.free_port(port + 1)
+            moved = True
+            ok(f"port {taken} is taken on this machine: this server uses {port}")
+        chosen = env.join(*env.split(host)) if ":" in host else env.join(host, port)
     else:
         # A detected address carries the port the server listens on: for a server set up for the first time, 8791 unless
         # that is taken (another copy of this server, another program), then the first free one after it.
@@ -102,6 +111,9 @@ def ensure_env(host=None, quiet=False, reset=None, adopt=True, retry="./opendmtq
     # whichever port was chosen is written, so compose publishes that one.
     if updates.get("LISTEN_PORT") == "" or not values.get("LISTEN_PORT"):
         updates["LISTEN_PORT"] = str(port)
+    # Port 80 named in an address given by hand: the owner's own choice, kept at every start (env.leaves_80).
+    if host and ":" in host and port == 80:
+        updates[env.CHOSE_80] = "chosen"
     if updates:
         env.save(ENV_FILE, updates)
     if chosen != current:
@@ -255,13 +267,42 @@ def open_firewall(port, internet, replaces=None):
 OLD_ADMIN_KEYS = ("ADMIN_PORT", "ADMIN_BIND")
 
 
+def leave_port_80():
+    """A server whose one port is 80 without its owner having chosen it (env.leaves_80: set up before 0.11.0) moves to
+    the port its admin pages had, 8791 unless the owner set another, as `port` moves one: LISTEN_PORT and the port in
+    PUBLIC_HOST, the app built for the new address at this start, the site's download page saying so. Returns the
+    words that say it (this start says them once, status and the Server page once each), or None."""
+    values = env.load(ENV_FILE)
+    if env.check_host(values.get("PUBLIC_HOST", "")) or not env.leaves_80(values, env.listen_port(values)):
+        return None
+    old = values["PUBLIC_HOST"]
+    # Free, or held by this copy's own admin pages on their port of their own before 0.11.0, which go below.
+    port = env.port_after_80(values, lambda p: not system.port_busy(p) or system.admin_holds(p))
+    new = env.join(env.split(old)[0], port)
+    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(port)})
+    env.note_move_off_80(os.path.join(DATA, "state"), old, new)
+    # Their old container holds the port the edge now takes (127.0.0.1:ADMIN_PORT): it goes first, made again by up.
+    if system.admin_holds(port):
+        system.compose("rm", "-sf", "admin")
+    return [f"The server moved from port 80 to {port}: http://{new}/",
+            "Phones install the app again from that address (the site's download page says so), and PCs connect to it."]
+
+
 def cmd_up(args):
+    # Off port 80 first, while .env still names the admin pages' old port (the one it moves to).
+    moved = leave_port_80()
     host = require_host()
     # A server set up before 0.11.0: its admin pages are on the server's one port now, and nothing answers on their old
     # one; the lines that named it go, so that nobody looks for them there.
     env.drop(ENV_FILE, OLD_ADMIN_KEYS)
     # The wordmark with this copy's version, once (setup shows it first and comes here after).
     look.banner(system.code_version())
+    if moved:
+        for line in moved:
+            ok(line)
+        # The rule for phones on WSL follows the port, as `port` moves it.
+        if env.is_wsl():
+            open_firewall(env.split(host)[1], internet=not env.is_lan_only(host), replaces=80)
     if not have_game_data():
         die("no client data yet; run ./opendmtq import <folder with your game files>")
     # Folders the containers mount must exist and belong to the user they run as, not be created by
@@ -399,6 +440,11 @@ def cmd_status(args):
         lines.append(("admin", admin_sign_in(env.load(ENV_FILE))))
     for line in look.rows(lines):
         print(line)
+    # A move off port 80 at the first start of this version, said here once too.
+    moved = env.move_off_80_unsaid(os.path.join(DATA, "state"), "status")
+    if moved:
+        print(f"\nThe server moved from port {moved['from']} to {moved['to']}: http://{moved['address']}/. Phones install "
+              "the app again from that address, and PCs connect to it.")
 
 
 def cmd_logs(args):
@@ -531,7 +577,11 @@ def cmd_port(args):
         die(f"port {args.port} is taken on this computer by another program; choose another")
     host = env.split(current)[0]
     new = env.join(host, args.port)
-    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(args.port)})
+    # Port 80 by the owner's own choice: kept at every start (a server only set up on it before 0.11.0 moves off it).
+    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(args.port),
+                        **({env.CHOSE_80: "chosen"} if args.port == 80 else {})})
+    if args.port != 80:
+        env.drop(ENV_FILE, (env.CHOSE_80,))
     ok(f"the server moves to port {args.port} at its next start: http://{new}/")
     # The rule for phones on WSL follows the port now: the next start needs it.
     if env.is_wsl():
@@ -902,7 +952,7 @@ def cmd_expose(args):
     if not args.off and not args.name:
         die("give the host name that points at your public IP: ./opendmtq expose myhome.example.com")
     if args.off:
-        # Back to the local network: no password, admin pages on the main port, port 80 unless taken, and
+        # Back to the local network: no password, admin pages on the main port, port 8791 unless taken, and
         # the address picked as setup picks it (detected, or --host). All of it is written together, once
         # an address is found: the exposed server keeps running meanwhile, and a .env without an
         # address would leave no command, ./opendmtq down included, able to reach it.
@@ -914,9 +964,11 @@ def cmd_expose(args):
         problem = env.check_host(address)
         if problem:
             die(problem)
-        # The admin pages: off the internet unless asked; on it, over the HTTPS door.
+        # The admin pages: off the internet unless asked; on it, over the HTTPS door. Port 80 given with --port is the
+        # owner's own choice, kept at every start.
         env.save(ENV_FILE, {"PUBLIC_HOST": address, "LISTEN_PORT": str(args.port),
-                            "ADMIN_ON_PUBLIC_PORT": "yes" if args.admin_public else "no"})
+                            "ADMIN_ON_PUBLIC_PORT": "yes" if args.admin_public else "no",
+                            **({env.CHOSE_80: "chosen"} if args.port == 80 else {})})
         ok(f"PUBLIC_HOST={address}, listening on TCP {args.port}")
         ok("the site is for accounts made on the admin pages' Accounts page; nobody makes their own")
         if args.admin_public:
@@ -1099,6 +1151,8 @@ def cmd_setup(args):
 
     step("3/5  Server (also builds the phone app)")
     cmd_up(args)
+    # As up left it: a server set up on port 80 before 0.11.0 has moved to its new port there.
+    host = require_host()
 
     step("4/5  Phone app")
     if args.rebuild_apk:

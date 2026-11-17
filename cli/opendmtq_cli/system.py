@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from . import look
+from .env import DEFAULT_PORT
 from .env import load as load_env
 from .env import save as save_env
 from .env import tidy as tidy_env
@@ -436,6 +437,13 @@ def edge_holds(port):
     return r.returncode == 0 and any(line.rsplit(":", 1)[-1].strip() == str(port) for line in r.stdout.splitlines())
 
 
+def admin_holds(port):
+    """True when this copy's own admin pages hold the port on this machine: a server set up before 0.11.0 published them
+    on a port of their own (127.0.0.1:ADMIN_PORT), which an update moves the server to."""
+    r = subprocess.run(["docker", "port", container("admin"), "8000/tcp"], capture_output=True, text=True)
+    return r.returncode == 0 and any(line.rsplit(":", 1)[-1].strip() == str(port) for line in r.stdout.splitlines())
+
+
 def free_port(start):
     """The first port from `start` on that nothing answers on."""
     port = start
@@ -493,7 +501,7 @@ def firewall_rule_exists(port):
     return r.stdout.strip() == "yes"
 
 
-def firewall_command(port=80, internet=False, remove=False, replaces=None):
+def firewall_command(port=DEFAULT_PORT, internet=False, remove=False, replaces=None):
     """cli/firewall.ps1 as one PowerShell command, with its parameters: the script as a script block, called with them as
     -File would pass them (its param() block takes them, its exit codes end the PowerShell that runs it). Its comment and
     blank lines are left out, the code as it is: the command goes on the elevated PowerShell's command line, through
@@ -513,7 +521,7 @@ def firewall_command(port=80, internet=False, remove=False, replaces=None):
     return "& {\n" + "\n".join(code) + "\n} " + " ".join(params)
 
 
-def run_firewall_script(port=80, internet=False, remove=False, replaces=None):
+def run_firewall_script(port=DEFAULT_PORT, internet=False, remove=False, replaces=None):
     """Run cli/firewall.ps1 elevated (Windows shows one UAC prompt). replaces: the port this server used until now.
 
     The script goes inside the elevated PowerShell's own command (-EncodedCommand), never as a file: a copy in the

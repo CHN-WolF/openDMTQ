@@ -45,7 +45,7 @@ fi
 export PHP_INI_SCAN_DIR="/usr/local/etc/php/conf.d:$PHP_EXTRA"
 
 # The address phones use, split for the doors' own names (opendmtq.conf): the port is 80 when the
-# address has none.
+# address has none, as a URL without a port means (the owner's own port 80; a new one always names its port).
 case "$PUBLIC_HOST" in
     *:*) OPENDMTQ_NAME=${PUBLIC_HOST%:*}; OPENDMTQ_PORT=${PUBLIC_HOST##*:} ;;
     *) OPENDMTQ_NAME=$PUBLIC_HOST; OPENDMTQ_PORT=80 ;;

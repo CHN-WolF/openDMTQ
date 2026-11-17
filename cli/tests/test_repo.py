@@ -3,6 +3,7 @@
 import argparse
 import ast
 import glob
+import json
 import os
 import re
 import shutil
@@ -437,6 +438,50 @@ class HostPortsTest(unittest.TestCase):
                 self.assertEqual(f.read(), "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n")
             self.assertTrue(any("at its next start: http://192.168.0.10:8791/" in line for line in said), said)
 
+    def test_a_server_on_port_80_moves_at_its_start(self):
+        # The Windows bundle or a host install set up before 0.11.0 on port 80: its start moves it to the port its admin
+        # pages had (8791 here, the first free one after it when taken), says so once, notes the move for the download
+        # page and for status and the Server page; `port 80` by its owner stays.
+        from opendmtq_host import commands
+        for text, busy, want in (("PUBLIC_HOST=192.168.0.10\nADMIN_PASSWORD=x\nADMIN_PORT=8791\n", set(), 8791),
+                                 ("PUBLIC_HOST=192.168.0.10\nLISTEN_PORT=80\nADMIN_PASSWORD=x\n", {8791}, 8792)):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, ".env")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(text)
+                said = []
+                with mock.patch.object(self.settings, "ENV_FILE", path), mock.patch.object(self.settings, "DATA", d), \
+                        mock.patch.object(self.settings, "ok", said.append), \
+                        mock.patch.object(self.settings, "tell", said.append), \
+                        mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": port not in busy):
+                    self.assertTrue(self.settings.leave_port_80())
+                    values = self.settings.settings()
+                    self.assertEqual((values["PUBLIC_HOST"], values["LISTEN_PORT"]), (f"192.168.0.10:{want}", str(want)))
+                    self.assertIn(f"The server moved from port 80 to {want}: http://192.168.0.10:{want}/", said)
+                    # Once: the next start leaves it where it is.
+                    self.assertFalse(self.settings.leave_port_80())
+                with open(os.path.join(d, "state", "address.json"), encoding="utf-8") as f:
+                    self.assertEqual(json.load(f), {"host": "192.168.0.10"})
+                # status says it once.
+                lines = []
+                with mock.patch.object(commands, "DATA", d), mock.patch.object(commands, "settings", lambda: values), \
+                        mock.patch.object(commands, "health", lambda values: None), \
+                        mock.patch.object(commands, "say", lines.append), mock.patch.object(commands, "tell", lines.append):
+                    commands.cmd_status(argparse.Namespace())
+                    commands.cmd_status(argparse.Namespace())
+                self.assertEqual(sum(f"moved from port 80 to {want}" in line for line in lines), 1, lines)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, ".env")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n")
+            with mock.patch.object(commands, "ENV_FILE", path), mock.patch.object(self.settings, "ENV_FILE", path), \
+                    mock.patch.object(self.settings, "DATA", d), mock.patch.object(commands, "ok", lambda m: None), \
+                    mock.patch.object(commands, "tell", lambda m: None), \
+                    mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": True):
+                self.assertEqual(commands.cmd_port(argparse.Namespace(port=80)), 0)
+                self.assertFalse(self.settings.leave_port_80())
+                self.assertEqual(self.settings.settings()["LISTEN_PORT"], "80")
+
     def test_each_command_reaches_its_own(self):
         # The host program's command line: start is start and port is port (a sub-command's name must not stand in for
         # the whole line's parser).
@@ -459,27 +504,39 @@ class HostPortsTest(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("helm"), "needs helm")
 class HelmPortTest(unittest.TestCase):
-    """The chart's one port (DEP-47): the router Service listens on the port in publicHost, the one the phones' app calls,
-    worked out from the values alone (helm template, an upgrade and a GitOps tool agree): an install from before 0.11.0,
-    whose publicHost names no port, stays on 80 where its phones are; a new one names 8791; router.service.port wins."""
+    """The chart's one port (DEP-47, DEP-70): the router Service listens on the port in publicHost, the one the phones'
+    app calls, worked out from the values alone (helm template, an upgrade and a GitOps tool agree): a publicHost that
+    names no port, as an install from before 0.11.0 has it, is on 8791, and the app is built for that address and the
+    notes name it; router.service.port wins."""
 
-    def service_port(self, *sets):
+    def rendered(self, *sets):
         chart = os.path.join(ROOT, "deploy", "helm", "opendmtq")
         out = subprocess.run(["helm", "template", "t", chart, "-f", os.path.join(ROOT, "deploy", "kind", "values.yaml"),
                               "--set", "router.service.port=null"] + [a for s in sets for a in ("--set", s)],
                              capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stderr)
+        return out.stdout
+
+    def service_port(self, *sets):
         # The router's own Service: named as the release, no part after it.
-        for doc in out.stdout.split("\n---"):
+        for doc in self.rendered(*sets).split("\n---"):
             if "kind: Service" in doc and re.search(r"^  name: t-opendmtq$", doc, re.M):
                 return int(re.search(r"^ +port: (\d+)$", doc, re.M).group(1))
         self.fail("no router Service")
 
     def test_the_service_takes_the_port_phones_call(self):
-        self.assertEqual(self.service_port("publicHost=192.168.1.10"), 80)
+        self.assertEqual(self.service_port("publicHost=192.168.1.10"), 8791)
         self.assertEqual(self.service_port("publicHost=192.168.1.10:8791"), 8791)
         self.assertEqual(self.service_port("publicHost=game.example.com:8790"), 8790)
         self.assertEqual(self.service_port("publicHost=192.168.1.10:8791", "router.service.port=9000"), 9000)
+
+    def test_a_public_host_without_a_port_is_on_8791_everywhere(self):
+        # Every container is given the address with its port (the builder makes the app for it), and nothing names 80.
+        out = self.rendered("publicHost=192.168.1.10", "builder.enabled=true")
+        hosts = re.findall(r"name: PUBLIC_HOST, value: \"?([^\"}\s]+)", out)
+        self.assertTrue(hosts, "no PUBLIC_HOST")
+        self.assertEqual(set(hosts), {"192.168.1.10:8791"})
+        self.assertNotRegex(out, r"192\.168\.1\.10(:80)?[/\"]")
 
 
 class HostAdminConfTest(unittest.TestCase):

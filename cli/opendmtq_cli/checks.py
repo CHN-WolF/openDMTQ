@@ -29,7 +29,7 @@ def local_address(values):
 def _local():
     """Where the server answers on this machine: port LISTEN_PORT on local_address()."""
     values = env.load(ENV_FILE)
-    return f"http://{local_address(values)}:{values.get('LISTEN_PORT') or '80'}"
+    return f"http://{local_address(values)}:{env.listen_port(values)}"
 
 
 # Another deployment to check instead of this machine's server (`check --url`, or OPENDMTQ_URL).

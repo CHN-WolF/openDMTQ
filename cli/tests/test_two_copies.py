@@ -154,13 +154,13 @@ class PortTest(unittest.TestCase):
             self.assertEqual(sb.call(lambda args: app.ensure_env()), 1)
             self.assertFalse(os.path.exists(sb.env_file))
 
-    def test_a_server_already_set_up_stays_where_it_is(self):
-        # Set up before 0.11.0 on port 80, with no LISTEN_PORT: its own port answers while it runs, and the phones' app
-        # has that address in it. It stays there, now written out (DEP-41).
+    def test_a_server_already_set_up_keeps_its_address_until_up_moves_it(self):
+        # Set up before 0.11.0 on port 80, with no LISTEN_PORT: its own port answers while it runs. The setup's address
+        # check keeps the address as it is (no second port picked), and up moves the server off port 80 (DEP-41).
         with Sandbox() as sb:
             sb.busy_ports = {80}
             self.assertEqual(app.ensure_env(), "192.168.0.10")
-            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "80")
+            self.assertTrue(env.leaves_80(env.load(sb.env_file), env.listen_port(env.load(sb.env_file))))
 
     def test_a_port_named_in_env_is_kept(self):
         with Sandbox(env_text="LISTEN_PORT=9000\n") as sb:
@@ -168,9 +168,16 @@ class PortTest(unittest.TestCase):
             self.assertEqual(app.ensure_env(), "192.168.0.10:9000")
 
     def test_an_address_given_by_hand_is_kept(self):
+        # Without a port it takes the port a new server takes (8791, here free); with one, that one.
         with Sandbox(env_text=None) as sb:
             sb.busy_ports = {80}
-            self.assertEqual(app.ensure_env("192.168.0.10"), "192.168.0.10")
+            self.assertEqual(app.ensure_env("192.168.0.10"), "192.168.0.10:8791")
+            self.assertEqual(env.load(sb.env_file)["LISTEN_PORT"], "8791")
+        with Sandbox(env_text=None) as sb:
+            sb.busy_ports = {8791}
+            self.assertEqual(app.ensure_env("192.168.0.10"), "192.168.0.10:8792")
+        with Sandbox(env_text=None) as sb:
+            self.assertEqual(app.ensure_env("192.168.0.10:9000"), "192.168.0.10:9000")
 
 
 class OfflineBuildTest(unittest.TestCase):

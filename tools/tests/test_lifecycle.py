@@ -434,6 +434,27 @@ class PortMoveTest(unittest.TestCase):
             self.assertEqual(moved.get_json(), {"port": 8792, "address": "http://192.168.0.10:8792/", "from_next_start": True})
             self.assertEqual(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["next_address"], "192.168.0.10:8792")
 
+    def test_a_move_off_port_80_is_said_once_and_the_owners_port_80_is_kept(self):
+        # At its first start with this version a server set up on port 80 moved to 8791 (cli/opendmtq_cli/env.py): the
+        # Server page says it once, the API names the port it left each time; the page's own move to port 80 is the
+        # owner's choice, which the next start keeps (PORT_80=chosen).
+        with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", "192.168.0.10:8791"), \
+                mock.patch.object(admin.lifecycle, "port_free", lambda port: True):
+            headers = self.token(inst)
+            with open(os.path.join(os.path.dirname(admin.core.DB), "port-moved.json"), "w", encoding="utf-8") as f:
+                json.dump({"from": 80, "to": 8791, "address": "192.168.0.10:8791", "at": 1, "said": ["start", "status"]}, f)
+            inst.sign_in()
+            words = "The server moved from port 80 to 8791 at its first start with this version: http://192.168.0.10:8791/."
+            self.assertIn(words, inst.client.get("/opendmtq/admin/server").get_data(as_text=True))
+            self.assertNotIn(words, inst.client.get("/opendmtq/admin/server").get_data(as_text=True))
+            for _ in range(2):
+                self.assertEqual(inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()["moved_from"], 80)
+            with inst.client.session_transaction("/opendmtq/admin/") as s:
+                csrf = s["csrf"]
+            inst.client.post("/opendmtq/admin/server/port", data={"csrf": csrf, "port": "80"})
+            with open(inst.path(".env"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), "PUBLIC_HOST=192.168.0.10\nLISTEN_PORT=80\nADMIN_PASSWORD=pw\nPORT_80=chosen\n")
+
     def test_in_containers_the_command_line_does_it(self):
         with Install() as inst:
             r = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8792}, headers=self.token(inst))

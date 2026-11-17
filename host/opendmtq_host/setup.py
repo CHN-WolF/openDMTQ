@@ -10,7 +10,7 @@ from opendmtq_cli import discover, look
 from .paths import DATA, ROOT, WINDOWS
 from .output import die, ok, say, tell, warn
 from .programs import programs
-from .settings import admin_url, ensure_settings, settings, site_url
+from .settings import admin_url, ensure_settings, leave_port_80, settings, site_url
 from .folders import make_folders, version
 from .server import cmd_run, open_setup
 from .commands import app_manifest, build_status, cmd_import, cmd_start, show_address
@@ -81,6 +81,8 @@ def cmd_setup(args):
     """First run, or again at any time: settings, files, server, app. Only what is missing is done."""
     found = opening()
     make_folders()
+    # Off port 80 before the settings are filled in and named, for a server set up on it before 0.11.0.
+    leave_port_80()
     values = ensure_settings(args.host)
     # Files named on the command line are imported here; otherwise the setup pages find them (or let the owner pick
     # them) in the browser.

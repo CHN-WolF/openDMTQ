@@ -5,8 +5,8 @@ import secrets
 import socket
 
 from opendmtq_cli import env
-from .paths import ADMIN_PORT, CLI, DEFAULT_PORT, ENV_FILE, RUN, WINDOWS
-from .output import die, ok
+from .paths import ADMIN_PORT, CLI, DATA, DEFAULT_PORT, ENV_FILE, RUN, WINDOWS
+from .output import die, ok, tell
 
 
 def settings():
@@ -15,10 +15,30 @@ def settings():
 
 
 def listen_port(values):
-    """The port the server listens on: LISTEN_PORT, else the one in the address, else 80."""
+    """The port the server listens on: LISTEN_PORT, else the one in the address (80 for an address without one, as a
+    URL reads it: a server set up so before 0.11.0, which its start moves off it, leave_port_80), else 8791 for one
+    not set up yet."""
     if values.get("LISTEN_PORT"):
         return int(values["LISTEN_PORT"])
-    return env.split(values.get("PUBLIC_HOST", ""))[1] if values.get("PUBLIC_HOST") else 80
+    return env.split(values.get("PUBLIC_HOST", ""))[1] if values.get("PUBLIC_HOST") else DEFAULT_PORT
+
+
+def leave_port_80():
+    """A server whose one port is 80 without its owner having chosen it (env.leaves_80: set up before 0.11.0) moves to
+    the port its admin pages had, 8791 unless the owner set another, the first free one after it when taken, as `port`
+    moves one: LISTEN_PORT and the port in PUBLIC_HOST, the app built for the new address at this start, the site's
+    download page saying so. Said here once (status and the Server page say it once each). True when it moved."""
+    values = settings()
+    if env.check_host(values.get("PUBLIC_HOST", "")) or not env.leaves_80(values, listen_port(values)):
+        return False
+    old = values["PUBLIC_HOST"]
+    port = env.port_after_80(values, bindable)
+    new = env.join(env.split(old)[0], port)
+    env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(port)})
+    env.note_move_off_80(os.path.join(DATA, "state"), old, new)
+    ok(f"The server moved from port 80 to {port}: http://{new}/")
+    tell("Phones install the app again from that address (the site's download page says so), and PCs connect to it.")
+    return True
 
 
 # The settings of the admin pages' own port before 0.11.0: no longer read, and taken out of .env at the start.

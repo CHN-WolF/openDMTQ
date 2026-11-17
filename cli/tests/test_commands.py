@@ -140,18 +140,24 @@ class HostTest(unittest.TestCase):
             self.assertEqual(sb.env()["PUBLIC_HOST"], "myhome.example.com:8790")
 
     def test_lan_address_brings_its_port(self):
+        # An address without a port keeps the server's port: port 80 only when named, and then the owner's own choice.
         with Sandbox("PUBLIC_HOST=192.168.0.10:8080\nLISTEN_PORT=8080\n") as sb:
             self.assertEqual(sb.call(app.cmd_host, address="192.168.0.20", base=None), 0, sb.output())
-            self.assertEqual(sb.env()["PUBLIC_HOST"], "192.168.0.20")
-            self.assertEqual(sb.env()["LISTEN_PORT"], "80")
+            self.assertEqual(sb.env()["PUBLIC_HOST"], "192.168.0.20:8080")
+            self.assertEqual(sb.env()["LISTEN_PORT"], "8080")
         with Sandbox() as sb:
             self.assertEqual(sb.call(app.cmd_host, address="192.168.0.20:8080", base=None), 0, sb.output())
             self.assertEqual(sb.env()["LISTEN_PORT"], "8080")
+        with Sandbox("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\n") as sb:
+            self.assertEqual(sb.call(app.cmd_host, address="192.168.0.20:80", base=None), 0, sb.output())
+            self.assertEqual((sb.env()["PUBLIC_HOST"], sb.env()["LISTEN_PORT"], sb.env()["PORT_80"]),
+                             ("192.168.0.20", "80", "chosen"))
 
     def test_same_address_repairs_the_port(self):
+        # The address takes the port the server listens on.
         with Sandbox("PUBLIC_HOST=192.168.0.20\nLISTEN_PORT=8790\n", detected="192.168.0.20") as sb:
             self.assertEqual(sb.call(app.cmd_host, address="192.168.0.20", base=None), 0, sb.output())
-            self.assertEqual(sb.env()["LISTEN_PORT"], "80")
+            self.assertEqual((sb.env()["PUBLIC_HOST"], sb.env()["LISTEN_PORT"]), ("192.168.0.20:8790", "8790"))
 
     def test_a_server_that_does_not_come_back_is_reported(self):
         with Sandbox() as sb:
@@ -688,13 +694,86 @@ class MessageTest(unittest.TestCase):
 
     def test_up_names_the_admin_pages_on_the_one_port(self):
         # Kept off the public port: on this PC, on the server's own port, and up waits for them there.
-        with Sandbox("PUBLIC_HOST=192.168.0.10\nLISTEN_PORT=80\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PORT=9791\nADMIN_PASSWORD=x\n") as sb:
+        with Sandbox("PUBLIC_HOST=192.168.0.10:8790\nLISTEN_PORT=8790\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PORT=9791\n"
+                     "ADMIN_PASSWORD=x\n") as sb:
             game_data(sb)
             with mock.patch.object(app.time, "sleep"):
                 self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
-            self.assertIn("http://localhost:80/opendmtq/admin/", sb.output())
-            self.assertIn("http://127.0.0.1:80/opendmtq/admin/login", sb.urls)
+            self.assertIn("http://localhost:8790/opendmtq/admin/", sb.output())
+            self.assertIn("http://127.0.0.1:8790/opendmtq/admin/login", sb.urls)
             self.assertNotIn("9791", sb.output())
+
+    def test_a_server_on_port_80_moves_to_its_admin_pages_port(self):
+        # Set up before 0.11.0 on port 80 (no LISTEN_PORT, an address without a port): up moves it to the port its admin
+        # pages had, here 9791 and then 8791 (the first free after a taken one), as `port` moves one; the site's start
+        # then notes the move from the address served before, and status and the Server page say it once each.
+        for env_text, busy, want in (("PUBLIC_HOST=192.168.0.10\nADMIN_PORT=9791\nADMIN_PASSWORD=x\n", set(), 9791),
+                                     ("PUBLIC_HOST=192.168.0.10\nLISTEN_PORT=80\nADMIN_PASSWORD=x\n", {8791}, 8792)):
+            with Sandbox(env_text) as sb:
+                game_data(sb)
+                sb.busy_ports = busy
+                with mock.patch.object(app.time, "sleep"):
+                    self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+                self.assertEqual((sb.env()["PUBLIC_HOST"], sb.env()["LISTEN_PORT"]), (f"192.168.0.10:{want}", str(want)))
+                self.assertNotIn("ADMIN_PORT", sb.env())
+                self.assertIn(f"The server moved from port 80 to {want}: http://192.168.0.10:{want}/", sb.output())
+                self.assertIn(f"server up: http://192.168.0.10:{want}/", sb.output())
+                with open(sb.path("data/state/address.json"), encoding="utf-8") as f:
+                    self.assertEqual(json.load(f), {"host": "192.168.0.10"})
+                # status once, then no more.
+                for said in (True, False):
+                    before = len(sb.output())
+                    self.assertEqual(sb.call(app.cmd_status), 0)
+                    self.assertEqual(f"moved from port 80 to {want}" in sb.output()[before:], said)
+                # Started again: nothing more moves, and nothing more says so.
+                before = len(sb.output())
+                with mock.patch.object(app.time, "sleep"):
+                    self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+                self.assertNotIn("moved", sb.output()[before:])
+                self.assertEqual(sb.env()["LISTEN_PORT"], str(want))
+
+    def test_the_old_admin_container_frees_the_port_first(self):
+        # Its admin pages still published on 127.0.0.1:8791 by the release before: that port is this server's to take,
+        # and their container goes before up makes the edge that takes it.
+        with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_PASSWORD=x\n") as sb:
+            game_data(sb)
+            sb.busy_ports, sb.admin_port = {8791}, 8791
+            with mock.patch.object(app.time, "sleep"):
+                self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+            self.assertEqual(sb.env()["LISTEN_PORT"], "8791")
+            self.assertIn(("rm", "-sf", "admin"), sb.compose_calls)
+            self.assertLess(sb.compose_calls.index(("rm", "-sf", "admin")),
+                            next(i for i, c in enumerate(sb.compose_calls) if c[0] == "up"))
+
+    def test_port_80_by_the_owners_choice_stays(self):
+        # `port 80` marks the choice; a port the owner chose that is not 80 stays too.
+        with Sandbox("PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=x\n") as sb:
+            game_data(sb)
+            self.assertEqual(sb.call(app.cmd_port, port=80), 0, sb.output())
+            self.assertEqual((sb.env()["PUBLIC_HOST"], sb.env()["LISTEN_PORT"], sb.env()["PORT_80"]),
+                             ("192.168.0.10", "80", "chosen"))
+            with mock.patch.object(app.time, "sleep"):
+                self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+            self.assertEqual(sb.env()["LISTEN_PORT"], "80")
+            self.assertNotIn("moved", sb.output())
+            # Another port after it: the mark goes.
+            self.assertEqual(sb.call(app.cmd_port, port=9000), 0, sb.output())
+            self.assertNotIn("PORT_80", sb.env())
+        with Sandbox("PUBLIC_HOST=192.168.0.10:9000\nLISTEN_PORT=9000\nADMIN_PORT=8791\nADMIN_PASSWORD=x\n") as sb:
+            game_data(sb)
+            with mock.patch.object(app.time, "sleep"):
+                self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+            self.assertEqual(sb.env()["LISTEN_PORT"], "9000")
+
+    def test_the_firewall_rule_follows_a_move_off_port_80(self):
+        # On WSL the rule for phones moves with the port, from 80 to the new one, as `port` moves it.
+        with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_PASSWORD=x\n", wsl=True) as sb:
+            game_data(sb)
+            sb.windows_reachable()
+            with mock.patch.object(app.time, "sleep"), mock.patch.object(app.system, "run_firewall_script",
+                                                                        return_value=None) as script:
+                self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+            script.assert_called_once_with(port=8791, internet=False, replaces=80)
 
     def test_up_status_and_setup_name_one_admin_address(self):
         # up, status and the setup's end all name the admin pages on the server's one port, at the address phones use,

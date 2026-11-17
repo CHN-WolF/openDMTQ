@@ -136,7 +136,8 @@ def write_private(path, text):
 
 
 def split(address):
-    """("host", port) from "host" or "host:port"; port 80 when none is given."""
+    """("host", port) from "host" or "host:port"; port 80 when none is given, as a URL without a port means (http://host/
+    is port 80)."""
     host, sep, port = address.rpartition(":")
     if not sep:
         return address, 80
@@ -144,7 +145,8 @@ def split(address):
 
 
 def join(host, port):
-    """The address the app uses: "host", or "host:port" for any port but 80."""
+    """The address the app uses: "host:port", or "host" for port 80, as a URL without a port means (only an owner's own
+    `port 80` makes one)."""
     return host if int(port) == 80 else f"{host}:{port}"
 
 
@@ -160,11 +162,88 @@ DEFAULT_PORT = 8791
 
 
 def listen_port(values):
-    """Port the server publishes: LISTEN_PORT in .env; 80 for a server set up before .env named one (compose's own
-    default, and the port its address then has); 8791 for one not set up yet."""
+    """Port the server publishes: LISTEN_PORT in .env; for a server set up before .env named one, the port its address
+    then has (an address without a port is port 80, which its start moves it off: leaves_80); 8791 for one not set up
+    yet."""
     if values.get("LISTEN_PORT"):
         return int(values["LISTEN_PORT"])
-    return 80 if values.get("PUBLIC_HOST") else DEFAULT_PORT
+    return split(values["PUBLIC_HOST"])[1] if values.get("PUBLIC_HOST") else DEFAULT_PORT
+
+
+# A server set up before 0.11.0 served port 80 when its .env named no port (Docker Compose published 80 then, and its
+# address had no port). It moves at its first start to the port its admin pages had (leaves_80, port_after_80,
+# note_move_off_80). `port 80` writes this setting, the owner's own choice of port 80, which every start then keeps.
+CHOSE_80 = "PORT_80"
+
+
+def leaves_80(values, port):
+    """True for a set-up server whose start would serve port 80 (`port`) without its owner having chosen it with `port
+    80`: one set up before 0.11.0 without LISTEN_PORT, its address without a port, or one whose .env says LISTEN_PORT=80
+    from then."""
+    return bool(values.get("PUBLIC_HOST")) and port == 80 and values.get(CHOSE_80) != "chosen"
+
+
+def port_after_80(values, free):
+    """The port a server leaves 80 for: the one its admin pages had (ADMIN_PORT, which only a server set up before 0.11.0
+    has; 8791 unless its owner set another), or the first one after it that free(port) allows."""
+    try:
+        first = int(values.get("ADMIN_PORT") or DEFAULT_PORT)
+    except ValueError:
+        first = DEFAULT_PORT
+    # Never a port below 1024 (the server's user may not take one), nor past the last.
+    if not 1024 <= first <= 65535:
+        first = DEFAULT_PORT
+    return next((p for p in range(first, min(first + 100, 65536)) if free(p)), first)
+
+
+# In the server's state folder: the move off port 80, as {"from", "to", "address", "at", "said"} ("said": where it has
+# been said, each of the start, status and the Server page once).
+MOVED_80 = "port-moved.json"
+
+
+def _write_state(folder, name, data):
+    """A small JSON file in the server's state folder, whole or not at all, its folder owner's (a run with sudo)."""
+    import json
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name)
+    with open(path + ".new", "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    if hasattr(os, "getuid") and os.getuid() == 0:
+        owner = os.stat(folder)
+        os.chown(path + ".new", owner.st_uid, owner.st_gid)
+    os.replace(path + ".new", path)
+
+
+def note_move_off_80(folder, old, new, said="start"):
+    """Notes in the server's state folder that the server moved from the address `old` (port 80) to `new`: the address
+    served before, for the server's start to note the move as any move of its address (address.json, when no start of
+    this version wrote one: the site's download page then tells players to install the app built for the new one), and
+    the move itself, said already where `said` names."""
+    import time
+    if not os.path.isfile(os.path.join(folder, "address.json")):
+        _write_state(folder, "address.json", {"host": old})
+    _write_state(folder, MOVED_80, {"from": split(old)[1], "to": split(new)[1], "address": new, "at": int(time.time()),
+                                    "said": [said]})
+
+
+def move_off_80_unsaid(folder, where):
+    """The move off port 80 (note_move_off_80) the first time `where` ("status", "page") asks for it, noted as said
+    there; None after that, and for a server that never moved."""
+    import json
+    try:
+        with open(os.path.join(folder, MOVED_80), encoding="utf-8") as f:
+            moved = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(moved, dict) or where in moved.get("said", []) or not isinstance(moved.get("to"), int):
+        return None
+    moved["said"] = list(moved.get("said", [])) + [where]
+    try:
+        _write_state(folder, MOVED_80, moved)
+    except OSError:
+        # Said again next time rather than not at all.
+        pass
+    return moved
 
 
 def port_problem(values):
@@ -181,7 +260,7 @@ def port_problem(values):
     if port == listen:
         return None
     return (f"PUBLIC_HOST={address} makes phones call port {port}, but the server listens on {listen} "
-            f"(LISTEN_PORT); run ./opendmtq host {host} for port 80, or ./opendmtq host {join(host, listen)}")
+            f"(LISTEN_PORT); run ./opendmtq host {host}:{listen}")
 
 
 def check_host(address):

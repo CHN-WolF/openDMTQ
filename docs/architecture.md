@@ -500,7 +500,7 @@ hand.
 - Containers run as the invoking user's uid (33, www-data, when that is root), with no capabilities,
   `no-new-privileges` and a read-only root filesystem. The content is mounted read-only. Apache and PHP do not announce
   their versions.
-- The stack publishes one port: `LISTEN_PORT`, 8791 on a new install (80 on one set up before 0.11.0 without it), on every interface (`BIND_ADDRESS` narrows it), held by
+- The stack publishes one port: `LISTEN_PORT`, 8791 (a server set up on port 80 before 0.11.0 moves there at its first start), on every interface (`BIND_ADDRESS` narrows it), held by
   the edge. It carries plain HTTP and HTTPS; HTTPS ends in the edge, whose certificate is signed by an authority the
   server makes for itself, limited to the server's own names ([internet.md](internet.md#https)). Only the edge holds
   the certificate's key, and no running container holds the authority's.

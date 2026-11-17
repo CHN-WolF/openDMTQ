@@ -145,9 +145,11 @@ An update keeps `data` and `.env`. Phones get a newer app on the site when the u
 launcher on its **Launcher** page ([the PC client](windows-player.md#the-launcher)).
 
 Everything is on the server's one port: the game, the players' site, the admin pages (`/opendmtq/admin/`) and the API
-(`/opendmtq/api/v1/`). A new install takes 8791. A server set up before 0.11.0 keeps the port its phones' app calls (80
-for most), and its admin pages, which had a port of their own (8791), are on that one port after the update: nothing
-answers on their old port, and `.env` no longer names it.
+(`/opendmtq/api/v1/`). A new install takes 8791. A server set up before 0.11.0 on port 80 moves at its first start
+after the update to the port its admin pages had (8791 unless you set another, or the first free one after it), as
+`port` moves it: the app is built again for the new address, the site's download page tells players to install it, and
+the start, `status` and the Server page say it once. A server on another port keeps it. Its admin pages are on that one
+port after the update: nothing answers on their old port, and `.env` no longer names it.
 
 To move a server to another port, use `port` (or the Server page): it sets `LISTEN_PORT` and the port in `PUBLIC_HOST`,
 and from the server's next start it answers there. The app is built again for the new address then, and the site's
@@ -175,9 +177,10 @@ then restart.
 
 | Line | What it is | Set by |
 |---|---|---|
-| `PUBLIC_HOST` | The address the app uses: a LAN IPv4 address with its port (`192.168.1.10:8791`; none for port 80), or `host:port` when exposed | the setup, `./opendmtq host`, `./opendmtq expose` |
+| `PUBLIC_HOST` | The address the app uses: a LAN IPv4 address with its port (`192.168.1.10:8791`), or `host:port` when exposed | the setup, `./opendmtq host`, `./opendmtq expose` |
 | `SERVER_NAME` | The name after the game's title on phones, `TECHNIKA Q (<name>)`; empty: the whole address | `./opendmtq name` |
-| `LISTEN_PORT` | The server's one port, for the game, the players' site, the admin pages and the API (8791 on a new install; 80 when unset on one set up before 0.11.0): the port in a LAN `PUBLIC_HOST`, or the forwarded one | the setup, `./opendmtq host`, `./opendmtq expose` |
+| `LISTEN_PORT` | The server's one port, for the game, the players' site, the admin pages and the API (8791 on a new install): the port in a LAN `PUBLIC_HOST`, or the forwarded one | the setup, `./opendmtq host`, `./opendmtq expose`, `./opendmtq port` |
+| `PORT_80` | `chosen`: port 80 by your own choice (`./opendmtq port 80`), which every start keeps; a server only set up on port 80 before 0.11.0 moves off it | `./opendmtq port 80` |
 | `BASE_APK` | The client to patch when `data/apk/base` holds several (a file name there) | `./opendmtq apk --base` |
 | `ADMIN_PASSWORD` | The owner's password on the admin pages and the players' site | the setup, `./opendmtq password`, the admin pages' Server page |
 | `ADMIN_USER` | The owner's ID (`admin` when unset) | by hand |

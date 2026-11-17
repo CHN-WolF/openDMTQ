@@ -655,7 +655,8 @@ def server_get(args):
     return {"install": lifecycle.install_kind(), "address": f"http://{core.PUBLIC_HOST}/",
             "version": os.environ.get("OPENDMTQ_VERSION") or None, "started": started,
             "runs_itself": lifecycle.can_run_itself(), "commands": lifecycle.commands(), "data": lifecycle.data_parts(),
-            "port": lifecycle.port_now(), "next_address": lifecycle.next_address()}
+            "port": lifecycle.port_now(), "next_address": lifecycle.next_address(),
+            "moved_from": (lifecycle.moved_off_80(once=False) or {}).get("was")}
 
 
 @handler

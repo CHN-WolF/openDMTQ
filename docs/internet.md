@@ -66,8 +66,8 @@ the sign-in page, which is on HTTPS. While the edge proxy (below) runs without a
 `doctor` checks the HTTPS door on the server PC.
 
 The same port also answers HTTPS: `https://myhome.example.com:8790/` opens the site and the download encrypted (the
-admin pages too, with `--admin-public`), while the game keeps talking plain HTTP on that port (on the local network with
-port 80 that is `https://<address>:80/`). The edge proxy, a small program in front of the server that holds the public
+admin pages too, with `--admin-public`), while the game keeps talking plain HTTP on that port (on the local network
+that is `https://<address>:8791/`). The edge proxy, a small program in front of the server that holds the public
 port (`server/edge/nginx.conf`), looks at the first bytes of each connection: a TLS handshake is decrypted there and
 passed on to the server's HTTPS door, everything else goes to its plain door, each with the visitor's address. Only the
 edge holds the certificate's key, never the server and its PHP code. Nothing else needs to be forwarded on the router.

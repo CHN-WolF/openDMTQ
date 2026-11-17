@@ -19,8 +19,8 @@ from opendmtq_cli import env, look
 from .paths import ADMIN_WAIT, APP, CLI, DATA, LOGS, PYTHON, ROOT, RUN, START_WAIT, WINDOWS
 from .output import die, say, warn
 from .programs import programs
-from .settings import (admin_port, admin_url, choose_admin_port, forget_old_admin_port, listen_port, require_settings,
-                       settings, site_url)
+from .settings import (admin_port, admin_url, choose_admin_port, forget_old_admin_port, leave_port_80, listen_port,
+                       require_settings, settings, site_url)
 from .folders import php_command, server_env, tool, tools_env
 from .apache import write_configs
 
@@ -507,6 +507,9 @@ def cmd_run(args, values=None, found=None):
     found = found or programs()
     values = values or require_settings()
     check_folder()
+    # Off port 80 first, while .env still names the admin pages' old port (the one it moves to): as a service, a run is
+    # the first start after an update.
+    leave_port_80()
     # An install from before 0.11.0: its admin pages' own port out of .env (they are on the server's one port now).
     values = forget_old_admin_port()
     if running_pid() and running_pid() != os.getpid():

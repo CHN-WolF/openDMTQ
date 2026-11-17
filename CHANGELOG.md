@@ -109,11 +109,16 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   answer on the server's one port, `LISTEN_PORT`: 8791 on a new install, the first free port after it when it is taken,
   on the Windows bundle, a host install, Docker Compose and the Helm chart alike. An exposed server's admin pages stay on
   that same port for the server PC (`localhost`).
-- A server updated from 0.10.0 ends with one port too. It keeps the port its phones' app calls (80 on most), so no phone
-  needs a new app; its admin pages, which had a port of their own (8791), answer on that one port, nothing answers on
-  their old one, and `ADMIN_PORT` leaves `.env` at the first start. The Helm chart's Service listens on the port in
-  `publicHost`. To move a server to another port, use `./opendmtq port <port>` (`OpenDMTQ.exe port <port>` on Windows) or
-  the admin pages' Server page: it sets `LISTEN_PORT`, the server answers there from its next start with the app built
+- A server updated from 0.10.0 ends with one port too. One on port 80 (no `LISTEN_PORT` and an address without a port,
+  or `LISTEN_PORT=80`) moves at its first start to the port its admin pages had, 8791 unless its owner set another (the
+  first free one after it when another program has it), as `port` moves a server: `LISTEN_PORT` and `PUBLIC_HOST` take
+  the new port, the app is built again for the new address, the site's download page tells players to install it over
+  the old one, and on WSL the Windows firewall rule moves with it. The start, `status` and the Server page each say it
+  once. A port other than 80 stays as it is, and so does port 80 chosen with `port 80`. Its admin pages, which had a port
+  of their own, answer on that one port, nothing answers on their old one, and `ADMIN_PORT` leaves `.env` at the first
+  start. In the Helm chart a `publicHost` without a port is on 8791: the Service, the notes and the app built for that
+  address. To move a server to another port, use `./opendmtq port <port>` (`OpenDMTQ.exe port <port>` on Windows) or the
+  admin pages' Server page: it sets `LISTEN_PORT`, the server answers there from its next start with the app built
   again for the new address, and the site's download page tells players to install it over the old one.
 - The owner's ID and password from `.env` sign in to the players' site too. A sign-in to the admin pages outlives a
   restart of the server.

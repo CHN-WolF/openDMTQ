@@ -154,6 +154,33 @@ def next_address():
     return None
 
 
+def moved_off_80(once=True):
+    """The server's move off port 80 at its first start with this version (cli/opendmtq_cli/env.py note_move_off_80):
+    {"was", "now", "address"}. once: the first time this page asks for it, noted as said here, and None after that (the
+    API asks with once=False, and leaves it to the page). None for a server that never moved."""
+    path = os.path.join(os.path.dirname(core.DB), "port-moved.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            moved = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(moved, dict) or not isinstance(moved.get("to"), int):
+        return None
+    if not once:
+        return {"was": moved.get("from", 80), "now": moved["to"], "address": f"http://{moved.get('address', '')}/"}
+    if "page" in moved.get("said", []):
+        return None
+    moved["said"] = list(moved.get("said", [])) + ["page"]
+    try:
+        # Whole or not at all; said again next time when it cannot be written.
+        with open(path + ".new", "w", encoding="utf-8") as f:
+            json.dump(moved, f)
+        os.replace(path + ".new", path)
+    except OSError:
+        pass
+    return {"was": moved.get("from", 80), "now": moved["to"], "address": f"http://{moved.get('address', '')}/"}
+
+
 def port_free(port):
     """True when no other program holds the port on this computer (on Windows, as only the program holding it may use
     it then)."""
@@ -184,7 +211,9 @@ def move_port(raw):
         raise Refused(409, "port_taken", t("port.taken", port=port))
     host, _ = setup.address_parts(core.PUBLIC_HOST)
     new = host if port == 80 else f"{host}:{port}"
-    setup.save_env({"PUBLIC_HOST": new, "LISTEN_PORT": str(port)})
+    # Port 80 by the owner's own choice: the server's start keeps it (one only set up on it before 0.11.0 moves off it,
+    # cli/opendmtq_cli/env.py leaves_80).
+    setup.save_env({"PUBLIC_HOST": new, "LISTEN_PORT": str(port), **({"PORT_80": "chosen"} if port == 80 else {})})
     changed("server:port", f"{core.PUBLIC_HOST} > {new}")
     return {"port": port, "address": f"http://{new}/", "from_next_start": True}
 
@@ -367,7 +396,7 @@ def server_page():
                            removes=removes(), parts=parts, total=sum(p["bytes"] for p in parts),
                            since=datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M") if started else "",
                            version=os.environ.get("OPENDMTQ_VERSION") or "", root=repairing.install_root(),
-                           port=port_now(), next_address=next_address(),
+                           port=port_now(), next_address=next_address(), moved_80=moved_off_80(),
                            can_move_port=bool(setup.HOST_INSTALL and setup.ENV_FILE),
                            # The owner's password: changed here by the owner, or the command that changes it.
                            password_here=bool(setup.HOST_INSTALL and setup.ENV_FILE), password_commands=password_commands(),

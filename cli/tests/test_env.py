@@ -1,5 +1,6 @@
 """Tests for .env handling and address detection."""
 
+import json
 import os
 import stat
 import tempfile
@@ -147,10 +148,40 @@ class HostTest(unittest.TestCase):
         self.assertEqual(env.join("a.example", 8790), "a.example:8790")
 
     def test_listen_port(self):
-        # Not set up yet: the one port of a new install. Set up before .env named a port: 80, where it has been.
+        # Not set up yet: the one port of a new install. Set up before .env named a port: the port in its address, which
+        # for an address without one is 80, as a URL reads it; such a server leaves 80 at its start unless its owner
+        # chose it (`port 80`).
         self.assertEqual(env.listen_port({}), 8791)
         self.assertEqual(env.listen_port({"PUBLIC_HOST": "192.168.0.10"}), 80)
+        self.assertEqual(env.listen_port({"PUBLIC_HOST": "192.168.0.10:8790"}), 8790)
         self.assertEqual(env.listen_port({"LISTEN_PORT": "8790"}), 8790)
+        self.assertTrue(env.leaves_80({"PUBLIC_HOST": "192.168.0.10"}, 80))
+        self.assertFalse(env.leaves_80({"PUBLIC_HOST": "192.168.0.10", "PORT_80": "chosen"}, 80))
+        self.assertFalse(env.leaves_80({"PUBLIC_HOST": "192.168.0.10:8790"}, 8790))
+        self.assertFalse(env.leaves_80({}, 80))
+        # Where it goes: the admin pages' port before 0.11.0, 8791 unless the owner set another, or the next free one.
+        self.assertEqual(env.port_after_80({}, lambda p: True), 8791)
+        self.assertEqual(env.port_after_80({"ADMIN_PORT": "9791"}, lambda p: True), 9791)
+        self.assertEqual(env.port_after_80({}, lambda p: p > 8792), 8793)
+        self.assertEqual(env.port_after_80({"ADMIN_PORT": "80"}, lambda p: True), 8791)
+
+    def test_a_move_off_port_80_is_noted_and_said_once_each(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env.note_move_off_80(folder, "192.168.0.10", "192.168.0.10:8791")
+            with open(os.path.join(folder, "address.json"), encoding="utf-8") as f:
+                self.assertEqual(json.load(f), {"host": "192.168.0.10"})
+            for where in ("status", "page"):
+                moved = env.move_off_80_unsaid(folder, where)
+                self.assertEqual((moved["from"], moved["to"], moved["address"]), (80, 8791, "192.168.0.10:8791"))
+                self.assertIsNone(env.move_off_80_unsaid(folder, where))
+            # An address a start of this version noted already is left as it is (it is the one served before).
+            with open(os.path.join(folder, "address.json"), "w", encoding="utf-8") as f:
+                json.dump({"host": "192.168.0.10"}, f)
+            env.note_move_off_80(folder, "192.168.0.10", "192.168.0.10:8792")
+            with open(os.path.join(folder, "address.json"), encoding="utf-8") as f:
+                self.assertEqual(json.load(f), {"host": "192.168.0.10"})
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIsNone(env.move_off_80_unsaid(folder, "status"))
 
     def test_with_no_way_out_the_address_comes_from_the_machine_itself(self):
         # A closed network may have no gateway: there is no route to ask about, and the setup must not stop for that.
