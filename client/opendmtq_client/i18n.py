@@ -45,6 +45,7 @@ TEXT = {
     "status.error": ("{error}", "{error}"),
     "status.mypage": ("Opening your page on the site...", "사이트의 내 페이지를 여는 중..."),
     "status.mypage.opened": ("Your page on the site is open in the browser.", "브라우저에서 사이트의 내 페이지를 열었습니다."),
+    "status.site.opened": ("The server's site is open in the browser.", "브라우저에서 서버의 사이트를 열었습니다."),
     "status.signed_out": ("Your sign-in ended (it ran out, or the password changed). Sign in again on the ONLINE page.",
                           "로그인이 끝났습니다(기간이 지났거나 비밀번호가 바뀌었습니다). ONLINE 페이지에서 다시 로그인하세요."),
 

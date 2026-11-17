@@ -1152,6 +1152,16 @@ def records_check(app, site, out, tag, problems):
             problems.append("%s: after My page on the site the status line says %r" % (name, app.status_text))
         shot(app.root, out, tag + "_play-mypage")
         measure(app, tag + "_play-mypage", problems)
+        # A server older than one-time links: its site's address opened, and the status line says the site opened.
+        site.links = False
+        opened.clear()
+        button(app, w("play.mypage")).press()
+        settle(app, 6, until=lambda: bool(opened))
+        settle(app)
+        site.links = True
+        if opened != [site.url + "/opendmtq/"] or app.status_text != w("status.site.opened"):
+            problems.append("%s: My page on the site of a server older than its links opened %r, said %r"
+                            % (name, opened, app.status_text))
         # An account linked to no player, then one with no plays: one line each.
         for variant, answer, said in (("unlinked", {"account": stub.ACCOUNT, "player": None, "recent": [], "best": []},
                                        w("play.records.unlinked", account=stub.ACCOUNT)),

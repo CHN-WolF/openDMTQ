@@ -579,9 +579,11 @@ class LauncherApp:
             log.warning("could not open %s: %s", url.split("?", 1)[0], e)
             self.set_status(i18n.Said("status.error", error=e), "bad", sticky=True)
             return
-        # The link works once: never in the log; the page it opens is said instead.
-        log.info("opened the player's page on the site in the browser")
-        self.set_status(i18n.Said("status.mypage.opened"), "ok", transient=True)
+        # The link works once: never in the log; the page it opens is said instead. A server older than such links opens
+        # its site's own address, whose sign-in comes first.
+        linked = "once=" in url
+        log.info("opened %s on the site in the browser", "the player's page" if linked else "the site's address")
+        self.set_status(i18n.Said("status.mypage.opened" if linked else "status.site.opened"), "ok", transient=True)
 
     def test_connection(self):
         """The connection test of the server PLAY plays on (connection.py), on a worker thread: its card on the Online page
