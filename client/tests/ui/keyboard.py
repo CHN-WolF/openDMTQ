@@ -150,18 +150,19 @@ def main():
     app.root.update()
     # Where the page is scrolled to, in pixels (a fraction moves with the page's height by a pixel or so).
     before = area.canvas.canvasy(0)
-    buffer.event_generate("<Left>")
+    # From the default, low, one step on to normal and one back.
+    buffer.event_generate("<Right>")
     shots.settle(app)
     focus = app.root.focus_get()
     if before <= 0 or abs(area.canvas.canvasy(0) - before) > 1:
         problems.append("Sound: stepping the buffer moved the page from %d px to %d" % (before,
                                                                                        area.canvas.canvasy(0)))
-    if not isinstance(focus, widgets.Segmented) or focus.value != "low":
+    if not isinstance(focus, widgets.Segmented) or focus.value != "normal":
         problems.append("Sound: after the buffer's step the keyboard is on %r" % (focus,))
     else:
-        focus.event_generate("<Right>")
+        focus.event_generate("<Left>")
         shots.settle(app)
-        if app.state.values["audio_buffer"] != "normal":
+        if app.state.values["audio_buffer"] != "low":
             problems.append("Sound: a second step of the buffer did nothing (%s)" % app.state.values["audio_buffer"])
 
     # ---- The Controls page's keyboard play: Tab goes to the switch, then each mode's boxes from its top lane, a lane's

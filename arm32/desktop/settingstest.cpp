@@ -1396,12 +1396,15 @@ int main() {
         check(read(path, text).anti_aliasing == player::Settings::AntiAliasing::kCmaa2, (std::string(msaa) + " is read as CMAA 2").c_str());
     }
     check(read(path, "audio_buffer=normal\n").audio_buffer == 1, "audio_buffer=normal is 1");
+    // The low buffer where the file names none, as the launcher's own default: measured through whole songs on real
+    // Windows, the least latency with no gap.
+    check(player::Settings{}.audio_buffer == 0 && read(path, "volume=50\n").audio_buffer == 0, "the low buffer is the default, as the launcher's");
     // Values it cannot read keep the default, each on its own: the keys around them are still read.
     const player::Settings& bad = read(path, "display=huge\nwindow=200x100\nvsync=maybe\nfps=20\nrender_scale=40\naudio_mode=loud\nupscaler=dlss\n"
                                              "anti_aliasing=fxaa\n"
                                              "audio_buffer=tiny\nvolume=loud\nvolume2=5\nfps=120\n");
     check(bad.fullscreen && bad.window_w == 0 && bad.vsync, "a display, window or vsync it cannot read keeps the default");
-    check(bad.render_scale == 100 && !bad.audio_exclusive && bad.audio_buffer == 1 && bad.volume == 100,
+    check(bad.render_scale == 100 && !bad.audio_exclusive && bad.audio_buffer == 0 && bad.volume == 100,
           "a render scale below 50, a mode, a buffer or a volume that is no number keeps the default");
     check(bad.fps == 120, "a frame limit below 30 is left out, and a later good one read");
     check(bad.upscaler == player::Settings::Upscaler::kFsr1, "an upscaler it does not know keeps the default, AMD FSR 1");

@@ -103,8 +103,8 @@ CHANGES = (
         ("music volume down (arrow)", widgets.Slider, "sound.volume.music", "<Left>", False),
         ("equaliser Bass (arrow)", widgets.Segmented, "sound.eq.preset", "<Right>", True),
         ("low band up (makes it Custom)", widgets.Slider, "sound.eq.low", "<Right>", True),
-        ("buffer low (arrow)", widgets.Segmented, "sound.buffer", "<Left>", True),
         ("buffer normal (arrow)", widgets.Segmented, "sound.buffer", "<Right>", True),
+        ("buffer low (arrow)", widgets.Segmented, "sound.buffer", "<Left>", True),
         ("mode exclusive (arrow)", widgets.Segmented, "sound.mode", "<Right>", True),
         ("mode shared (arrow)", widgets.Segmented, "sound.mode", "<Left>", True))),
     ("controls", (

@@ -81,10 +81,14 @@ struct Settings {
     enum class ShowFps { kOff, kTopLeft, kTopRight, kBottomLeft, kBottomRight };
     ShowFps show_fps = ShowFps::kOff;
     // The sound's device ("" Windows' default output), the device alone, how much is kept ahead (0 low, 1 normal,
-    // 2 safe) and the game's volume in percent.
+    // 2 safe) and the game's volume in percent. The buffer low unless the file says otherwise: measured through whole
+    // songs on real Windows (a 192 kHz device, the PC busy with other work, two songs each), shared, low put the sound
+    // out 29 to 36 ms after the mix (Windows' low-latency mode at its 7 ms period) against normal's 37 to 43 and safe's
+    // 73 to 78, the device alone 10 ms (its 3 ms period) against 31 and 61, with no gap in any; where a device has no
+    // shorter period than its standard one, low is a 10 ms buffer of the standard mode.
     std::string audio_device;
     bool audio_exclusive = false;
-    int audio_buffer = 1;
+    int audio_buffer = 0;
     int volume = 100;
     // The music and the effects as shares of the volume, in percent, and the equaliser on the whole sound: a preset, or
     // custom with its three bands in dB (sound_mix.h). The in-game sound panel changes them and writes them back.

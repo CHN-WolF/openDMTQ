@@ -299,6 +299,17 @@ class Values(unittest.TestCase):
         self.assertEqual(back, {"volume": 40, "eq": "custom", "eq_low": 3})
         self.assertEqual(choices.took_back(choices.normalize({}), choices.settings_text({})), {})
 
+    def test_the_buffer_is_low_as_the_players_default(self):
+        # The low buffer first, the player's own default where the file names none (arm32/desktop/player.h), measured
+        # through whole songs on real Windows with no gap and the least latency.
+        self.assertEqual(choices.normalize({})["audio_buffer"], "low")
+        player_h = os.path.join(os.path.dirname(SETTINGS_CPP), "player.h")
+        if os.path.isfile(player_h):
+            with open(player_h, encoding="utf-8") as f:
+                found = re.search(r"int audio_buffer = (\d);", f.read())
+            self.assertTrue(found)
+            self.assertEqual(("low", "normal", "safe")[int(found.group(1))], choices.DEFAULTS["audio_buffer"])
+
     def test_settings_file(self):
         text = choices.settings_text({"display": "window", "window": "1600x900", "vsync": "off", "fps": "unlimited",
                                       "render_scale": "75", "upscaler": "nis", "anti_aliasing": "smaa", "show_fps": "on",

