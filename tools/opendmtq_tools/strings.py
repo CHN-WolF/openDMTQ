@@ -2208,14 +2208,14 @@ STRINGS = {
         # Discord and Slack (webhooks.py).
         # The owner's password on the Server page (lifecycle.py); the site's MY PAGE in the log of changes.
         "pw.title": "소유자 비밀번호",
-        "pw.lead": "소유자 아이디 <code>{user}</code>와 이 비밀번호로 이 관리 페이지와 플레이어 사이트에 로그인합니다. 새 비밀번호는 바로 적용되고, 소유자의 다른 로그인은 모두 끝나며 지금 이 로그인은 그대로입니다.",
+        "pw.lead": "소유자 아이디(<code>{user}</code>)와 이 비밀번호로 이 관리 페이지와 플레이어 사이트에 로그인합니다. 새 비밀번호는 바로 적용되고, 소유자의 다른 로그인은 모두 끝나며 지금 이 로그인은 그대로입니다.",
         "pw.owner_only": "소유자 아이디로 로그인한 소유자만 바꿀 수 있습니다.",
         "pw.new": "새 비밀번호",
         "pw.again": "새 비밀번호 한 번 더",
         "pw.rule": "10자에서 64자까지, 띄어쓰기와 따옴표, $, #, \\, `는 쓸 수 없습니다.",
         "pw.change": "비밀번호 바꾸기",
         "pw.confirm": "소유자 비밀번호를 바꿀까요? 소유자의 다른 로그인은 모두 끝납니다. PC 클라이언트와 플레이어 사이트의 브라우저도 마찬가지입니다.",
-        "pw.done": "소유자 비밀번호를 바꿨습니다. 이제 <code>{user}</code>는 새 비밀번호로 로그인합니다.",
+        "pw.done": "소유자 비밀번호를 바꿨습니다. 이제 소유자 아이디(<code>{user}</code>)는 새 비밀번호로 로그인합니다.",
         "pw.missing": "새 비밀번호를 입력하세요.",
         "pw.bad": "비밀번호는 10자에서 64자까지이고, 띄어쓰기와 따옴표, $, #, \\, `는 쓸 수 없습니다.",
         "pw.by_command": "이 설치에서는 명령줄로 바꿉니다: {command}",
