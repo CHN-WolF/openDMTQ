@@ -75,7 +75,7 @@ const FULL = [
   ['admin-songs', `${A}/songs`],
   ['admin-players', `${A}/players`],
   // A player's own page (PAGE-75): one who plays much with nothing changed, one with a balance of his own and purchases,
-  // and the longest name banned with the longest reason, unlimited, items given and taken, and changes listed (seed.php).
+  // and a long name banned with the longest reason, unlimited, items given and taken, and changes listed (seed.php).
   ['admin-player', `${A}/players/1`],
   ['admin-player-kept', `${A}/players/2`],
   ['admin-player-banned', `${A}/players/6`],
@@ -2280,8 +2280,10 @@ async function thisPc(contexts) {
     await signInForms(contexts);
     await portalFlows(contexts);
     await replayFlows(contexts);
-    await adminFlows(contexts);
+    // Before the admin flows: their song hidden and shown again rebuilds the catalog from the stand-in game files, which
+    // have none of the items run.sh's stand-in catalog gives a player's page.
     await gameFlows(contexts);
+    await adminFlows(contexts);
   } else if (stage === 'patterns') {
     await hoverOnly(contexts);
     await inPlace(contexts);
