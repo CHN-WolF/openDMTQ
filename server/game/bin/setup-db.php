@@ -233,6 +233,32 @@ if (!in_array('maint_seen', $live_columns, true)) {
 // name and its value per row, which the admin pages' Broadcasts page writes and portal/live_lib.php reads. The same
 // statement as SETTING_TABLE in the admin pages.
 $db->exec('CREATE TABLE IF NOT EXISTS LiveSetting (name TEXT PRIMARY KEY, value TEXT NOT NULL)');
+// A player's game state beyond their scores (src/player.php): what they hold of the two currencies, their experience (the
+// level comes from it) and their own unlimited switch; the items they bought, were given or had taken beyond what everyone
+// has; the products a level unlock opened for them; what they bought and paid; a ban, with its reason, start and end; and
+// the server's own settings for it all (unlimited for everyone, what a new player starts with). A player without a row of
+// PlayerState has the server's start values. The same statements as GAME_TABLES in the admin pages (backups.py, which
+// game.py uses too), which a restored database gets.
+foreach (['CREATE TABLE IF NOT EXISTS PlayerState (guid INTEGER PRIMARY KEY, mpoint INTEGER NOT NULL, qpoint INTEGER NOT NULL,
+           exp INTEGER NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, changed_at INTEGER)',
+          'CREATE TABLE IF NOT EXISTS PlayerItem (guid INTEGER NOT NULL, item_id INTEGER NOT NULL, owned INTEGER NOT NULL,
+           how TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (guid, item_id))',
+          'CREATE TABLE IF NOT EXISTS PlayerUnlock (guid INTEGER NOT NULL, product_id INTEGER NOT NULL, at INTEGER NOT NULL,
+           PRIMARY KEY (guid, product_id))',
+          'CREATE TABLE IF NOT EXISTS PlayerPurchase (id INTEGER PRIMARY KEY, guid INTEGER NOT NULL, product_id INTEGER NOT NULL,
+           item_id INTEGER NOT NULL, currency TEXT NOT NULL, price INTEGER NOT NULL, paid INTEGER NOT NULL, at INTEGER NOT NULL)',
+          'CREATE INDEX IF NOT EXISTS PlayerPurchase_guid ON PlayerPurchase (guid, at)',
+          "CREATE TABLE IF NOT EXISTS PlayerBan (guid INTEGER PRIMARY KEY, reason TEXT NOT NULL, since INTEGER NOT NULL,
+           until INTEGER, by TEXT NOT NULL DEFAULT '')",
+          'CREATE TABLE IF NOT EXISTS GameSetting (name TEXT PRIMARY KEY, value TEXT NOT NULL)'] as $sql) {
+    // Without these the server cannot answer a player's state: it does not start, and says why.
+    if (!$db->exec($sql)) {
+        fwrite(STDERR, "opendmtq: cannot add the players' game state to the database: " . $db->lastErrorMsg() . "\n");
+        exit(1);
+    }
+}
+// A year of purchases is kept, as of plays.
+$db->exec('DELETE FROM PlayerPurchase WHERE at < ' . (time() - 365 * 86400));
 // The accounts of the site, made on the Accounts page of the admin pages and checked by the site's sign-in:
 // every page of it is behind that. The same statement as ACCOUNT_TABLE there (which also adds guid).
 $db->exec("CREATE TABLE IF NOT EXISTS SiteUser (name TEXT PRIMARY KEY COLLATE NOCASE, pass TEXT NOT NULL,

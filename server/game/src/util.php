@@ -5,8 +5,6 @@
  * (portal/lib.php) loads this file too, for the months.
  */
 
-// The level every player has: the server gives everyone the highest (game.getUserAsset), and the rankings show it.
-const OPENDMTQ_LEVEL = 99;
 // The largest number the client can read.
 const OPENDMTQ_INT_MAX = 2147483647;
 // The most rows one ranking reply carries (the client asks for 20 at a time).

@@ -4,8 +4,8 @@
 # loopback with an empty database, runs the checks, and removes everything again. Needs nothing but Docker and Python 3.
 #
 # Usage: tests/game/protocol.sh        (PORT, default 18701; KEEP=1 leaves the server up)
-# Also runs tests/game/lock.php, tests/game/names.php, tests/game/keys.php and tests/game/moved.php on the same database,
-# and fails on any PHP warning in the server's log.
+# Also runs tests/game/lock.php, tests/game/names.php, tests/game/keys.php, tests/game/state.php and tests/game/moved.php on
+# the same database, and fails on any PHP warning in the server's log.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -34,6 +34,20 @@ docker run --rm -u 33:33 -v "$DATA/content:/content" -v "$ROOT/tests/ui:/ui:ro" 
 # Its number goes to protocol.py, which then holds the hidden song's checks to it.
 HIDDEN_SONG=$(python3 -c 'import json, sys; songs = json.load(open(sys.argv[1], encoding="utf-8")); songs[-1]["hidden_yn"] = "Y"; json.dump(songs, open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False); print(songs[-1]["song_id"])' \
   "$DATA/content/songs.json" "$DATA/custom/songList.json")
+# The catalog as the tools make it from the client's tables (songs.py's rebuild): made up, for the players' game state
+# (tests/game/state.php): characters and a skin everyone has, notes for MAX POINT nobody has at first, a pack of MAX POINT
+# for Q and a free one, and song 7's first 4LINE chart costing MAX POINT.
+cat > "$DATA/custom/catalog.json" <<'CATALOG'
+{"items": [30001, 30002, 100001], "unlock_product": null,
+ "point_charts": [{"pattern_id": 61, "song_id": 7, "point_type": 1, "point_value": 350}],
+ "products": {"90001": {"item": 90001, "kind": "N", "point": 2000, "cash": 0, "amount": 0},
+              "90002": {"item": 90002, "kind": "N", "point": 2000, "cash": 0, "amount": 0},
+              "90003": {"item": 90003, "kind": "N", "point": 2000, "cash": 0, "amount": 0},
+              "50001": {"item": 50001, "kind": "M", "point": 0, "cash": 10, "amount": 2500},
+              "59001": {"item": 59001, "kind": "M", "point": 0, "cash": 0, "amount": 150}},
+ "gear": {"C": [[30001, "Made Partner"], [30002, "Second Partner"]], "N": [[90001, "Made Note"], [90002, "Made Note 2"], [90003, "Made Note 3"]],
+          "K": [[100001, "Made Skin"]]}}
+CATALOG
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 # As compose starts it: read-only, unprivileged, capped.
 docker run -d --name "$NAME" --cpus 2 --memory 1g -u 33:33 --read-only --tmpfs /var/opendmtq:mode=1777 --tmpfs /tmp:mode=1777 \
@@ -62,6 +76,10 @@ docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/test
 # best changes hands, and the column a database from before it gets at the next start (tests/game/keys.php), inside the
 # running server, on its database and at its own address.
 docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/keys.php" || failed=1
+# A player's game state (tests/game/state.php): what the game is told of their currencies, level and items, what a purchase,
+# a save and a chart's cost do to them, unlimited currency, and a ban in the game, on the site and in the PC client, inside
+# the running server, on its database and at its own address, with the catalog written above.
+docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/state.php" || failed=1
 # A server moved to another address: each start notes the move, and the download page says players need the new app
 # (tests/game/moved.php).
 docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/moved.php" || failed=1

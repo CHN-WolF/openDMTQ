@@ -23,6 +23,8 @@
 
 // Where everything is: the game server's settings, which every part of the server shares.
 require_once __DIR__ . '/../game/src/config.php';
+// A player's ban (odq_ban_of()): a banned player is never on air.
+require_once __DIR__ . '/../game/src/player.php';
 // The stream folders (data/state/live on the host) and the game database.
 define('LIVE_DIR', odq_state_dir() . '/live');
 define('LIVE_DB', odq_db_path());
@@ -260,7 +262,9 @@ function live_authorize(): array
     $db = live_db();
     $row = $db ? live_player($db, live_ids((string)($_GET['ids'] ?? ''))) : null;
     $sent = (string)($_SERVER['HTTP_X_LIVE_TOKEN'] ?? '');
-    if (!$row || !$row['live'] || (string)$row['token'] === '' || !hash_equals((string)$row['token'], $sent)) {
+    // A banned player's upload too: their broadcast stops with the ban, whatever their switch says.
+    if (!$row || !$row['live'] || (string)$row['token'] === '' || !hash_equals((string)$row['token'], $sent)
+        || odq_ban_of((int)$row['guid'], $db) !== null) {
         http_response_code(403);
         exit;
     }
@@ -831,7 +835,8 @@ function live_on_air(SQLite3 $db): array
     $r = @$db->query("SELECT guid FROM LiveSwitch WHERE live = 1");
     while ($r && ($row = $r->fetchArray(SQLITE3_NUM))) {
         $s = live_stream((int)$row[0]);
-        if ($s && !$s['ended'] && time() - (int)$s['updated'] < LIVE_LISTED) {
+        // A banned player is not listed, even in the moments before their last upload ages out.
+        if ($s && !$s['ended'] && time() - (int)$s['updated'] < LIVE_LISTED && odq_ban_of((int)$row[0], $db) === null) {
             $on[(int)$row[0]] = true;
         }
     }

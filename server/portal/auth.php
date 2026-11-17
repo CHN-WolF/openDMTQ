@@ -6,6 +6,8 @@
 
 // Where everything is: the game server's settings, which every part of the server shares.
 require_once __DIR__ . '/../game/src/config.php';
+// A player's ban (site_ban()).
+require_once __DIR__ . '/../game/src/player.php';
 // The game database (lib.php names the same file so).
 if (!defined('DB')) {
     define('DB', odq_db_path());
@@ -124,6 +126,30 @@ function site_check(string $name, string $password): ?string
     return $row && $ok && !$row['off'] && dl_key() !== '' ? (string)$row['name'] : null;
 }
 
+/*
+ * The ban of the game player an account is linked to (the Accounts page links one), while it lasts: ['reason', 'since',
+ * 'until', 'by'] as the admin pages keep it (src/player.php odq_ban_of()), or null. A banned player's accounts do not sign
+ * in to the site, nor to the PC client, and a browser signed in to one is signed out at its next page.
+ */
+function site_ban(?array $row): ?array
+{
+    if (!$row || ($row['guid'] ?? null) === null) {
+        return null;
+    }
+    $db = site_db();
+    return $db ? odq_ban_of((int)$row['guid'], $db) : null;
+}
+
+/* The words of a ban on the sign-in page: the owner's reason, with its end when it has one, in the page's language. */
+function site_ban_words(array $ban): string
+{
+    $reason = trim(preg_replace('/\s+/u', ' ', $ban['reason']) ?? '');
+    if ($ban['until'] === null) {
+        return t('signin.banned', ['reason' => $reason]);
+    }
+    return t('signin.banned_until', ['reason' => $reason, 'when' => date(lang() === 'ko' ? 'Y. n. j. H:i' : 'M j, Y, H:i', $ban['until'])]);
+}
+
 /* The cookie's signature: when it ends, whose it is, and the account's password as kept. */
 function dl_mac(string $expires, string $name, string $pass): string
 {
@@ -140,7 +166,8 @@ function site_user(): ?string
         $c = (string)($_COOKIE[DL_COOKIE] ?? '');
         if (dl_key() !== '' && preg_match('/^(\d{10})\.((?:[0-9a-f]{2}){3,20})\.([0-9a-f]{64})$/', $c, $m) && (int)$m[1] >= time()) {
             $row = site_account((string)hex2bin($m[2]));
-            if ($row && !$row['off'] && hash_equals(dl_mac($m[1], (string)$row['name'], (string)$row['pass']), $m[3])) {
+            // A banned player's account is signed out, as one switched off is.
+            if ($row && !$row['off'] && hash_equals(dl_mac($m[1], (string)$row['name'], (string)$row['pass']), $m[3]) && site_ban($row) === null) {
                 $who = (string)$row['name'];
             }
         }

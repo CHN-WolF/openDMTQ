@@ -61,6 +61,11 @@ if (isset($_GET['signin'])) {
         answer(401, ['error' => 'wrong']);
     }
     dl_attempt_succeeded($attempt);
+    // A banned player's account: no sign-in, with the owner's reason and the end when there is one (Unix time, or null).
+    $ban = site_ban(site_account($who));
+    if ($ban !== null) {
+        answer(403, ['error' => 'banned', 'reason' => $ban['reason'], 'until' => $ban['until']]);
+    }
     dl_sign_in($who);
     answer(200, ['account' => $who, 'expires' => time() + DL_DAYS * 86400]);
 }

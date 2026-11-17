@@ -9,6 +9,7 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/util.php';
+require_once __DIR__ . '/player.php';
 
 /*
  * The pattern ids (charts) a ranking counts: those of one line ($line 3, 4 or 5), optionally of one
@@ -162,8 +163,9 @@ function odq_board($patterns)
 }
 
 /*
- * Name and partner/add-on icons of the given players: guid => [name, slot_item1, slot_item2].
- * With two Member rows on one guid (a transfer), the row whose id is the guid wins.
+ * Name, partner/add-on icons and level of the given players: guid => [name, slot_item1, slot_item2, level].
+ * With two Member rows on one guid (a transfer), the row whose id is the guid wins. The level is the player's as the
+ * server keeps it (player.php), the start level for a player it has kept nothing of.
  */
 function odq_profiles(array $guids)
 {
@@ -172,10 +174,16 @@ function odq_profiles(array $guids)
         return [];
     }
     // Ints only, so they can be written into the query.
-    $sql = 'SELECT CAST(guid AS INTEGER) AS guid, id, nickname, slot_item1, slot_item2 FROM Member'
-        . ' WHERE CAST(guid AS INTEGER) IN (' . implode(',', $guids) . ')'
-        . ' ORDER BY (id = CAST(guid AS INTEGER)) DESC, id ASC';
+    $sql = 'SELECT CAST(m.guid AS INTEGER) AS guid, m.id, m.nickname, m.slot_item1, m.slot_item2, s.exp FROM Member m'
+        . ' LEFT JOIN PlayerState s ON s.guid = CAST(m.guid AS INTEGER)'
+        . ' WHERE CAST(m.guid AS INTEGER) IN (' . implode(',', $guids) . ')'
+        . ' ORDER BY (m.id = CAST(m.guid AS INTEGER)) DESC, m.id ASC';
     $r = @odq_db()->query($sql);
+    // A database from before the players' state was kept (restored, until the next start adds it): without the level.
+    if (!$r) {
+        $r = @odq_db()->query(str_replace([', s.exp', ' LEFT JOIN PlayerState s ON s.guid = CAST(m.guid AS INTEGER)'], [', NULL AS exp', ''], $sql));
+    }
+    $start = odq_level_exp(odq_game_settings()['start_level']);
     $out = [];
     while ($r && ($row = $r->fetchArray(SQLITE3_ASSOC))) {
         $guid = (int)$row['guid'];
@@ -185,7 +193,8 @@ function odq_profiles(array $guids)
         }
         // A nickname is blank until the player sets one; the web pages say "Player <n>" then too.
         $name = trim((string)$row['nickname']);
-        $out[$guid] = [$name !== '' ? $name : "Player $guid", (int)$row['slot_item1'], (int)$row['slot_item2']];
+        $level = odq_level_of($row['exp'] === null ? $start : odq_clamp($row['exp'], 0, OPENDMTQ_EXP_MAX));
+        $out[$guid] = [$name !== '' ? $name : "Player $guid", (int)$row['slot_item1'], (int)$row['slot_item2'], $level];
     }
     return $out;
 }
@@ -203,7 +212,7 @@ function odq_rows(array $board, array $indexes)
     foreach ($indexes as $i) {
         [$guid, $score] = $board[$i];
         // A player whose Member row vanished meanwhile still gets a name.
-        [$name, $slot1, $slot2] = $profiles[$guid] ?? ["Player $guid", 0, 0];
+        [$name, $slot1, $slot2, $level] = $profiles[$guid] ?? ["Player $guid", 0, 0, odq_level_of(odq_level_exp(odq_game_settings()['start_level']))];
         $rows[] = [
             // Position on the board, 1 for the best.
             'rank' => $i + 1,
@@ -213,7 +222,7 @@ function odq_rows(array $board, array $indexes)
             'score' => odq_int32($score),
             'slot_item1' => odq_int32($slot1),
             'slot_item2' => odq_int32($slot2),
-            'lev' => OPENDMTQ_LEVEL,
+            'lev' => $level,
             'display_name' => $name,
             'profile_img' => '',
         ];

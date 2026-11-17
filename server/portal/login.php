@@ -44,6 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && from_another_site()) {
     exit;
 }
 
+// The message to show, as a key of STRINGS (in the page's language); a ban's own words, made with its reason.
+$error = '';
+$banned = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // The ID as typed, without the space a phone's keyboard may add after a word.
     $user = trim((string)($_POST['user'] ?? ''));
@@ -59,7 +62,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Counted before the password is compared, so a burst of guesses cannot pass the limit together; for the account
         // typed, whose admin rights put it under a limit for the whole server too.
         $error = 'signin.throttled';
-    } elseif (($who = site_check($user, $password)) !== null) {
+    } elseif (($who = site_check($user, $password)) !== null && ($ban = site_ban(site_account($who))) !== null) {
+        // The right password of a banned player's account: not a guess, and no sign-in; the owner's reason says why.
+        dl_attempt_succeeded($attempt);
+        $error = 'signin.banned';
+        $banned = site_ban_words($ban);
+    } elseif ($who !== null) {
         // A right password is not a failure.
         dl_attempt_succeeded($attempt);
         // From a download link: the download itself would leave this filled form on screen, so the
@@ -111,7 +119,7 @@ page_header(t('signin.title'), $from);
             // the form, in the box. ?>
       <?php if ($error && !$missing): ?>
         <?php // An error, in red: the yellow box is for notices (maintenance, the app being built). ?>
-        <p class="error" role="alert"><?= t($error) ?></p>
+        <p class="error" role="alert"><?= $banned !== '' ? $banned : t($error) ?></p>
       <?php endif; ?>
       <?php // Each field's words when it is left empty come from the site's own check (forms.js), in the page's language and
             // look, under the field, not from the browser's bubbles (novalidate): each field's words in its data-missing. A

@@ -13,6 +13,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/util.php';
 require_once __DIR__ . '/achievement.php';
+require_once __DIR__ . '/player.php';
 
 /*
  * A call's result and error, for the replies that are not a plain result: an error (result null, error with its
@@ -123,11 +124,15 @@ function odq_game_first_resource_songs(array $p)
 function odq_game_asset_by_puid(array $p)
 {
     $puid = $p[0] ?? null;
+    // The account's player, as the server keeps them (player.php): its level and currencies as getUserAsset tells them.
+    $member = odq_member_by('puid', $puid);
+    $state = odq_player_state($member ? odq_intval($member['guid']) : 0);
+    [$mpoint, $qpoint] = odq_shown_points($state);
     return ['status' => 'SUCCESS', 'code' => 200, 'myAssetInfo' => [
         // The puid as text, the guid as a number: the shapes the client reads.
         'puid' => odq_text($puid), 'guid' => odq_intval($puid),
-        'exp' => 99999, 'mpoint' => 999999, 'score' => 9999999, 'lev' => 99,
-        'amt_total' => 999999, 'amt_cash' => 999999, 'amt_point' => 999999,
+        'exp' => $state['exp'], 'mpoint' => $mpoint, 'score' => 9999999, 'lev' => $state['level'],
+        'amt_total' => $qpoint, 'amt_cash' => $qpoint, 'amt_point' => $qpoint,
         'song_count' => max(1, odq_max_song_id()), 'migrated_yn' => 'Y',
     ]];
 }
@@ -232,6 +237,9 @@ function odq_game_pattern_url(array $p)
  */
 function odq_game_preview_play(array $p)
 {
+    // A chart that costs MAX POINT (game.getPatternUsePointData, which the song's page shows by its button) is paid for as
+    // its play starts, as the game asks for the player's balance right after this to show it.
+    odq_pay_for_chart(odq_intval($p[0] ?? null), odq_intval($p[1] ?? null));
     $now = time();
     return [
         'note_count' => 3,
@@ -255,6 +263,44 @@ function odq_game_preview_play(array $p)
     ];
 }
 
+/*
+ * Takes what a chart costs from a player as its play starts (game.getPreviewPlayInfo): MAX POINT for a chart of point
+ * type 1, Q for type 2, the catalog's point_charts, which the song's page shows. Nothing for any other chart, for a player
+ * whose currency is unlimited, or for an id without an account. Never below 0: the song's page lets a play start only
+ * with enough, and a balance lowered on the admin pages meanwhile goes to 0 rather than refuse the play. Never in the
+ * way of the reply: a database that does not take it leaves the play free.
+ */
+function odq_pay_for_chart(int $guid, int $pattern): void
+{
+    $cost = null;
+    foreach (odq_catalog()['point_charts'] as $chart) {
+        if ((int)($chart['pattern_id'] ?? 0) === $pattern) {
+            $cost = $chart;
+        }
+    }
+    if ($cost === null || $guid <= 0 || odq_account_known($guid) !== true) {
+        return;
+    }
+    $value = max(0, (int)($cost['point_value'] ?? 0));
+    $type = (int)($cost['point_type'] ?? 0);
+    $db = odq_db();
+    if ($value === 0 || !in_array($type, [1, 2], true) || !@$db->exec('BEGIN IMMEDIATE')) {
+        return;
+    }
+    try {
+        $state = odq_player_state($guid, $db);
+        if (!$state['unlimited']) {
+            // What the player has of it, at most.
+            $taken = min($value, $type === 1 ? $state['mpoint'] : $state['qpoint']);
+            odq_state_add($db, $guid, $type === 1 ? -$taken : 0, $type === 2 ? -$taken : 0, 0);
+        }
+        @$db->exec('COMMIT');
+    } catch (Throwable $e) {
+        @$db->exec('ROLLBACK');
+        error_log('opendmtq: getPreviewPlayInfo: ' . $e->getMessage());
+    }
+}
+
 /* game.getSongList []: every song the server offers, as the list has it (hidden ones marked hidden_yn Y). */
 function odq_game_song_list(array $p)
 {
@@ -270,8 +316,11 @@ function odq_game_song_url(array $p)
 }
 
 /*
- * game.getUserAsset [guid]: the player's level, points and equipped items. Everyone is level 99 with every MAX
- * POINT and every in-game item at level 10; the equipped items are the player's own (game.setSlotItem).
+ * game.getUserAsset [guid]: the player's level, experience, currencies and equipped items, which the game's top bar shows
+ * (the level and its gauge, Q and MAX) and the shop checks prices against. The level, experience and currencies are the
+ * player's as the server keeps them (player.php), the figure of no end while their currency is unlimited; every in-game
+ * item is at its highest level, 10; the equipped items are the player's own (game.setSlotItem). The game takes all of it
+ * from this reply alone: it asks again after every play, purchase and upgrade, and never works a balance out itself.
  */
 function odq_game_user_asset(array $p)
 {
@@ -280,12 +329,15 @@ function odq_game_user_asset(array $p)
     $slot = function ($n) use ($member) {
         return $member ? $member["slot_item$n"] : 0;
     };
+    $state = odq_player_state(odq_intval($p[0] ?? null));
+    [$mpoint, $qpoint] = odq_shown_points($state);
     return [
-        'exp' => 0, 'mpoint' => 999999, 'score' => 9999999,
+        'exp' => $state['exp'], 'mpoint' => $mpoint, 'score' => 9999999,
         'slot_item1' => $slot(1), 'slot_item2' => $slot(2), 'slot_item3' => $slot(3), 'slot_item4' => $slot(4),
-        'in_game_item1' => 10, 'in_game_item2' => 10, 'in_game_item3' => 10, 'lev' => OPENDMTQ_LEVEL,
-        // Text here, numbers in getGameAssetByPuid: the shapes the client reads.
-        'amt_total' => '999999', 'amt_cash' => '999999', 'amt_point' => '999999', 'amt_mileage' => '999999',
+        'in_game_item1' => 10, 'in_game_item2' => 10, 'in_game_item3' => 10, 'lev' => $state['level'],
+        // Text here, numbers in getGameAssetByPuid: the shapes the client reads (it reads Q from amt_total alone, as a
+        // whole number it parses; the other three go with it as they always did).
+        'amt_total' => (string)$qpoint, 'amt_cash' => (string)$qpoint, 'amt_point' => (string)$qpoint, 'amt_mileage' => (string)$qpoint,
     ];
 }
 
@@ -472,6 +524,19 @@ function odq_game_save_play(array $p)
         $l->bindValue(':keys', $keys, SQLITE3_INTEGER);
         @$l->execute();
     }
+    // What the play earns, kept with it (player.php): MAX POINT and experience, the level following the experience. The
+    // state before it too, for the reply's figures of what was earned (none past the most the game shows).
+    $earned = null;
+    if ($stored) {
+        try {
+            $before = odq_player_state($guid, $db);
+            $after = odq_state_add($db, $guid, OPENDMTQ_PLAY_MPOINT, 0, OPENDMTQ_PLAY_EXP);
+            $earned = [$before, $after];
+        } catch (Throwable $e) {
+            // The play is not kept without what it earned: the client offers to retry, which sends the same result again.
+            $stored = false;
+        }
+    }
     // Kept only when the best row was written and the commit works; otherwise nothing of it.
     if (!$stored || !@$db->exec('COMMIT')) {
         error_log('opendmtq: savePlayResult: ' . $db->lastErrorMsg());
@@ -490,11 +555,14 @@ function odq_game_save_play(array $p)
         'lucky_bonus_score' => 0,
         'score' => $total,
         'total_score' => $total,
-        'exp' => 10,
-        'total_exp' => 10,
-        'mpoint' => 150,
-        'total_mpoint' => 150,
-        'lev' => OPENDMTQ_LEVEL,
+        // What the play earned, which the result screen shows (EXP and MAX POINT), and the player's figures after it: their
+        // experience, what the game is told they hold (the figure of no end while unlimited) and their level. The game
+        // reads the two earned figures here and the rest from getUserAsset, which it asks next.
+        'exp' => $earned[1]['exp'] - $earned[0]['exp'],
+        'total_exp' => $earned[1]['exp'],
+        'mpoint' => $earned[1]['mpoint'] - $earned[0]['mpoint'],
+        'total_mpoint' => odq_shown_points($earned[1])[0],
+        'lev' => $earned[1]['level'],
         // What this play earned, shown by the game at once; always a list.
         'new_achievements' => odq_new_achievements($guid, $had),
         // No quests run here (game.getOwnQuestList), so none completes or goes on.

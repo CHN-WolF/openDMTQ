@@ -7,13 +7,16 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/util.php';
+require_once __DIR__ . '/player.php';
 
 /*
  * The game's achievements, as its table quest_achievement has them (patch 1.003.005: 34, ids 1 to 35 without 28):
  * id => [condition type, condition value, condition count, condition special, points]. What the server can tell of
  * each, by type:
- * - QUEST: reaching level <value>. The server gives every player level 99, so all of them.
- * - TOTAL_MPOINT: holding <value> MAX POINT. The server gives everyone 999,999, so all of them.
+ * - QUEST: reaching level <value>: the player's level as the server keeps it (player.php; 99 until the owner sets
+ *   another, so all of them).
+ * - TOTAL_MPOINT: holding <value> MAX POINT: what the game is told they hold (999,999 until the owner sets another, the
+ *   figure of no end while unlimited).
  * - LINE: a first clear on line <value> (3: 2LINE, 4: 3LINE), from the best scores (Play).
  * - ALL_COMBO, PERFECT: one ALL COMBO, one PERFECT PLAY, from the best scores.
  * - SIGNATURE: <count> clears of difficulty <value> (1 NORMAL, 2 HARD, 3 EXPERT), from the play log.
@@ -38,8 +41,6 @@ const OPENDMTQ_ACHIEVEMENTS = [
     32 => ['TOTAL_SCORE', 7500000, 1, '', 65], 33 => ['TOTAL_SCORE', 10000000, 1, '', 70], 34 => ['TOTAL_SCORE', 15000000, 1, '', 75],
     35 => ['TOTAL_SCORE', 30000000, 1, '', 99],
 ];
-// What the server gives every player (game.getUserAsset), for the level and MAX POINT achievements.
-const OPENDMTQ_MAX_POINT = 999999;
 
 /*
  * game.getAchievementCount []: how many achievements the game has and the points of all of them, which
@@ -146,12 +147,15 @@ function odq_achievements_held($guid)
             $clears[$signature] = ($clears[$signature] ?? 0) + (int)$row['n'];
         }
     }
+    // Their level and what they hold of MAX POINT, as getUserAsset tells the game.
+    $state = odq_player_state((int)$guid);
+    $held_mpoint = odq_shown_points($state)[0];
     // Each achievement: stored, or earned by those figures, by its condition type.
     $ids = [];
     foreach (OPENDMTQ_ACHIEVEMENTS as $id => [$type, $value, $count]) {
         $earned = isset($stored[$id])
-            || ($type === 'QUEST' && OPENDMTQ_LEVEL >= $value)
-            || ($type === 'TOTAL_MPOINT' && OPENDMTQ_MAX_POINT >= $value)
+            || ($type === 'QUEST' && $state['level'] >= $value)
+            || ($type === 'TOTAL_MPOINT' && $held_mpoint >= $value)
             || ($type === 'LINE' && isset($cleared_lines[$value]))
             || ($type === 'ALL_COMBO' && $combo)
             || ($type === 'PERFECT' && $perfect)
@@ -169,7 +173,7 @@ function odq_achievements_held($guid)
  * for those with no stored date yet: what the server held before it stored them, and a player's achievements until
  * their next save stores them. Worked out from their play log replayed in the order it was played, so that a later
  * play does not move the estimate either:
- * - QUEST, TOTAL_MPOINT (held from the start): their first play.
+ * - QUEST, TOTAL_MPOINT (held from the start until the owner changes them): their first play.
  * - LINE: their first clear of a chart of that line.
  * - SIGNATURE: their <count>-th clear of that difficulty.
  * - TOTAL_SCORE: when the sum of their best scores, raised play by play as the log has them, first reached the step.

@@ -6,8 +6,9 @@
  *
  * Errors the client knows: with an error the client skips the method's own handler. SVC.05008 it treats as
  * handled (no popup, the screen goes on); any other code opens its "retry?" popup, whose other button quits the
- * game. SVC.001 means "update required" to it and makes it quit: never sent. The client reads a missing list as
- * null and stops, so every list in a reply is present, even when empty.
+ * game. SVC.001 means "update required" to it and makes it quit: never sent. SVC.05403, a code it does not know, is
+ * what a banned player's calls get: that popup, with OpenDMTQ's notice saying why over the game (odq_banned_reply()).
+ * The client reads a missing list as null and stops, so every list in a reply is present, even when empty.
  */
 
 require_once __DIR__ . '/config.php';
@@ -17,6 +18,7 @@ require_once __DIR__ . '/user.php';
 require_once __DIR__ . '/ranking.php';
 require_once __DIR__ . '/achievement.php';
 require_once __DIR__ . '/live.php';
+require_once __DIR__ . '/player.php';
 
 /*
  * Every method this server answers, by its name in lower case (the game sends them in camel case; the name is
@@ -123,6 +125,20 @@ function odq_unknown_method($method): OdqReply
     return odq_error('SVC.05008', "OpenDMTQ: $name is not available on this server");
 }
 
+/*
+ * The reply to a call of a banned player's (player.php's PlayerBan): an error the client does not know, which opens its own
+ * popup (Network connection error, RETRY and CLOSE, which quits the game) and keeps it from going on: the game's sign-in
+ * stops there, and a game already in goes no further than its next request. What the ban says, in the owner's words,
+ * shows over the game at the same time (odq_ban_notice()).
+ */
+function odq_banned_reply(): OdqReply
+{
+    return odq_error(OPENDMTQ_BANNED_CODE, 'OpenDMTQ: this player cannot play on this server now');
+}
+
+// The error code of a banned player's calls: none the client knows (rpc.php's header says what it does with those).
+const OPENDMTQ_BANNED_CODE = 'SVC.05403';
+
 /* One call: its handler's result as {result, error}, never an exception. */
 function odq_call($method, $params): array
 {
@@ -130,7 +146,17 @@ function odq_call($method, $params): array
     // A parameter list that is not a list counts as an empty one: every value then reads as missing.
     $list = is_array($params) ? array_values($params) : [];
     try {
-        $reply = $handler ? $handler($list) : odq_unknown_method($method);
+        // A banned player's game gets no further: their sign-in, and any call of theirs, refused, with a notice that says
+        // why at each sign-in.
+        $player = $handler ? odq_call_player(odq_method_key($method), $list) : 0;
+        if ($player > 0 && odq_ban_of($player) !== null) {
+            if (odq_method_key($method) === 'user.loginv2') {
+                odq_ban_notice($player);
+            }
+            $reply = odq_banned_reply();
+        } else {
+            $reply = $handler ? $handler($list) : odq_unknown_method($method);
+        }
     } catch (Throwable $e) {
         // A fault here must not cost the rest of the batch: logged, and answered like an unknown method.
         error_log("opendmtq: $method: " . $e->getMessage());

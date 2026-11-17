@@ -35,6 +35,23 @@ const MAINT_TOASTS = [
     'en' => ['maint_on' => "Under maintenance\n%s", 'maint_changed' => "Maintenance notice updated\n%s",
              'maint_off' => "Maintenance is over\nThe server is open as usual"],
 ];
+// A banned player's notice, at each sign-in the game tries (src/player.php odq_ban_notice()): the title, then the owner's
+// reason, with when the ban ends where it has an end.
+const BAN_TOAST = ['ko' => "이 서버에서 플레이할 수 없어요\n%s", 'en' => "You cannot play on this server\n%s"];
+const BAN_UNTIL = ['ko' => '%s · %s까지', 'en' => '%s · until %s'];
+
+/* The second line of a banned player's notice: the reason, and the end in the server's zone when the ban has one. */
+function live_ban_line(array $ban, string $lang): string
+{
+    // One line, as the notice has room for: the owner's reason with its line breaks as spaces.
+    $reason = trim(preg_replace('/\s+/u', ' ', $ban['reason']) ?? '');
+    if ($ban['until'] === null) {
+        return $reason;
+    }
+    $when = $lang === 'ko' ? date('n월 j일 H:i', $ban['until']) : date('M j, H:i', $ban['until']);
+    return sprintf(BAN_UNTIL[$lang], $reason, $when);
+}
+
 // The line under the title of a notice turned on without a message of the owner's own (DEFAULT_NOTICE, lib.php).
 const MAINT_PLAIN = ['ko' => '점검이 끝나면 여기서 다시 알려 드려요', 'en' => 'You will hear here when it is over'];
 const MAINT_DEFAULT = 'The server is under maintenance. Please try again later.';
@@ -54,9 +71,13 @@ $reply = ['on' => false] + live_stream_settings()
  * update really cleared it returns it, also when two polls cross. A newer notice written meanwhile (another number) stays
  * for the next poll. It waits while the player is in a song.
  */
-function live_take_toast(array $row): array
+function live_take_toast(array $row, ?array $ban = null): array
 {
     if ($row['toast'] === '' || live_in_song($row)) {
+        return ['', 0, ''];
+    }
+    // A ban's notice only while the ban lasts: one lifted meanwhile is no news.
+    if ($row['toast'] === 'ban' && $ban === null) {
         return ['', 0, ''];
     }
     $rw = live_db(true);
@@ -71,6 +92,9 @@ function live_take_toast(array $row): array
         return ['', 0, ''];
     }
     $lang = ($_GET['lang'] ?? '') === 'ko' ? 'ko' : 'en';
+    if ($row['toast'] === 'ban') {
+        return [sprintf(BAN_TOAST[$lang], live_ban_line($ban, $lang)), (int)$row['toast_id'], 'ban'];
+    }
     if (!isset(TOASTS[$lang][$row['toast']])) {
         return ['', 0, ''];
     }
@@ -118,11 +142,13 @@ function live_take_maintenance(array $row): array
 
 $db = live_db();
 $row = $db ? live_player($db, live_ids((string)($_GET['ids'] ?? ''))) : null;
+// A banned player (src/player.php): never on air, and their switch left as it is for when the ban ends.
+$ban = $row ? odq_ban_of((int)$row['guid'], $db) : null;
 // New players start switched on when the owner says so (the Broadcasts page, or LIVE_DEFAULT=on before the owner chose),
 // with broadcasts on for the server or off: a player whose switch nobody has touched yet has it on, and hears so ("on",
 // or "wait" while the server's are off). A row can exist before that, from song tracking; only the admin pages set
 // changed_at, and what they set stays.
-if ($row && !$row['live'] && live_settings()['new_players']) {
+if ($row && $ban === null && !$row['live'] && live_settings()['new_players']) {
     $rw = live_db(true);
     $token = bin2hex(random_bytes(16));
     $kind = $enabled ? 'on' : 'wait';
@@ -143,13 +169,13 @@ if ($row && !$row['live'] && live_settings()['new_players']) {
 }
 if ($row) {
     $reply['switch'] = (bool)$row['live'];
-    // On air only with both switches on; the key goes with it.
-    if ($enabled && $row['live'] && (string)$row['token'] !== '') {
+    // On air only with both switches on and no ban; the key goes with it.
+    if ($enabled && $ban === null && $row['live'] && (string)$row['token'] !== '') {
         $reply['on'] = true;
         $reply['token'] = $row['token'];
     }
     // The notice waiting for this player, if any, once; with none, the maintenance notice's newest change, once.
-    [$reply['toast'], $reply['toast_id'], $reply['toast_kind']] = live_take_toast($row);
+    [$reply['toast'], $reply['toast_id'], $reply['toast_kind']] = live_take_toast($row, $ban);
     if ($reply['toast'] === '') {
         [$reply['toast'], $reply['toast_id'], $reply['toast_kind']] = live_take_maintenance($row);
     }
