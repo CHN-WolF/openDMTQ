@@ -254,7 +254,7 @@ one the server marks as the server PC's own. Through the API it is `POST /app/pl
 
 ## One-time sign-in links
 
-The PC client's **My page on the site** opens the player's page in the PC's browser, signed in already: the server makes
+The PC client's **My page on the site** opens MY PAGE in the PC's browser, signed in already: the server makes
 a link for the launcher's sign-in that signs a browser in to the same account once, within a minute
 (`/opendmtq/login.php?once=...`), then opens the page; one used already, or older, leads to the sign-in page, which says
 so. The links are kept beside the database (`data/state/signin-links`), each named by the hash of its token. The API

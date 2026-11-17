@@ -22,7 +22,7 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   launcher's logs, the end of the game's log, the settings, the displays, the sound devices, Windows, the graphics cards,
   the versions and the last connection test in one zip, with the user's name, the site IDs, the servers' addresses,
   the sign-ins, tokens and this PC's player id left out, and says what was left out.
-- **My page on the site** on the PC client's **Play** page opens the player's page in the browser, signed in already by a
+- **My page on the site** on the PC client's **Play** page opens the player's MY PAGE in the browser, signed in already by a
   one-time link the server makes for the launcher's sign-in (it works once, within a minute; `POST /site/link` makes one
   through the API for the token's admin), and **My records** lists the player's latest plays and best records from the
   server, with the place on each chart and the keyboard's mark.

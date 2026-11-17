@@ -96,9 +96,9 @@ if (isset($_GET['link'])) {
     if ($who === null) {
         answer(403, ['error' => 'signin']);
     }
-    // The player's own page when the account is linked to its game player, else the site's home.
-    $me = site_me();
-    $page = $me !== null ? '/opendmtq/player.php?id=' . $me : '/opendmtq/';
+    // MY PAGE, the account's own page: its game player's profile, plays and records when the account is linked to one,
+    // and the account's settings in any case (the owner's account, linked to no player, included).
+    $page = '/opendmtq/me.php';
     $token = once_issue($who, $page);
     if ($token === null) {
         answer(503, ['error' => 'down']);
