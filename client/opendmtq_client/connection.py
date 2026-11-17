@@ -44,6 +44,9 @@ CONNECT_TIMEOUT = 5
 # The ports a new server takes, the first free of them (host/opendmtq_host/settings.py choose_port): looked at when
 # nothing answers on the address's own port.
 PORTS = tuple(range(8791, 8800))
+# What the server says of its app to a sign-in (server.app_info's refusals), as the sign-in step words it.
+APP_SAID = {"error.app.none": "app_building", "error.app.stale": "app_rebuilding", "error.app.failed": "app_failed",
+            "error.app.named": "app_named"}
 # How long each of those ports may take to answer (seconds): looked at together, so the whole look takes about this.
 PROBE_TIMEOUT = 2
 # How many small asks the round trip times.
@@ -271,9 +274,13 @@ def _steps(result, address, server, end, stop, cancel):
             end(result.step("signin").done("bad", "ended", _ms(started), account=server.get("account") or "?"))
         except srv.ServerError as e:
             # Signed in, and the server says something of its app instead (none yet, for another address): the sign-in
-            # holds all the same.
+            # holds all the same. Said in the test's own words, what the server found and nothing more.
             cookie = server["cookie"]
-            end(result.step("signin").done("ok", "ok_app", _ms(started), account=server.get("account") or "?", error=e))
+            outcome = APP_SAID.get(getattr(e, "key", None))
+            if outcome:
+                end(result.step("signin").done("ok", outcome, _ms(started), account=server.get("account") or "?"))
+            else:
+                end(result.step("signin").done("ok", "ok_app", _ms(started), account=server.get("account") or "?", error=e))
     # 7. The game server's own answers: its health page (the client data, the database), and the maintenance check the
     # game makes at its start (/inspection/status.json: open_yn Y while the owner's notice is on).
     started = time.perf_counter()

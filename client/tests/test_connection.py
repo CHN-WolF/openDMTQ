@@ -186,6 +186,18 @@ class ConnectionTest(Folder):
         self.assertEqual(self.said(steps["downloads"]), "The client data's list (3 KB) is there to download; the app "
                                                         "downloads after a sign-in.")
 
+    def test_the_servers_app_said_as_found(self):
+        # Signed in while the server builds its app, builds it again for a new address, or could not build it: the sign-in
+        # holds, and the app's state is said as it was found, nothing more.
+        for state, said in (("none", "The server is building its app (about 20 seconds)."),
+                            ("stale", "The server's address changed, and it is building its app again."),
+                            ("failed", "The server could not build its app.")):
+            self.site.app_state = state
+            _, steps, _ = self.run_test()
+            self.assertEqual((steps["signin"].state, self.said(steps["signin"])),
+                             ("ok", "Signed in as %s. %s" % (stub.ACCOUNT, said)))
+        self.assertEqual(self.said(steps["signin"], KO), "%s 계정으로 로그인되어 있습니다. 서버가 앱을 만들지 못했습니다." % stub.ACCOUNT)
+
     def test_the_game_under_maintenance_and_down(self):
         # The owner's maintenance notice, as the game asks for it at its start.
         self.site.maintenance = True
