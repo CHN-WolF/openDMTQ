@@ -2087,6 +2087,8 @@ async function thisPc(contexts) {
   if (!windows) return;
   const pressed = await contexts.signed.newPage();
   await pressed.setViewport({ width: 1280, height: 900 });
+  // In English, as its picture's name says: the sweep above left the browser on the last language it swept.
+  await pressed.setCookie({ name: 'opendmtq_lang', value: 'en', url: ADMIN });
   await pressed.goto(`${A}/app`, { waitUntil: 'networkidle2' });
   await Promise.all([pressed.waitForNavigation({ waitUntil: 'domcontentloaded' }), pressed.click('#this-pc button')]);
   // Followed while it runs, then the page with what it said.
