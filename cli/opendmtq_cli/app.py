@@ -250,8 +250,7 @@ def address_lines(host, values):
 
 def admin_sign_in(values):
     """Where the owner signs in to the admin pages on this PC, and with what: the one address `up`, `status` and the
-    setup's end all name (their own port, which works on this PC whatever the public port carries), and the ID and where
-    its password is."""
+    setup's end all name (on the server's one port, admin_link), and the ID and where its password is."""
     return f"{admin_link(values)}  (ID {values.get('ADMIN_USER') or 'admin'}, password: ADMIN_PASSWORD in .env)"
 
 

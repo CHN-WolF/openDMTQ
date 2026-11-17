@@ -137,8 +137,9 @@ jobs:
           cp _work/client-release/releases/* dist/client/
           cp _work/client-release/releases/OpenDMTQ-Setup.exe _work/client-release/releases/OpenDMTQ-Setup.exe.version tools/opendmtq_tools/
 
-      # The Windows bundle for this version, and its SHA-256, with the release. Before anything is pushed: its downloads are the
-      # likeliest thing to fail (some sites drop old files), and a failure here must not leave half a release published.
+      # The Windows bundle for this version, with the release (its checksum goes in the one list below). Before anything is
+      # pushed: its downloads are the likeliest thing to fail (some sites drop old files), and a failure here must not leave
+      # half a release published.
       - name: Windows bundle
         env:
           VERSION: ${{ steps.names.outputs.version }}
