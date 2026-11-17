@@ -180,10 +180,13 @@ A release, by a maintainer:
 2. Run `tests/qa.sh` on that commit, on a machine with the game's files: it marks the commit when everything passes.
    `CLIENTS=<folder>` checks the patcher against every APK in that folder too: the game's other version, a copy
    changed for another server.
-3. Push the tag `v1.2.3`. `.github/workflows/release.yml` checks that the tag, the chart and the changelog name one
-   version (`.github/release_notes.py`), runs CI again, checks the mark, and publishes a GitHub release whose notes are
-   that version's section of the changelog. Without the mark it stops: run `tests/qa.sh`, then run the release again
-   (`gh run rerun`).
+3. Push the tag `v1.2.3`, and publish from the machine that holds the project's signing key: the release's checksums
+   are signed with it, and every server and PC client checks a release's files against that signature
+   (`tools/opendmtq_tools/signing.py`). The key never enters the repository or GitHub: `OPENDMTQ_SIGNING_KEY` names its
+   file, and `.github/release_assets.py layout` signs with it and refuses to lay a release out without it. The steps are
+   `.github/workflows/release.yml`'s: the tag, the chart and the changelog name one version (`.github/release_notes.py`),
+   CI and the mark pass, the images and the chart go to GHCR, and the GitHub release has that version's section of the
+   changelog as its notes. On GitHub, release.yml checks the same and stops before it builds anything, as it has no key.
 
 What a release publishes:
 
@@ -194,13 +197,15 @@ What a release publishes:
 | The server for Windows | `opendmtq-server-1.2.3-windows-x64.zip` |
 | The Helm chart | `opendmtq-server-1.2.3-helm-chart.tgz`, and `oci://ghcr.io/kanggu12/charts/opendmtq` |
 | The runtime for newer phones, for the server's app builder | `opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip` |
-| The PC client's update feed and package, which installed clients update from | `releases.win.json` (Velopack's name, which installed clients look for) and `opendmtq.client-1.2.3-full.nupkg` (the feed names it) |
-| The checksums of all of them | `opendmtq-1.2.3-sha256sums.txt` |
+| The PC client's update feed and packages, which installed clients update from | `releases.win.json` (Velopack's name, which installed clients look for), `opendmtq.client-1.2.3-full.nupkg` and `opendmtq.client-1.2.3-delta.nupkg` (from the release before; the feed names both) |
+| The checksums of all of them, and their signature | `opendmtq-1.2.3-sha256sums.txt` and `opendmtq-1.2.3-sha256sums.txt.sig` |
 
 `.github/release_assets.py` gives the files these names and checks them before anything is pushed: exactly these, in
-lower case, the version in each name, the programs for Windows built for x64, the update feed naming the package beside
-it, the package's own manifest the PC client's id. The
-release's notes open with which file is for whom (`.github/release_notes.py`).
+lower case, the version in each name, the programs for Windows built for x64, the update feed naming the packages beside
+it and the files the full package holds, the packages' own manifests the PC client's id, the launcher taking no test's
+key, and the checksums signed by the project's key. The delta package is made from the previous release's full package,
+which the PC client's build keeps beside the new one (`OPENDMTQ_PREVIOUS_RELEASE`). The release's notes open with which
+file is for whom (`.github/release_notes.py`).
 
 A release names itself by its number (`0.2.0`): the Windows bundle, the one-command install and the Helm chart. A copy
 from a clone names itself the same at a release's tag, and past it by that release and its commit (`0.9.3-d5e201c`),

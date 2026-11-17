@@ -83,14 +83,46 @@ is wrong under the field it is about, and signs in on Enter.
 
 **PLAY** asks the server for a newer app first and downloads it when there is one; when the server cannot be asked, the
 game starts with the app this PC has. The checks ask the server too: one that does not answer is said on the **Play**
-and **Help** pages and does not stop **PLAY**. The launcher updates itself from the project's releases: **Launcher**,
-**Check for updates**. It also looks at each start, in the background for 10 seconds at most, and again every six hours
-while it is open: a newer version is said on the **Launcher** page and in the status line, each with **Update to** that
-version; nothing is installed by itself, and without internet nothing is said. Every minute while it is on screen, the
-launcher also asks the server again: one that stops answering, a sign-in the server no longer takes, and a newer app are
-said as they come, each time they do. Without internet, the installer from the server's **Download** page updates it
-instead, once the server has a newer one; the servers and the settings stay. While the game runs the launcher steps
-aside, and comes back when the game ends.
+and **Help** pages and does not stop **PLAY**. The launcher updates itself ([updates](#updates)): **Launcher**, **Check
+for updates**. It also looks at each start, in the background for 10 seconds at most, and again every six hours while it
+is open: a newer version is said on the **Launcher** page and in the status line, each with **Update to** that version;
+nothing is installed by itself, and without an answer nothing is said. Every minute while it is on screen, the launcher
+also asks the server again: one that stops answering, a sign-in the server no longer takes, and a newer app are said as
+they come, each time they do. The installer from the server's **Download** page updates it too, once the server has a
+newer one; the servers and the settings stay. While the game runs the launcher steps aside, and comes back when the game
+ends.
+
+### Updates
+
+The launcher takes its updates from the server it plays on first. The server keeps the PC client's update of the version
+it hands out, the same files as the project's release, at `/updates/` on its one port, and the launcher goes no further
+than that version: a launcher stays matched to its server, on a network with no way out too. A server that keeps none (one
+older than 0.11.0) lets the launcher take the project's releases on GitHub, up to the server's own version, and with no
+server it takes GitHub's latest release. A server that does not answer sends it nowhere else: nothing is said until it
+answers. **Check for updates** says where an update comes from.
+
+An update goes in only when the release's checksums carry the OpenDMTQ project's signature, by the key built into the
+launcher (`8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`, [a release's files](install.md#a-releases-files)):
+
+- `releases.win.json`, the update feed, names the version and its packages. It must be the file the signed checksums
+  sum, or the launcher says the update is not signed by the OpenDMTQ project and installs nothing.
+- `opendmtq.client-<version>-delta.nupkg`, what changed since the release before, is what a launcher of that release
+  downloads: checked against the signed checksums, then the launcher's own updater puts the new version together from
+  it, and the launcher checks that what it made holds the files the release signed.
+- `opendmtq.client-<version>-full.nupkg`, the whole update, is what every other launcher downloads, and one whose delta
+  did not give the files signed (it says *The whole update is downloading* on the command line). It must be the file the
+  signed checksums sum.
+- `opendmtq-<version>-sha256sums.txt` and its signature `opendmtq-<version>-sha256sums.txt.sig` come first: without
+  them nothing of the release is downloaded.
+
+Everything is downloaded into a folder of the launcher's own in Windows' temporary folder and checked there, before
+anything goes into the program's folder: a package that is not the one the release signed is refused, said in words,
+and the program stays as it was. The launcher's log says each step.
+
+A launcher of 0.10.0 or older checks no signature: it takes the update its address gives, the project's releases on
+GitHub, over HTTPS, checking only the hash the update feed gives. So it updates to 0.11.0 from GitHub as before, and
+trusts GitHub's answer for what it puts in; from 0.11.0 on, every update a launcher takes is one the project signed,
+whoever hands it out.
 
 **Controls** sets keyboard play. **Play with keys** turns it on or off (on at first). While it is on, a table shows the
 lanes of 2, 3 and 4 LINE from the top, each with a box for its key and one for a second key: click a box (or Tab to it
@@ -523,6 +555,6 @@ game judged its notes by type.
 ## For server owners
 
 Nothing to do, unless the server has no internet: the site's **Download** page offers the installer to signed-in
-players, set up for the server as it is handed out, and the launcher signs in with the site's accounts. Where the
-server gets the installer, and what it needs without internet:
-[the PC client's installer](admin.md#the-pc-clients-installer).
+players, set up for the server as it is handed out, and the launcher signs in with the site's accounts. The server hands
+the launchers their updates too, of the installer's version ([updates](#updates)). Where the server gets the installer
+and the updates, and what it needs without internet: [the PC client's installer](admin.md#the-pc-clients-installer).

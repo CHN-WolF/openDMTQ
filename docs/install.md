@@ -57,9 +57,10 @@ Download `opendmtq-server-<version>-windows-x64.zip` from [Releases](https://git
 and unpack it outside OneDrive and Program Files, for example to `C:\OpenDMTQ`. Start `OpenDMTQ.exe`. If Windows says it
 protected your PC, click **More info**, then **Run anyway**: OpenDMTQ.exe is not signed by a publisher Windows knows.
 
-Each release has `opendmtq-<version>-sha256sums.txt`, the SHA-256 of every file in it. In PowerShell, compare
-`Get-FileHash opendmtq-server-<version>-windows-x64.zip` with its line; on Linux, run
-`sha256sum -c --ignore-missing opendmtq-<version>-sha256sums.txt` in the folder you downloaded to.
+Each release has `opendmtq-<version>-sha256sums.txt`, the SHA-256 of every file in it, signed by the OpenDMTQ project
+([a release's files](#a-releases-files)). In PowerShell, compare `Get-FileHash opendmtq-server-<version>-windows-x64.zip`
+with its line; on Linux, run `sha256sum -c --ignore-missing opendmtq-<version>-sha256sums.txt` in the folder you
+downloaded to.
 </details>
 
 ## Linux or macOS
@@ -185,6 +186,46 @@ then restart.
 | `BIND_ADDRESS` | The interface the server's port is published on (all when unset) | by hand |
 | `COMPOSE_PROJECT_NAME` | What this server's containers are called; a second copy of the repository gets its own by itself | `./opendmtq`, for a second copy |
 | `OPENDMTQ_SERVER_IMAGE`, `OPENDMTQ_TOOLS_IMAGE` | A release's images to run instead of building them here ([without internet](closed-network.md)) | by hand |
+
+## A release's files
+
+Each release on [Releases](https://github.com/kanggu12/openDMTQ/releases) has these, `<version>` standing for its number
+(`0.11.0`):
+
+- `opendmtq-pc-client-<version>-windows-x64-setup.exe`: the PC client's installer, for players. A server hands out the
+  same file set up for itself.
+- `opendmtq-server-<version>-windows-x64.zip`: the whole server for Windows, for server owners on Windows.
+- `opendmtq-server-<version>-helm-chart.tgz`: the Helm chart, for server owners on Kubernetes.
+- `opendmtq-phone-runtime-<version>-android-arm64-armv7.zip`: what the phone app needs on phones that run only 64-bit
+  apps. The server's app builder fetches it and adds it to the app.
+- `releases.win.json`: the PC client's update feed, which names the version and its packages with their sizes and
+  hashes. Installed PC clients read it, from their server or from here.
+- `opendmtq.client-<version>-full.nupkg`: the PC client's update, whole. PC clients of any earlier version take it.
+- `opendmtq.client-<version>-delta.nupkg`: what changed since the release before. A PC client of that release downloads
+  it instead of the whole update, and its own updater puts the new version together from it.
+- `opendmtq-<version>-sha256sums.txt`: the SHA-256 of every other file here.
+- `opendmtq-<version>-sha256sums.txt.sig`: the OpenDMTQ project's signature over the checksums. Servers and PC clients
+  check it before they use a file of the release: what does not match the signed checksums is not used.
+
+The signature is Ed25519, by the project's key, whose public half is built into the server and the PC client:
+`8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`. To check a release by hand with OpenSSL 3, save the
+key as `opendmtq-release.pem`:
+
+```
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAjq2VVRpdXSFtyhLeIBOEZdTPvOxI7CsmEcnkn8R7d9c=
+-----END PUBLIC KEY-----
+```
+
+and in the folder you downloaded to:
+
+```sh
+v=0.11.0
+openssl pkeyutl -verify -pubin -inkey opendmtq-release.pem -rawin -in opendmtq-$v-sha256sums.txt -sigfile opendmtq-$v-sha256sums.txt.sig
+sha256sum -c --ignore-missing opendmtq-$v-sha256sums.txt
+```
+
+The first says `Signature Verified Successfully`, the second `OK` for each file you have.
 
 ## What it runs on
 

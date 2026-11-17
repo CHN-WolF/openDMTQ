@@ -527,7 +527,11 @@ def _from_delta(result, full, delta, base, folder, run):
     None (the caller fetches the whole package). The delta is checked against the signed checksums before Update.exe
     reads it; what Update.exe wrote is checked by its bytes, or by the files it holds (FilesSHA256, signed in the
     feed), as it is zipped again."""
-    path = _fetch(result, delta, folder)
+    try:
+        path = _fetch(result, delta, folder)
+    except UpdateError:
+        # A delta the feed names and the source does not hand out (_fetch said why in the log): the whole package.
+        return None
     try:
         signing.check_file(result.info.sums, delta["FileName"], path)
     except signing.Unsigned as e:

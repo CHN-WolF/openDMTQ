@@ -1207,34 +1207,24 @@ def dialogs_check(app, out, tag, problems):
 
 def update_on_offer_check(app, out, tag, problems):
     """The look for a newer launcher at the start, with no press: a look that fails (no network) or finds the launcher
-    up to date says nothing; one that finds a newer one says it on the status line with its update while PLAY is ready,
-    and the Launcher page shows its answer and its Update button without Check for updates. The link does what the
-    page's button does (maintenance.update_launcher). A stand-in for Velopack's module answers."""
-    import types
+    up to date says nothing; one that finds a newer one on the server PLAY plays on says it on the status line with its
+    update while PLAY is ready, and the Launcher page shows its answer, naming the server, and its Update button without
+    Check for updates. The link does what the page's button does (maintenance.update_launcher). A stand-in for the
+    check answers (updates.check: what it finds is client/tests/test_updates.py's)."""
     from unittest import mock
 
-    from opendmtq_client import __version__, actions, maintenance, updates
+    from opendmtq_client import actions, maintenance, updates
     w = app.words
-    # What the stand-in feed says: "fail" (no network), None (up to date) or a version on offer.
+    # What the stand-in check finds: "fail" (no network), None (up to date) or a version on offer from the server.
     feed = {"says": "fail"}
 
-    class Manager:
-        """Velopack's UpdateManager as far as the look uses it."""
-
-        def __init__(self, source):
-            self.source = source
-
-        def get_current_version(self):
-            return __version__
-
-        def check_for_updates(self):
-            if feed["says"] == "fail":
-                raise RuntimeError("Network error: Http error: io: Nonauthoritative host not found. (os error 11002)")
-            if feed["says"] is None:
-                return None
-            return types.SimpleNamespace(TargetFullRelease=types.SimpleNamespace(Version=feed["says"]))
-
-    velopack = types.SimpleNamespace(UpdateManager=Manager, GithubSource=lambda *a: a[0])
+    def check(state=None):
+        if feed["says"] == "fail":
+            return updates.Result("failed", error="<urlopen error [Errno 11001] getaddrinfo failed>")
+        if feed["says"] is None:
+            return updates.Result("uptodate")
+        server = app.state.server()
+        return updates.Result("available", version=feed["says"], source=updates.Source("server", server["url"], server))
     # The run's own window size again (the dialogs' check made it the smallest), and PLAY ready, as a player who starts
     # the launcher finds it: signed in again on the stand-in server, the line kept from the checks before given way.
     app.root.geometry("%s+0+0" % tag.split("-", 1)[1])
@@ -1243,8 +1233,7 @@ def update_on_offer_check(app, out, tag, problems):
         app.state.save()
     app.user_acted()
     app.update_found = None
-    with mock.patch.dict(sys.modules, {"velopack": velopack}), \
-            mock.patch.object(updates, "UPDATE_SOURCE", "http://updates.test/"):
+    with mock.patch.object(updates, "check", check):
         for says in ("fail", None):
             feed["says"] = says
             app.go("play")
@@ -1286,43 +1275,47 @@ def update_on_offer_check(app, out, tag, problems):
             button(app, w("about.update_now", v="9.9.9"))
         except AssertionError:
             problems.append("%s: the Launcher page shows no update for the newer launcher found at the start" % tag)
+        # Its answer names the server it comes from.
+        import tkinter as tk
+        named = w("about.available.from", v="9.9.9", source=updates.Source("server", app.state.server()["url"],
+                                                                           app.state.server()).label())
+        if named not in [x.cget("text") for x in widgets_of(app.root) if isinstance(x, tk.Label)]:
+            problems.append("%s: the Launcher page does not name the server the update comes from" % tag)
     app.update_found = None
     app.go("play")
     settle(app)
 
 
 def update_failures_check(app, out, tag, problems):
-    """The Launcher page's update when Velopack fails, said by its kind in the page's language, Velopack's own words in
-    the log only: a check with no network (as Wine says it), then an update whose download finds the disk full. A
-    stand-in for Velopack's module answers (the test machine has none)."""
+    """The Launcher page's update when it fails, said in the page's language, the system's own words in the log only: a
+    check with no network (as Windows says it), a release its project did not sign (refused, in the colour of a fault),
+    then an update whose download finds the disk full. Stand-ins for the check and the update answer (updates.check and
+    apply: what they do is client/tests/test_updates.py's)."""
     import tkinter as tk
-    import types
     from unittest import mock
 
-    from opendmtq_client import __version__, updates
+    from opendmtq_client import theme, updates
     w = app.words
-    said = {"check": "Network error: Http error: io: Nonauthoritative host not found. (os error 11002)"}
+    said = {"check": "fail"}
+    server = app.state.server()
+    source = updates.Source("server", server["url"], server)
 
-    class Manager:
-        """Velopack's UpdateManager as far as the launcher uses it."""
+    def check(state=None):
+        if said["check"] == "fail":
+            return updates.Result("failed", error="<urlopen error [Errno 11001] getaddrinfo failed>")
+        if said["check"] == "refused":
+            return updates.Result("refused", error="opendmtq-9.9.9-sha256sums.txt is not signed by the OpenDMTQ project",
+                                  source=source)
+        return updates.Result("available", version="9.9.9", source=source)
 
-        def __init__(self, source):
-            self.source = source
+    def apply(result, tell=None, run=None):
+        try:
+            raise OSError(28, "There is not enough space on the disk. (os error 112)")
+        except OSError as e:
+            raise updates.UpdateError("the update to 9.9.9 could not be downloaded", "error.update.download",
+                                      v="9.9.9") from e
 
-        def get_current_version(self):
-            return __version__
-
-        def check_for_updates(self):
-            if said["check"]:
-                raise RuntimeError(said["check"])
-            return types.SimpleNamespace(TargetFullRelease=types.SimpleNamespace(Version="9.9.9"))
-
-        def download_updates(self, info):
-            raise RuntimeError("IO error: There is not enough space on the disk. (os error 112)")
-
-    velopack = types.SimpleNamespace(UpdateManager=Manager, GithubSource=lambda *a: a[0])
-    with mock.patch.dict(sys.modules, {"velopack": velopack}), \
-            mock.patch.object(updates, "UPDATE_SOURCE", "http://updates.test/"):
+    with mock.patch.object(updates, "check", check), mock.patch.object(updates, "apply", apply):
         app.go("about")
         settle(app)
         button(app, w("about.check")).press()
@@ -1335,9 +1328,24 @@ def update_failures_check(app, out, tag, problems):
         shot(app.root, out, "%s_about-update-offline" % tag)
         measure(app, "%s_about-update-offline" % tag, problems)
         texts = [x.cget("text") for x in widgets_of(app.root) if isinstance(x, tk.Label)]
-        if expected not in texts or any("os error" in t for t in texts):
+        if expected not in texts or any("os error" in t or "Errno" in t for t in texts):
             problems.append("%s: a check with no network said %r" % (tag, [t for t in texts if "update" in t.lower()
                                                                           or "업데이트" in t]))
+        # A release its project did not sign: refused, the fact said in the colour of a fault.
+        said["check"] = "refused"
+        button(app, w("about.check")).press()
+        expected = w("about.refused", source=source.label())
+        end = time.time() + 5
+        while time.time() < end and not any(isinstance(x, tk.Label) and x.cget("text") == expected
+                                            for x in widgets_of(app.root)):
+            app.root.update()
+            time.sleep(0.02)
+        shot(app.root, out, "%s_about-update-refused" % tag)
+        measure(app, "%s_about-update-refused" % tag, problems)
+        refused = [x for x in widgets_of(app.root) if isinstance(x, tk.Label) and x.cget("text") == expected]
+        if not refused or refused[0].cget("fg") != theme.BAD:
+            problems.append("%s: a refused update said %r" % (tag, [x.cget("text") for x in widgets_of(app.root)
+                                                                     if isinstance(x, tk.Label) and "OpenDMTQ" in x.cget("text")]))
         # Then one on offer, whose download finds the disk full: the dialog says so in plain words.
         said["check"] = None
         button(app, w("about.check")).press()
@@ -1358,7 +1366,7 @@ def update_failures_check(app, out, tag, problems):
         update.press()
         wait_out(app.root, 2.0)
         dialog = failed.get("dialog")
-        if dialog is None or dialog.detail != w("fault.disk_full"):
+        if dialog is None or dialog.detail != w("error.update.download", v="9.9.9") + " " + w("fault.disk_full"):
             problems.append("%s: a full disk during the update said %r" % (tag, dialog and dialog.detail))
 
 

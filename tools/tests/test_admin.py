@@ -453,6 +453,48 @@ class AppPageTest(unittest.TestCase):
             self.assertIn('class="lamp wait"', page)
             self.assertIn("The last build failed (no base APK). Players still get this one.", page)
 
+    def test_the_pc_clients_updates_show_beside_the_installer(self):
+        # API-66: what the site hands the launchers that play here, said on the App page as GET /app/windows/updates gives
+        # it, in both languages, and what the builder refused for its signature, in the page's words.
+        with Install() as inst:
+            self.build(inst, "OpenDMTQ-new.apk", HOST, "2026-11-01T08:00:00", offered=True)
+            inst.write("apk/out/OpenDMTQ-Setup.exe", "MZ!")
+            inst.write("apk/out/windows.json", json.dumps({"file": "OpenDMTQ-Setup.exe", "size": 3, "sha256": "0", "version": "0.8.1",
+                                                           "copied_at": "2026-11-09T08:01:00"}))
+            # The installer and no updates: the launchers look at GitHub's releases.
+            self.assertIn("PC clients look for their updates on GitHub: this server hands out none.", self.page(inst))
+            os.makedirs(inst.path("apk/out/updates"))
+            files = {}
+            for name, size in (("releases.win.json", 10), ("opendmtq.client-0.8.1-full.nupkg", 2048),
+                               ("opendmtq.client-0.8.1-delta.nupkg", 1024), ("opendmtq-0.8.1-sha256sums.txt", 20),
+                               ("opendmtq-0.8.1-sha256sums.txt.sig", 64)):
+                inst.write("apk/out/updates/" + name, "x" * size)
+                files[name] = {"size": size, "sha256": "0" * 64}
+            inst.write("apk/out/updates.json", json.dumps({"version": "0.8.1", "files": files, "full": "opendmtq.client-0.8.1-full.nupkg",
+                                                           "delta": "opendmtq.client-0.8.1-delta.nupkg", "delta_from": "0.8.0",
+                                                           "signed_by": "ab" * 32, "source": "the release",
+                                                           "kept_at": "2026-11-17T12:00:00"}))
+            page = self.page(inst)
+            self.assertIn("PC clients that play here update themselves from this server to 0.8.1, which the OpenDMTQ project signed (", page)
+            self.assertIn(" from 0.8.0)", page)
+            self.assertNotIn("this server hands out none", page)
+            inst.client.set_cookie("opendmtq_lang", "ko")
+            page = self.page(inst)
+            self.assertIn("PC 클라이언트는 이 서버에서 OpenDMTQ 프로젝트가 서명한 0.8.1 버전으로 업데이트합니다(", page)
+            self.assertIn("0.8.0 버전에서는 ", page)
+            inst.client.set_cookie("opendmtq_lang", "en")
+            # A refusal of the builder's, of the updates or of the installer: each said in the page's words.
+            inst.write("apk/client-updates-error.txt", "opendmtq.client-0.8.2-full.nupkg is not the file the release signed\n")
+            inst.write("apk/client-windows-error.txt", "opendmtq-0.8.2-sha256sums.txt is not signed by the OpenDMTQ project\n")
+            page = self.page(inst)
+            self.assertIn('<p class="flash bad" role="status">opendmtq.client-0.8.2-full.nupkg is not the file the OpenDMTQ release '
+                          'signed, so the server did not take it.</p>', page)
+            self.assertIn('<p class="flash bad" role="status">opendmtq-0.8.2-sha256sums.txt is not signed by the OpenDMTQ project, '
+                          'so the server took nothing of that release.</p>', page)
+            # A fetch that only failed (no internet) is no refusal: nothing said of it here.
+            inst.write("apk/client-windows-error.txt", "could not ask https://github.com for the latest release\n")
+            self.assertNotIn("could not ask", self.page(inst))
+
     def test_the_installer_for_windows_shows_when_the_builder_kept_one(self):
         with Install() as inst:
             self.build(inst, "OpenDMTQ-new.apk", HOST, "2026-11-01T08:00:00", offered=True)

@@ -239,6 +239,9 @@ def keep(out_dir, version=None, releases=None):
             if name not in about["files"]:
                 os.remove(os.path.join(staged, name))
         about.update(source=source, kept_at=datetime.datetime.now().replace(microsecond=0).isoformat())
+        # Readable by the site as the rest of data/apk/out is (mkdtemp makes a folder its owner's alone): a host install
+        # or a cluster may run the site as another user than the builder.
+        os.chmod(staged, 0o755)
         _swap(out_dir, staged, about)
     except Exception as e:  # noqa: BLE001 - refused, no internet, a full disk: what the site handed out stays
         why = str(e) if isinstance(e, (signing.Unsigned, runtime.RuntimeError_)) else f"{type(e).__name__}: {e}"

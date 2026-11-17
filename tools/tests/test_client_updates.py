@@ -109,6 +109,8 @@ class Sources(Place):
                          ("0.11.1", "beside the code", "0.11.0", TEST_KEY))
         self.assertEqual(kept["files"], about["files"])
         self.assertEqual(self.asked, [])
+        # Readable by the site, which may run as another user than the builder.
+        self.assertEqual(os.stat(os.path.join(self.out, client_updates.FOLDER)).st_mode & 0o777, 0o755)
 
     def test_a_kit_in_data_apk_is_taken_and_goes(self):
         put(os.path.join(self.apk, client_updates.KIT), release_files(self.version))
@@ -239,6 +241,9 @@ class Served(Place):
         portal = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "server", "portal", "updates.php")
         if not os.path.isfile(portal):
             portal = "/server/portal/updates.php"
+        if not os.path.isfile(portal):
+            # The tools alone, without the server's code beside them (CI mounts it at /server/portal).
+            self.skipTest("the site's code is not here")
         with open(portal, encoding="utf-8") as f:
             page = f.read()
         self.assertIn("APK_DIR . '/updates.json'", page)

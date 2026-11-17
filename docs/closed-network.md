@@ -9,7 +9,7 @@ for the internet: the setup, the app's build, the server and the game all stay o
 | Windows bundle | Works as it is | The zip and your game files |
 | Docker Compose | Works | A release's images and source, and your game files. Docker has to be on the computer already |
 | Kubernetes | Works | A release's images in your registry, the chart, and your game files |
-| Linux host install (Debian, Ubuntu) | Works | The system's packages, three programs (apktool, uber-apk-signer, 7-Zip), the source, the runtime for newer phones, the PC client's installer, and your game files |
+| Linux host install (Debian, Ubuntu) | Works | The system's packages, three programs (apktool, uber-apk-signer, 7-Zip), the source, the runtime for newer phones, the PC client's installer and updates, the release's signed checksums, and your game files |
 | macOS host install | **Not possible**: Homebrew has no way to install from files carried in | Use Docker Compose instead |
 
 Below, `1.2.3` stands for the release you want. Everything is fetched on a computer with internet, carried over on a disk,
@@ -18,7 +18,8 @@ and put in place on the closed one. [An update](#updates) is the same trip with 
 ## Windows
 
 Nothing to prepare. Unpack the zip, double-click `OpenDMTQ.exe`, and go through the setup in the browser, as the
-[quick start](../README.md#quick-start) says. The runtime for newer phones is in the zip.
+[quick start](../README.md#quick-start) says. The runtime for newer phones is in the zip. For the PC clients to update
+through the server, carry in [their updates](#the-pc-clients-updates) too.
 
 ## Docker Compose
 
@@ -118,6 +119,8 @@ And these, into `kit` under these names:
 | `7zip.tar.xz` | `https://www.7-zip.org/a/7z2501-linux-x64.tar.xz` (`7z2501-linux-arm64.tar.xz` on an ARM server) |
 | `opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip` | `https://github.com/kanggu12/openDMTQ/releases/download/v1.2.3/opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip` |
 | `opendmtq-pc-client-1.2.3-windows-x64-setup.exe` | `https://github.com/kanggu12/openDMTQ/releases/download/v1.2.3/opendmtq-pc-client-1.2.3-windows-x64-setup.exe` |
+| `releases.win.json`, `opendmtq.client-1.2.3-full.nupkg`, `opendmtq.client-1.2.3-delta.nupkg` | The same release's files of these names: the PC clients' updates |
+| `opendmtq-1.2.3-sha256sums.txt`, `opendmtq-1.2.3-sha256sums.txt.sig` | The same release's checksums and their signature |
 | `opendmtq-source.tar.gz` | `https://github.com/kanggu12/openDMTQ/archive/refs/tags/v1.2.3.tar.gz` |
 
 On the closed computer, as the user who will run the server, beside the `kit` folder:
@@ -129,8 +132,27 @@ host/install.sh --from ../kit
 ./opendmtq setup
 ```
 
-`host/install.sh` checks each of the three programs against the hash of the copy that was tested. The one command of the quick
-start needs the internet, so it is not for here.
+`host/install.sh` checks each of the three programs against the hash of the copy that was tested, and the app builder
+checks the runtime, the installer and the PC clients' updates against the release's signed checksums. The one command of
+the quick start needs the internet, so it is not for here.
+
+## The PC clients' updates
+
+A PC client takes its updates from the server it plays on ([the PC client](windows-player.md#updates)), so on a closed
+network it updates when the server has them: the update of the version of the installer the server hands out. The server
+takes them, the first it has:
+
+- **Docker Compose and Kubernetes:** a release's tools image brings them.
+- **A Linux host install:** the kit above, whose files `host/install.sh` puts in place.
+- **The Windows bundle:** the zip cannot bring them, as the release's checksums name the zip's own hash. Put the release's
+  `releases.win.json`, `opendmtq.client-1.2.3-full.nupkg`, `opendmtq.client-1.2.3-delta.nupkg`,
+  `opendmtq-1.2.3-sha256sums.txt` and `opendmtq-1.2.3-sha256sums.txt.sig` in `data\apk\pc-client-updates` and build the
+  app again, or restart the server.
+
+The server checks them against the release's checksums and the OpenDMTQ project's signature over them (the key
+`8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`, [a release's files](install.md#a-releases-files)) before
+it hands any out, at `/updates/` on its one port. Files that do not match are refused, and the admin pages' **App** page
+says so. Without them, the PC clients update with the installer from the site's **Download** page.
 
 ## macOS
 

@@ -32,9 +32,17 @@ pass() { echo "PASS $*"; }
 fail() { echo "FAIL $*"; fails=$((fails + 1)); }
 
 OLD_VERSION=$(cat "$OLD/OpenDMTQ-Setup.exe.version" 2>/dev/null || true)
-NEW_VERSION=$(sed -n 's/.*"Version":"\([^"]*\)".*/\1/p' "$NEW/releases.win.json")
-# The package by the name the new feed gives it (the release's, in lower case).
-PACKAGE=$(sed -n 's/.*"FileName":"\([^"]*\)".*/\1/p' "$NEW/releases.win.json")
+# The newest full package the new feed names, and its delta package when it has one, by the names it gives them (the
+# release's, in lower case): the feed also lists the release before's full package, which its delta starts from.
+read -r NEW_VERSION PACKAGE DELTA < <(python3 - "$NEW/releases.win.json" <<'PY'
+import json, sys
+assets = json.load(open(sys.argv[1], encoding="utf-8-sig"))["Assets"]
+key = lambda a: tuple(int(n) for n in a["Version"].split("-")[0].split("."))
+full = max((a for a in assets if a["Type"] == "Full"), key=key)
+delta = [a["FileName"] for a in assets if a["Type"] == "Delta" and a["Version"] == full["Version"]]
+print(full["Version"], full["FileName"], delta[0] if delta else "-")
+PY
+)
 [ -n "$OLD_VERSION" ] && [ -n "$NEW_VERSION" ] || { echo "no versions in $OLD and $NEW" >&2; exit 1; }
 echo "from $OLD_VERSION to $NEW_VERSION, the package as $PACKAGE"
 # The release's name for it, in lower case (.github/release_assets.py): vpk's own name has the id's capitals.
@@ -121,8 +129,9 @@ for way in github launcher; do
     || fail "$way: the new launcher does not say $NEW_VERSION"
   # What was asked for: the feed by its name and the package by the name the feed gives, in lower case exactly.
   grep -E "releases.win.json|nupkg|/releases" "$OUT/requests.log" | sed 's/?.*//' | sort | uniq -c | sed "s/^/  $way asked: /"
-  grep -q "/$PACKAGE\( \|?\|$\)" "$OUT/requests.log" && pass "$way: the package came by the feed's name ($PACKAGE)" \
-    || fail "$way: the package was not downloaded by the feed's name ($PACKAGE)"
+  # The delta package when the feed has one from the installed version (Velopack takes it first), else the full one.
+  grep -q "/\($PACKAGE\|$DELTA\)\( \|?\|$\)" "$OUT/requests.log" && pass "$way: the package came by the feed's name ($PACKAGE or $DELTA)" \
+    || fail "$way: the package was not downloaded by the feed's name ($PACKAGE or $DELTA)"
   grep -q "^packages: .*$PACKAGE" "$OUT/$way.log" && pass "$way: the update keeps the package under that name" \
     || fail "$way: the update did not keep $PACKAGE"
   grep -q "^repaired: NOTICES.txt back$" "$OUT/$way.log" && pass "$way: repair puts a file back from the updated package" \

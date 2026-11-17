@@ -439,6 +439,19 @@ class Packages(Updates):
                     self.assertEqual(f.read(), self.stand.server_files["opendmtq.client-0.11.1-full.nupkg"])
                 self.assertEqual(len(self.velopack.applied), 1)
 
+    def test_a_delta_the_server_does_not_hand_out_gives_the_whole_package(self):
+        # The feed names it, the server has it not (404): said in the log as a warning, and the whole package comes.
+        files = made_release("0.11.1", base="0.11.0")
+        del files["opendmtq.client-0.11.1-delta.nupkg"]
+        self.stand.server_files = files
+        told = []
+        with self.assertLogs("opendmtq_client", "INFO") as said:
+            updates.apply(updates.check(self.state), tell=told.append, run=self.patcher())
+        self.assertEqual(told, ["whole"])
+        self.assertEqual(self.patched, [])
+        self.assertEqual(len(self.velopack.applied), 1)
+        self.assertFalse([line for line in said.output if line.startswith("ERROR")], said.output)
+
     def test_a_delta_that_is_not_the_one_signed_never_reaches_update_exe(self):
         files = made_release("0.11.1", base="0.11.0")
         files["opendmtq.client-0.11.1-delta.nupkg"] = b"x" * len(files["opendmtq.client-0.11.1-delta.nupkg"])

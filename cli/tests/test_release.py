@@ -178,6 +178,14 @@ class NamesTest(unittest.TestCase):
         install = read("host", "install.sh")
         self.assertIn("'" + names["runtime"].format(version="*") + "'", install)
         self.assertIn("'" + names["client"].format(version="*") + "'", install)
+        # DEP-69: the kit's signed checksums beside them, and the PC client's updates where the builder takes them from
+        # (tools/opendmtq_tools/client_updates.py KIT).
+        self.assertIn("kit_file '" + names["sums"].format(version="*") + "'", install)
+        self.assertIn('cp "$sums" "$sums.sig" "$REPO/data/apk/"', install)
+        for name in (names["feed"], names["package"], names["delta"]):
+            self.assertIn(name.replace("{version}", "$version"), install)
+        self.assertIn('KIT = "pc-client-updates"', read("tools", "opendmtq_tools", "client_updates.py"))
+        self.assertIn('"$REPO/data/apk/pc-client-updates/"', install)
 
     def test_the_guides_name_the_files_as_a_release_has_them(self):
         guides = ["README.md", "docs/install.md", "docs/windows-player.md", "docs/closed-network.md", "CONTRIBUTING.md",

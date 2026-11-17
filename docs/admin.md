@@ -156,14 +156,27 @@ Where the server gets the installer, the first that has one:
 
 - **Beside the server's code:** a release's tools image and the Windows bundle bring it.
 - **`data/apk`:** put there by hand, for a server without internet, or fetched there before.
-- **The latest release:** fetched into `data/apk` when there is none, as Docker Compose from the source and a host
-  install on Linux or macOS do.
+- **The release of the server's own version**, else the latest release: fetched into `data/apk` when there is none, as
+  Docker Compose from the source and a host install on Linux or macOS do.
 
-A copy in `data/apk` gives way to the latest release's once it is a week old, and stays when that fetch fails. After a
-fetch that failed, the builder waits a day before it tries again: a server without internet does not wait for an answer
-at every start. Without internet, put the release's `opendmtq-pc-client-<version>-windows-x64-setup.exe` in `data/apk`
-([without internet](closed-network.md)): the builder keeps it as `OpenDMTQ-Setup.exe`, with the version from its name. Without an installer the site shows no Windows button, and everything else
-works as before.
+A copy in `data/apk` gives way to that release's once it is a week old, and stays when that fetch fails. After a fetch that
+failed, the builder waits a day before it tries again: a server without internet does not wait for an answer at every
+start. Without internet, put the release's `opendmtq-pc-client-<version>-windows-x64-setup.exe` in `data/apk`
+([without internet](closed-network.md)): the builder keeps it as `OpenDMTQ-Setup.exe`, with the version from its name.
+Without an installer the site shows no Windows button, and everything else works as before.
+
+What the builder fetches from a release comes with the release's checksums and the OpenDMTQ project's signature over them
+([a release's files](install.md#a-releases-files)), and it takes the file only when it is the one they sum: the
+installer, and the runtime for newer phones. A copy put in `data/apk` by hand is checked the same way when the release's
+`opendmtq-<version>-sha256sums.txt` and its `.sig` are beside it. A file that does not match is refused, and the **App**
+page (the installer) or the setup (the runtime) says which.
+
+The site also hands the PC clients that play on it their updates, those of the installer's version, at `/updates/` on
+the server's one port, with no sign-in: the update feed, its packages and the release's signed checksums, which the
+launcher checks before it takes any ([the PC client](windows-player.md#updates)). The builder keeps them beside the
+installer, the first it has: beside the server's code (a release's tools image), `data/apk/pc-client-updates` (a host
+install's kit, or put there by hand), or the release, fetched. The **App** page says to which version they update and how
+much a PC downloads; `GET /app/windows/updates` in the [API](api.md) gives the same, file by file.
 
 A server reached over HTTPS hands out installers that use it, with the port named (HTTPS answers on the game's port).
 Where the server has its own certificate authority (Docker Compose makes one), the installer carries it, and the
