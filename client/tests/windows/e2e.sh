@@ -81,7 +81,9 @@ with urllib.request.urlopen(request, timeout=60) as response:
 open('/out/' + name, 'wb').write(data)
 print('downloaded', name, len(data), 'bytes; it brings', preset.read('/out/' + name))
 " || { echo "FAIL: the installer could not be downloaded from the server" >&2; exit 1; }
-SETUP=$(cd "$OUT" && ls OpenDMTQ-Setup-*.exe | head -n 1)
+# By the name the server gives it: in lower case since 0.11.0 (opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe),
+# OpenDMTQ-Setup-<address>.exe before.
+SETUP=$(cd "$OUT" && ls opendmtq-pc-client-*-setup-*.exe OpenDMTQ-Setup-*.exe 2>/dev/null | head -n 1)
 [ -n "$SETUP" ] || { echo "FAIL: no installer came" >&2; exit 1; }
 
 # ---- 2 to 4 under Wine, on the virtual screen
