@@ -114,7 +114,7 @@ class PlayHereTest(unittest.TestCase):
             self.assertNotIn('id="this-pc"', self.page(path, remote=ELSEWHERE), path)
         # Sent all the same: refused in words, nothing run.
         _, said = self.press(remote=ELSEWHERE)
-        self.assertIn("Play on this PC works from the server PC itself", said)
+        self.assertIn("Play on this PC works from the server PC itself, in its own browser.", said)
         self.assertEqual(self.started, [])
 
     def test_the_windows_bundle_installs_the_pc_client_set_up_for_this_server(self):
@@ -183,7 +183,7 @@ class PlayHereTest(unittest.TestCase):
         self.assertIn("OpenDMTQ-setup.log", said)
         self.server(code=this_pc.GAME_OPEN)
         _, said = self.press()
-        self.assertIn("The game is open on this PC. Close it, then press Play on this PC again.", said)
+        self.assertIn("The game is open on this PC, and the installer installs nothing under it.", said)
 
     def test_linux_and_macos_say_how_to_play_from_a_windows_pc(self):
         for kind in ("host", "docker"):
