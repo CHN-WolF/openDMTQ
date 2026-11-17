@@ -123,6 +123,19 @@ class Glass(unittest.TestCase):
             self.assertLessEqual(max(abs(a - b) for a, b in zip(got, panel)), LEVEL, (point, got))
         self.assertEqual(on.size, (40 + 2 * ring, 22 + 2 * ring))
 
+    def test_beyond_the_cut_the_field_without_its_dots(self):
+        # What a card shows past its cut: the field's own colour where the page is the dotted field alone, at any part
+        # of the page and scale (so a card moved over it keeps its corner), and the page's light where there is some.
+        from PIL import Image
+        from opendmtq_client import art, theme
+        field = tuple(int(theme.BG[i:i + 2], 16) for i in (1, 3, 5))
+        for scale in (1.0, 1.5, 2.0):
+            for offset in (0, 7, 913):
+                plain = art.without_dots(art._field(40, 40, scale, offset), scale)
+                self.assertEqual(set(plain.getdata()), {field}, (scale, offset))
+        lit = Image.new("RGB", (40, 40), (90, 160, 40))
+        self.assertEqual(set(art.without_dots(lit, 1.0).getdata()), {(90, 160, 40)})
+
     def test_the_cut_shows_the_page_beyond_it(self):
         from PIL import Image
         from opendmtq_client import art, theme
@@ -131,15 +144,19 @@ class Glass(unittest.TestCase):
             # A picture of the page with something in every pixel (a colour per place), as the shards and dots are.
             page = Image.new("RGB", (size, size))
             page.putdata([((x * 13) % 256, (y * 29) % 256, (x * y) % 256) for y in range(size) for x in range(size)])
-            corner = art.corner(size, theme.PANEL, page, seam=theme.HAIRLINE, seam_width=edge)
-            for x in range(size):
-                for y in range(size):
-                    if x - y > 2 + 2 * edge:
-                        # Beyond the cut, clear of its line: the page's own pixel.
-                        self.assertEqual(corner.getpixel((x, y)), page.getpixel((x, y)), (size, x, y))
-                    elif y - x > 2 + 2 * edge:
-                        # Inside: the card.
-                        self.assertEqual(corner.getpixel((x, y)), panel, (size, x, y))
+            # Drawn whole, and as a card lays its corner over the page where it stands (the card's part made once).
+            layer = art.corner_layer(size, theme.PANEL, seam=theme.HAIRLINE, seam_width=edge)
+            laid = page.copy()
+            laid.paste(layer, (0, 0), layer)
+            for corner in (art.corner(size, theme.PANEL, page, seam=theme.HAIRLINE, seam_width=edge), laid):
+                for x in range(size):
+                    for y in range(size):
+                        if x - y > 2 + 2 * edge:
+                            # Beyond the cut, clear of its line: the page's own pixel.
+                            self.assertEqual(corner.getpixel((x, y)), page.getpixel((x, y)), (size, x, y))
+                        elif y - x > 2 + 2 * edge:
+                            # Inside: the card.
+                            self.assertEqual(corner.getpixel((x, y)), panel, (size, x, y))
 
 
 class BuildPictures(unittest.TestCase):

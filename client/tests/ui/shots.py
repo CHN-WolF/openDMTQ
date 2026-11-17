@@ -148,10 +148,17 @@ def field_check(app, name, problems, root):
                 cut_corners.append((box, w.cut, getattr(w, "edge", 1)))
         if area.bar.winfo_ismapped():
             mask.paste(0, (area.bar.winfo_rootx() - x0, 0, width, height))
-        # Each card's corner past its cut, clear of the cut's own line and its smoothing: the picture beyond.
+        # Each card's corner past its cut, clear of the cut's own line and its smoothing: the picture beyond, without the
+        # field's faint dots (art.without_dots: a card that moves over the plain field keeps the same corner).
         from PIL import ImageDraw
+        from opendmtq_client import art
         draw = ImageDraw.Draw(mask)
         for box, cut, edge in cut_corners:
+            square = (box[2] - cut, box[1], box[2], box[1] + cut)
+            if not (square[0] >= 0 and square[1] >= 0 and square[2] <= width and square[3] <= height):
+                # A corner the page's scroll cuts: measured where it shows whole.
+                continue
+            wanted.paste(art.without_dots(wanted.crop(square), app.ui.scale), square[:2])
             right, top_y = box[2], box[1]
             draw.polygon([(right - cut + 2 + edge, top_y), (right - 1, top_y), (right - 1, top_y + cut - 3 - edge)],
                          fill=255)
@@ -684,9 +691,29 @@ def pages_check(app, out, tag, problems):
         if page == "play":
             slab_check(app.root, app.play_button, seen, name, problems)
             play_fits(app, name, tag, problems)
+        menu_mark_check(app, page, name, problems)
         if page == "screen":
             # After its shot: the wheel scrolls the page (the header turns into the dark bar).
             wheel_check(app, problems)
+
+
+def menu_mark_check(app, page, name, problems):
+    """The menu's page on show is its slab and its lime name, with no stripe of lime along the slab's edge (a box's
+    side stripe says nothing the slab does not): the menu's own picture, a few pixels in from the slab's left edge, is
+    the slab's colour there."""
+    from opendmtq_client import theme
+    menu = app.rail.list
+    picture = getattr(menu, "odq_picture", None)
+    box = menu.boxes.get(page) if hasattr(menu, "boxes") else None
+    if picture is None or box is None:
+        problems.append("%s: the menu drew no slab for the page on show" % name)
+        return
+    lime = tuple(int(theme.OK[i:i + 2], 16) for i in (1, 3, 5))
+    middle = (box[1] + box[3]) // 2
+    for x in range(box[0], box[0] + app.ui.px(4)):
+        if picture.getpixel((x, middle))[:3] == lime:
+            problems.append("%s: a stripe of lime along the menu's page on show" % name)
+            return
 
 
 def whole_rows_at_top(app, area):

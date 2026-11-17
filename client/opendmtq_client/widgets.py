@@ -675,6 +675,12 @@ class ScrollArea(tk.Frame):
         if behind is None or not self.inner.winfo_exists():
             return
         under = under if under is not None and under.winfo_exists() else self.inner
+        drawn = self._backdrop_size
+        if drawn is not None and drawn[0] != max(1, self.canvas.winfo_width()):
+            # The window is being made wider or narrower: the page's picture is drawn again for the new width once the
+            # sizes stop changing (_relayout), and that cuts every picture again; a cut of the old picture for each step
+            # of a drag would only slow the drag.
+            return
         for frame, shows in self._field_frames(under):
             self.watch(frame)
             if not shows:
@@ -708,10 +714,10 @@ class ScrollArea(tk.Frame):
             # Kept on the canvas: Tk drops a picture the moment Python forgets it. A dialog draws the window from it.
             holder.odq_image, holder.odq_picture = image, picture
             self._field[frame] = (holder, (place, width, id(behind)), tall)
-        # The frames gone with a page that went, and their pictures with them; then each card under `under` (all of
-        # them for the column) cuts its corner again where it now stands.
+        # The frames gone with a page that went, and their pictures with them.
         self._field = {f: v for f, v in self._field.items() if f.winfo_exists()}
         self._cards = [card for card in self._cards if card.winfo_exists()]
+        # Then each card under `under` (all of them for the column) cuts its corner again where it now stands.
         inside = str(under) + "."
         for card in self._cards:
             if under is self.inner or str(card).startswith(inside):
@@ -1785,7 +1791,8 @@ class Card(tk.Frame):
         self.cut = ui.px(self.CUT)
         self._corner_label = tk.Label(self, bd=0, highlightthickness=0, bg=outside)
         self._corner_label.place(relx=1.0, x=-self.cut, y=0, width=self.cut, height=self.cut, bordermode="outside")
-        self._corner_key = None
+        # Where the corner was last cut for, and what it shows beyond the cut (_cut_over_field).
+        self._corner_key, self._corner_shown = None, None
         self._paint_corner(outside)
         # On a page's field (no card round it), the picture beyond the cut follows the card where it stands.
         self.odq_area = None
@@ -1798,19 +1805,28 @@ class Card(tk.Frame):
             holder = holder.master
         if self.odq_area is not None and str(outside).lower() == str(self.odq_area.cget("bg")).lower():
             self.odq_area._cards.append(self)
+            # Its corner follows the card where it stands: when it moves, and when the page's picture is drawn again.
             self.bind("<Configure>", lambda e: self._cut_over_field(), add="+")
             self._cut_over_field()
 
     def _paint_corner(self, beyond):
-        """The corner's picture with `beyond` past the cut: a colour, or the page's picture there."""
-        picture = art.corner(self.cut, theme.PANEL, beyond, seam=theme.HAIRLINE, seam_width=self.edge)
+        """The corner's picture with `beyond` past the cut: a colour, or the page's picture there (the card's part laid
+        over it, made once: art.corner_layer)."""
+        if isinstance(beyond, str):
+            picture = art.corner(self.cut, theme.PANEL, beyond, seam=theme.HAIRLINE, seam_width=self.edge)
+        else:
+            layer = art.corner_layer(self.cut, theme.PANEL, seam=theme.HAIRLINE, seam_width=self.edge)
+            picture = beyond.convert("RGB")
+            picture.paste(layer, (0, 0), layer)
         self._corner = ImageTk.PhotoImage(picture, master=self)
         self._corner_label.configure(image=self._corner)
         # A dialog draws the window from the widgets (snapshot.py): the corner as it shows.
         self._corner_label.odq_picture = picture
 
     def _cut_over_field(self):
-        """The page's picture beyond the cut, where the card now stands (drawn again only when that changed)."""
+        """The page's picture beyond the cut, where the card now stands, without the field's faint dots (art.without_dots):
+        drawn again only when what shows there changed, which on the plain field it does not, so that a card moved by a
+        row that comes above it is not drawn again a moment after the move (client/tests/ui/flicker.py)."""
         area = self.odq_area
         if area is None or not self.winfo_exists() or self.winfo_width() <= 1:
             return
@@ -1829,7 +1845,12 @@ class Card(tk.Frame):
         if picture is None:
             return
         self._corner_key = key
-        self._paint_corner(picture)
+        beyond = art.without_dots(picture, self.ui.scale)
+        shown = beyond.tobytes()
+        if shown == self._corner_shown:
+            return
+        self._corner_shown = shown
+        self._paint_corner(beyond)
 
 
 class RowList(tk.Frame):

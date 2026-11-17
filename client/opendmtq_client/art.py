@@ -921,6 +921,49 @@ def corner(size, inside, outside, seam=None, seam_width=1):
     return img
 
 
+def without_dots(picture, scale=1.0):
+    """A part of the page's picture with the field's dots taken out (each pixel the darkest round it, as far as a dot
+    reaches): its light, its panes and its shards as they are, the faint perforation gone. What a card's cut shows
+    beyond it (Card), so that a card that moves over the plain field keeps the same corner, and only one over the lit
+    top or a shard is drawn again."""
+    reach = 2 * int(math.ceil(scale)) + 1
+    return picture.convert("RGB").filter(ImageFilter.MinFilter(reach))
+
+
+# The layers corner_layer() made, by size, colours and seam: a card's corner is laid over the page again each time the card
+# moves on the page, and the layer is the same each time.
+_corner_layers = {}
+
+
+def corner_layer(size, inside, seam=None, seam_width=1):
+    """What a card's cut corner draws over the page's picture beyond it, as an RGBA picture `size` square: the card's
+    triangle and the seam along the cut, smooth along the cut (as corner() draws them), and nothing past it (alpha 0),
+    so that the page's own pixels show there. Made once for each size and look (Card lays it over the picture where the
+    card stands, a paste instead of a drawing at three times the size for every move)."""
+    key = (size, inside, seam, seam_width)
+    found = _corner_layers.get(key)
+    if found is not None:
+        return found
+    k = SS
+    s = size * k
+    # The colours drawn as corner() draws them, and how much of each pixel is the card's: all of it but the cut.
+    img = Image.new("RGB", (s, s), _rgb(inside))
+    alpha = Image.new("L", (s, s), 255)
+    ImageDraw.Draw(alpha).polygon([(0, 0), (s, 0), (s, s)], fill=0)
+    if seam:
+        line = Image.new("L", (s, s), 0)
+        ImageDraw.Draw(line).line([(0, 0), (s, s)], fill=255, width=k * max(1, int(seam_width)))
+        img.paste(_rgb(seam), (0, 0), line)
+        alpha = ImageChops.lighter(alpha, line)
+    layer = img.convert("RGBA")
+    layer.putalpha(alpha)
+    # Smoothed with each colour weighted by how much of the card it is (premultiplied), so the cut's edge takes no
+    # colour of what lies past it.
+    layer = layer.convert("RGBa").resize((size, size), Image.LANCZOS).convert("RGBA")
+    _corner_layers[key] = layer
+    return layer
+
+
 def mark(size):
     """The OpenDMTQ mark, as the site's icon draws it: the wordmark's green Q, leaning, on a dark rounded square."""
     s = size * SS
