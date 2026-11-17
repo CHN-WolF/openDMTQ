@@ -553,6 +553,11 @@ def run_firewall_script(port=DEFAULT_PORT, internet=False, remove=False, replace
     Returns None on success, else what went wrong (with the way to do it by hand).
     """
     by_hand = "run cli/firewall.ps1 as administrator yourself"
+    # OPENDMTQ_NO_FIREWALL: no command asks Windows to change its firewall, whichever it is (up, setup, expose, port,
+    # uninstall, firewall). The repository's tests set it for every command they run on this computer, so that a test
+    # on a WSL machine never changes that Windows' firewall or brings up its administrator prompt.
+    if os.environ.get("OPENDMTQ_NO_FIREWALL"):
+        return f"skipped, as OPENDMTQ_NO_FIREWALL asks; {by_hand}"
     try:
         command = firewall_command(port, internet, remove, replaces)
     except OSError as e:

@@ -38,8 +38,9 @@ answers() {
   done
   return 1
 }
-# The server's command line, in the server's folder, as its owner runs it.
-cli() { (cd "$SRV" && ./opendmtq "$@"); }
+# The server's command line, in the server's folder, as its owner runs it; never changing Windows' firewall on a WSL
+# machine (OPENDMTQ_NO_FIREWALL), uninstall and port included.
+cli() { (cd "$SRV" && OPENDMTQ_NO_FIREWALL=1 ./opendmtq "$@"); }
 
 cleanup() {
   (cd "$SRV" 2>/dev/null && COMPOSE_PROJECT_NAME=$PROJECT docker compose --profile tools down -v --remove-orphans >/dev/null 2>&1) || true

@@ -124,7 +124,8 @@ class FirewallScriptTest(unittest.TestCase):
             scripts.append(script)
             return subprocess.CompletedProcess([], 0, result, "")
 
-        with mock.patch.object(system, "powershell", fake), mock.patch("subprocess.run") as ran:
+        with mock.patch.object(system, "powershell", fake), mock.patch("subprocess.run") as ran, \
+                mock.patch.dict(os.environ, {"OPENDMTQ_NO_FIREWALL": ""}):
             out = system.run_firewall_script(**kwargs)
         # Nothing else is run for it: no copy of the script to put anywhere.
         ran.assert_not_called()
@@ -154,8 +155,19 @@ class FirewallScriptTest(unittest.TestCase):
         arguments = re.search(r"-ArgumentList (.*?); 'exit '", script).group(1)
         self.assertLess(len(" ".join(a.strip("'") for a in arguments.split(","))), 2048)
 
+    def test_the_switch_for_tests_asks_windows_nothing(self):
+        # CLI-53: OPENDMTQ_NO_FIREWALL, which the repository's tests set on this computer: PowerShell is never started,
+        # for a rule made, moved or removed, and the answer says it was skipped.
+        asked = []
+        with mock.patch.object(system, "powershell", lambda script, timeout=60: asked.append(script)), \
+                mock.patch.dict(os.environ, {"OPENDMTQ_NO_FIREWALL": "1"}):
+            for kwargs in ({"port": 8791}, {"port": 8791, "replaces": 80}, {"port": 8791, "remove": True}):
+                self.assertIn("skipped", system.run_firewall_script(**kwargs))
+        self.assertEqual(asked, [])
+
     def test_without_powershell_it_says_so(self):
-        with mock.patch.object(system, "powershell", lambda script, timeout=60: None):
+        with mock.patch.object(system, "powershell", lambda script, timeout=60: None), \
+                mock.patch.dict(os.environ, {"OPENDMTQ_NO_FIREWALL": ""}):
             self.assertIn("cannot reach Windows PowerShell", system.run_firewall_script(port=80))
 
     def test_a_failed_script_is_a_failure(self):

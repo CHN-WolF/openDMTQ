@@ -11,6 +11,9 @@
 #
 # One report per commit under _work/qa, the newest five kept: each step's whole output and the list of results.
 set -uo pipefail
+# No step changes this computer's Windows firewall or asks for its administrator (a WSL machine): every command line the
+# steps run takes this, as --no-firewall.
+export OPENDMTQ_NO_FIREWALL=1
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
