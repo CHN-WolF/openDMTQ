@@ -44,8 +44,10 @@ class Sandbox:
         self.edge_port = None
         # The port this server's own admin pages publish, as a server set up before 0.11.0 had them (None: none).
         self.admin_port = None
-        # Docker Engine unless a test says Docker Desktop (it decides whether the server PC's visits can be told apart).
+        # Docker Engine unless a test says Docker Desktop or rootless Docker (each decides whether the server PC's visits
+        # can be told apart).
         self.docker_desktop = False
+        self.rootless = False
         # What `docker inspect` says about the server container, and whether its portal answers.
         self.state = None
         self.healthy = True
@@ -221,7 +223,8 @@ class Sandbox:
             require_docker=lambda: None, own_data_dirs=lambda *a, **k: None, first_build_notice=lambda: False,
             powershell=self._powershell, port_busy=lambda port: port in self.busy_ports, project_folder=lambda name: None,
             edge_holds=lambda port: port == self.edge_port, admin_holds=lambda port: port == self.admin_port,
-            docker_desktop=lambda: self.docker_desktop))
+            docker_desktop=lambda: self.docker_desktop,
+            cannot_tell=lambda: "Docker Desktop" if self.docker_desktop else "rootless Docker" if self.rootless else None))
         s.enter_context(mock.patch.multiple(app, **paths, wait_builder=lambda since=None: self.built))
         s.enter_context(mock.patch.multiple(
             backup, DATA=self.data, ENV_FILE=self.env_file, BACKUPS=os.path.join(self.data, "backups"),

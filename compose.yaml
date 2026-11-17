@@ -128,6 +128,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SERVER_URL: http://server:8080
       BASE_APK: ${BASE_APK:-}
+      # Where these pages open, which the Server page names: as the server passes them on (above).
+      ADMIN_ON_PUBLIC_PORT: ${ADMIN_ON_PUBLIC_PORT:-yes}
       # What new players start with until the owner chooses on the Broadcasts page, as the server reads it.
       LIVE_DEFAULT: ${LIVE_DEFAULT:-off}
       HOME: /tmp

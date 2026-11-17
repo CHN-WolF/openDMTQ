@@ -142,6 +142,8 @@ spec:
             - {name: OPENDMTQ_VERSION, value: {{ .Chart.AppVersion | quote }}}
             - {name: SERVER_NAME, value: {{ .Values.serverName | quote }}}
             - {name: SERVER_URL, value: "http://127.0.0.1:8080"}
+            # Where these pages open, which the Server page names: as the server container passes them on.
+            - {name: ADMIN_ON_PUBLIC_PORT, value: {{ $adminPublic | quote }}}
             - {name: HOME, value: /tmp}
             # What new players start with until the owner chooses, as the server container reads it.
             - {name: LIVE_DEFAULT, value: {{ include "opendmtq.liveDefault" . | quote }}}

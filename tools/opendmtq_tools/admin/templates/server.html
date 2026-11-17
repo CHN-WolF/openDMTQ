@@ -15,10 +15,12 @@
   <p class="auto-line big"><span class="lamp on"></span><b>{{ t('server.running') }}</b>{% if since %}<span class="meta">{{ t('server.since', when=since) }}</span>{% endif %}</p>
   <table class="kv server-facts">
     <tr><td>{{ t('server.address') }}</td><td><code>http://{{ public_host }}/</code></td></tr>
-    <tr><td>{{ t('server.admin_address') }}</td><td><code>http://{{ public_host }}/opendmtq/admin/</code></td></tr>
+    <tr><td>{{ t('server.admin_address') }}</td><td><code>{{ admin_at[0] }}</code></td></tr>
     {% if version %}<tr><td>{{ t('server.version') }}</td><td>{{ version }}</td></tr>{% endif %}
     <tr><td>{{ t('server.install') }}</td><td>{{ t(kind_words[kind]) }}</td></tr>
   </table>
+  {# Kept to the server PC (an exposed server): who else may open them, and what opens them from elsewhere. #}
+  {% if admin_at[1] %}<p class="lead" id="admin-local">{{ t(admin_at[1]) }}</p>{% endif %}
   {% if can_run %}
   <p class="lead">{{ t('server.power_lead') }}</p>
   <div class="btn-line">

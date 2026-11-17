@@ -329,6 +329,29 @@ class ServerPageTest(unittest.TestCase):
         # The one address, on the server's own port: never another.
         self.assertIn("http://192.168.0.10/opendmtq/admin/", page)
 
+    def test_it_names_where_these_pages_open(self):
+        # On a local network address at the address phones use; on the public port over HTTPS (--admin-public); else on
+        # the server PC alone, never through a proxy, said with what opens them from elsewhere where something does.
+        cases = ((("192.168.0.10:8791", "yes", False, False), "http://192.168.0.10:8791/opendmtq/admin/", None),
+                 (("game.example.com:8790", "yes", False, False), "https://game.example.com:8790/opendmtq/admin/", None),
+                 (("game.example.com:8790", "no", False, False), "http://localhost:8790/opendmtq/admin/",
+                  "--admin-public</code> puts them on the public port over HTTPS."),
+                 (("game.example.com:8790", "yes", True, False), "http://localhost:8790/opendmtq/admin/",
+                  "A visit that comes through a proxy, one on this PC too, is one from elsewhere.</p>"),
+                 (("game.example.com:8790", "no", False, True), "http://localhost:8000/opendmtq/admin/",
+                  "to port 8000 of the api pod opens them."))
+        for (host, public, host_install, kubernetes), address, words in cases:
+            with Install() as inst, mock.patch.object(admin.core, "PUBLIC_HOST", host), \
+                    mock.patch.dict(os.environ, {"ADMIN_ON_PUBLIC_PORT": public}), \
+                    mock.patch.multiple(admin.setup, HOST_INSTALL=host_install, IN_KUBERNETES=kubernetes):
+                inst.sign_in()
+                page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            self.assertIn(f"<code>{address}</code>", page, host)
+            if words:
+                self.assertIn(words, page, host)
+            else:
+                self.assertNotIn('id="admin-local"', page, host)
+
     def test_on_a_host_install_it_restarts_stops_and_uninstalls(self):
         with Install() as inst, self.host(inst):
             inst.sign_in()

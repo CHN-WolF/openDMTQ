@@ -510,8 +510,11 @@ hand.
 - The admin pages have no port of their own: the server passes `/opendmtq/admin` to them on its one port. With
   `ADMIN_ON_PUBLIC_PORT=no` (an exposed server) only the server PC's own visits are passed on: those that reach the
   server from the stack network's gateway, which Docker Engine uses for a visit to localhost (`ADMIN_LOCAL=gateway`,
-  which the command line sets; under Docker Desktop, which passes every visit that way, none). Once HTTPS is set up a
-  plain-HTTP visit from elsewhere is sent to HTTPS; one to localhost stays on plain HTTP.
+  which the command line sets; under Docker Desktop and rootless Docker, which pass every visit that way, none), and that
+  carry none of the headers a proxy adds to say whom it passes on (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`,
+  `X-Forwarded-Host`, `X-Forwarded-Proto`, `Via`): a reverse proxy on the server PC passes on visits from elsewhere. A
+  host install keeps them to loopback on the same terms. No header a visit brings exempts it from the sign-in throttle.
+  Once HTTPS is set up a plain-HTTP visit from elsewhere is sent to HTTPS; one to localhost stays on plain HTTP.
 - Their API (`/opendmtq/api`) is passed on where they are, with a token on each request. Once HTTPS is set up, a
   plain-HTTP request to it is refused (`403 use_https`) and passed on nowhere: its token has gone out in clear already.
   The database keeps a SHA-256 of each token, compared in constant time; a token that works is never throttled, and

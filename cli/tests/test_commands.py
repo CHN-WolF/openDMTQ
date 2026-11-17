@@ -294,8 +294,39 @@ class ExposeTest(unittest.TestCase):
         with Sandbox("PUBLIC_HOST=192.168.0.10\n") as sb:
             sb.docker_desktop = True
             self.assertEqual(self.expose(sb), 0, sb.output())
-            self.assertIn("admin pages: off", sb.output())
+            self.assertIn("admin pages: off (Docker Desktop cannot tell", sb.output())
             self.assertNotIn("localhost", sb.output())
+
+    def test_on_rootless_docker_too_and_the_server_takes_no_visit_as_its_own(self):
+        # Rootless Docker's port driver hands the server every visit from one address, as Docker Desktop does: the admin
+        # pages are off without --admin-public, said at expose and in up's addresses, and the server is told to take no
+        # visit as the server PC's (ADMIN_LOCAL=none).
+        with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_PASSWORD=x\n") as sb:
+            sb.rootless = True
+            game_data(sb)
+            self.assertEqual(self.expose(sb), 0, sb.output())
+            self.assertIn("admin pages: off (rootless Docker cannot tell this PC's visits from the internet's; "
+                          "./opendmtq expose myhome.example.com --admin-public puts them on the public port over HTTPS)",
+                          sb.output())
+            before = len(sb.output())
+            with mock.patch.object(app.time, "sleep"):
+                self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+            self.assertIn("Admin pages    off (rootless Docker", sb.output()[before:])
+            self.assertNotIn("localhost", sb.output())
+        with mock.patch.object(app.system, "_docker_info", lambda: "Ubuntu 24.04|[\"name=seccomp\",\"name=rootless\"]"):
+            self.assertEqual(app.system.cannot_tell(), "rootless Docker")
+            self.assertEqual(app.system.compose_env()["ADMIN_LOCAL"], "none")
+        with mock.patch.object(app.system, "_docker_info", lambda: "Docker Desktop|[\"name=seccomp\"]"):
+            self.assertEqual(app.system.compose_env()["ADMIN_LOCAL"], "none")
+        with mock.patch.object(app.system, "_docker_info", lambda: "Ubuntu 24.04|[\"name=seccomp\"]"):
+            self.assertIsNone(app.system.cannot_tell())
+            self.assertEqual(app.system.compose_env()["ADMIN_LOCAL"], "gateway")
+
+    def test_on_docker_engine_a_proxys_visit_is_said_to_be_one_from_elsewhere(self):
+        with Sandbox("PUBLIC_HOST=192.168.0.10\n") as sb:
+            self.assertEqual(self.expose(sb), 0, sb.output())
+            self.assertIn("http://localhost:8790/opendmtq/admin/ on this PC (a visit through a proxy is one from "
+                          "elsewhere: --admin-public puts them on the public port over HTTPS)", sb.output())
 
     def test_a_server_that_does_not_come_back_is_reported(self):
         with Sandbox() as sb:

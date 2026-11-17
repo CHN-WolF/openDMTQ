@@ -9,6 +9,7 @@ only the server's folders, which these pages have.
 """
 
 import datetime
+import ipaddress
 import json
 import os
 import re
@@ -149,6 +150,43 @@ def next_address():
                 if sep and key.strip().removeprefix("export ").strip() == "PUBLIC_HOST":
                     value = value.strip().strip("'\"")
                     return value if value and value != core.PUBLIC_HOST else None
+    except OSError:
+        pass
+    return None
+
+
+def admin_address():
+    """Where these pages open, for the Server page: (address, words or None). On a local network address at the address
+    phones use, from anywhere there; on an internet address over HTTPS on the same port where they are on the public port
+    (ADMIN_ON_PUBLIC_PORT=yes); else on the server PC alone, as localhost, and never through a proxy (words: what opens
+    them from elsewhere, where something does)."""
+    public = (os.environ.get("ADMIN_ON_PUBLIC_PORT") or env_setting("ADMIN_ON_PUBLIC_PORT") or "yes") == "yes"
+    host, port = setup.address_parts(core.PUBLIC_HOST)
+    try:
+        lan = ipaddress.IPv4Address(host).is_private
+    except ValueError:
+        lan = False
+    if public and lan:
+        return f"http://{core.PUBLIC_HOST}/opendmtq/admin/", None
+    if public and not setup.HOST_INSTALL:
+        return f"https://{host}:{port}/opendmtq/admin/", None
+    # Off the chart's router: on the machine with kubectl, by its port-forward to the admin service's own port.
+    if setup.IN_KUBERNETES:
+        return "http://localhost:8000/opendmtq/admin/", "server.admin_local_kubernetes"
+    # A host install has no HTTPS: there an internet address keeps them on the server PC whatever .env says.
+    return f"http://localhost:{port}/opendmtq/admin/", "server.admin_local" + ("" if setup.HOST_INSTALL else "_docker")
+
+
+def env_setting(name):
+    """A setting from .env, where these pages can read it (a host install); None elsewhere and when it is not there."""
+    if not (setup.HOST_INSTALL and setup.ENV_FILE):
+        return None
+    try:
+        with open(setup.ENV_FILE, encoding="utf-8-sig") as f:
+            for line in f.read().splitlines():
+                key, sep, value = line.partition("=")
+                if sep and key.strip().removeprefix("export ").strip() == name:
+                    return value.strip().strip("'\"")
     except OSError:
         pass
     return None
@@ -396,7 +434,7 @@ def server_page():
                            removes=removes(), parts=parts, total=sum(p["bytes"] for p in parts),
                            since=datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M") if started else "",
                            version=os.environ.get("OPENDMTQ_VERSION") or "", root=repairing.install_root(),
-                           port=port_now(), next_address=next_address(), moved_80=moved_off_80(),
+                           port=port_now(), next_address=next_address(), moved_80=moved_off_80(), admin_at=admin_address(),
                            can_move_port=bool(setup.HOST_INSTALL and setup.ENV_FILE),
                            # The owner's password: changed here by the owner, or the command that changes it.
                            password_here=bool(setup.HOST_INSTALL and setup.ENV_FILE), password_commands=password_commands(),

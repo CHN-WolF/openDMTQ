@@ -225,14 +225,21 @@ def admin_address(values):
 
 def admin_link(values):
     """The admin pages' address, to print: on the server's one port, at the address phones use on a local network; on
-    an internet address over HTTPS when they are on the public port, else on this PC as localhost."""
+    an internet address over HTTPS when they are on the public port, else on this PC as localhost, never through a
+    proxy; off where Docker hands the server every visit from one address (Docker Desktop, rootless Docker), with the
+    way to have them."""
     host = values.get("PUBLIC_HOST", "")
     public = values.get("ADMIN_ON_PUBLIC_PORT", "yes") == "yes"
     if public and env.is_lan_only(host):
         return f"http://{host}/opendmtq/admin/"
     if public:
         return f"https://{env.https_address(host)}/opendmtq/admin/"
-    return f"http://localhost:{env.listen_port(values)}/opendmtq/admin/ on this PC"
+    kind = system.cannot_tell()
+    if kind:
+        return (f"off ({kind} cannot tell this PC's visits from the internet's; ./opendmtq expose "
+                f"{env.split(host)[0]} --admin-public puts them on the public port over HTTPS)")
+    return (f"http://localhost:{env.listen_port(values)}/opendmtq/admin/ on this PC (a visit through a proxy is one "
+            "from elsewhere: --admin-public puts them on the public port over HTTPS)")
 
 
 def address_lines(host, values):
@@ -974,13 +981,10 @@ def cmd_expose(args):
         if args.admin_public:
             ok(f"admin pages: https://{env.https_address(address)}/opendmtq/admin/ once HTTPS is up (own certificate, "
                "see docs/internet.md#https)")
-        elif system.docker_desktop():
-            # Docker Desktop hands the server every visit from one address of its own, so the server cannot tell the
-            # server PC's visits from the internet's: there the admin pages are on the public port over HTTPS or nowhere.
-            ok("admin pages: off (Docker Desktop cannot tell this PC's visits from the internet's; --admin-public puts "
-               "them on the public port over HTTPS)")
         else:
-            ok(f"admin pages: {admin_link(env.load(ENV_FILE))} (--admin-public to change)")
+            # Off where Docker hands the server every visit from one address of its own (Docker Desktop, rootless
+            # Docker); else on this PC, not through a proxy (admin_link says each).
+            ok(f"admin pages: {admin_link(env.load(ENV_FILE))}")
     values = env.load(ENV_FILE)
     after = (values["PUBLIC_HOST"], env.listen_port(values))
     # New settings: restart (the builder rebuilds the app when the address changed), open the

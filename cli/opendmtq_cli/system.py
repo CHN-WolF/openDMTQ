@@ -193,8 +193,9 @@ def compose_env(extra=None):
     # --progress flag: the Compose of Docker 23 has no such flag and stops at it, and ignores a variable it does not know.
     env["COMPOSE_PROGRESS"] = "quiet"
     # Whether the server may take a visit from its network's gateway as the server PC's own (the admin pages on the one
-    # port, server/entrypoint.sh): Docker Engine passes only this machine's own visits that way, Docker Desktop every one.
-    env["ADMIN_LOCAL"] = "none" if docker_desktop() else "gateway"
+    # port, server/entrypoint.sh): Docker Engine passes only this machine's own visits that way, Docker Desktop and
+    # rootless Docker's port driver every one (cannot_tell).
+    env["ADMIN_LOCAL"] = "none" if cannot_tell() else "gateway"
     env.update(extra or {})
     return env
 
@@ -202,17 +203,38 @@ def compose_env(extra=None):
 _desktop = None
 
 
-def docker_desktop():
-    """True when Docker here is Docker Desktop (asked once per run)."""
+def _docker_info():
+    """What `docker info` says of the system and its security options, asked once per run ("" when it cannot be
+    asked)."""
     global _desktop
     if _desktop is None:
         try:
-            r = subprocess.run(["docker", "info", "--format", "{{.OperatingSystem}}"], capture_output=True, text=True,
-                               timeout=20)
-            _desktop = "Docker Desktop" in r.stdout
+            r = subprocess.run(["docker", "info", "--format", "{{.OperatingSystem}}|{{json .SecurityOptions}}"],
+                               capture_output=True, text=True, timeout=20)
+            _desktop = r.stdout
         except (OSError, subprocess.SubprocessError):
-            _desktop = False
+            _desktop = ""
     return _desktop
+
+
+def docker_desktop():
+    """True when Docker here is Docker Desktop."""
+    return "Docker Desktop" in _docker_info()
+
+
+def docker_rootless():
+    """True when Docker here runs rootless: its port driver hands the server every visit, from anywhere, from one address
+    of its own."""
+    return "name=rootless" in _docker_info()
+
+
+def cannot_tell():
+    """The name of the Docker here when it hands the server every visit from one address of its own, so that the server
+    cannot tell the server PC's visits from the internet's ("Docker Desktop", "rootless Docker"); None for Docker
+    Engine, which passes only this machine's own visits so."""
+    if docker_desktop():
+        return "Docker Desktop"
+    return "rootless Docker" if docker_rootless() else None
 
 
 def require_docker():
