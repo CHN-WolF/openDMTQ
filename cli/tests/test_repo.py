@@ -113,6 +113,18 @@ class ApiDocsTest(unittest.TestCase):
             self.assertIsNotNone(self.route_for(path, method), f"{method or ''} {path}")
 
 
+class PlayerRateTest(unittest.TestCase):
+    def test_the_readme_says_the_players_own_limit(self):
+        # The player takes any frame limit up to its own most (arm32/desktop/settings.cpp) and follows the display's
+        # rate with VSync: the README names that most, never a cap of the display it was measured on (it said 240 Hz).
+        with open(os.path.join(ROOT, "arm32", "desktop", "settings.cpp"), encoding="utf-8") as f:
+            most = re.search(r"number\(value, 30, (\d+), n\)", f.read()).group(1)
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as f:
+            text = " ".join(f.read().split())
+        self.assertIn(f"up to {most} frames a second", text)
+        self.assertNotRegex(text, r"up to \d+ Hz")
+
+
 class WindowsLinesTest(unittest.TestCase):
     def test_the_guides_count_the_windows_lines_as_the_block_has_them(self):
         # The guides say "the same N lines" of the Windows install's PowerShell block: as many as it has (they said four
