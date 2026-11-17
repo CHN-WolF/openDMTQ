@@ -6,6 +6,7 @@
 #include "host.h"
 #include "jvm.h"
 #include "mixer.h"
+#include "openal_rate.h"
 
 #include <atomic>
 #include <chrono>
@@ -159,12 +160,14 @@ constexpr arm32::HostFn kHooks[kCallCount] = {&on_sourcef, &on_play, &on_playv, 
 //
 // The game's OpenAL (OpenAL Soft 1.13) has two ways out: OpenSL ES first and android.media.AudioTrack ("Android
 // Legacy") second. Its OpenSL ES one mixes at 44,100 Hz whatever it is asked (its reset sets that rate), which is what a
-// phone plays; its AudioTrack one mixes at the rate the game's context asks for, else at the 22,050 Hz its open sets.
-// The game's sound wrapper picks the device and makes the context: both calls are said in the log, with the rate the
+// phone plays; its AudioTrack one, which opens here (the player has no OpenSL ES), mixes at the rate the game's context
+// asks for, else at the 22,050 Hz its open sets. The game opens its default device and asks for no rate: its context
+// on the AudioTrack device is given the phone's (openal_rate.h). Both calls are said in the log, with the rate the
 // device mixes at then.
 
-// ALC's names (alc.h): a device's name, its mixing rate.
-constexpr std::uint32_t kAlcDeviceSpecifier = 0x1005, kAlcFrequency = 0x1007;
+// ALC's name for a device's name (alc.h); its mixing rate's is audio::kAlcFrequency.
+constexpr std::uint32_t kAlcDeviceSpecifier = 0x1005;
+using audio::kAlcFrequency;
 // The two calls taken over, after the four above in the stubs' numbers, and the two only called.
 enum DeviceCall { kOpenDevice, kCreateContext, kDeviceCallCount };
 const char* const kDeviceNames[kDeviceCallCount] = {"alcOpenDevice", "alcCreateContext"};
@@ -222,13 +225,43 @@ std::uint64_t on_open_device(Thread& t) {
     return device;
 }
 
-// alcCreateContext(device, attributes): the game's own, said with what it asked and the rate the device mixes at then.
+// An attribute list of guest memory (pairs up to a 0) as pairs without the 0; none for no list.
+std::vector<std::uint32_t> attributes_of(gaddr list) {
+    std::vector<std::uint32_t> out;
+    for (std::uint32_t i = 0; list && i < 64 && g().proc.mem.readable(list + i * 8, 8); ++i) {
+        const std::uint32_t key = *g().proc.mem.ptr<std::uint32_t>(list + i * 8);
+        if (!key) break;
+        out.push_back(key);
+        out.push_back(*g().proc.mem.ptr<std::uint32_t>(list + i * 8 + 4));
+    }
+    return out;
+}
+
+// alcCreateContext(device, attributes): on OpenAL's AudioTrack device with the rate a phone's OpenAL mixes at
+// (openal_rate.h), on any other as the game asked; said with what it asked and the rate the device mixes at then.
 std::uint64_t on_create_context(Thread& t) {
     const gaddr device = t.arg(0), list = t.arg(1);
-    const std::string asked = attributes_text(list);
-    const std::uint64_t context = t.call(g_device_original[kCreateContext], {device, list});
-    jvm::log("player: sound: the game's OpenAL made a context on \"%s\" (attributes: %s): it mixes at %d Hz", device_name(t, device).c_str(),
-             asked.c_str(), device_rate(t, device));
+    const std::string name = device_name(t, device), asked = attributes_text(list);
+    const std::vector<std::uint32_t> game = attributes_of(list), given = audio::context_attributes(name, game);
+    gaddr copy = 0;
+    if (given != game) {
+        // The list OpenAL is given instead: a guest copy with its closing 0, kept until the call is done with it.
+        copy = g().malloc(static_cast<std::uint32_t>((given.size() + 1) * 4));
+        if (copy) {
+            for (std::size_t i = 0; i < given.size(); ++i) *g().proc.mem.ptr<std::uint32_t>(copy + static_cast<gaddr>(i) * 4) = given[i];
+            *g().proc.mem.ptr<std::uint32_t>(copy + static_cast<gaddr>(given.size()) * 4) = 0;
+        }
+    }
+    const std::uint64_t context = t.call(g_device_original[kCreateContext], {device, copy ? copy : list});
+    if (copy) {
+        jvm::log("player: sound: the game's OpenAL made a context on \"%s\" (attributes: %s), asked for %u Hz as on a phone (attributes: %s): "
+                 "it mixes at %d Hz",
+                 name.c_str(), asked.c_str(), audio::kPhoneOpenAlRate, attributes_text(copy).c_str(), device_rate(t, device));
+        g().free(copy);
+    } else {
+        jvm::log("player: sound: the game's OpenAL made a context on \"%s\" (attributes: %s): it mixes at %d Hz", name.c_str(), asked.c_str(),
+                 device_rate(t, device));
+    }
     return context;
 }
 

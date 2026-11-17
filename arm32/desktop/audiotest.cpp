@@ -3,6 +3,7 @@
 // a stream's formats, its write waiting while the buffer is full and its underrun counter, the mix of two streams and
 // its clipping, and the null output keeping real time. Prints one line per check, then "ALL CHECKS PASSED".
 #include "mixer.h"
+#include "openal_rate.h"
 
 #include <chrono>
 #include <cmath>
@@ -427,6 +428,25 @@ int main() {
         const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / 1000;
         std::snprintf(what, sizeof what, "the equaliser costs %.2f us for a 5 ms period (want under 100 us: 2 %% of the period)", us);
         check(us < 100 && std::isfinite(static_cast<float>(sink)), what);
+    }
+
+    // The game's OpenAL context (openal_rate.h): on its AudioTrack device, the one the player has, a phone's rate where the
+    // game asks for none, in place of one it asks for, the rest of its attributes kept; on OpenSL ES as the game asked.
+    {
+        const std::vector<std::uint32_t> none = context_attributes("Android Legacy", {});
+        check(none == std::vector<std::uint32_t>{kAlcFrequency, 44100}, "the game's AudioTrack OpenAL context with no attributes: 44100 Hz, a phone's rate");
+        const std::vector<std::uint32_t> asked = context_attributes("Android Legacy", {0x1010, 32, kAlcFrequency, 22050, 0x1011, 4});
+        check(asked == std::vector<std::uint32_t>{0x1010, 32, kAlcFrequency, 44100, 0x1011, 4}, "22050 Hz asked for: 44100 Hz in its place, the rest kept");
+        const std::vector<std::uint32_t> others = context_attributes("Android Legacy", {0x1010, 32});
+        check(others == std::vector<std::uint32_t>{0x1010, 32, kAlcFrequency, 44100}, "other attributes kept, the rate after them");
+        check(context_attributes("OpenSL", {}).empty() && context_attributes("OpenSL", {kAlcFrequency, 22050}) == std::vector<std::uint32_t>{kAlcFrequency, 22050},
+              "OpenSL ES (a phone's, which sets 44100 Hz itself) as the game asked");
+        // What that rate keeps: a 15 kHz tone (the octave above 11 kHz a 22,050 Hz mix cannot hold) at 44,100 Hz into a
+        // 48 kHz device comes out whole, where at 22,050 Hz it cannot be made at all.
+        std::vector<float> top = resample(tone(15000, 44100, 1.0, 0.5), 44100, 48000);
+        const double top_snr = snr_db(top, 15000, 48000, 0.5);
+        std::snprintf(what, sizeof what, "a 15 kHz tone at 44100 Hz into 48 kHz: %.1f dB above the rest (want 80)", top_snr);
+        check(top_snr >= 80, what);
     }
 
     std::printf("%d checks\n", g_checks);
