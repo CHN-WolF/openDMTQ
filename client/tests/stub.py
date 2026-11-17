@@ -12,6 +12,9 @@ import time
 import urllib.parse
 
 ACCOUNT, PASSWORD = "player1", "pass-1234"
+# Accounts whose player the owner banned, with the password above: one until a set time, one until lifted (client.php's
+# 403 with the owner's reason).
+BANNED = {"banned1": 1999999999, "banned2": None}
 # How often the server looks whether stop() wants it to end (seconds): stop() waits for that look, and at
 # serve_forever's own half second it was most of the unit tests' time, once per test with a site.
 POLL = 0.01
@@ -190,6 +193,8 @@ class Site:
                                             "page": "/opendmtq/player.php?id=7", "expires": 1999999999})
                 if self.path != "/opendmtq/client.php?signin":
                     return self._json(404, {"error": "none"})
+                if form.get("user", [""])[0] in BANNED and form.get("password", [""])[0] == PASSWORD:
+                    return self._json(403, {"error": "banned", "reason": "Made-up scores", "until": BANNED[form["user"][0]]})
                 if form.get("user", [""])[0] != ACCOUNT or form.get("password", [""])[0] != PASSWORD:
                     return self._json(401, {"error": "wrong"})
                 cookie = "opendmtq_dl=%s; expires=Fri, 01-Jan-2049 00:00:00 GMT; path=/; httponly; samesite=Lax" % site.cookie

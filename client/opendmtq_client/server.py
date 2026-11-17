@@ -3,7 +3,8 @@
 What the server answers is its site's client.php (server/portal/client.php) and /apk:
 
   GET  /opendmtq/client.php?about    {"opendmtq", "name", "address", "app"}, no sign-in
-  POST /opendmtq/client.php?signin   user, password -> {"account", "expires"} and the site's sign-in cookie
+  POST /opendmtq/client.php?signin   user, password -> {"account", "expires"} and the site's sign-in cookie; 403
+                                     {"error": "banned", "reason", "until"} for an account whose player is banned
   GET  /opendmtq/client.php?app      the app on offer: {"file", "sha256", "size", "built_at", "label", "package",
                                      "address"} (signed in)
   GET  /apk                          the app (signed in)
@@ -28,6 +29,7 @@ import re
 import socket
 import ssl
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -259,6 +261,17 @@ def sign_in(base, user, password):
         raise ServerError("too many tries: wait a minute and try again", "error.signin.throttled")
     if status == 503:
         raise ServerError("the server cannot sign anyone in right now", "error.signin.down")
+    if status == 403 and code == "banned":
+        # The owner banned the account's player: the owner's reason, and the end when the ban has one (client.php), as
+        # the site's sign-in says them.
+        reason = str(answer.get("reason") or "")
+        until = answer.get("until")
+        if isinstance(until, int) and not isinstance(until, bool) and until > 0:
+            # This computer's time, in a form both languages read.
+            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(until))
+            raise ServerError("this account cannot sign in until %s: %s" % (when, reason), "error.signin.banned_until",
+                              when=when, reason=reason)
+        raise ServerError("this account cannot sign in: %s" % reason, "error.signin.banned", reason=reason)
     if status != 200 or not isinstance(answer, dict) or not answer.get("account"):
         raise ServerError("the server answered %s%s" % (status, " (%s)" % code if code else ""), "error.server.answered",
                           status=status)

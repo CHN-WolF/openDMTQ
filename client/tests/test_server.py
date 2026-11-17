@@ -3,6 +3,7 @@
 import os
 import socket
 import threading
+import time
 import urllib.error
 from unittest import mock
 
@@ -120,6 +121,17 @@ class Talking(Folder):
         with self.assertRaises(srv.ServerError) as caught:
             srv.sign_in(self.site.url, stub.ACCOUNT, "wrong")
         self.assertEqual(caught.exception.key, "error.signin.wrong")
+
+    def test_a_banned_account_is_told_why(self):
+        # The owner banned the account's player: the owner's reason, with the end when the ban has one.
+        with self.assertRaises(srv.ServerError) as caught:
+            srv.sign_in(self.site.url, "banned1", stub.PASSWORD)
+        self.assertEqual(caught.exception.key, "error.signin.banned_until")
+        self.assertEqual(caught.exception.params, {"when": time.strftime("%Y-%m-%d %H:%M", time.localtime(1999999999)),
+                                                   "reason": "Made-up scores"})
+        with self.assertRaises(srv.ServerError) as caught:
+            srv.sign_in(self.site.url, "banned2", stub.PASSWORD)
+        self.assertEqual((caught.exception.key, caught.exception.params), ("error.signin.banned", {"reason": "Made-up scores"}))
 
     def test_app_needs_the_sign_in(self):
         with self.assertRaises(srv.SignedOut):
