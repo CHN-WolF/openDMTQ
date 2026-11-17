@@ -44,8 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && from_another_site()) {
     exit;
 }
 
-// The message to show, as a key of STRINGS (in the page's language); a ban's own words, made with its reason.
-$error = '';
+// A ban's own words, made with its reason, shown in place of the message's key for a banned player's account.
 $banned = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // The ID as typed, without the space a phone's keyboard may add after a word.
