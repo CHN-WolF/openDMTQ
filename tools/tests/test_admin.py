@@ -2338,7 +2338,7 @@ class RestoreRefusesAndRescuesTest(unittest.TestCase):
             csrf = page_token(inst)
             with admin.backups._restoring:
                 self.post(inst, csrf)
-            self.assertIn("Another restore is running", inst.client.get("/opendmtq/admin/backups").get_data(as_text=True))
+            self.assertIn("A restore, a repair or a deletion of the server's data is running", inst.client.get("/opendmtq/admin/backups").get_data(as_text=True))
 
     def test_a_failed_upload_leaves_no_backup(self):
         with Install() as inst:
