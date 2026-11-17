@@ -60,7 +60,7 @@ Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, a
 
 ## The launcher
 
-![The launcher's PLAY page: the server and the sign-in, the ready check, how to play with keyboard play's keys first, the last game, and PLAY](images/client-play.png)
+![The launcher's PLAY page: the server and the sign-in with My page on the site, the ready check, how to play with keyboard play's keys first, the last game, and PLAY](images/client-play.png)
 
 | Page | What it has |
 | :--- | :--- |
@@ -132,6 +132,8 @@ before it when a keyboard played it) and the place on that chart (#2 of 5); it i
 again after a game. An account the server's owner has not linked to a game player says so instead, and signed out the
 card is not there.
 
+![My records under the PLAY page's columns: three recent plays and three best records, each with its song, chart and when, the score with the keyboard's mark before those a keyboard played, and the place on the chart; under them what the keyboard's mark means](images/client-records.png)
+
 **Controls** sets keyboard play. **Play with keys** turns it on or off (on at first). While it is on, a table shows the
 lanes of 2, 3 and 4 LINE from the top, each with a box for its key and one for a second key: click a box (or Tab to it
 and press Enter), then press the key. The key goes in by its place on the keyboard, and is named as the US layout's key
@@ -161,6 +163,8 @@ the clipboard:
 | Broadcasts | The broadcast state the player asks for between songs |
 | Downloads | The app and the client data's list of files, by their headers alone: nothing is downloaded |
 | Round trip | Five small asks: the time in the middle, the fastest and the slowest |
+
+![The Online page's connection test: Test connection and Forget at the server card's title, then the test's card with Copy, its one-line verdict and a row for each step with its lamp, what it found and how long it took](images/client-test.png)
 
 A step after one that did not get through says it was not tried. When nothing answers on the address's port, the test
 also asks the same host on 8791 and the ports a new server takes when that one is taken (to 8799): an OpenDMTQ server
