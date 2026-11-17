@@ -14,6 +14,7 @@
 #include <fstream>
 #include <string>
 #include <sys/prctl.h>
+#include <vector>
 
 namespace player::audio {
 
@@ -330,6 +331,7 @@ Mixer::Mixer(std::unique_ptr<Output> output)
              output_->name(), rate_, 1000.0 * static_cast<double>(period_) / rate_, output_->buffer_ms(), std::clamp(options().volume, 0, 100),
              std::clamp(start.music, 0, 100), std::clamp(start.effects, 0, 100), eq_name(start.eq), bands.low, bands.mid, bands.high);
     thread_ = std::thread([this] { run(); });
+    reporter_ = std::thread([this] { look_back(); });
 }
 
 void Mixer::set_levels(const Levels& l) {
@@ -347,8 +349,13 @@ void Mixer::set_levels(const Levels& l) {
 }
 
 Mixer::~Mixer() {
-    running_ = false;
+    {
+        std::lock_guard<std::mutex> l(look_lock_);
+        running_ = false;
+    }
+    looked_.notify_all();
     if (thread_.joinable()) thread_.join();
+    if (reporter_.joinable()) reporter_.join();
 }
 
 namespace {
@@ -429,31 +436,61 @@ void set_result_path(const std::string& path) {
 }
 
 void Mixer::report() {
-    std::lock_guard<std::mutex> l(lock_);
-    // The output's latency since the last look, into the game's.
-    const Latency stretch = output_->take_latency();
-    merge(latency_, stretch);
-    jvm::log("audio: %s at %d Hz: %.1f s in periods of %.2f ms, %llu late", output_->name(), rate_,
-             static_cast<double>(periods_.load() * period_) / rate_, 1000.0 * static_cast<double>(period_) / rate_,
-             static_cast<unsigned long long>(late_.load()));
-    if (stretch.count) {
-        jvm::log("audio: %s %s, the device's period %.2f ms: %.1f ms out (%.1f to %.1f) over %llu writes, %.1f ms over the game", output_->name(),
-                 output_->mode(), output_->period_ms(), stretch.mean_ms(), stretch.min_ms, stretch.max_ms,
-                 static_cast<unsigned long long>(stretch.count), latency_.mean_ms());
-    }
-    // Seconds, whatever each stream's rate.
-    auto line = [](const Stream& s, const char* state) {
-        jvm::log("audio: %s at %d Hz (%s): %.1f s written, %.1f s played, %llu underruns (%.1f ms short)", s.name().c_str(), s.rate(),
-                 state, static_cast<double>(s.written()) / s.rate(), static_cast<double>(s.played()) / s.rate(),
-                 static_cast<unsigned long long>(s.underruns()), 1000.0 * static_cast<double>(s.short_frames()) / s.out_rate());
+    // The lines made under the lock, then said out of it: the mixer's thread takes the lock every period, and a log line
+    // may wait on the disk longer than a device alone's buffer of 3 ms lasts.
+    std::vector<std::string> lines;
+    const auto say = [&lines](const char* format, auto... values) {
+        char line[512];
+        std::snprintf(line, sizeof line, format, values...);
+        lines.emplace_back(line);
     };
-    for (const auto& s : streams_) line(*s, s->playing() ? "playing" : "not playing");
-    for (const auto& s : closed_) line(*s, "closed");
+    {
+        std::lock_guard<std::mutex> l(lock_);
+        // The output's latency since the last look, into the game's.
+        const Latency stretch = output_->take_latency();
+        merge(latency_, stretch);
+        say("audio: %s at %d Hz: %.1f s in periods of %.2f ms, %llu late", output_->name(), rate_,
+            static_cast<double>(periods_.load() * period_) / rate_, 1000.0 * static_cast<double>(period_) / rate_,
+            static_cast<unsigned long long>(late_.load()));
+        if (stretch.count) {
+            say("audio: %s %s, the device's period %.2f ms: %.1f ms out (%.1f to %.1f) over %llu writes, %.1f ms over the game", output_->name(),
+                output_->mode(), output_->period_ms(), stretch.mean_ms(), stretch.min_ms, stretch.max_ms,
+                static_cast<unsigned long long>(stretch.count), latency_.mean_ms());
+        }
+        // Seconds, whatever each stream's rate.
+        const auto line = [&say](const Stream& s, const char* state) {
+            say("audio: %s at %d Hz (%s): %.1f s written, %.1f s played, %llu underruns (%.1f ms short)", s.name().c_str(), s.rate(), state,
+                static_cast<double>(s.written()) / s.rate(), static_cast<double>(s.played()) / s.rate(),
+                static_cast<unsigned long long>(s.underruns()), 1000.0 * static_cast<double>(s.short_frames()) / s.out_rate());
+        };
+        for (const auto& s : streams_) line(*s, s->playing() ? "playing" : "not playing");
+        for (const auto& s : closed_) line(*s, "closed");
+    }
     // The equaliser's cost, where it ran.
     const std::uint64_t ran = eq_periods_.exchange(0), ns = eq_ns_.exchange(0);
     if (ran) {
-        jvm::log("audio: the equaliser took %.2f us a period (%.3f %% of the mixer's time) over %llu periods", static_cast<double>(ns) / 1e3 / static_cast<double>(ran),
-                 100.0 * static_cast<double>(ns) / (static_cast<double>(ran) * 1e9 * static_cast<double>(period_) / rate_), static_cast<unsigned long long>(ran));
+        say("audio: the equaliser took %.2f us a period (%.3f %% of the mixer's time) over %llu periods", static_cast<double>(ns) / 1e3 / static_cast<double>(ran),
+            100.0 * static_cast<double>(ns) / (static_cast<double>(ran) * 1e9 * static_cast<double>(period_) / rate_), static_cast<unsigned long long>(ran));
+    }
+    for (const std::string& l : lines) jvm::log("%s", l.c_str());
+}
+
+void Mixer::look_back() {
+    // Its name for the stats and a debugger.
+    prctl(PR_SET_NAME, "mixer report");
+    // With ARM32_STATS=1 the counters go to the log every five seconds, beside the runtime's own; the last game's result
+    // for the PC client every five seconds whatever the stats (a game that ends without the player's own end, a crash or
+    // the process ended, still leaves its sound's result).
+    const char* stats = std::getenv("ARM32_STATS");
+    const bool report_often = stats && std::atoi(stats) > 0;
+    std::unique_lock<std::mutex> l(look_lock_);
+    while (running_.load()) {
+        // Five seconds, or at once when the mixer goes.
+        if (looked_.wait_for(l, std::chrono::seconds(5), [this] { return !running_.load(); })) break;
+        l.unlock();
+        if (report_often) report();
+        write_result();
+        l.lock();
     }
 }
 
@@ -578,13 +615,8 @@ void Mixer::run() {
     std::vector<float> buf(period_ * kChannels);
     using Clock = std::chrono::steady_clock;
     Clock::time_point last{};
-    // With ARM32_STATS=1 the counters go to the log every five seconds, beside the runtime's own.
-    const char* stats = std::getenv("ARM32_STATS");
-    const bool report_often = stats && std::atoi(stats) > 0;
-    Clock::time_point next_report = Clock::now() + std::chrono::seconds(5);
-    // The last game's result for the PC client, every five seconds too: a game that ends without the player's own end
-    // (a crash, the process ended) still leaves its sound's result.
-    Clock::time_point next_result = Clock::now() + std::chrono::seconds(5);
+    // The counters and the last game's result are said by a thread of their own (look_back): nothing here waits on a
+    // disk.
     // The level's trace (a check's): its sums over the second so far.
     const char* trace = std::getenv("PLAYER_TRACE_AUDIO");
     const bool trace_level = trace && *trace == '1';
@@ -592,14 +624,6 @@ void Mixer::run() {
     float level_peak = 0;
     std::size_t level_frames = 0;
     while (running_.load()) {
-        if (report_often && Clock::now() >= next_report) {
-            report();
-            next_report += std::chrono::seconds(5);
-        }
-        if (Clock::now() >= next_result) {
-            write_result();
-            next_result += std::chrono::seconds(5);
-        }
         std::fill(buf.begin(), buf.end(), 0.0f);
         {
             std::lock_guard<std::mutex> l(lock_);

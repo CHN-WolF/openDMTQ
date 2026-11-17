@@ -229,6 +229,9 @@ public:
 
 private:
     void run();
+    // The thread that says the counters (with ARM32_STATS) and writes the last game's result every five seconds, off the
+    // mixer's own thread, which must never wait on a disk.
+    void look_back();
 
     std::unique_ptr<Output> output_;
     // The output's rate, and its name and buffer, which stay when a failed output is replaced by the null one; the
@@ -253,6 +256,10 @@ private:
     // The output's latency over the whole game (each report adds its stretch), under lock_.
     Latency latency_;
     std::thread thread_;
+    // look_back's thread, and what wakes it when the mixer goes.
+    std::thread reporter_;
+    std::mutex look_lock_;
+    std::condition_variable looked_;
 };
 
 // Where the mixer writes the last game's sound result (Mixer::write_result): the PC client's folder, beside the settings
