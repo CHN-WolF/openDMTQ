@@ -206,6 +206,10 @@ if [ -f "$PASS" ]; then
     # A visit to localhost is the server PC's own: nothing of it travels, so it stays on plain HTTP, where the browser has
     # no certificate to warn about. (A visitor from elsewhere who names localhost only sends their own password in clear.)
     not_local='RewriteCond %{HTTP_HOST} !^(?:localhost|127\.[0-9.]+)(?::[0-9]+)?$'
+    # Only where this server tells the server PC's own visits apart (LOCAL_FROM), which then open the admin pages here:
+    # elsewhere (Docker Desktop) a visit naming localhost may be anyone's and is refused on plain HTTP, so it goes to the
+    # HTTPS door with the others, where the admin pages open.
+    [ -n "$LOCAL_FROM" ] || not_local=''
     {
         # Sent to the HTTPS door while it works (a redirect answers before any access rule below).
         echo "$https_works"
