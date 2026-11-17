@@ -175,6 +175,13 @@ the PC client a Sound page, a connection test, signed updates from its own serve
   wordmark and headings' lines in plain characters of the same width, which that console does not draw two columns wide.
 - The site's download page has one main button, the app's.
 - `./opendmtq up --no-firewall` leaves the Windows firewall alone under WSL, as `setup` and `expose` do with it.
+- The PC client's pages stand on the window's own background: between and round the cards the page shows its lit top,
+  the shards at its edges and its dots, where a near-black slab covered them from under the page's title down, and each
+  card has the site's glass edge, a hairline with a brighter top. The launcher, the site and the admin pages lose the
+  details that said nothing: the glow round state lights, switches, a focused field, the S grade, the replay's knob and
+  the live frame, the stripe along the menu's current page and along two boxes of the admin pages, the band on a job's
+  log before it ends, and boxes inside cards where rows and a line say the same; the perfect play mark's letters and a
+  hidden song's row read at 4.5:1 and more.
 
 ### Security
 
