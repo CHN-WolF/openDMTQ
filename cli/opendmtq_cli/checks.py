@@ -220,8 +220,7 @@ def doctor():
 
     # Where the repository is.
     if env.windows_drive(system.ROOT):
-        warn("the repository is on a Windows drive: the database is slow there and file owners cannot be "
-             "set. Clone it inside WSL (for example ~/openDMTQ) and move data/ and .env over")
+        warn("the repository is on a Windows drive: the database is slow there and file owners cannot be set")
 
     # .env and the address.
     problem = env.check_host(host)

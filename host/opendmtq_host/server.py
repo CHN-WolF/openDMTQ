@@ -482,8 +482,7 @@ def check_address(values):
         return
     # After the setup's summary, which ends with a blank line: none more before it.
     warn(f"this computer's address is now {now}, but the players' app calls {host}. To move the server, run "
-         f"{CLI} host {env.join(now, port)} (the app is built again; players install it over the old one). A fixed "
-         "address for this computer in the router's settings (a DHCP reservation) keeps it from changing.")
+         f"{CLI} host {env.join(now, port)} (the app is built again; players install it over the old one).")
     say("")
 
 
@@ -497,9 +496,6 @@ def check_folder():
     except OSError:
         die(f"OpenDMTQ cannot write in {ROOT}. Move the OpenDMTQ folder to one of your own (for example "
             "C:\\OpenDMTQ or your Documents) and start it there.")
-    if WINDOWS and "onedrive" in ROOT.lower():
-        warn("OpenDMTQ is in a OneDrive folder: OneDrive may hold its database while it syncs. A folder outside "
-             "OneDrive, such as C:\\OpenDMTQ, is safer.")
 
 
 def cmd_run(args, values=None, found=None):

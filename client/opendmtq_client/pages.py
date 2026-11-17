@@ -1980,8 +1980,7 @@ def _help_trouble(app, parent):
     # there once the game has run with the app.
     _log_file, has_log = _player_log(app)
     first = "help.trouble.1" if has_log else "help.trouble.1.none"
-    for i, (key, page) in enumerate(((first, None), ("help.trouble.2", "screen"), ("help.trouble.3", "sound"),
-                                     ("help.trouble.4", None))):
+    for i, (key, page) in enumerate(((first, None),)):
         if i:
             widgets.divider(card.body, ui, pady=CHECK_GAP)
         line = tk.Frame(card.body, bg=theme.PANEL)

@@ -146,6 +146,28 @@ class DownloadWordTest(unittest.TestCase):
                     self.assertNotIn("내려받", line, f"{os.path.relpath(path, ROOT)}:{n}")
 
 
+class AdviceTest(unittest.TestCase):
+    def test_no_usage_advice_in_the_pages_and_the_programs(self):
+        # The pages, the command line, the host program and the bundle's guide say what a person must do to go on, never
+        # how to use the tool or whom to ask (the owner's rule): the phrases that did are gone. The README and the docs
+        # keep "use only files you have the right to use".
+        paths = [os.path.join(ROOT, *p.split("/")) for p in (
+            "server/portal/strings.php", "tools/opendmtq_tools/strings.py", "host/windows/README.txt")]
+        paths += glob.glob(os.path.join(ROOT, "cli", "opendmtq_cli", "*.py"))
+        paths += glob.glob(os.path.join(ROOT, "host", "opendmtq_host", "*.py"))
+        phrases = ("right to use", "(recommended)", "(추천)", "check it before the app is built", "Tell the server's admin",
+                   "tell the server's admin", "use an older phone", "서버 관리자에게 알려", "오래된 폰이나 태블릿을 쓰세요",
+                   "If nothing changes in a few minutes", "make sure your firewall", "Clone it inside WSL",
+                   "DHCP reservation", "is safer", "이용할 권리가 있는 파일만")
+        for path in paths:
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            for phrase in phrases:
+                # The license's own words say what the license gives (lic.game): a fact, not advice.
+                kept = text.replace("it gives no right to use them", "")
+                self.assertNotIn(phrase, kept, f"{os.path.relpath(path, ROOT)}: {phrase}")
+
+
 class PlayerRateTest(unittest.TestCase):
     def test_the_readme_says_the_players_own_limit(self):
         # The player takes any frame limit up to its own most (arm32/desktop/settings.cpp) and follows the display's

@@ -1111,8 +1111,7 @@ def cmd_setup(args):
     look.banner(system.code_version(), gap=False)
     if env.windows_drive(ROOT):
         print()
-        warn("this repository is on a Windows drive: the database is slow there and file owners cannot be "
-             "set. Clone it inside WSL instead (for example ~/openDMTQ)")
+        warn("this repository is on a Windows drive: the database is slow there and file owners cannot be set")
     step("1/5  Address phones will use")
     host = ensure_env(args.host)
 
@@ -1175,7 +1174,7 @@ def cmd_setup(args):
         else:
             open_firewall(port, internet)
     else:
-        warn(f"make sure your firewall allows TCP {port} from {'anywhere' if internet else 'the LAN'}")
+        ok(f"phones connect on TCP {port} from {'anywhere' if internet else 'the local network'}")
 
     step("Self-check")
     failures = checks.end_to_end()

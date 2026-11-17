@@ -186,11 +186,16 @@ class Wording(unittest.TestCase):
         for key, (en, _ko) in i18n.TEXT.items():
             self.assertNotRegex(en, r"(?i)\blog ?in\b", key)
 
-    def test_a_help_line_does_not_name_the_page_its_link_names(self):
-        # The link at the line's right end says SCREEN or SOUND: the line itself says what to do there.
-        for key, page in (("help.trouble.2", "SCREEN"), ("help.trouble.3", "SOUND")):
-            for text in i18n.TEXT[key]:
-                self.assertNotIn(page, text, key)
+    def test_no_usage_advice_in_the_words(self):
+        # What a player must do to go on stays (try again, sign in, the log that says why); how to set or use the game,
+        # or whom to ask, is theirs to decide: the Help page's tips and the errors' "ask the server's admin" went.
+        for key, (en, ko) in i18n.TEXT.items():
+            for phrase in ("server's admin whether", "Ask the server's admin", "Tell the server's admin",
+                           "Is the server on", "check the address", "Try a window", "If the sound breaks"):
+                self.assertNotIn(phrase, en, key)
+            for phrase in ("서버 관리자에게 물어보세요", "서버 관리자에게 알려 주세요", "켜져 있는지 확인하세요", "소리가 끊기면"):
+                self.assertNotIn(phrase, ko, key)
+        self.assertEqual([k for k in i18n.TEXT if k.startswith("help.trouble.")], ["help.trouble.1", "help.trouble.1.none"])
 
     def test_the_korean_vsync_hints_say_the_state_they_show_in(self):
         # Shown while VSync is on (or off): "켜면" (once turned on) would say it is off.

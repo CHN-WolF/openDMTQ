@@ -3,8 +3,7 @@ OpenDMTQ for Windows
 
 An open-source server for DJMAX Technika Q. No game files are included: it runs with your own copy of the game's
 Android app (an .apk; the original, or a copy changed for another server) and its client data and song data (a
-folder or an archive, also one in parts). Please use only files you have the right to use. Importing the song data,
-the songs' music, charts and jackets, is optional.
+folder or an archive, also one in parts). Importing the song data, the songs' music, charts and jackets, is optional.
 
 OpenDMTQ is an unofficial, non-commercial project, not affiliated with or endorsed by NEOWIZ. DJMAX and TECHNIKA Q are
 trademarks of NEOWIZ. OpenDMTQ contains no game data. If the copyright holder requests it, this project may be made
@@ -13,7 +12,7 @@ private or shut down.
 Start
 -----
 
-1. Keep this folder somewhere of your own, outside OneDrive and Program Files (for example C:\OpenDMTQ).
+1. Keep this folder somewhere of your own, where it can write (for example C:\OpenDMTQ).
 2. Start OpenDMTQ.exe. The setup opens in your browser.
 3. The setup finds your files in Downloads, on the Desktop or in Documents. If they are elsewhere, paste their path or
    open their folder. Each file says what it is and whether it can be used. Then the setup takes you through the address
