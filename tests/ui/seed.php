@@ -77,6 +77,9 @@ $db->exec('COMMIT');
 // changes (his player's page lists it).
 $db->exec("INSERT INTO PlayerState (guid, mpoint, qpoint, exp, unlimited, changed_at) VALUES (2, 1234567, 45, 644, 0, $now), (6, 2000, 9, 5669, 1, $now)");
 $db->exec("INSERT INTO PlayerItem (guid, item_id, owned, how, at) VALUES (2, 90001, 1, 'bought', $now), (6, 90002, 1, 'given', $now), (6, 30001, 0, 'taken', $now)");
+// Sena's slots as game.setSlotItem keeps them: a partner and a skin the stand-in catalog has names for, a note it has
+// none for (MY PAGE shows the names, and the number where there is none).
+$db->exec("UPDATE Member SET slot_item1 = 30001, slot_item2 = 0, slot_item3 = 90001, slot_item4 = 100001 WHERE guid = 1");
 $db->exec("INSERT INTO PlayerPurchase (guid, product_id, item_id, currency, price, paid, at) VALUES
            (2, 90001, 90001, 'max', 2000, 2000, " . ($now - 7200) . "), (2, 1050001, 50001, 'q', 10, 10, " . ($now - 3600) . "),
            (6, 100002, 100002, 'max', 25000, 0, " . ($now - 600) . ")");

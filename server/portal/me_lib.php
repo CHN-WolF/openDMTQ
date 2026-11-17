@@ -352,7 +352,22 @@ function me_game(int $guid): array
             'items' => ['fp' => $int('in_game_item1'), 'gr' => $int('in_game_item2'), 'ab' => $int('in_game_item3')],
             'owned' => count(odq_shop_own_items([$guid])),
             // The slots as game.setSlotItem keeps them: 1 the character partner, 2 the add-on, 3 the note skin, 4 the skin.
-            'equipped' => ['character' => $int('slot_item1'), 'addon' => $int('slot_item2'), 'note' => $int('slot_item3'), 'skin' => $int('slot_item4')]];
+            'equipped' => ['character' => $int('slot_item1'), 'addon' => $int('slot_item2'), 'note' => $int('slot_item3'), 'skin' => $int('slot_item4')]]
+        // Each one's name as the game shows it in the page's language, '' where the client's tables give none.
+        + ['equipped_names' => array_map('me_item_name', ['character' => $int('slot_item1'), 'addon' => $int('slot_item2'),
+                                                          'note' => $int('slot_item3'), 'skin' => $int('slot_item4')])];
+}
+
+/* An item's name as the game shows it in the page's language: catalog.json's names (the tools write them from the client's
+   tables, the admin pages' player page reads the same), the English one where the page's language has none, '' for no
+   item or no name. Plain text. */
+function me_item_name(int $item): string
+{
+    if ($item <= 0) {
+        return '';
+    }
+    $names = odq_catalog()['names'] ?? [];
+    return (string)($names[lang()][(string)$item] ?? $names['en'][(string)$item] ?? '');
 }
 
 /* The words for one of the game's achievements, made from its condition (OPENDMTQ_ACHIEVEMENTS in achievement.php): the

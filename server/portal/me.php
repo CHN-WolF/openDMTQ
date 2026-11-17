@@ -262,13 +262,13 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
         <div class="stat"><span class="lbl"><?= t('me.owned') ?></span><span class="num"><?= number_format($game['owned']) ?></span></div>
       </div>
       <?php // The in-game items by the game's own names, each with its level; then what is in each of the four slots the game's
-            // MY PAGE shows, by the item's number (the server has no names for them). ?>
+            // MY PAGE shows, by the item's name as the game shows it (its number where the client's tables give no name). ?>
       <ul class="me-items">
         <?php foreach ($game['items'] as $code => $level): ?>
           <li><span><?= ME_ITEMS[$code] ?></span><b><?= t('me.item_level', ['n' => $level]) ?></b></li>
         <?php endforeach; ?>
         <?php foreach ($game['equipped'] as $slot => $item): ?>
-          <li><span><?= t(ME_SLOTS[$slot]) ?></span><b><?= $item ? t('me.item_no', ['n' => $item]) : t('me.item_none') ?></b></li>
+          <li><span><?= t(ME_SLOTS[$slot]) ?></span><b><?= !$item ? t('me.item_none') : ($game['equipped_names'][$slot] !== '' ? h($game['equipped_names'][$slot]) : t('me.item_no', ['n' => $item])) ?></b></li>
         <?php endforeach; ?>
       </ul>
       <p class="meta"><?= t('me.game_note') ?></p>

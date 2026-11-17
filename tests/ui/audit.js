@@ -2496,6 +2496,18 @@ async function myPage(contexts) {
   check("the linked account's profile is its game player's, as its JSON twin says", head.startsWith('Sena') && facts.player && facts.player.name === 'Sena'
     && facts.account.id === MINE.id && facts.game && facts.game.level > 0 && Array.isArray(facts.achievements.held), `${head} ${JSON.stringify(facts).slice(0, 200)}`);
   check('its public page is one link away', await me.$eval('.me-public a', a => a.getAttribute('href')).catch(() => '') === '/opendmtq/player.php?id=1');
+  // The four slots name their items as the game shows them, by the catalog's names (run.sh's stand-in gives 30001 and
+  // 100001 theirs), the JSON twin as the page; an item the catalog has no name for keeps its number. Before: numbers only.
+  const named = { 30001: 'Jimmy', 100001: 'Yellow' };
+  const slots = Object.entries((facts.game && facts.game.equipped) || {});
+  const shown = await textOf(me, '.me-items');
+  check("MY PAGE names the equipped items as the game shows them, and its JSON twin too",
+    !!facts.game.equipped_names && slots.length === 4
+      && slots.every(([slot, id]) => (facts.game.equipped_names[slot] || '') === (named[id] || ''))
+      && slots.every(([, id]) => !id || shown.includes(named[id] || `No. ${id}`))
+      // seed.php equips Jimmy, Yellow and an unnamed note: the names and the number all seen.
+      && shown.includes('Jimmy') && shown.includes('Yellow') && shown.includes('No. 90001'),
+    `${JSON.stringify(facts.game.equipped)} ${JSON.stringify(facts.game.equipped_names)} | ${shown.slice(0, 200)}`);
   const total = facts.player.total;
   // Every play of the player, a page at a time: the twin counts them as the page does.
   await me.goto(`${P}/me.php?tab=plays`, { waitUntil: 'domcontentloaded' });
