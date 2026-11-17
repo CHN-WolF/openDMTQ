@@ -91,6 +91,14 @@ class AdminStrings(unittest.TestCase):
             for key, text in table.items():
                 self.assertNotIn(EM_DASH, text, key)
 
+    def test_one_term_for_one_thing_and_no_fallback_particles(self):
+        # The admin pages name each thing one way (관리자 페이지, 일일 백업, 휴대폰, 앱을 만들다), never put a particle as a
+        # form's fallback after a value ("(으)로", "은(는)", "을(를)"), and say a sign-in ran out as 만료.
+        for key, text in strings.STRINGS["ko"].items():
+            for old in ("관리 페이지", "매일 백업", "빌드", "로그인이 끝났", "(으)로", "은(는)", "을(를)", "돌아서 ", "돕니다"):
+                self.assertNotIn(old, text, key)
+            self.assertIsNone(re.search(r"(?<!휴대)(?<!아이)폰", text), key)
+
     def test_a_song_error_reads_in_english_and_keeps_its_key(self):
         e = songs.SongError("song.missing", name="song.fpk")
         self.assertEqual(str(e), "song.fpk is missing")

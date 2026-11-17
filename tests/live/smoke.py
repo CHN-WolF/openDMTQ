@@ -180,7 +180,7 @@ s = state("ko")
 # LIVE-47: switched on while the server's are off: no key, and a notice that it starts once they are on (before: none).
 check("off for the server: a player switched on gets no key, and is told it waits for the server",
       s["on"] is False and "token" not in s and s.get("switch") is True and s.get("toast_kind") == "wait"
-      and s["toast"] == "방송을 켜 두었어요\n이 서버의 방송이 켜지면 시작해요" and s.get("toast_id", 0) > 0, s)
+      and s["toast"] == "내 방송이 켜졌어요\n이 서버의 방송이 켜지면 시작해요" and s.get("toast_id", 0) > 0, s)
 check("and the players page holds the switch for then", "On · server off" in admin_page("/opendmtq/admin/players"))
 switch("live-off")
 s = state()

@@ -1612,7 +1612,7 @@ class InviteTest(unittest.TestCase):
             install.client.set_cookie("opendmtq_lang", "ko")
             page = html.unescape(self.message(install, "friend3"))
             self.assertIn("TECHNIKA Q (Living Room), OpenDMTQ 서버", page)
-            self.assertIn("Android 폰과 태블릿용입니다.\nWindows PC: 같은 페이지의 설치 파일(.exe) 다운로드", page)
+            self.assertIn("Android 휴대폰과 태블릿용입니다.\nWindows PC: 같은 페이지의 설치 파일(.exe) 다운로드", page)
             self.assertNotIn("전용", page)
 
     def test_the_message_says_https_where_the_site_is_on_it(self):

@@ -659,7 +659,7 @@ tr.row-warn { background: color-mix(in srgb, var(--warn) 6%, transparent); }
 /* Who did it, in a column of its own after what it was about. */
 .ch-who { color: var(--chalk); font-weight: 600; overflow-wrap: anywhere; }
 .ch-who:not(:empty)::before { content: "by "; font-weight: 400; color: var(--ash); }
-:lang(ko) .ch-who:not(:empty)::before { content: "처리: "; }
+:lang(ko) .ch-who:not(:empty)::before { content: "변경한 사람: "; }
 
 /* Players: last played with its small line; a heading that sorts says so. */
 .player-last { white-space: nowrap; font-size: var(--t-sm); color: var(--ash); }
