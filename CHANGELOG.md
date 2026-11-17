@@ -21,15 +21,18 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - Notices in the game at every change of a broadcast switch, the player's or the server's under it, also when a
   broadcast ends and while the server's broadcasts are off, each with its own number (`toast_id`, `toast_kind` in
   `/live/state`); and at every change of the maintenance notice for players already in the game.
-- The server hands the PC clients that play on it their updates: those of the version of the installer it hands out, at
-  `/updates/` on its one port. A release's tools image brings them, a host install's kit carries them in, and any other
-  install fetches them from the release. A launcher looks at its server first and at GitHub's releases second, and goes
-  no further than the version its server hands out, or than the server's own version when it hands out none: launchers
-  stay matched to their server, on a network with no way out too. The admin pages' App page says what the server hands
-  out, and `GET /app/windows/updates` gives it file by file.
-- Delta packages: each release has `opendmtq.client-<version>-delta.nupkg`, what changed since the release before, which
-  a PC client of that release downloads instead of the whole update and its own updater puts the new version together
-  from. When what it puts together does not hold the release's files, the whole package comes instead.
+- The PC client's Sound page: master, music and effects volumes and an equaliser (Flat, Bass, Vocal, Treble, or three
+  bands of the player's own at 120 Hz, 1 kHz and 6 kHz), with `--set music_volume=`, `effects_volume=`, `eq=` and
+  `eq_low=` to `eq_high=`, and `--status`.
+- A sound panel over the game, from the bar: the same volumes and equaliser, heard as they change, kept for the next game
+  and shown by the launcher.
+- The bar over the game by touch: a tap on its handle, a long press or a pull down brings it; a mouse brings it by
+  pointing at the top or by pressing and pulling down. In a song a press reaches the game unless the game has been quiet
+  for 1.5 s.
+- The PC client's installer, run again, offers Open, Repair, Update and Uninstall (with the player's data kept or not),
+  and Windows' Apps removes the PC client the same way, in OpenDMTQ's design.
+- The launcher's log names each display's current rate, its highest rate at its size and whether Windows changes the
+  rate by itself (dynamic refresh rate).
 
 ### Changed
 
@@ -56,13 +59,24 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - The release's files say what each is, for which system and architecture and which version, in lower case:
   `opendmtq-pc-client-<version>-windows-x64-setup.exe` for players, `opendmtq-server-<version>-windows-x64.zip`,
   `opendmtq-server-<version>-helm-chart.tgz`, `opendmtq-phone-runtime-<version>-android-arm64-armv7.zip`, the PC client's
-  update feed and packages, and one `opendmtq-<version>-sha256sums.txt` with its signature; the notes open with which file
-  is for whom. The
-  player alone, `RELEASES` and `assets.win.json` are no longer published, and installed PC clients update as before.
+  update feed and package, and one `opendmtq-<version>-sha256sums.txt`. The player alone, `RELEASES` and
+  `assets.win.json` are no longer published, and installed PC clients update as before.
 - What the server hands out and keeps is named for what it is, in lower case too:
   `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`, `opendmtq-phone-app-<date>-android-<address>.apk`,
   `opendmtq-server-backup-<time>-<why>.tar.gz` (backups named before still count), the players' and plays' files, the
   request log and recordings.
+- The launcher's menu is a column on the left again, and the first start's steps run down its side.
+- A setting changed in the launcher changes its own row only: no page is drawn again whole, and nothing flashes. The
+  launcher's drop-down lists are in OpenDMTQ's design, open over everything else and close when the window moves.
+- The launcher's sign-in forms work as the site's: labels, Show inside the password field (by the keyboard too), what is
+  missing said under its field, the ID kept, Enter sends.
+- The launcher's pages and lists scroll by dragging with a finger. Its notices come at every change (a newer launcher, a
+  sign-in that ended, a server that stopped answering), and the files it reads are read the same after Notepad saved them
+  (a byte order mark, Windows line ends, spaces, quotes).
+- The upscaler, used below a render scale of 100 % only, is AMD FSR 1 by default: in the player's measurements it is as
+  sharp as the game's own picture and nearest to it at 50 %. A PC client that kept the earlier default without choosing
+  it takes FSR 1. SMAA is the highest anti-aliasing preset.
+- The player asks the server for broadcast notices every 5 s (every 15 s before).
 
 - A server takes the PC client's installer from the release of its own version when there is one, else from the latest
   release, so that the installer and the updates it hands out are of one version.
@@ -88,6 +102,14 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
   home page's broadcasts did not come back on a page left open.
 - `.env` as Notepad saves it (a byte order mark, Windows line ends, spaces around `=`) is read the same everywhere.
 - A sign-in refused for too many tries is in the log of changes; an account without admin rights is told so.
+- On a display that Windows 11 runs slower while nothing moves (dynamic refresh rate), such as a 180 Hz panel shown as
+  60 Hz, the launcher offered no frame limit above 60 and VSync held the game at 60. The launcher now offers every rate up
+  to each display's highest at its size, and the player asks Windows for the panel's full rate, measures the refreshes
+  and follows them.
+- A window resized or switched to full screen after the game had started kept the game's first size and stretched its
+  layout; the game now lays itself out again at the new size.
+- Pulling the bar over the game down with a mouse could show the whole bar for a moment; the bar follows the pointer and
+  settles where it is let go. The player's refresh meter no longer miscounts on a PC whose timing is unsteady.
 
 ## [0.10.0] - 2026-11-13
 
