@@ -91,7 +91,8 @@ CHANGES = (
         ("FPS counter on (brings Position)", widgets.Toggle, "screen.counter", "<space>", True),
         ("FPS counter off (takes Position)", widgets.Toggle, "screen.counter", "<space>", True),
         ("render scale 75 (brings Upscaler)", widgets.Select, "screen.scale", "75", True),
-        ("upscaler NIS (FSR 1 is the default)", widgets.Select, "screen.upscaler", "nis", False),
+        # FSR 1 is the default below 100 % (values.DEFAULTS): another one, so that the choice changes the screen.
+        ("upscaler NIS", widgets.Select, "screen.upscaler", "nis", False),
         ("render scale 100 (takes Upscaler)", widgets.Select, "screen.scale", "100", True),
         ("anti-aliasing SMAA", widgets.Select, "screen.aa", "smaa", False),
         ("anti-aliasing off", widgets.Select, "screen.aa", "off", False),
@@ -256,6 +257,34 @@ def main():
     if not kept or not all(x.winfo_exists() for x in kept):
         results.append({"change": "online: Sign out", "missing": "the server's card was made again"})
 
+    # ---- The connection test: Test connection makes its card alone (its steps waiting: the test is held at its start),
+    # then each step says itself in place, nothing made or gone, until the test ends.
+    from opendmtq_client import connection
+    gate, real_run = threading.Event(), connection.run
+
+    def held_run(*args, **kwargs):
+        gate.wait(10)
+        return real_run(*args, **kwargs)
+
+    connection.run = held_run
+    try:
+        kept = [x for x in shots.widgets_of(app.body.inner) if isinstance(x, widgets.Field)]
+        test = shots.button(app, w("test.button"))
+        measure_change(app, "online: Test connection, its card alone", lambda: test.press(), results, rows_allowed=150,
+                       focus=lambda: test, moves="card")
+        if not kept or not all(x.winfo_exists() for x in kept):
+            results.append({"change": "online: Test connection", "missing": "the server's card was made again"})
+        shots.settle(app)
+        before = all_widgets(app)
+        gate.set()
+        shots.settle(app, 30, until=lambda: not app.connection_test["running"])
+        after = all_widgets(app)
+        results.append({"change": "online: the test's steps said in place", "moves": False, "expect_change": True,
+                        "frames_between": 0, "span": 0, "made": len(after - before), "gone": len(before - after),
+                        "changed": True, "rows_allowed": 0})
+    finally:
+        connection.run = real_run
+
     for job in app.root.tk.splitlist(app.root.tk.call("after", "info")):
         app.root.after_cancel(job)
     app.root.destroy()
@@ -275,6 +304,8 @@ def main():
         if r["frames_between"] > frames or r["span"] > ms:
             problems.append("%s: %d frames between the screen before and after, over %d ms" % (
                 r["change"], r["frames_between"], r["span"]))
+        if r.get("gone", 0) > r["rows_allowed"] and r["change"].endswith("said in place"):
+            problems.append("%s: %d widgets gone (none may go)" % (r["change"], r["gone"]))
         if r["made"] > r["rows_allowed"]:
             problems.append("%s: %d widgets made anew (the rows it brings: %d at most)" % (r["change"], r["made"],
                                                                                          r["rows_allowed"]))

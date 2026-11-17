@@ -3,6 +3,9 @@
   OpenDMTQ.exe                          the launcher window (the first-start guide the first time)
   OpenDMTQ.exe --status                 print the server, the sign-in, the app, the ready check and a newer launcher on
                                         offer (exit 0: PLAY can go)
+  OpenDMTQ.exe --test-server [ADDRESS]  test the connection to the server PLAY plays on (or ADDRESS), step by step, each
+                                        with what it found and how long it took (exit 0: every step passed, 1: one
+                                        failed)
   OpenDMTQ.exe --server URL             connect to a server and play on it from now on
   OpenDMTQ.exe --sign-in ID             sign in to the server (the password from standard input, or asked for)
   OpenDMTQ.exe --sign-out               forget the sign-in
@@ -566,6 +569,9 @@ def parse(argv):
     play.add_argument("--status", action="store_true",
                       help="print the server, the sign-in, the app, the ready check and a newer launcher on offer")
     play.add_argument("--play", action="store_true", help="get ready and start the game")
+    play.add_argument("--test-server", nargs="?", const="", metavar="ADDRESS",
+                      help="test the connection to the server PLAY plays on, or to ADDRESS: each step with what it found "
+                           "and how long it took (exit 0 when every step passes, 1 when one fails)")
     online = p.add_argument_group("server and sign-in")
     online.add_argument("--server", metavar="URL", help="connect to the server at this address and play on it")
     online.add_argument("--sign-in", metavar="ID", help="sign in to the server (the password from standard input)")
@@ -649,7 +655,7 @@ def _jobs(args, maintenance=True):
     --clear-game-data and --uninstall."""
     return any((args.status, args.server, args.sign_in, args.sign_out, args.app, args.set, args.audio_devices,
                 args.language, args.guide, args.open_log, args.play, args.forget, args.reset, args.update,
-                args.skip_guide, args.servers, args.report)) or (
+                args.skip_guide, args.servers, args.report, args.test_server is not None)) or (
         maintenance and any((args.repair, args.clear_game_data, args.uninstall)))
 
 
@@ -778,6 +784,40 @@ def _check_settings(state, args):
             trial["eq"] = "custom"
         # As state.set_value checks it: the whole set normalized, a ChoiceError for the value it does not take.
         trial = choices.normalize(trial)
+
+
+def _test_server(state, address):
+    """--test-server [ADDRESS]: the window's connection test (connection.py) of ADDRESS, or of the server PLAY plays on,
+    in the window's English words: a title, the verdict, then each step as it ends with its mark, its name, what it found
+    and how long it took. 0 when every step passed, 1 when one failed, 2 with no server to test."""
+    from opendmtq_client import connection
+    w = i18n.Words("en")
+    if not address:
+        if state.server() is None:
+            _say("No server to test: connect with --server URL, or give the address (--test-server ADDRESS).", error=True)
+            return 2
+        address = state.current
+    try:
+        # A server this launcher knows: its sign-in is tested too.
+        known = state.server(srv.normalize(address))
+    except srv.ServerError:
+        known = None
+    _show(console.heading(w("test.title")))
+    width = max(len(w("test." + key)) for key in connection.STEPS)
+    marks = {"ok": "ok", "warn": "warn", "bad": "fail", "skip": "skip"}
+
+    def said(step):
+        mark = marks.get(step.state, "skip")
+        found = w.say(step.said) if step.said else ""
+        took = "  (%s)" % connection.took(step.ms) if step.ms is not None and step.state != "skip" else ""
+        _say("  [%s] %s: %s%s" % (console.MARKS[mark][0].ljust(4), w("test." + step.key), found, took),
+             shown="  %s %s  %s%s" % (console.mark(mark), console.paint(w("test." + step.key).ljust(width), "muted"),
+                                      found, console.paint(took, "faint")))
+
+    result = connection.run(address, known, report=said)
+    _show("")
+    _say(w.say(result.verdict()), error=result.failed() and not result.moved)
+    return 1 if result.failed() else 0
 
 
 def _report(state, target):
@@ -912,6 +952,8 @@ def _run(state, args, jobs):
         _servers(state)
     if args.report:
         _report(state, args.report)
+    if args.test_server is not None:
+        return _test_server(state, args.test_server)
     if args.status:
         return _status(state)
     if args.play:

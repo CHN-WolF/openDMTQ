@@ -97,6 +97,9 @@ class LauncherApp:
         self.records = None             # the last records the server gave for the sign-in in use: {"key": (address,
         #                                 account), "answer": server.records' answer or None, "at"}; None before any
         self.records_asked = None       # the sign-in whose records are being asked for now, or None
+        self.connection_test = None     # the connection test of this run: {"id", "url", "running", "steps": {key: Step},
+        #                                 "result"}; its card on the Online page fills in as its steps end
+        self.test_runs = 0              # connection tests started in this run (each card is made for one)
         self._setup_fonts()
         self._size_window()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -579,6 +582,94 @@ class LauncherApp:
         # The link works once: never in the log; the page it opens is said instead.
         log.info("opened the player's page on the site in the browser")
         self.set_status(i18n.Said("status.mypage.opened"), "ok", transient=True)
+
+    def test_connection(self):
+        """The connection test of the server PLAY plays on (connection.py), on a worker thread: its card on the Online page
+        is made at once with every step waiting, and each step's row says what it found as it ends, in place."""
+        server = self.state.server()
+        if server is None or (self.connection_test and self.connection_test["running"]):
+            return
+        self.user_acted()
+        self.test_runs += 1
+        test = {"id": self.test_runs, "url": server["url"], "running": True, "steps": {}, "result": None}
+        self.connection_test = test
+        self.follow_page("online")
+        # The server's entry as it is now: its sign-in is asked with its cookie, nothing of it changed.
+        entry = dict(server)
+        from opendmtq_client import connection
+
+        def work():
+            try:
+                result = connection.run(test["url"], entry,
+                                        report=lambda step: self.post(lambda: self._test_step(test, step)))
+            except Exception:  # noqa: BLE001  (logged; the card says the test ended where it stopped)
+                log.exception("the connection test failed")
+                result = None
+            self.post(lambda: self._test_done(test, result))
+
+        threading.Thread(target=work, daemon=True, name="connection-test").start()
+
+    def _test_step(self, test, step):
+        """A step of the test ended: kept, and its row on the card says it, in place."""
+        from opendmtq_client import pages
+        test["steps"][step.key] = step
+        pages.test_step_shown(self, test, step)
+
+    def _test_done(self, test, result):
+        """The test ended: its result kept and its verdict said on the card (with the address of a server found on
+        another port to use), its lines in the log."""
+        from opendmtq_client import pages
+        test["running"], test["result"] = False, result
+        if result is not None:
+            for line in result.text(i18n.Words("en")).splitlines():
+                log.info("connection test: %s", line)
+        pages.test_done_shown(self, test)
+
+    def copy_test(self):
+        """Copy: the whole result of the test on show as text, in the window's language, on the clipboard."""
+        test = self.connection_test
+        if not test or test["result"] is None:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(test["result"].text(self.words))
+        self.set_status(i18n.Said("test.copied"), "ok", transient=True)
+
+    def use_found_address(self, found):
+        """The test's Use this address: the server PLAY plays on moves to the address it was found at (its sign-in kept;
+        its app, built for the old address, goes), asked of the server first on a worker thread."""
+        if self.busy_now():
+            self.set_status(i18n.Said("online.busy"), "warn")
+            return
+        self.user_acted()
+        old = self.state.current
+
+        def work():
+            try:
+                actions.move_server(self.state, old, found, change=self.post)
+                self.post(lambda: self._moved(found))
+            except Exception as e:  # noqa: BLE001  (said on the status line)
+                log.info("could not move to %s: %s", found, e)
+                self.post(lambda error=e: self.set_status(i18n.Said("status.error", error=error), "bad", sticky=True))
+
+        threading.Thread(target=work, daemon=True, name="move").start()
+
+    def _moved(self, found):
+        """Moved: said, saved, and the test run again on the new address."""
+        self.state.save()
+        self.address_draft = None
+        self.download_error, self.app_note = None, None
+        self.refresh_checks(force=True)
+        self.connection_test = None
+        self.follow_page("online", "play")
+        # The test again, of the new address; said after it starts (its start is the player's doing, which would give the
+        # line back to the ready check).
+        self.test_connection()
+        self.set_status(i18n.Said("test.used", url=found), "ok", sticky=True)
+
+    def test_from_play(self):
+        """PLAY's Server row, when the server does not answer: the Online page, and the test of it."""
+        self.nav_go("online")
+        self.test_connection()
 
     def look_for_update(self):
         """The look for a newer launcher at the start (updates.Look): on a worker thread, with its time limit. A newer one

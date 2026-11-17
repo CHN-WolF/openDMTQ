@@ -132,6 +132,25 @@ def connect(state, address, change=at_once):
     return found
 
 
+def move_server(state, old, new, change=at_once):
+    """The server at `old` found at `new` (the connection test found it on another port): asked there first, then the
+    launcher's entry moved to it, made where `change` makes it. Its sign-in stays (the site's cookie is the same on any
+    port of the server), its app goes (built for the old address, the game would ask that). A server known at `new`
+    already is played on as it is."""
+    found = srv.about(new)
+
+    def move():
+        entry = state.server(old)
+        if entry is not None and state.server(new) is None:
+            entry.update(url=new, name=found["name"], address=found["address"], app=None)
+        else:
+            state.add_server(new, found["name"], found["address"])
+        state.current = new
+    change(move)
+    apps.remove(old)
+    return found
+
+
 def sign_in(state, user, password, change=at_once):
     """Sign in to the current server; the launcher keeps the cookie it gives, never the password."""
     server = state.server()

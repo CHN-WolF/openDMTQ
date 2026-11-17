@@ -11,6 +11,7 @@ report, and OpenDMTQ-cmd.exe --report FILE).
     settings/player-settings.txt  the settings file the player reads
     system/displays.txt           each display, its size and its rates, as the launcher's log has them
     system/sound.txt              the sound devices the player plays on, the default marked
+    system/connection-test.txt    the last connection test (connection.py), step by step, when there was one
 
 What is left out is replaced by a word in angle brackets wherever it is found, in every file: the Windows user's name
 and every path with it (the home folder, the temporary folder), the site IDs signed in with or filled in, every server's
@@ -350,6 +351,11 @@ def make(state, path=None, devices=None, now=None):
     listed = devices if devices is not None else player.audio_devices()
     files["system/sound.txt"] = "".join("%s%s\n    %s\n" % (d["name"], " (default)" if d["default"] else "", d["id"])
                                         for d in listed) or "The player listed no sound devices.\n"
+    # The last connection test, as Copy gives it, in English.
+    from opendmtq_client import connection, i18n
+    tested = connection.last()
+    if tested is not None:
+        files["system/connection-test.txt"] = tested.text(i18n.Words("en"))
     # Every file with what is left out taken out, about.txt last: it says what was.
     written = {name: scrub(text) for name, text in files.items()}
     cards = graphics()

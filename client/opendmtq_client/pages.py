@@ -521,6 +521,9 @@ def refresh_checks(app):
         if row["go"] == "repair":
             # Repair runs on the click, under its own dialog.
             action = lambda: maintenance.repair_program(app)
+        elif row["go"] == "test":
+            # The connection test, on the Online page.
+            action = app.test_from_play
         elif row["go"]:
             # The page it names, as the menu would open it.
             action = lambda p=row["go"]: app.nav_go(p)
@@ -554,8 +557,12 @@ def check_row(check, w, on_play=False, in_guide=False, installed=False):
         # PLAY does these by itself; the row only says it will.
         row.update(state="change", value=w("play.will_get"))
     elif not check.blocks and check.key == "server":
-        # The server does not answer: nothing to fix on this PC, and PLAY still plays this PC's app.
-        row.update(state="change", value=w("check.server.down"))
+        # The server does not answer: PLAY still plays this PC's app; the connection test says where the way to it stops
+        # (none in the guide, which has no Online page to show it on).
+        if in_guide:
+            row.update(state="change", value=w("check.server.down"))
+        else:
+            row.update(state="change", link=w("check.server.test"), go="test")
     else:
         # What stops PLAY is a problem; the rest will change once the player sees to it.
         row["state"] = "bad" if check.key in actions.BLOCKING else "change"
@@ -1433,6 +1440,8 @@ def connect_panel(app, parent, rerender, forget=False):
         # At the card's title, apart from Connect: the next server this launcher knows becomes the one PLAY plays on.
         widgets.Button(card.head, ui, w("online.forget"), lambda: forget_server(app, server, rerender),
                        kind="danger").pack(side="right")
+        # Beside it, the connection test of this server: its card comes under this one (test_panel).
+        widgets.Button(card.head, ui, w("test.button"), app.test_connection).pack(side="right", padx=(0, ui.px(8)))
     if not server:
         # Not connected yet: typing goes to the address, Enter connects.
         address.after_idle(address.focus_set)
@@ -1646,6 +1655,137 @@ def _get(app, rerender):
     rerender()
 
 
+def test_key(app):
+    """What the Online page's test card shows: the test of the server in use (its number), or None."""
+    test, server = app.connection_test, app.state.server()
+    return test["id"] if test and server and test["url"] == server["url"] else None
+
+
+# A step's lamp by its state: lime what is fine, a yellow ring what is not as it should be, red what fails, a faint ring
+# what waits or was not tried.
+TEST_LAMPS = {"ok": (theme.OK, False), "warn": (theme.WARN, True), "bad": (theme.BAD, False),
+              "skip": (theme.FAINT, True), "wait": (theme.FAINT, True)}
+
+
+def test_panel(app, parent):
+    """The connection test's card: its verdict at the top, Copy at its title, then a row a step (a lamp, the step's name,
+    what it found, how long it took), every step there from the start and each said in place as it ends; with a server
+    found on another port, Use this address under the verdict."""
+    from PIL import ImageTk
+    from opendmtq_client import connection
+    test = app.connection_test
+    if test_key(app) is None:
+        return
+    ui, w = app.ui, app.words
+    card = _card(parent, ui, w("test.title"))
+    shown = test["shown"] = {"rows": {}}
+    copy = widgets.Button(card.head, ui, w("test.copy"), app.copy_test)
+    copy.pack(side="right")
+    shown["copy"] = copy
+    # The lamps of each state, made once for the card's rows.
+    pictures = {}
+    for state, (colour, hollow) in TEST_LAMPS.items():
+        picture = art.lamp(colour, ui.scale, bg=theme.PANEL, hollow=hollow)
+        pictures[state] = (picture, ImageTk.PhotoImage(picture, master=card))
+    shown["pictures"] = pictures
+    verdict = widgets.Said(card.body, ui, font=ui.fonts.body)
+    verdict.pack(fill="x")
+    shown["verdict"] = verdict
+    # Where Use this address comes when the test found the server on another port.
+    shown["use"] = tk.Frame(card.body, bg=theme.PANEL)
+    widgets.divider(card.body, ui, pady=CHECK_GAP)
+    # The steps' names in one column, as wide as the widest of either language.
+    names = [words for key in connection.STEPS for words in i18n.TEXT["test." + key]]
+    column = widgets.name_width(ui, names)
+    for i, key in enumerate(connection.STEPS):
+        if i:
+            widgets.divider(card.body, ui, pady=TEST_ROW_GAP)
+        row = tk.Frame(card.body, bg=theme.PANEL)
+        row.pack(fill="x")
+        lamp = tk.Label(row, image=pictures["wait"][1], bg=theme.PANEL, bd=0)
+        lamp.odq_picture = pictures["wait"][0]
+        lamp.pack(side="left", anchor="n", pady=(ui.px(3), 0))
+        # The step's name in the names' column: a frame as wide as the column, as tall as the name.
+        holder = tk.Frame(row, bg=theme.PANEL, width=column)
+        holder.pack(side="left", anchor="n", padx=(ui.px(6), 0))
+        name = tk.Label(holder, text=w("test." + key), font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL, anchor="w")
+        name.pack(anchor="w")
+        holder.configure(height=name.winfo_reqheight())
+        holder.pack_propagate(False)
+        took = tk.Label(row, text="", font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL)
+        took.pack(side="right", anchor="n", padx=(ui.px(12), 0), pady=(ui.px(2), 0))
+        # What it found, beside its name, wrapping in the room left of how long it took.
+        found = widgets.label(row, ui, w("test.waiting"), font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL,
+                              wrap_margin=0, beside=(lamp, holder, took))
+        found.pack(side="left", fill="x", expand=True, pady=(ui.px(2), 0))
+        shown["rows"][key] = {"lamp": lamp, "name": name, "found": found, "took": took}
+    # What ended before the card was made (the page drawn again meanwhile), and the verdict as it stands.
+    for step in test["steps"].values():
+        test_step_shown(app, test, step)
+    test_done_shown(app, test)
+
+
+# The room either side of the faint line between two steps' rows (logical pixels): tighter than a list's, as a test has
+# ten of them.
+TEST_ROW_GAP = 6
+
+
+def test_step_shown(app, test, step):
+    """A step's row as it ended, in place: its lamp, what it found, how long it took. Nothing else of the page made again."""
+    from opendmtq_client import connection
+    shown = test.get("shown")
+    row = shown and shown["rows"].get(step.key)
+    if not row or not row["lamp"].winfo_exists():
+        return
+    picture, image = shown["pictures"][step.state]
+    row["lamp"].configure(image=image)
+    row["lamp"].odq_picture = picture
+    row["found"].configure(text=app.words.say(step.said) if step.said else app.words("test.waiting"),
+                           fg=theme.TEXT if step.state == "bad" else theme.MUTED)
+    row["took"].configure(text=connection.took(step.ms) if step.ms is not None and step.state != "skip" else "")
+    _test_verdict(app, test)
+
+
+def test_done_shown(app, test):
+    """The test's end on its card, in place: the verdict, Copy, and Use this address for a server found on another
+    port."""
+    shown = test.get("shown")
+    if not shown or not shown["verdict"].winfo_exists():
+        return
+    _test_verdict(app, test)
+    result = test["result"]
+    shown["copy"].enable(not test["running"] and result is not None)
+    use = shown["use"]
+    for child in use.winfo_children():
+        child.destroy()
+    if result is not None and result.moved and not test["running"]:
+        # The server's address on the port it answers on, one press away (plain: the page's lime button stays its own
+        # main action, the sign-in or the app's download).
+        widgets.Button(use, app.ui, app.words("test.use"), lambda: app.use_found_address(result.moved)).pack(anchor="w")
+        if not use.winfo_manager():
+            use.pack(fill="x", pady=(app.ui.px(FORM_BUTTON_GAP), 0), after=shown["verdict"])
+    elif use.winfo_manager():
+        use.pack_forget()
+
+
+def _test_verdict(app, test):
+    """The verdict line over the steps, as the test stands: running, or its outcome in the outcome's tone."""
+    from opendmtq_client import connection
+    shown = test["shown"]
+    if test["running"] or test["result"] is None:
+        partial = connection.Result(test["url"])
+        for step in test["steps"].values():
+            partial.steps[connection.STEPS.index(step.key)] = step
+        partial.ended = not test["running"]
+        said, tone = partial.verdict(), None
+    else:
+        result = test["result"]
+        said = result.verdict()
+        tone = "ok" if not result.failed() and not any(s.state == "warn" for s in result.steps) else (
+            "bad" if result.failed() and not result.moved else "warn")
+    shown["verdict"].set(app.words.say(said), tone)
+
+
 def known_servers(app, parent, rerender):
     """The other servers this launcher knows: play on one of them instead, or forget one."""
     ui, w = app.ui, app.words
@@ -1749,6 +1889,8 @@ def build_online(app, parent):
     server_key, signin_key, app_key, others_key = online_keys(app)
     # The server's card is keyed by the server in use only: its line under the address follows each answer in place.
     sections.add(lambda: (app.state.current,), lambda holder: connect_panel(app, holder, again, forget=True))
+    # The connection test of the server in use, made once a test starts and filled in as its steps end (test_panel).
+    sections.add(lambda: test_key(app), lambda holder: test_panel(app, holder))
     sections.add(signin_key, lambda holder: signin_panel(app, holder, again))
     sections.add(app_key, lambda holder: app_panel(app, holder, again))
     sections.add(others_key, lambda holder: known_servers(app, holder, again))

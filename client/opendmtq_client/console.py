@@ -16,7 +16,9 @@ import sys
 COLOURS = {"ok": (0x8c, 0xf2, 0x3d), "warn": (0xff, 0xcf, 0x3d), "bad": (0xff, 0x5f, 0x72), "muted": (0xae, 0xb8, 0xc3),
            "faint": (0x8d, 0x98, 0xa4), "text": (0xee, 0xf2, 0xf6)}
 # A ready check's mark by its kind, as words in plain text (what scripts and the tests read) and the tone it shows in.
-MARKS = {"ok": ("ok", "ok"), "warn": ("warn", "warn"), "todo": ("todo", "bad"), "play": ("play", "warn")}
+MARKS = {"ok": ("ok", "ok"), "warn": ("warn", "warn"), "todo": ("todo", "bad"), "play": ("play", "warn"),
+         # A connection test's step that fails, and one not tried (connection.py).
+         "fail": ("fail", "bad"), "skip": ("skip", "faint")}
 # The names' column: as wide as the longest name of a part, at least this many characters.
 NAME_WIDTH = 10
 # How wide a line is at most when the terminal does not say (characters).

@@ -12,6 +12,7 @@ Exit status 1 when the layout check finds a problem; the problems are printed an
 import argparse
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -131,7 +132,7 @@ def settle(app, seconds=8.0, until=None):
         app.root.update()
         # The page's picture behind is drawn a moment after the page (widgets.ScrollArea): a shot waits for it.
         body = getattr(app.guide, "body", None) if getattr(app, "guide", None) is not None else getattr(app, "body", None)
-        busy = (app.checks is None or app.download is not None or
+        busy = (app.checks is None or app.download is not None or getattr(app, "records_asked", None) is not None or
                 (body is not None and body.winfo_exists() and body._backdrop_job is not None))
         guide = getattr(app, "guide", None)
         if guide is not None and guide.checking:
@@ -1106,6 +1107,185 @@ def variants_check(app, site, out, tag, problems):
     unnamed_check(app, out, tag, problems)
 
 
+def records_check(app, site, out, tag, problems):
+    """PLAY signed in: My records under the columns (the stand-in's made-up plays: a long title, the keyboard's mark, a
+    new record, places on the charts), My page on the site on the server card opening the one-time link in the browser,
+    then the records of an account linked to no player and of one with no plays; signed out, neither."""
+    import tkinter as tk
+    from opendmtq_client import actions as acts
+    w = app.words
+    opened = []
+    real_open = acts.open_url
+    acts.open_url = opened.append
+    try:
+        app.records = None
+        app.go("play")
+        settle(app)
+        name = tag + "_play-records"
+        shot(app.root, out, name)
+        measure(app, name, problems)
+        play_fits(app, name, tag, problems)
+        card = card_titled(app, w("play.records"))
+        shown = [x.cget("text") for x in widgets_of(app.root) if isinstance(x, tk.Label) and x.winfo_ismapped()]
+        if card is None:
+            problems.append("%s: no My records card on PLAY signed in" % name)
+        for words in (w("play.records.recent"), w("play.records.best"), "987,654", w("play.records.place", n=1, all=4),
+                      "Glass Garden of the Long Afternoon", w("play.records.keys")):
+            if words not in shown:
+                problems.append("%s: PLAY's records do not say %r" % (name, words))
+        # Three of each list, no more: the rest is on the site.
+        if shown.count("812,300") != 2:
+            problems.append("%s: the records' lists do not each show three rows" % name)
+        # The page at its end, where the card is whole.
+        app.body.canvas.yview_moveto(1.0)
+        settle(app)
+        shot(app.root, out, name + "-end")
+        app.body.to_top()
+        settle(app)
+        # My page on the site: the server's one-time link opened, said on the status line.
+        button(app, w("play.mypage")).press()
+        settle(app, 6, until=lambda: bool(opened))
+        settle(app)
+        if opened != [site.url + "/opendmtq/login.php?once=" + stub.LINK_TOKEN]:
+            problems.append("%s: My page on the site opened %r" % (name, opened))
+        if app.status_text != w("status.mypage.opened"):
+            problems.append("%s: after My page on the site the status line says %r" % (name, app.status_text))
+        shot(app.root, out, tag + "_play-mypage")
+        measure(app, tag + "_play-mypage", problems)
+        # An account linked to no player, then one with no plays: one line each.
+        for variant, answer, said in (("unlinked", {"account": stub.ACCOUNT, "player": None, "recent": [], "best": []},
+                                       w("play.records.unlinked", account=stub.ACCOUNT)),
+                                      ("none", dict(stub.made_up_records(), recent=[], best=[]), w("play.records.none"))):
+            site.records = answer
+            app.refresh_records(force=True)
+            settle(app)
+            vname = "%s_play-records-%s" % (tag, variant)
+            shot(app.root, out, vname)
+            measure(app, vname, problems)
+            if said not in [x.cget("text") for x in widgets_of(app.root) if isinstance(x, tk.Label) and x.winfo_ismapped()]:
+                problems.append("%s: the records card does not say %r" % (vname, said))
+        site.records = stub.made_up_records()
+        app.refresh_records(force=True)
+        settle(app)
+    finally:
+        acts.open_url = real_open
+
+
+def test_check(app, site, out, tag, problems):
+    """The connection test on the Online page: Test connection, its card filled in step by step (a row a step, every
+    one said), its verdict, Copy; a server that moved to another port found there, with Use this address, which plays
+    on it; PLAY's Server row leading to the test while the server does not answer."""
+    import tkinter as tk
+    from opendmtq_client import connection
+    w = app.words
+    app.go("online")
+    settle(app)
+    button(app, w("test.button")).press()
+    settle(app, 30, until=lambda: app.connection_test is not None and not app.connection_test["running"])
+    settle(app)
+    name = tag + "_online-test"
+    card = card_titled(app, w("test.title"))
+    if card is None:
+        problems.append("%s: no connection test card" % name)
+        return
+    app.body.show_widget(card)
+    settle(app)
+    shot(app.root, out, name)
+    measure(app, name, problems)
+    shown = [x.cget("text") for x in widgets_of(card) if isinstance(x, tk.Label) and x.winfo_ismapped()]
+    for key in connection.STEPS:
+        if w("test." + key) not in shown:
+            problems.append("%s: the card has no row for %s" % (name, key))
+    if w("test.waiting") in shown:
+        problems.append("%s: a step still waits after the test ended" % name)
+    # Copy: the whole result on the clipboard, in the window's language.
+    button(app, w("test.copy")).press()
+    settle(app)
+    copied = app.root.clipboard_get()
+    if not copied.startswith(w("test.text.title", url=site.url, at="")[:20]) or len(copied.splitlines()) != 12:
+        problems.append("%s: Copy copied %r" % (name, copied[:80]))
+    # A server that moved: the launcher's address on a port nobody listens on, the stand-in's port among those a new
+    # server takes.
+    before = app.state.current
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        closed = s.getsockname()[1]
+    old = "http://127.0.0.1:%d" % closed
+    app.state.add_server(old, "Stand-in")
+    app.state.servers = [x for x in app.state.servers if x["url"] != before]
+    app.refresh_checks(force=True)
+    real_ports = connection.PORTS
+    connection.PORTS = (closed + 1, int(site.url.rsplit(":", 1)[1]))
+    try:
+        app.go("play")
+        settle(app, 12)
+        name = tag + "_play-server-down"
+        shot(app.root, out, name)
+        measure(app, name, problems)
+        # The ready check's Server row leads to the test.
+        link = [x for x in widgets_of(app.body.inner) if isinstance(x, tk.Label) and x.cget("text").startswith(
+            w("check.server.test"))]
+        if not link:
+            problems.append("%s: the Server row does not lead to the connection test" % name)
+        else:
+            link[0].event_generate("<Button-1>")
+        settle(app, 30, until=lambda: app.connection_test is not None and not app.connection_test["running"])
+        settle(app)
+        name = tag + "_online-test-moved"
+        card = card_titled(app, w("test.title"))
+        if app.page != "online" or card is None:
+            problems.append("%s: the Server row did not open the test on the Online page" % name)
+            return
+        app.body.show_widget(card)
+        settle(app)
+        shot(app.root, out, name)
+        measure(app, name, problems)
+        button(app, w("test.use")).press()
+        settle(app, 12, until=lambda: app.state.current == site.url)
+        settle(app, 30, until=lambda: app.connection_test is not None and not app.connection_test["running"])
+        if app.state.current != site.url or app.status_text != w("test.used", url=site.url):
+            problems.append("%s: Use this address left PLAY on %s (%r)" % (name, app.state.current, app.status_text))
+    finally:
+        connection.PORTS = real_ports
+        # The stand-in again for what follows, signed in as before.
+        if app.state.server(before) is None:
+            app.state.add_server(before, "Stand-in")
+        app.state.current = before
+        from opendmtq_client import actions as acts
+        acts.sign_in(app.state, stub.ACCOUNT, stub.PASSWORD)
+        app.state.save()
+        app.connection_test = None
+        app.refresh_checks(force=True)
+        settle(app)
+
+
+def report_check(app, out, tag, problems):
+    """Help's Save a report: the zip made under a dialog that says so, shown chosen in its folder, then a dialog that names
+    it and says what was left out; the zip in the user's Downloads, under the report's name."""
+    import zipfile
+    from opendmtq_client import actions as acts
+    w = app.words
+    shown = []
+    real_show = acts.show_file
+    acts.show_file = lambda path: shown.append(path) or True
+    try:
+        app.go("help")
+        settle(app)
+        name = tag + "_dialog-report"
+        through_dialog(app, out, name, button(app, w("help.report")).press,
+                       lambda d: d.canvas.event_generate("<Return>"), problems, seconds=20.0)
+        settle(app)
+        made = shown[0] if shown else None
+        downloads = os.path.join(os.environ["HOME"], "Downloads")
+        if not made or os.path.dirname(made) != downloads or not zipfile.is_zipfile(made):
+            problems.append("%s: the report was not shown in Downloads as a zip (%r)" % (name, made))
+        elif not re.fullmatch(r"opendmtq-report-\d{8}-\d{6}\.zip", os.path.basename(made)):
+            problems.append("%s: the report is named %r" % (name, os.path.basename(made)))
+    finally:
+        acts.show_file = real_show
+
+
 def unnamed_check(app, out, tag, problems):
     """A server with no name of its own (a site without SERVER_NAME calls itself by its address): its address once on
     the PLAY page's card and in Help's ready check, never "192.0.2.5:8080" over "http://192.0.2.5:8080"."""
@@ -1621,6 +1801,8 @@ def main():
     gc.disable()
     home = tempfile.mkdtemp()
     os.environ["HOME"] = home
+    # The user's Downloads, where Help's Save a report puts the zip, as Windows has it.
+    os.makedirs(os.path.join(home, "Downloads"))
     os.environ["OPENDMTQ_CLIENT_DIR"] = os.path.join(home, "client")
     os.environ["XDG_DATA_HOME"] = os.path.join(home, "local")
     player = os.path.join(home, "player", "fake_player.py")
@@ -1657,6 +1839,11 @@ def main():
     guide.finish(play=False)
     settle(app)
     pages_check(app, args.out, tag, problems)
+    # PLAY's records and My page on the site, signed in after the guide; Help's Save a report.
+    records_check(app, site, args.out, tag, problems)
+    report_check(app, args.out, tag, problems)
+    # The connection test on the Online page, and from PLAY's Server row when the server does not answer.
+    test_check(app, site, args.out, tag, problems)
     # Keyboard play on the Controls page, its states and its keys.
     keys_check(app, args.out, tag, problems)
     # Online's address field after a failed Connect, as the guide's SERVER step above.

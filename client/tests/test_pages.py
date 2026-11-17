@@ -40,11 +40,15 @@ class CheckRow(unittest.TestCase):
         row = pages.check_row(actions.Check("player", False, "missing"), EN)
         self.assertEqual((row["link"], row["value"]), (None, EN("check.player.missing")))
 
-    def test_what_play_does_and_a_silent_server_have_no_link(self):
-        # PLAY downloads the app by itself; a server that does not answer leaves PLAY its app on this PC.
+    def test_what_play_does_has_no_link_and_a_silent_server_leads_to_the_test(self):
+        # PLAY downloads the app by itself; a server that does not answer leaves PLAY its app on this PC, and its row leads
+        # to the connection test (on the Online page; the guide, which has none, says it does not answer).
         fetched = pages.check_row(actions.Check("app", False, "none", page="online", play_fixes=True), EN)
         self.assertEqual((fetched["state"], fetched["value"], fetched["link"]), ("change", EN("play.will_get"), None))
         silent = pages.check_row(actions.Check("server", False, "no answer", page="online", blocks=False), EN)
+        self.assertEqual((silent["state"], silent["value"], silent["link"], silent["go"]),
+                         ("change", None, EN("check.server.test"), "test"))
+        silent = pages.check_row(actions.Check("server", False, "no answer", page="online", blocks=False), EN, in_guide=True)
         self.assertEqual((silent["state"], silent["value"], silent["link"]), ("change", EN("check.server.down"), None))
 
     def test_a_fine_row_names_what_it_is_about(self):

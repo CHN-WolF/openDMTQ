@@ -8,6 +8,7 @@ import hashlib
 import http.server
 import json
 import threading
+import time
 import urllib.parse
 
 ACCOUNT, PASSWORD = "player1", "pass-1234"
@@ -20,9 +21,10 @@ APP = b"PK\x03\x04 made-up app " * 4096
 LINK_TOKEN = "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v"
 
 
-def made_up_records(now=1795400000):
+def made_up_records(now=None):
     """A player's records as client.php?records answers them, with made-up songs: plays and bests with the keyboard and
-    without, a new record, places on their charts."""
+    without, a new record, places on their charts; their times from `now` (this moment by default)."""
+    now = int(now if now is not None else time.time())
     def row(title, chart, score, grade, keys, rank, players, **more):
         return dict({"chart": 100 + rank, "title": title, "chart_name": chart, "score": score, "grade": grade, "keys": keys,
                      "rank": rank, "players": players}, **more)
@@ -54,6 +56,11 @@ class Site:
         self.old = False               # an OpenDMTQ from before the PC client: no client.php, its health page only
         self.records = made_up_records()   # client.php?records' answer; None: a server from before records (404)
         self.links = True              # client.php?link answers; False: a server from before one-time links (404)
+        self.version = "0.8.0"         # the OpenDMTQ version client.php?about says
+        self.health = {"ok": True, "patch": "1.003.005", "maintenance": False}   # what its health page answers
+        self.broadcasts = False        # broadcasts on for the server (/live/state)
+        # The client data's list of files for its patch, as the game downloads it (its first bytes).
+        self.listing = b"\x02" + b"patch list " * 300
 
     def describe(self):
         return {"file": "opendmtq-phone-app-2026.11.09-android-127.0.0.1-8080.apk", "sha256": hashlib.sha256(self.app).hexdigest(),
@@ -96,10 +103,15 @@ class Site:
                     return self._json(404, {"error": "not found"})
                 if self.path == "/opendmtq/health.php":
                     # What every OpenDMTQ answers: its game server's state and the game's patch.
-                    return self._json(200, {"ok": True, "patch": "1.003.005", "maintenance": False})
+                    return self._json(200 if site.health.get("ok") else 503, site.health)
                 if self.path == "/opendmtq/client.php?about":
-                    return self._json(200, {"opendmtq": "0.8.0", "name": "Stand-in", "address": "127.0.0.1:8080",
+                    return self._json(200, {"opendmtq": site.version, "name": "Stand-in", "address": "127.0.0.1:8080",
                                             "app": site.app_state == "ok"})
+                if self.path == "/live/state?ids=0":
+                    # What the player asks between songs, for nobody's number.
+                    return self._json(200, {"on": False, "fps": 30, "height": 720, "bitrate": 2000000, "segment": 2,
+                                            "switch": False, "broadcasts": site.broadcasts, "toast": "", "toast_id": 0,
+                                            "toast_kind": ""})
                 if self.path == "/opendmtq/client.php?records":
                     if site.records is None:
                         return self._json(404, {"error": "unknown"})
@@ -135,6 +147,29 @@ class Site:
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
+
+            def do_HEAD(self):
+                # The heads the connection test asks for: the client data's list of the patch, and the app signed in.
+                site.requests.append(("HEAD", self.path, self._cookie()))
+                patch = site.health.get("patch")
+                if self.path == "/patch/phone_new/%s/android/patch_new.csv.lz4" % patch:
+                    kind, length = "application/octet-stream", len(site.listing)
+                elif self.path == "/apk" and self._signed():
+                    kind, length = site.apk_kind, len(site.app)
+                elif self.path == "/apk":
+                    self.send_response(302)
+                    self.send_header("Location", "/opendmtq/login.php?next=%2Fapk")
+                    self.end_headers()
+                    return
+                else:
+                    self.send_response(404)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(length))
+                self.end_headers()
 
             def do_POST(self):
                 site.requests.append(("POST", self.path, self._cookie()))
