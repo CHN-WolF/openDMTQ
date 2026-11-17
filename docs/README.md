@@ -44,7 +44,7 @@ quick start for each way to run a server, and [Questions and answers](faq.md) co
 
 | Guide | For |
 | :--- | :--- |
-| [Architecture](architecture.md) | How the parts fit together: the server, the game server's code, the content, the app patch, the database |
+| [Architecture](architecture.md) | How the parts fit together: the server and its one port, the game server's code and each player's game state, the content, the app patch, the PC client and its updates, the database, the security model, releases and their signature |
 | [Testing](testing.md) | What runs before a change reaches a server, and how to run it |
 | [Test cases](test-cases.md) | Every case, one table per area, with what checks it |
 | [The arm32 runtime](../arm32/README.md) | How the 32-bit game runs on phones without 32-bit support |
