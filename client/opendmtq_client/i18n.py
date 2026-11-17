@@ -392,7 +392,7 @@ TEXT = {
     "online.sub": ("The server you play on, your sign-in and its app on this PC.", "플레이하는 서버와 로그인, 이 PC에 받은 앱입니다."),
     "online.server": ("Server", "서버"),
     "online.address": ("Server address", "서버 주소"),
-    "online.address.example": ("192.168.1.10:8080", "192.168.1.10:8080"),
+    "online.address.example": ("192.168.1.10:8791", "192.168.1.10:8791"),
     "online.connect": ("Connect", "연결"),
     "online.connecting": ("Connecting...", "연결하는 중..."),
     "online.connected": ("Connected to {name}.", "{name}에 연결했습니다."),

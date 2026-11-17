@@ -205,6 +205,12 @@ class Wording(unittest.TestCase):
             for text in pair:
                 self.assertNotRegex(text, r"F11|Alt\+Enter", key)
 
+    def test_the_address_example_is_on_a_new_servers_port(self):
+        # A new server is on 8791: the example in an empty address field shows that port, as the server's own pages name
+        # it (cli/opendmtq_cli/env.py DEFAULT_PORT).
+        for example in i18n.TEXT["online.address.example"]:
+            self.assertTrue(example.endswith(":8791"), example)
+
     def test_no_file_name_a_player_never_has(self):
         # Players get the installer as the site or a release names it (opendmtq-pc-client-...-setup....exe): the words
         # say "the installer", never the build's own OpenDMTQ-Setup.exe.
