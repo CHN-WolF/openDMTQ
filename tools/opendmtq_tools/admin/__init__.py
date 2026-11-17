@@ -14,9 +14,9 @@ from .. import songs, strings
 # The application first; each page adds its addresses to it as it is imported.
 from .core import app
 from . import core, auth, assets, jobs, apps, players, recordings, song_pages, status, backups, accounts, logs
-from . import charts, insights, setup, lifecycle
+from . import charts, insights, setup, lifecycle, this_pc
 # The API last: its routes call every page's actions, and its token check comes after the pages' sign-in gate.
 from . import tokens, site, api_routes, api
 
 __all__ = ["app", "songs", "strings", "charts", "insights", "setup", "core", "auth", "assets", "jobs", "apps", "players", "recordings", "song_pages",
-           "status", "backups", "accounts", "logs", "tokens", "site", "api_routes", "api", "lifecycle"]
+           "status", "backups", "accounts", "logs", "tokens", "site", "api_routes", "api", "lifecycle", "this_pc"]

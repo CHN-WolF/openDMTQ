@@ -21,7 +21,7 @@ from flask import g, jsonify, request, send_file
 from werkzeug.exceptions import HTTPException
 
 from .. import server_data, songs
-from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, tokens
+from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, this_pc, tokens
 # The status page's module by another name: the route's handler is called status.
 from . import status as status_page
 from .core import Refused, app, changed, db, json_error, plain, tp
@@ -417,6 +417,12 @@ def kept_file(*parts, mimetype):
     if not os.path.isfile(path):
         raise Refused(404, "not_found", message="It is not there.")
     return send_file(path, mimetype=mimetype, max_age=0)
+
+
+@handler
+def app_play_here(args):
+    """POST /app/play-here: the App page's Play on this PC (this_pc.start): the same checks, the same job."""
+    return started(this_pc.start())
 
 
 @handler

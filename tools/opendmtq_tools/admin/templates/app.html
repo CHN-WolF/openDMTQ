@@ -1,4 +1,5 @@
 {% extends "base.html" %}{% block title %}{{ t('app.title') }}{% endblock %}
+{% from "this_pc.html" import play_here with context %}
 {% block body %}
 {# The app players get: what it is, whether it is right for this server, and the one way to change it, a new build for
    this server's address. #}
@@ -38,6 +39,9 @@
      screen and the forms ready for another try; gone with a restart of this service, the page starts over. #}
   {% if job %}<pre class="log" id="log" data-job="{{ url_for('job_status', job_id=job) }}" data-done="{{ url_for('app_page', built=job) }}" data-gone="{{ url_for('app_page') }}">{{ t('app.starting') }}</pre>{% endif %}
 </section>
+{# Play on this PC, for a visit from the server PC alone (this_pc.py): the PC client installed and opened here, or on Linux
+   and macOS how to play from a Windows PC. #}
+{% if here %}<section class="card" id="this-pc">{{ play_here(here, here_job, 'app') }}</section>{% endif %}
 {# A build for another address, for a test on another network: kept here for download, never offered to players. #}
 <section class="card">
   <h2>{{ t('app.other_title') }}</h2>

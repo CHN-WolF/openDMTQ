@@ -820,6 +820,9 @@ table.sortable :is(th.r, th.rank)[data-sort]::after { position: absolute; margin
 .setup-phone ol { flex: 1 1 260px; display: grid; gap: 6px; margin: 0; padding-left: 20px; color: var(--chalk); }
 /* The setup's app step: the question about newer phones above its button. */
 .setup-build { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0; }
+/* The setup's last step on the server PC itself: the PC client here (this_pc.html), under what to do on each phone. */
+.setup-here { margin: 0 0 16px; }
+.setup-here .lead { margin: 0; }
 
 /* The Server page (server.html): its state as a table of facts, the commands where the page cannot act, the data part by
    part with a box to tick, and what an uninstall takes away. */

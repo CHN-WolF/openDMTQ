@@ -60,6 +60,8 @@ CHANGE_WORDS = {
     "server:stop": "change.server_stop", "server:port": "change.server_port", "server:restart": "change.server_restart",
     "server:uninstall": "change.server_uninstall",
     "server:repair": "change.server_repair", "server:delete-data": "change.server_delete_data",
+    # Play on this PC (this_pc.py): the PC client installed or opened on the server PC, by whoever pressed it.
+    "app:play_here": "change.play_here",
 }
 
 

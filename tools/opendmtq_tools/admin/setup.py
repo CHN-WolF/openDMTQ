@@ -843,6 +843,10 @@ def setup_page():
         view["has_apk"] = has_base_apk()
         # The QR code of the download page, made with the app (an app from before it has none).
         view["qr"] = os.path.isfile(os.path.join(core.APK, "out", "download-qr.svg"))
+        # Play on this PC, for a visit from the server PC (this_pc.py), and its press while it runs.
+        from . import this_pc
+        view["here"] = this_pc.offer()
+        view["here_job"] = this_pc.following(request.args.get("here", ""))
     return render_template("setup.html", **view)
 
 

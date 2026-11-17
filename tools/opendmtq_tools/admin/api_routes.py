@@ -103,7 +103,8 @@ SHAPES = {
     "Job": Shape("Work that runs in the background: an app build, an import, a restore, and on the admin pages a backup made, "
                  "a change to the songs, a repair or a deletion of the server's data.", [
         Field("id", "string", "Its id, for GET /jobs/{job}."),
-        Field("kind", "string", "What it does.", enum=["build", "import", "restore", "backup", "songs", "repair", "delete-data"]),
+        Field("kind", "string", "What it does.", enum=["build", "import", "restore", "backup", "songs", "repair", "delete-data",
+                                                       "pc-client"]),
         Field("state", "string", "Where it is.", enum=["running", "done", "failed"]),
         Field("started", "integer", "When it started (Unix time)."),
         Field("log", "[string]", "Its last 200 lines of output."),
@@ -759,11 +760,18 @@ ROUTES = [
                                                "or other details on its end): download it again from the start."),
                   (416, "range_not_satisfiable", "The part asked for begins past the end; `Content-Range: bytes */length` says the "
                                                  "length.")]),
-    # What the site hands the launchers that play here (client_updates.py, apps.pc_updates).
-    Route("GET", "/app/windows/updates", "read", "app_windows_updates", "App", "The PC client's updates the site hands out "
-          "to the launchers that play on this server, and what the builder refused for its signature.",
-          "Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks "
-          "there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.", answer="PcClientUpdates"),
+    Route("POST", "/app/play-here", "write", "app_play_here", "App", "Installs the PC client on the server PC and opens it, as the "
+          "App page's Play on this PC does.",
+          "From the server PC itself only, on the Windows bundle: the installer this server keeps, set up for this server with "
+          "the token's admin's ID on its end, runs with `--silent` for the Windows user the server runs as, and the launcher "
+          "opens with this server and that ID filled in to sign in (never a password). With the PC client installed already, "
+          "its launcher opens the same way. The job's log says what it did.",
+          answer="JobAnswer", status=202,
+          errors=[(403, "not_this_pc", "The call does not come from the server PC itself (loopback, or one of its own addresses)."),
+                  (404, "not_windows", "The server runs on Linux or macOS, or in Docker: the message says how to play from a "
+                                       "Windows PC."),
+                  (404, "no_installer", "The PC client is not installed here and this server keeps no installer for Windows."),
+                  (409, "busy", "Play on this PC runs already.")]),
     Route("GET", "/app/icon", "read", "app_icon", "App", "The launcher icon of the app on offer, as the builder kept it.",
           download="image/png", errors=[(404, "not_found", "No icon is kept.")]),
     Route("GET", "/builds", "read", "builds_list", "App", "Every build of the app, newest first.", answer="BuildList"),

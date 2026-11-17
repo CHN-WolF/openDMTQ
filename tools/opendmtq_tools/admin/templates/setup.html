@@ -1,4 +1,5 @@
 {% extends "base.html" %}{% block title %}{{ t('setup.title') }}{% endblock %}
+{% from "this_pc.html" import play_here with context %}
 {% block body %}
 {# The setup's four steps: where the owner is, which are done. Each can be opened again later (more songs, another
    address, another player). #}
@@ -209,6 +210,8 @@
       <li>{{ t('setup.phone_play') }}</li>
     </ol>
   </div>
+  {# On the server PC itself: the PC client here, or how to play from a Windows PC (this_pc.py). #}
+  {% if here %}<div class="setup-here" id="this-pc">{{ play_here(here, here_job, 'setup', level=3) }}</div>{% endif %}
   {% endif %}
   {% if done.files and done.players and done.app %}
   <p class="flash ok" role="status">{{ t('setup.all_done') }}</p>

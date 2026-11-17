@@ -267,6 +267,27 @@ def healthy(**fields):
             "apk_matches_host": True, "https": False, "role": "api", "writable": True, **fields}
 
 
+def windows_bundle_with_the_pc_client(inst):
+    """The Windows bundle on the server PC with the PC client installed for its Windows user: Play on this PC opens the
+    launcher, which stands in here (nothing is started)."""
+    client = inst.path("local/OpenDMTQ.Client")
+    os.makedirs(os.path.join(client, "current"), exist_ok=True)
+    with open(os.path.join(client, "OpenDMTQ.exe"), "wb") as f:
+        f.write(b"MZ")
+    started = []
+
+    class Started:
+        def wait(self, timeout=None):
+            return 0
+
+    def start_program(command, cwd):
+        started.append(command)
+        return Started()
+    return host_install(inst) + [mock.patch.object(admin.lifecycle, "install_kind", lambda: "windows"),
+                                 mock.patch.dict(os.environ, {"LOCALAPPDATA": inst.path("local")}),
+                                 mock.patch.object(admin.this_pc, "start_program", start_program)]
+
+
 def host_install(inst):
     """The setup's pages as a host install has them: its run folder, its .env and a home folder to look in."""
     for d in ("run", "home/Downloads/game", "home/Desktop"):
@@ -439,6 +460,13 @@ def CASES():
           check=lambda t, inst, r: (t.assertTrue(r.data.startswith(b"MZ!")), t.assertTrue(r.data.endswith(b"OPENDMTQ-PRESET1")),
                                     t.assertIn(b'"url":"http://', r.data))),
         C("app_windows", "GET", "/app/windows", 404, "not_found"),
+        # Play on this PC: from the server PC itself on the Windows bundle (the test client's address is loopback), the job
+        # that opens the launcher; from another PC refused; on a server that is no Windows bundle, how to play from one.
+        C("app_play_here", "POST", "/app/play-here", 202, setup=windows_bundle_with_the_pc_client,
+          check=lambda t, inst, r: t.assertEqual(r.get_json()["job"]["kind"], "pc-client")),
+        C("app_play_here", "POST", "/app/play-here", 403, "not_this_pc", setup=windows_bundle_with_the_pc_client,
+          environ_base={"REMOTE_ADDR": "192.168.0.50"}),
+        C("app_play_here", "POST", "/app/play-here", 404, "not_windows"),
         C("app_windows", "GET", "/app/windows", 404, "not_found", setup=with_windows_half_copied),
         # A broken download goes on where it stopped (InstallerDownloadTest has the rest): a part, another file, past the end.
         C("app_windows", "GET", "/app/windows", 206, setup=with_windows, headers={"Range": "bytes=0-1"},
@@ -1910,6 +1938,10 @@ PAGE_ACTIONS = {
     "app_prune": ["builds_prune"],
     "app_download": ["build_download"],
     "app_windows": ["app_windows"],
+    # Play on this PC (this_pc.py), and the App page and the setup's last step following it.
+    "play_here": ["app_play_here"],
+    "app_page?here": ["job_get"],
+    "setup_page?here": ["job_get"],
     "app_delete": ["build_delete"],
     "job_status": ["job_get"],
     "songs_page": ["songs_list"],
@@ -2040,7 +2072,7 @@ TEMPLATE_PAGES = {"accounts.html": "accounts_page", "app.html": "app_page", "bac
                   "server.html": "server_page", "look.html": "look"}
 
 # The arguments of an address that make a page show another of its views (a tab, a step, a file), or follow a job.
-VARIANTS = ("tab", "step", "csv", "watch", "dir", "page", "player", "built", "job", "host")
+VARIANTS = ("tab", "step", "csv", "watch", "dir", "page", "player", "built", "job", "host", "here")
 
 # Every argument a page's address takes, with where the API takes the same: ("query" | "path" | "body", the route, its
 # names there), ("view", routes...) for one that chooses which of the page's views shows (the routes that give them), or
@@ -2051,6 +2083,9 @@ GET_ARGS = {
     "app_page?job": ("path", "job_get", "job"),
     "app_page?built": ("path", "job_get", "job"),
     "app_page?host": ("body", "builds_start", "host"),
+    # Play on this PC that the App page and the setup's last step follow.
+    "app_page?here": ("path", "job_get", "job"),
+    "setup_page?here": ("path", "job_get", "job"),
     # A backup, a restore or a change to the songs that its page follows.
     "backups_page?job": ("path", "job_get", "job"),
     # The Server page: a repair or a deletion to follow.

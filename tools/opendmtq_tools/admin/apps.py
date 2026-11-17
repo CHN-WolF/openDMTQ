@@ -227,11 +227,12 @@ def app_page():
     listed = builds()
     offer, state, _ = offer_state(listed)
     typed = job.get("host") or request.args.get("host") or ""
-    updates, refused = pc_updates()
+    # Play on this PC, for a visit from the server PC (this_pc.py), and its press while it runs.
+    from . import this_pc
     return render_template("app.html", offer=offer, state=state, windows=windows_offer(offer), others=[b for b in listed if not b["current"]],
                            job=wanted or None, running=jobs.running_build(), host=typed if typed != core.PUBLIC_HOST else "",
-                           icon=os.path.isfile(os.path.join(core.APK, "out", "app-icon.png")), updates=updates,
-                           updates_size=updates_size(updates), refused=refused)
+                           icon=os.path.isfile(os.path.join(core.APK, "out", "app-icon.png")), here=this_pc.offer(),
+                           here_job=this_pc.following(request.args.get("here", "")))
 
 
 @app.route(BASE + "/app/icon.png")
