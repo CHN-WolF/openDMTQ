@@ -806,6 +806,22 @@ class MessageTest(unittest.TestCase):
                 self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
             script.assert_called_once_with(port=8791, internet=False, replaces=80)
 
+    def test_up_with_no_firewall_leaves_the_rule_at_a_move(self):
+        # --no-firewall leaves Windows' firewall alone at a move off port 80 too, as setup's does: a test of the move on
+        # a WSL machine never replaces the rule of a server that runs there.
+        with Sandbox("PUBLIC_HOST=192.168.0.10\nADMIN_PASSWORD=x\n", wsl=True) as sb:
+            game_data(sb)
+            sb.windows_reachable()
+            with mock.patch.object(app.time, "sleep"), mock.patch.object(app.system, "run_firewall_script") as script:
+                self.assertEqual(sb.call(app.cmd_up, no_firewall=True), 0, sb.output())
+            script.assert_not_called()
+            self.assertEqual(sb.env()["LISTEN_PORT"], "8791")
+            self.assertIn("The server moved from port 80 to 8791", sb.output())
+        # And the command line takes it.
+        with mock.patch.object(app, "cmd_up", return_value=0) as up:
+            self.assertEqual(app.main(["up", "--no-firewall"]), 0)
+        self.assertTrue(up.call_args.args[0].no_firewall)
+
     def test_up_status_and_setup_name_one_admin_address(self):
         # up, status and the setup's end all name the admin pages on the server's one port, at the address phones use,
         # with where the password is (CLI-21). (up and the setup's end in their block of addresses, status on its admin

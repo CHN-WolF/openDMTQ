@@ -306,8 +306,9 @@ def cmd_up(args):
     if moved:
         for line in moved:
             ok(line)
-        # The rule for phones on WSL follows the port, as `port` moves it.
-        if env.is_wsl():
+        # The rule for phones on WSL follows the port, as `port` moves it; --no-firewall (up's, or the setup's that
+        # comes here) leaves Windows' firewall alone.
+        if env.is_wsl() and not getattr(args, "no_firewall", False):
             open_firewall(env.split(host)[1], internet=not env.is_lan_only(host), replaces=80)
     if not have_game_data():
         die("no client data yet; run ./opendmtq import <folder with your game files>")
@@ -1241,7 +1242,9 @@ def main(argv=None):
     p.add_argument("--check", action="store_true", help="only say what each file there is and whether it can be used")
     p.set_defaults(fn=cmd_import)
 
-    sub.add_parser("up", help="start (or update) the server").set_defaults(fn=cmd_up)
+    p = sub.add_parser("up", help="start (or update) the server")
+    p.add_argument("--no-firewall", action="store_true", help="do not touch the Windows firewall")
+    p.set_defaults(fn=cmd_up)
     # No help here: under the epilog's heading, out of the list (argparse lists the commands that have one).
     p = sub.add_parser("deploy", description="Put this commit on the live server: only if its tests passed, not during a song, "
                                              "with a backup first.")

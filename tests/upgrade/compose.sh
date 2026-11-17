@@ -109,7 +109,9 @@ sed -i -e "s/^PUBLIC_HOST=.*/PUBLIC_HOST=$OLD_HOST/" -e '/^LISTEN_PORT=/d' "$SRV
 # The new code over it, as an update brings it (the folder's files replaced, .env and data/ kept), then up again.
 find "$SRV" -mindepth 1 -maxdepth 1 ! -name data ! -name .env -exec rm -rf {} +
 tar -C "$ROOT" --exclude=./data --exclude=./_work --exclude=./.host --exclude=./.git --exclude=./.env -cf - . | tar -x -C "$SRV"
-cli up > "$WORK/up.log" 2>&1 || true
+# --no-firewall: under WSL the move would take the Windows firewall's rule for port 80 to the new port, and this machine's
+# firewall belongs to its own servers, never to a test's.
+cli up --no-firewall > "$WORK/up.log" 2>&1 || true
 sed 's/^/    /' "$WORK/up.log"
 # Where it moved: the port its admin pages had, and the address with it.
 PORT=$OLD_ADMIN
@@ -145,7 +147,7 @@ rm -f "$jar"
 # 3. Stopped and started again, the owner's own steps before the password no longer worked.
 cli down > /dev/null 2>&1 || true
 expect "stopped: nothing answers" test "$(code "http://127.0.0.1:$PORT/opendmtq/health.php")" = 000
-cli up > "$WORK/up2.log" 2>&1 || true
+cli up --no-firewall > "$WORK/up2.log" 2>&1 || true
 expect "started again, the site answers" answers "http://127.0.0.1:$PORT/opendmtq/health.php"
 expect "and the admin pages" answers "http://127.0.0.1:$PORT/opendmtq/admin/login"
 owner_signs_in "stopped and started again"

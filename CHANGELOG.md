@@ -148,6 +148,7 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - The server's start window on Windows' own console with a Korean, Japanese or Chinese code page or font draws its
   wordmark and headings' lines in plain characters of the same width, which that console does not draw two columns wide.
 - The site's download page has one main button, the app's.
+- `./opendmtq up --no-firewall` leaves the Windows firewall alone under WSL, as `setup` and `expose` do with it.
 
 ### Fixed
 
