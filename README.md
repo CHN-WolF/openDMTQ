@@ -21,7 +21,8 @@
   <a href="#quick-start">Quick start</a> &nbsp;|&nbsp;
   <a href="#what-it-does">What it does</a> &nbsp;|&nbsp;
   <a href="#how-it-works">How it works</a> &nbsp;|&nbsp;
-  <a href="#guides">Guides</a>
+  <a href="#guides">Guides</a> &nbsp;|&nbsp;
+  <a href="#contributing">Contributing</a>
 </p>
 
 <p align="center">
@@ -99,8 +100,9 @@ cd openDMTQ
 ./opendmtq setup
 ```
 
-Every install serves on one port, 8791 unless taken: the players' site at `http://<this PC>:8791/` and the admin pages
-at `http://<this PC>:8791/opendmtq/admin/`, where `admin` signs in with `ADMIN_PASSWORD` from `.env`, on both.
+Every install serves on one port, 8791 unless another program has it: the players' site at `http://<this PC>:8791/` and
+the admin pages at `http://<this PC>:8791/opendmtq/admin/`. The ID `admin` and `ADMIN_PASSWORD` from `.env` sign in to
+both.
 
 <p align="center">
   <img src="docs/images/setup.jpg" alt="The setup in the browser: the game's Android app, the client data and the song data found in Downloads, each labeled with what it is, with a button to import them" width="100%">
@@ -112,30 +114,35 @@ at `http://<this PC>:8791/opendmtq/admin/`, where `admin` signs in with `ADMIN_P
 - **The game's online features.** Accounts, scores, monthly and per-song rankings, achievements and maintenance
   notices.
 - **Your own songs.** Add songs as packages or hide others; phones get what changed at their next start.
-- **Admin pages and an HTTP API.** The setup, the app, songs, players, accounts, broadcasts and backups in the browser,
-  all also as JSON ([the API](docs/api.md)).
+- **Your players, in the game and around it.** Each player's currency, level, items and a ban the game itself shows, on
+  the admin pages; a notice on the site, maintenance in the game, and messages to Discord or Slack when someone goes
+  live or takes a chart's #1.
+- **Admin pages and an HTTP API.** The setup, the app, songs, players, accounts, broadcasts, backups and the server
+  itself (restart, repair, its port, uninstall) in the browser, all also as JSON ([the API](docs/api.md)).
 - **No internet needed** once the files are in ([without internet](docs/closed-network.md)).
 - **Tested before every release** on the real game files, on Windows, Debian, Ubuntu and Docker, and the PC client
   under Wine and on Windows itself ([testing](docs/testing.md)).
 
 ### The players' site
 
-Rankings, songs, player profiles and live broadcasts with recordings, in English and Korean. On a phone, it is where
-players sign in and get the app.
+Rankings, songs, player profiles and live broadcasts with recordings, in English and Korean, and MY PAGE, each player's
+own page with their plays, records and account. On a phone, it is where players sign in and get the app.
 
 <p align="center">
-  <img src="docs/images/site-phone.webp" alt="The players' site on an Android phone: the sign-in page with an ID and a password typed in, and the Download page with Download app (.apk), the app's size and date, and the steps to download, install and play it" width="560">
+  <img src="docs/images/site-phone.webp" alt="The players' site on an Android phone: the sign-in page with its ID and password fields and Show, and the Download page with Download app (.apk), the app's file, size and date, and the steps to download, install and play it" width="560">
 </p>
 
 ### The PC client
 
 A Windows installer from the server's site, set up for that server, which runs on Linux under Wine too. Its launcher
-signs in and keeps the game up to date. The game runs at the display's own refresh rate (up to 1000 frames a second
-with VSync off) and plays with a touch screen, the mouse or the keyboard (the keys you choose for each lane); a bar
-over the game has its sound, minimise, full screen and quit ([the PC client](docs/windows-player.md)).
+signs in, tests the way to the server step by step, and keeps the game and itself up to date from the server, with
+releases the project signed. The game runs at the display's full refresh rate, 160 and 180 Hz laptop panels included
+(up to 1000 frames a second with VSync off), and plays with a touch screen, the mouse or the keyboard (the keys you
+choose for each lane); a bar over the game has its sound, minimise, full screen and quit
+([the PC client](docs/windows-player.md)).
 
 <p align="center">
-  <img src="docs/images/client-play.png" alt="The launcher's PLAY page: the server and the sign-in, the ready check, how to play, the last game, and PLAY" width="100%">
+  <img src="docs/images/client-play.png" alt="The launcher's PLAY page signed in on 192.168.1.10:8791: the server with My page on the site, the ready check, how to play, the last game, and PLAY" width="100%">
 </p>
 
 ### Newer phones
@@ -159,12 +166,13 @@ Plain PHP and SQLite, with no database server to run. Two CPU cores answer hundr
 ## How it works
 
 <p align="center">
-  <img src="docs/images/diagram-architecture.svg" alt="How OpenDMTQ fits together: phones, PCs and browsers reach the server's one port, which sends each path to the game server, the game's files, live broadcasts, the players' site or the admin pages; the setup imports your game files and the app builder patches your APK" width="100%">
+  <img src="docs/images/diagram-architecture.svg" alt="How OpenDMTQ fits together: phones, PCs and browsers reach the server's one port, 8791 by default, which sends each path to the game server, the game's files, live broadcasts, the players' site or the admin pages and their API; the setup imports your game files, and the app builder patches your APK and keeps the PC client's installer and updates beside it" width="100%">
 </p>
 
 The patched app points the game's four official hosts at your server, which answers the game, its login, its downloads
-and the website from one address. The game server is OpenDMTQ's own code ([architecture](docs/architecture.md)).
-Accounts, scores and recordings stay in `data/` on your computer ([privacy](docs/faq.md#privacy)).
+and the website from one address and port. The game server is OpenDMTQ's own code
+([architecture](docs/architecture.md)). Accounts, scores and recordings stay in `data/` on your computer
+([privacy](docs/faq.md#privacy)).
 
 ## What it runs on
 
@@ -179,15 +187,19 @@ Accounts, scores and recordings stay in `data/` on your computer ([privacy](docs
 
 - **For players:** [playing on a server](docs/play.md) · [the PC client](docs/windows-player.md) ·
   [troubleshooting](docs/troubleshooting.md#for-players)
-- **For server owners:** [installing](docs/install.md) · [the game's files](docs/game-files.md) ·
-  [the site and the admin pages](docs/admin.md) · [songs](docs/songs.md) · [playing from outside your home](docs/internet.md) ·
-  [live broadcasts](docs/live.md) · [Kubernetes](docs/kubernetes.md) · [without internet](docs/closed-network.md) ·
-  [the API](docs/api.md) · [troubleshooting](docs/troubleshooting.md#for-server-owners) · [questions and answers](docs/faq.md)
-- **For contributors:** [contributing](CONTRIBUTING.md) · [architecture](docs/architecture.md) ·
-  [testing](docs/testing.md) · [test cases](docs/test-cases.md)
+- **For server owners:** [installing](docs/install.md) · [the game's files](docs/game-files.md) · [the site and the
+  admin pages](docs/admin.md) · [songs](docs/songs.md) · [playing from outside your home](docs/internet.md) · [live
+  broadcasts](docs/live.md) · [Kubernetes](docs/kubernetes.md) · [without internet](docs/closed-network.md) · [the
+  API](docs/api.md) · [troubleshooting](docs/troubleshooting.md#for-server-owners) · [questions and
+  answers](docs/faq.md)
 
-Report a bug or ask for a feature in [Issues](https://github.com/kanggu12/openDMTQ/issues/new/choose); see what changed
-in [CHANGELOG.md](CHANGELOG.md), and report security problems through [SECURITY.md](.github/SECURITY.md).
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has how the pieces fit, how to build and test them without the game's files, and what
+a change needs; [the architecture](docs/architecture.md), [testing](docs/testing.md) and
+[the test cases](docs/test-cases.md) go further. Report a bug or ask for a feature in
+[Issues](https://github.com/kanggu12/openDMTQ/issues/new/choose); see what changed in [CHANGELOG.md](CHANGELOG.md), and
+report security problems as [SECURITY.md](.github/SECURITY.md) says.
 
 ## License
 

@@ -32,7 +32,7 @@ on. The server's owner runs it and makes your account.
 ## On an Android phone or tablet
 
 <p align="center">
-  <img src="images/site-phone.webp" alt="The server's site on an Android phone: the sign-in page with an ID and a password typed in, and the Download page with Download app (.apk), the app's size and date, and the steps to download, install and play it" width="640">
+  <img src="images/site-phone.webp" alt="The server's site on an Android phone at 192.168.1.10:8791: the sign-in page with its ID and password fields and Show, and the Download page with Download app (.apk), the app's file, size and date, and the steps to download, install and play it" width="640">
 </p>
 
 1. Open the server's address (the one in the owner's message, such as `http://192.168.1.10:8791/`) in Chrome or
