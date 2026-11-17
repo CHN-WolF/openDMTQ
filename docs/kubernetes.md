@@ -4,7 +4,7 @@ For the server's owner on a Kubernetes cluster: the Helm chart in `deploy/helm/o
 each part needs.
 
 <p align="center">
-  <img src="images/fig-kubernetes.svg" alt="The Helm chart. Phones and browsers reach the router Service on publicHost; two routers send the game's files to the asset servers (two to N, files only) and the rest to the api pod, exactly one: its init containers, the server, the admin sidecar and Litestream, which copies every commit to S3-compatible storage and restores the newest copy at start. A ReadWriteMany data volume holds content, the apps, the added songs and backups; the builder Job writes the app after install and upgrade" width="100%">
+  <img src="images/fig-kubernetes.svg" alt="The Helm chart. Phones, PCs and browsers reach the router Service on publicHost's port, 8791 when it names none; two routers send the game's files to the asset servers (two to N) and the rest to the api pod, exactly one: its init containers, the server, the admin sidecar with the admin pages and their API behind the server, and Litestream, which copies every commit to S3-compatible storage and restores the newest copy at start. A ReadWriteMany volume holds content, the apps, the added songs and backups; the builder Job writes the app after install and upgrade" width="100%">
 </p>
 
 ## Design
@@ -30,7 +30,7 @@ each part needs.
 - **Admin pages.** A sidecar of the api pod (it works on that pod's database). The router serves `/opendmtq/admin/`
   only when `admin.onPublicPort` allows it: by default over HTTPS with `router.tls`, and otherwise only for
   a private IPv4 `publicHost`, where the password crosses the LAN in clear. Otherwise use
-  `kubectl port-forward` (the release notes print the command). Password from
+  `kubectl port-forward` (the chart's notes, which `helm install` prints, give the command). Password from
   `admin.existingSecret`, or generated into `<release>-opendmtq-admin`; the admin pages' Server page names the commands
   that put a new one in that Secret and restart the pod. An init container creates the shared folders as uid 33 first.
 - **Broadcasts.** `live.default` is `LIVE_DEFAULT` of the compose setup: `on` starts a new player's switch on until the

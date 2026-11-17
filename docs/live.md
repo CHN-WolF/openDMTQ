@@ -19,7 +19,7 @@ bundle also holds the shim used on phones that still run 32-bit apps. On an olde
 stays at "Waiting"; they can still play and watch.
 
 <p align="center">
-  <img src="images/fig-live-flow.svg" alt="A live broadcast: once the owner turns a player's broadcast on, the phone asks about every 15 seconds and uploads a two-second MPEG-TS segment every two seconds; a browser plays it with hls.js about ten seconds behind; switched off, the next upload gets a 403; ended on the phone, the playlist ends and the recording is closed, and a past broadcast plays as a recording with its songs as chapters" width="100%">
+  <img src="images/fig-live-flow.svg" alt="A live broadcast: once the owner turns broadcasts on for the server (Broadcasts page) and for the player (Players page), the game asks every 15 seconds on a phone and every 5 on a PC, with a notice at every change of a switch, and uploads a two-second segment every two seconds; the Discord and Slack chats of the Notices page hear that the player is on air; a browser plays it about ten seconds behind; switched off, the next upload gets a 403; ended in the game, the playlist ends and the recording is closed; a past broadcast plays with its songs as chapters" width="100%">
 </p>
 
 ## Using it

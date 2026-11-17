@@ -1,66 +1,78 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 756" width="956" height="756" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="The PC client's parts. The installer comes from the server's site, set up for that server, or from a release, and installs for one Windows user with no administrator rights. The launcher, Python and Tk, signs in with a site account through client.php, downloads the server's app from /apk and keeps it up to date, sets the picture and the sound up and starts the player; it updates itself from the project's releases. The player runs the server's app, the game's own 32-bit code: the arm32 runtime translates it with Dynarmic and gives it Linux's system calls on Windows, with a Java VM of its own; the game draws with OpenGL ES on ANGLE over Direct3D 11, through the upscalers and anti-aliasing, each frame paced to the display's refreshes; WASAPI plays its sound and Media Foundation its videos. Its overlay, the bar, the question before quitting, the notices and the FPS counter, is frosted glass in windows of its own. It sends the game's requests, downloads and broadcasts to the server as a phone does, its broadcasts made with Windows' own encoders">
-<rect x="-28" y="-28" width="956" height="756" rx="16" fill="#11151a"/>
-<path d="M650,0 H886 L900,14 V700 H650 Z" fill="#11151a" stroke="#8cf23d" stroke-width="2" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 834" width="956" height="834" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="The PC client's parts. The installer, opendmtq-pc-client-&lt;version&gt;-windows-x64-setup-&lt;address&gt;.exe, comes from the server's site, set up for that server, or from a release, and installs for one Windows user with no administrator rights; run again, it opens, repairs, updates or uninstalls the PC client, as Windows' Apps does. The launcher, Python and Tk with its menu down the left, signs in with a site account through client.php, downloads the server's app from /apk and keeps it up to date, sets the picture and the sound up, tests the connection to the server, saves a report, shows the player's records and opens MY PAGE by a one-time link, and starts the player; it takes its own updates from its server's /updates/ first, then from GitHub, only those the project signed, a delta package when it can. The player runs the server's app, the game's own 32-bit code: the arm32 runtime translates it with Dynarmic and gives it Linux's system calls on Windows, with a Java VM of its own; the game draws with OpenGL ES on ANGLE over Direct3D 11, through the upscalers and anti-aliasing, each frame paced to the display's refreshes at its highest rate; WASAPI plays its sound, mixed at 44,100 Hz, with a low buffer by default, and Media Foundation its videos. Its overlay, the bar with Sound, minimise, full screen and quit, the sound panel, the question before quitting, the notices and the FPS counter, is frosted glass in windows of its own. It sends the game's requests, downloads and broadcasts to the server as a phone does, its broadcasts made with Windows' own encoders">
+<rect x="-28" y="-28" width="956" height="834" rx="16" fill="#11151a"/>
+<path d="M650,0 H886 L900,14 V778 H650 Z" fill="#11151a" stroke="#8cf23d" stroke-width="2" stroke-linejoin="round"/>
 <text x="664" y="26" font-size="15" font-weight="700" fill="#eef2f6" text-anchor="start" data-box="664,886">OpenDMTQ server</text>
-<rect x="0" y="0" width="610" height="700" rx="8" fill="#11151a" stroke="#3a434d" stroke-width="1" stroke-dasharray="5 4"/>
+<rect x="0" y="0" width="610" height="778" rx="8" fill="#11151a" stroke="#3a434d" stroke-width="1" stroke-dasharray="5 4"/>
 <text x="14" y="22" font-size="13" font-weight="600" fill="#aeb8c3" text-anchor="start" data-box="14,596">On a Windows PC</text>
-<path d="M14,40 H584 L596,52 V112 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="71.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,582">Installer</text>
-<text x="28" y="90.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">From the server's site, set up for it: for one Windows user, no administrator rights</text>
-<path d="M664,40 H874 L886,52 V112 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="678" y="62.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">Players' site</text>
-<text x="678" y="81.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">/windows: the installer,</text>
-<text x="678" y="99" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">with this server's address</text>
-<path d="M663.5,76 L604,76" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M597,76 L606.0,71.5 L606.0,80.5 Z" fill="#7b8794" data-tip="597,76"/>
-<path d="M305,112.5 L305,132" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M305,139 L300.5,130.0 L309.5,130.0 Z" fill="#7b8794" data-tip="305,139"/>
-<path d="M14,140 H584 L596,152 V228 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="170.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,582">Launcher</text>
-<text x="28" y="189.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">Python and Tk: signs in, downloads the server's app and keeps it up to date, sets the</text>
-<text x="28" y="207" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">picture and the sound up, starts the player; updates itself from the project's releases</text>
-<path d="M664,140 H874 L886,152 V228 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="678" y="170.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">client.php, /apk</text>
-<text x="678" y="189.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">a site account's sign-in,</text>
-<text x="678" y="207" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">the app phones install</text>
-<path d="M596.5,184 L656,184" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M663,184 L654.0,188.5 L654.0,179.5 Z" fill="#7b8794" data-tip="663,184"/>
-<path d="M305,228.5 L305,248" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M305,255 L300.5,246.0 L309.5,246.0 Z" fill="#7b8794" data-tip="305,255"/>
-<text x="315" y="246" font-size="12" fill="#aeb8c3" text-anchor="start" data-box="313,596">starts it, with the app and the settings</text>
-<rect x="14" y="256" width="582" height="430" rx="8" fill="#11151a" stroke="#3a434d" stroke-width="1" stroke-dasharray="5 4"/>
-<text x="28" y="278" font-size="13" font-weight="600" fill="#aeb8c3" text-anchor="start" data-box="28,582">Player: OpenDMTQ-Player.exe</text>
-<path d="M28,290 H570 L582,302 V340 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="42" y="310.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">The server's app</text>
-<text x="42" y="329.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">the game's own 32-bit ARM code: its requests and downloads</text>
-<path d="M28,348 H570 L582,360 V412 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="42" y="366.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">arm32 runtime</text>
-<text x="42" y="385.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">Dynarmic translates the code as it runs; Linux's system calls on Windows;</text>
-<text x="42" y="403" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">a Java VM of its own</text>
-<path d="M28,420 H570 L582,432 V484 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="42" y="438.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Picture</text>
-<text x="42" y="457.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">OpenGL ES on ANGLE over Direct3D 11; FSR 1 or NIS, CMAA 2 or SMAA;</text>
-<text x="42" y="475" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">each frame paced to the display's refreshes</text>
-<path d="M28,492 H570 L582,504 V542 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="42" y="512.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Sound and video</text>
-<text x="42" y="531.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">WASAPI, shared or exclusive; the videos through Media Foundation</text>
-<path d="M28,550 H570 L582,562 V614 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="42" y="568.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Overlay</text>
-<text x="42" y="587.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">the bar, the question before quitting, notices, the FPS counter:</text>
-<text x="42" y="605" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">frosted glass, in windows of their own</text>
-<path d="M28,622 H570 L582,634 V672 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="42" y="642.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Broadcasts</text>
-<text x="42" y="661.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">what the player shows, through Windows' own video and sound encoders</text>
-<path d="M664,275 H874 L886,287 V355 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="678" y="301.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">Game server, files</text>
-<text x="678" y="320.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">the game's requests and</text>
-<text x="678" y="338" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">its downloads</text>
-<path d="M582.5,315 L656,315" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M663,315 L654.0,319.5 L654.0,310.5 Z" fill="#7b8794" data-tip="663,315"/>
-<path d="M664,607 H874 L886,619 V687 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="678" y="633.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">Live</text>
-<text x="678" y="652.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">uploads, as a phone's</text>
-<text x="678" y="670" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">broadcast does</text>
-<path d="M582.5,647 L656,647" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M663,647 L654.0,651.5 L654.0,642.5 Z" fill="#7b8794" data-tip="663,647"/>
+<path d="M14,40 H584 L596,52 V144 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="61" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,582">Installer</text>
+<text x="28" y="80" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">From the server's site, set up for it, or from a release:</text>
+<text x="28" y="97.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">opendmtq-pc-client-&lt;version&gt;-windows-x64-setup-&lt;address&gt;.exe; for one Windows</text>
+<text x="28" y="115" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">user, no administrator rights. Run again: Open, Repair, Update, Uninstall</text>
+<text x="28" y="132.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">(Windows' Apps removes it the same way)</text>
+<path d="M664,40 H874 L886,52 V144 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="678" y="69.75" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">Players' site</text>
+<text x="678" y="88.75" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">/windows: the installer,</text>
+<text x="678" y="106.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">set up with this server's</text>
+<text x="678" y="123.75" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">address</text>
+<path d="M663.5,92 L604,92" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M597,92 L606.0,87.5 L606.0,96.5 Z" fill="#7b8794" data-tip="597,92"/>
+<path d="M305,144.5 L305,164" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M305,171 L300.5,162.0 L309.5,162.0 Z" fill="#7b8794" data-tip="305,171"/>
+<path d="M14,172 H584 L596,184 V292 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="201" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,582">Launcher</text>
+<text x="28" y="220" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">Python and Tk, a menu down its left: signs in, keeps the server's app up to date,</text>
+<text x="28" y="237.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">sets the picture and the sound up, tests the connection, saves a report, shows</text>
+<text x="28" y="255" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">My records and MY PAGE by a one-time link, and starts the player. Its own updates:</text>
+<text x="28" y="272.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,582">from its server first, then GitHub, only those the project signed; a delta when it can</text>
+<path d="M664,172 H874 L886,184 V234 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="678" y="189.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">client.php, /apk</text>
+<text x="678" y="208.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">sign-in, records, the</text>
+<text x="678" y="226" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">one-time link; the app</text>
+<path d="M596.5,203 L656,203" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M663,203 L654.0,207.5 L654.0,198.5 Z" fill="#7b8794" data-tip="663,203"/>
+<path d="M664,242 H874 L886,254 V292 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="678" y="262.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">/updates/</text>
+<text x="678" y="281.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">its updates, signed</text>
+<path d="M596.5,267 L656,267" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M663,267 L654.0,271.5 L654.0,262.5 Z" fill="#7b8794" data-tip="663,267"/>
+<path d="M305,292.5 L305,312" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M305,319 L300.5,310.0 L309.5,310.0 Z" fill="#7b8794" data-tip="305,319"/>
+<text x="315" y="310" font-size="12" fill="#aeb8c3" text-anchor="start" data-box="313,596">starts it, with the app and the settings</text>
+<rect x="14" y="320" width="582" height="444" rx="8" fill="#11151a" stroke="#3a434d" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="28" y="342" font-size="13" font-weight="600" fill="#aeb8c3" text-anchor="start" data-box="28,582">Player: OpenDMTQ-Player.exe</text>
+<path d="M28,354 H570 L582,366 V404 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="42" y="374.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">The server's app</text>
+<text x="42" y="393.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">the game's own 32-bit ARM code: its requests and downloads</text>
+<path d="M28,412 H570 L582,424 V476 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="42" y="430.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">arm32 runtime</text>
+<text x="42" y="449.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">Dynarmic translates the code as it runs; Linux's system calls on Windows;</text>
+<text x="42" y="467" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">a Java VM of its own</text>
+<path d="M28,484 H570 L582,496 V548 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="42" y="502.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Picture</text>
+<text x="42" y="521.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">OpenGL ES on ANGLE over Direct3D 11; FSR 1 or NIS, CMAA 2 or SMAA;</text>
+<text x="42" y="539" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">each frame paced to the display's refreshes, at its highest rate</text>
+<path d="M28,556 H570 L582,568 V620 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="42" y="574.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Sound and video</text>
+<text x="42" y="593.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">WASAPI, shared or exclusive, a low buffer by default; the game's sound mixed</text>
+<text x="42" y="611" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">at 44,100 Hz, as on a phone; the videos through Media Foundation</text>
+<path d="M28,628 H570 L582,640 V692 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="42" y="646.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Overlay</text>
+<text x="42" y="665.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">the bar (Sound, minimise, full screen, quit), the sound panel, the question before</text>
+<text x="42" y="683" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">quitting, notices, the FPS counter: frosted glass, in windows of their own</text>
+<path d="M28,700 H570 L582,712 V750 H28 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="42" y="720.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="42,568">Broadcasts</text>
+<text x="42" y="739.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="42,568">what the player shows, through Windows' own video and sound encoders</text>
+<path d="M664,339 H874 L886,351 V419 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="678" y="365.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">Game server, files</text>
+<text x="678" y="384.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">the game's requests and</text>
+<text x="678" y="402" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">its downloads</text>
+<path d="M582.5,379 L656,379" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M663,379 L654.0,383.5 L654.0,374.5 Z" fill="#7b8794" data-tip="663,379"/>
+<path d="M664,685 H874 L886,697 V765 H664 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="678" y="711.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="678,872">Live</text>
+<text x="678" y="730.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">uploads, as a phone's</text>
+<text x="678" y="748" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="678,872">broadcast does</text>
+<path d="M582.5,725 L656,725" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M663,725 L654.0,729.5 L654.0,720.5 Z" fill="#7b8794" data-tip="663,725"/>
 </svg>

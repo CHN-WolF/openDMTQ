@@ -86,7 +86,7 @@ Enter. Then type, for example, `OpenDMTQ.exe status`.
 When the game does not start or shows no songs, this chart leads to the right section:
 
 <p align="center">
-  <img src="images/fig-troubleshooting.svg" alt="When the game does not start or shows no songs: if the app does not install, see The app does not install; if the phone cannot open the server's page, see that section; without client data imported, The game stops at its start; if it does not get past its start, The app installs but cannot connect; with no songs in its list, The song list is empty; otherwise the server works" width="100%">
+  <img src="images/fig-troubleshooting.svg" alt="When the game does not start or shows no songs: on a PC, see A PC does not play, where the connection test (ONLINE, Test connection) names the step that fails and Help, Save a report gathers the logs; on a phone, if the app does not install, see The app does not install; if the phone cannot open the server's page, see that section; without client data, The game stops at its start; if it does not get past its start, The app installs but cannot connect; with no songs, The song list is empty; otherwise the server works" width="100%">
 </p>
 
 ### The phone cannot open the server page
@@ -152,11 +152,11 @@ Android says "App not installed" for several reasons. Check them in this order.
   and later, Galaxy S24 and later, Galaxy Tab S10 and later, Galaxy Z Fold6 and Flip6 and later, and other models with
   a Snapdragon 8 Gen 3, Exynos 2400, Dimensity 9300 or newer chip. The download completes and the install fails,
   unless the server added the arm32 runtime to the app.
-  - The server adds it by itself when it builds the app: the setup says **The app runs on newer phones too**. With Docker
-    Compose, `./opendmtq doctor` also names the runtime next to the APK.
+  - The server adds it by itself when it builds the app: the setup says **The app runs on newer phones too**. With
+    Docker Compose, `./opendmtq doctor` also names the runtime next to the APK.
   - When it could not, the setup says why, and with Docker Compose `./opendmtq doctor` too. `./opendmtq runtime`
-    (`OpenDMTQ.exe runtime` on Windows) tries again and builds the app again. A server without internet takes it from a file:
-    [Without internet](closed-network.md).
+    (`OpenDMTQ.exe runtime` on Windows) tries again and builds the app again. A server without internet takes it from a
+    file: [Without internet](closed-network.md).
   - Without the runtime, phones that cannot run 32-bit apps cannot install the app, and live broadcasts need it too.
 - **Out of storage, or a download that was cut off:** free some space and download again. Another app does not get in
   the way: each signing key gives an app a package of its own, so this server's earlier app, other servers' apps and

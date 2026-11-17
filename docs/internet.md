@@ -10,7 +10,7 @@ myhome.example.com:8790` on a host install), but passwords would then cross the 
 How a phone on mobile data reaches the server PC:
 
 <p align="center">
-  <img src="images/fig-internet.svg" alt="Playing from outside: a phone on mobile data and a browser look up the DDNS name, which follows your public IP, and connect to your router, which forwards TCP 8790 to the server PC. There the edge, the one public port, reads each connection's first bytes: plain HTTP goes to the plain door (the game, /apk, /ca.crt), TLS is ended and goes to the HTTPS door (the site and the download). The admin pages answer there only after expose --admin-public" width="100%">
+  <img src="images/fig-internet.svg" alt="Playing from outside: a phone on mobile data and a browser look up the DDNS name, which follows your public IP, and connect to your router, which forwards TCP 8790 to the server PC. There the edge, the one public port, reads each connection's first bytes: plain HTTP goes to the plain door (the game, /apk, /ca.crt), TLS is ended and goes to the HTTPS door (the site and the download). The admin pages answer the server PC itself on the same port (localhost), and visits from elsewhere only after expose --admin-public, over HTTPS" width="100%">
 </p>
 
 ```sh

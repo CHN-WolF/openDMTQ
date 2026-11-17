@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 538" width="956" height="538" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="The parts with Docker Compose. Phones (plain HTTP) and browsers (HTTPS) reach the edge, nginx on the one public port, which ends HTTPS and passes each connection to one of Apache's two doors; site.conf sends it to the game server, the players' site or, for /opendmtq/admin, the admin pages, on the same port: the owner opens them there too. The game server, the site and the admin pages work on data/; the builder puts the app, and the PC client's installer beside it, in data/apk/out at every start">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 538" width="956" height="538" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="The parts with Docker Compose. Phones and PCs (plain HTTP) and browsers (HTTPS) reach the edge, nginx on the server's one port (8791 unless set otherwise), which ends HTTPS and passes each connection to one of Apache's two doors; site.conf sends it to the game server, the players' site or, for /opendmtq/admin and /opendmtq/api, the admin service, which has no port of its own on the PC: the owner opens the admin pages on the same port. The game server, the site and the admin pages work on data/; the builder puts the app, and the PC client's installer and its updates beside it, in data/apk/out at every start">
 <rect x="-28" y="-28" width="956" height="538" rx="16" fill="#11151a"/>
 <path d="M0,30 H144 L156,42 V94 H0 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="14" y="57.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,142">Phone</text>
+<text x="14" y="57.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,142">Phones, PCs</text>
 <text x="14" y="76.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="14,142">the app, plain HTTP</text>
 <path d="M0,120 H144 L156,132 V184 H0 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="14" y="147.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,142">Browser</text>
@@ -12,8 +12,8 @@
 <path d="M200,60 H348 L360,72 V154 H200 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="214" y="84.75" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="214,346">edge</text>
 <text x="214" y="103.75" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="214,346">nginx on the</text>
-<text x="214" y="121.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="214,346">public port,</text>
-<text x="214" y="138.75" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="214,346">ends HTTPS</text>
+<text x="214" y="121.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="214,346">server's one port</text>
+<text x="214" y="138.75" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="214,346">(8791), ends HTTPS</text>
 <path d="M156.5,62 L178,62 L178,90 L192,90" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="M199,90 L190.0,94.5 L190.0,85.5 Z" fill="#7b8794" data-tip="199,90"/>
 <path d="M156.5,152 L178,152 L178,124 L192,124" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
@@ -54,9 +54,10 @@
 <text x="574" y="370" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="574,736">no port of its own</text>
 <path d="M655,136.5 L655,292" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="M655,299 L650.5,290.0 L659.5,290.0 Z" fill="#7b8794" data-tip="655,299"/>
-<text x="662" y="222" font-size="12" fill="#aeb8c3" text-anchor="start" data-box="662,790">/opendmtq/admin</text>
+<text x="662" y="216" font-size="12" fill="#aeb8c3" text-anchor="start" data-box="662,790">/opendmtq/admin,</text>
+<text x="662" y="230" font-size="12" fill="#aeb8c3" text-anchor="start" data-box="662,790">/opendmtq/api</text>
 <path d="M156.5,362 L280,362 L280,162" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M280,155 L275.5,164.0 L284.5,164.0 Z" fill="#7b8794" data-tip="280,155"/>
+<path d="M280,155 L284.5,164.0 L275.5,164.0 Z" fill="#7b8794" data-tip="280,155"/>
 <text x="290" y="300" font-size="12" fill="#aeb8c3" text-anchor="start" data-box="290,420">the same port</text>
 <path d="M764,300 H888 L900,312 V394 H764 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="778" y="333.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="778,886">data/</text>
@@ -64,10 +65,10 @@
 <text x="778" y="370" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="778,886">state, apk</text>
 <path d="M832,250.5 L832,299.5" fill="none" stroke="#7b8794" stroke-width="1.6"/>
 <path d="M750.5,347 L763.5,347" fill="none" stroke="#7b8794" stroke-width="1.6"/>
-<path d="M764,420 H888 L900,432 V482 H764 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="778" y="437.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="778,886">builder</text>
-<text x="778" y="456.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="778,886">at every start:</text>
-<text x="778" y="474" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="778,886">data/apk/out</text>
+<path d="M560,420 H888 L900,432 V482 H560 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="574" y="437.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="574,886">builder</text>
+<text x="574" y="456.5" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="574,886">at every start: the app, the PC client's</text>
+<text x="574" y="474" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="574,886">installer and its updates, in data/apk/out</text>
 <path d="M832,419.5 L832,402" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="M832,395 L836.5,404.0 L827.5,404.0 Z" fill="#7b8794" data-tip="832,395"/>
 </svg>
