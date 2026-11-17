@@ -1,0 +1,24 @@
+{# The Notices page's maintenance card: the in-game notice's state and its form (song_pages.py gives maint). A part the page
+   changes in place (data-region, data-inplace: admin.js). #}
+<section class="card" id="maintenance" data-region>
+  <h2>{{ t('maint.heading') }}</h2>
+  <p class="lead">{{ t('maint.lead') }}</p>
+  <p class="auto-line big"><span class="lamp {{ 'wait' if maint.on else 'off' }}"></span><b>{{ t('maint.is_on') if maint.on else t('maint.is_off') }}</b></p>
+  {# Its own address: the page it is on may be drawn at another. #}
+  <form method="post" action="{{ url_for('maintenance_page') }}" data-inplace>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="field">{{ t('maint.message') }} <textarea name="message" rows="3" maxlength="{{ maint.max }}" placeholder="{{ t('maint.placeholder') }}">{{ maint.message }}</textarea></label>
+    <p class="presets"><span class="presets-label">{{ t('maint.presets') }}</span>
+      {% for name, key in (('maint.p_short_name', 'maint.p_short'), ('maint.p_update_name', 'maint.p_update'), ('maint.p_tonight_name', 'maint.p_tonight')) %}<button type="button" class="btn btn-sm" data-text="{{ tp(key) }}">{{ t(name) }}</button>{% endfor %}
+    </p>
+    {# While it is on, ending it is what one came for. Starting it keeps players out, so it asks. The page's one main button. #}
+    <div class="btn-line">
+      {% if maint.on %}
+      <button class="btn btn-primary" name="action" value="off">{{ t('maint.end') }}</button>
+      <button class="btn" name="action" value="on">{{ t('maint.update') }}</button>
+      {% else %}
+      <button class="btn btn-primary" name="action" value="on" data-ask="{{ tp('maint.confirm') }}" data-yes="{{ tp('maint.start') }}">{{ t('maint.start') }}</button>
+      {% endif %}
+    </div>
+  </form>
+</section>

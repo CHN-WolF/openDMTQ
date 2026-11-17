@@ -1390,7 +1390,7 @@ class ChangeLogPageTest(unittest.TestCase):
             for lang in ("en", "ko"):
                 self.assertIn(key, admin.strings.STRINGS[lang], what)
         templates = os.path.join(os.path.dirname(admin.__file__), "templates")
-        pages = {"players.html": "player_action", "backups.html": "backups_page", "songs.html": "songs_page", "maintenance.html": "maintenance_page",
+        pages = {"players.html": "player_action", "backups.html": "backups_page", "songs.html": "songs_page", "maintenance_card.html": "maintenance_page",
                  "recordings.html": "recordings_page"}
         for name, page in pages.items():
             with open(os.path.join(templates, name), encoding="utf-8") as f:

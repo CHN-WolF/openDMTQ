@@ -69,7 +69,7 @@ def attention(health, counts, saved, backup_age, on, build, failed, usage):
     elif backup_age > 7 * 86400:
         out.append(("warn", t("alert.old_backup", ago=ago(time.time() - backup_age)), url_for("backups_page"), t("nav.backups")))
     if on:
-        out.append(("warn", t("alert.maintenance"), url_for("maintenance_page"), t("nav.maintenance")))
+        out.append(("warn", t("alert.maintenance"), url_for("maintenance_page") + "#maintenance", t("nav.maintenance")))
     return out
 
 # How much each kind of thing takes on the disk changes slowly, and counting it means walking folders (a folder's bytes:

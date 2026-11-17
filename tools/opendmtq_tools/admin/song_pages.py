@@ -1,5 +1,6 @@
-"""The Songs and Maintenance pages: the song list with its plays, song packages, what is hidden, the notice. Each form's work
-is a function (add_package, set_hidden, remove, set_notice) that the API calls as well (api.py)."""
+"""The Songs page and the Notices page's maintenance card: the song list with its plays, song packages, what is hidden, the
+in-game maintenance notice. Each form's work is a function (add_package, set_hidden, remove, set_notice) that the API calls
+as well (api.py)."""
 
 import collections
 import json
@@ -11,7 +12,7 @@ import time
 from flask import flash, redirect, render_template, request, session, url_for
 
 from .. import songs
-from . import core, jobs
+from . import core, jobs, notices
 from .core import Refused, ago, app, BASE, changed, db, t, tp, why
 
 
@@ -220,8 +221,18 @@ def song_title(song_id):
 MAINT_MAX = 200
 
 
+@notices.card("maint")
+def maintenance_card():
+    """The Notices page's maintenance card: on or off, and the field's words. Off, the field holds the message used last,
+    for the next time, until something else is typed."""
+    on, message = songs.maintenance()
+    return {"on": on, "message": message or core.settings().get("maintenance_message", ""), "max": MAINT_MAX}
+
+
 @app.route(BASE + "/maintenance", methods=["GET", "POST"])
 def maintenance_page():
+    """The Notices page (notices.py), at the address it had when it held the maintenance notice alone; and the maintenance
+    card's form."""
     # What sessions before this version kept in the cookie: the last message is kept with the server's settings now.
     session.pop("maintenance_message", None)
     if request.method == "POST":
@@ -232,12 +243,11 @@ def maintenance_page():
         except Refused as e:
             # Too long: the page again with what was typed, to shorten, and why.
             flash(e.words, e.tone)
-            return render_template("maintenance.html", on=songs.maintenance()[0], message=message, max=MAINT_MAX), e.status
+            return notices.render(e.status, maint={"message": message})
         flash(t("maint.off" if not on else "maint.updated" if was_on else "maint.on"), "ok")
-        return redirect(url_for("maintenance_page"))
-    on, message = songs.maintenance()
-    # Off: the field holds the message used last, for the next time, until something else is typed.
-    return render_template("maintenance.html", on=on, message=message or core.settings().get("maintenance_message", ""), max=MAINT_MAX)
+        # Back to the card, wherever on the page it is.
+        return redirect(url_for("maintenance_page") + "#maintenance")
+    return notices.render()
 
 
 def set_notice(on, message):

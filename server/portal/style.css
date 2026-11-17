@@ -1795,3 +1795,7 @@ table.board.parts td.name a::after { content: none; }
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } }
 @keyframes reveal-x { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes me-arrive { from { background-color: color-mix(in srgb, var(--accent) 36%, transparent); } }
+
+/* ---------------------------------------------------------------------- the owner's notice (lib.php, page_header()) */
+
+/* ---------------------------------------------------------------------- MY PAGE (me.php) */

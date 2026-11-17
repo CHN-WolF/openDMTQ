@@ -572,22 +572,28 @@ def notice():
 
 @handler
 def maintenance_get(args):
-    """GET /maintenance: the Maintenance page's notice."""
+    """GET /maintenance: the Notices page's maintenance card."""
     return notice()
 
 
 @handler
 def maintenance_set(args):
-    """PUT /maintenance: the Maintenance page's On, with its message (song_pages.set_notice, which refuses a long one)."""
+    """PUT /maintenance: the maintenance card's On, with its message (song_pages.set_notice, which refuses a long one)."""
     song_pages.set_notice(True, args.get("message") or "")
     return notice()
 
 
 @handler
 def maintenance_clear(args):
-    """DELETE /maintenance: the Maintenance page's Off."""
+    """DELETE /maintenance: the maintenance card's Off."""
     song_pages.set_notice(False, "")
     return notice()
+
+
+# ------------------------------------------------------------------------------ the site's notice (notice.py)
+
+
+# ------------------------------------------------------------------------------ Discord and Slack (webhooks.py)
 
 
 # ------------------------------------------------------------------------------ the server page

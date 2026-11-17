@@ -288,7 +288,7 @@ SHAPES = {
     "Invite": Shape("Where players get the app.", [
         Field("url", "string", "The download page by the address all phones use."),
         Field("qr", "boolean", "True when its QR code is there (GET /invite/qr).")]),
-    # The Songs and Maintenance pages.
+    # The Songs page and the Notices page's maintenance card.
     "Song": Shape("A song on the Songs page.", [
         Field("id", "integer", "Its id."),
         Field("name", "string", "Its key in the song data."),
@@ -313,6 +313,9 @@ SHAPES = {
         Field("change", "integer", "The number of its last change (turned on, a new message, ended), higher with each one; 0 before the "
               "first. The game's notice page is asked for under it, and players in the game are told of each change once."),
         Field("changed_at", "integer", "When that change was made (Unix time); null before the first.", nullable=True)]),
+    # The Notices page's notice on the site (notice.py).
+    # The Notices page's Discord and Slack (webhooks.py).
+    # The owner's password on the Server page (lifecycle.py).
     "Stopping": Shape("A stop asked for.", [Field("stopping", "boolean", "True: the server stops within a few seconds, these pages and the API with it.")]),
     # The Server page.
     "ServerState": Shape("The server as the Server page shows it.", [
@@ -770,7 +773,9 @@ TAGS = [
     ("Jobs", "Work that runs in the background: app builds, imports, restores."),
     ("App", "The App page: the app on offer, its builds, the way players get it."),
     ("Songs", "The Songs page."),
-    ("Maintenance", "The Maintenance page: the in-game notice."),
+    ("Maintenance", "The Notices page's maintenance card: the in-game notice."),
+    # The Notices page's notice on the site (notice.py).
+    # The Notices page's Discord and Slack (webhooks.py).
     ("Server", "The Server page: the server's state, stopping and restarting it, the repair, its data, and uninstalling it."),
     ("Players", "The Players page."),
     ("Accounts", "The Accounts page: the site's accounts."),
@@ -879,7 +884,7 @@ ROUTES = [
           answer="Deleted",
           errors=[(404, "song_not_found", "No such song."), (409, "not_added", "One of the game's own songs."),
                   (500, "song_action_failed", "The song list could not be made without it.")]),
-    # The Maintenance page: the notice (song_pages.set_notice).
+    # The Notices page's maintenance card: the notice (song_pages.set_notice).
     Route("GET", "/maintenance", "read", "maintenance_get", "Maintenance", "The in-game maintenance notice: on or off, and what it says.",
           answer="Notice"),
     Route("PUT", "/maintenance", "write", "maintenance_set", "Maintenance", "Turns the notice on, or changes what it says while it is on.",
@@ -890,6 +895,8 @@ ROUTES = [
           errors=[(400, "message_too_long", "The message is longer than 200 characters.")]),
     Route("DELETE", "/maintenance", "write", "maintenance_clear", "Maintenance", "Turns the notice off.",
           "Players in the game are told between songs that it is over.", answer="Notice"),
+    # The Notices page's notice on the site (notice.py).
+    # The Notices page's Discord and Slack (webhooks.py).
     # The Server page (lifecycle.py): the state, stop and restart (setup.stop_server, lifecycle.restart_server), the repair,
     # the data, the uninstall.
     Route("GET", "/server", "read", "server_get", "Server", "The server as the Server page shows it: how it is installed, its address, "

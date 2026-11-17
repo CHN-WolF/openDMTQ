@@ -284,6 +284,8 @@ const STRINGS = [
         'live.ctl_full' => 'Full screen',
         'live.ctl_exit' => 'Leave full screen',
         'live.muted' => 'Your browser started the video without sound. Tap the speaker to turn it on.',
+        // The owner's notice above every page (lib.php, page_header()).
+        // MY PAGE (me.php): a player's own page and their account.
     ],
     'ko' => [
         'nav.download' => '앱(.apk) 내려받기',
@@ -559,5 +561,7 @@ const STRINGS = [
         'live.ctl_full' => '전체 화면',
         'live.ctl_exit' => '전체 화면 종료',
         'live.muted' => '브라우저 설정 때문에 소리 없이 재생 중입니다. 스피커 버튼을 누르면 소리가 나옵니다.',
+        // The owner's notice above every page (lib.php, page_header()).
+        // MY PAGE (me.php): a player's own page and their account.
     ],
 ];

@@ -591,7 +591,7 @@ Refusals:
 
 ### Maintenance
 
-The Maintenance page: the in-game notice.
+The Notices page's maintenance card: the in-game notice.
 
 | Route | Scope | What it does |
 |:---|:---:|:---|

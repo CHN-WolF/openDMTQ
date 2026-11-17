@@ -23,7 +23,7 @@
 {# The page: this one, or for the frame alone (look.html) the page that asked for it, whose rules it follows. #}
 {% set ep = page_ep or request.endpoint %}
 {% set pages = [('dashboard', 'nav.status'), ('app_page', 'nav.app'), ('songs_page', 'nav.songs'), ('players_page', 'nav.players'), ('accounts_page', 'nav.accounts'), ('recordings_page', 'nav.recordings'),
-                ('backups_page', 'nav.backups'), ('maintenance_page', 'nav.maintenance'), ('server_page', 'nav.server'), ('logs_page', 'nav.logs')] %}
+                ('backups_page', 'nav.backups'), ('maintenance_page', 'nav.notices'), ('server_page', 'nav.server'), ('logs_page', 'nav.logs')] %}
 <header class="bar">
   <div class="wrap bar-in">
     {# One name, DMTQ and ADMIN together, and at the bar's right end, only when the game server is not answering, one word
