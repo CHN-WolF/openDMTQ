@@ -66,17 +66,22 @@ docker run --rm -u 33:33 -v "$DATA/content:/content" -v "$UI:/ui:ro" --entrypoin
 # The catalog as the tools make it from the client's tables (songs.py's rebuild), made up: the items a player equips, with
 # names of the lengths and scripts the player's page must cope with, a few of them with the game's own names in each
 # language, and a few products of the shop.
-cat > "$DATA/custom/catalog.json" <<'CATALOG'
+# Written now and again before MY PAGE's stage: the admin flows hide a song and show it again, which rebuilds the
+# catalog from the stand-in game files, which have none of these items or names.
+stand_in_catalog() {
+  cat > "$DATA/custom/catalog.json" <<'CATALOG'
 {"items": [30001, 30002, 30003, 40001, 100001, 100002], "unlock_product": null, "point_charts": [],
  "products": {"90001": {"item": 90001, "kind": "N", "point": 2000, "cash": 0, "amount": 0},
-              "1050001": {"item": 50001, "kind": "M", "point": 0, "cash": 10, "amount": 2500}},
+                "1050001": {"item": 50001, "kind": "M", "point": 0, "cash": 10, "amount": 2500}},
  "gear": {"C": [[30001, "지미"], [30002, "A Partner With A Name Long Enough To Wrap In Any Narrow List"], [30003, "소향"]],
-          "F": [[40001, "안티 게임오버"]],
-          "N": [[90001, "레인보우 노트"], [90002, "미러볼 노트"], [90003, "Crystal Note"]],
-          "K": [[100001, "Yellow Metal Skin"], [100002, "워터멜론 메탈 스킨"]]},
+            "F": [[40001, "안티 게임오버"]],
+            "N": [[90001, "레인보우 노트"], [90002, "미러볼 노트"], [90003, "Crystal Note"]],
+            "K": [[100001, "Yellow Metal Skin"], [100002, "워터멜론 메탈 스킨"]]},
  "names": {"en": {"100001": "Yellow", "30001": "Jimmy"}, "ko": {"100001": "옐로메탈", "30001": "지미"}}}
 CATALOG
-chmod a+rw "$DATA/custom/catalog.json"
+  chmod a+rw "$DATA/custom/catalog.json"
+}
+stand_in_catalog
 # Started as tests/live/run.sh starts them, and as compose does: read-only, unprivileged, capped.
 docker network create "$NET" >/dev/null 2>&1 || true
 docker rm -f "$SITE" "$ADMIN" >/dev/null 2>&1 || true
@@ -306,6 +311,8 @@ stage maint
 stage notice
 stage flows
 # MY PAGE: the account's own page for an account linked to its player, one that is not and the owner's; its changes.
+# The stand-in catalog again first, with the names its slots are shown by.
+stand_in_catalog
 stage mine
 # Nothing said only under a mouse pointer, switches that change the page where it is, the forms' words under their fields.
 stage patterns
