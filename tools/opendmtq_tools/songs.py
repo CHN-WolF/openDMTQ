@@ -68,6 +68,9 @@ SONG_FILE = re.compile(r"preview/.*|dlc/d3?_e\d+\.unity3d")
 OPTIONAL_GAME_FILES = ("Fonts/",)
 # The product the shop's unlock screen shows (shop.getProductForUnlock).
 UNLOCK_PRODUCT = "80002"
+# The kinds of item a player equips (the item table's item_type): partners, add-ons, note skins and skins, the four places on
+# the game's top bar. The admin pages give and take these one by one.
+GEAR_KINDS = ("C", "F", "N", "K")
 # First ids handed to added songs and charts, far above the shipped ones (191 and 1320).
 FIRST_SONG_ID = 1001
 FIRST_PATTERN_ID = 20001
@@ -1035,6 +1038,12 @@ def _ints(row, col, names):
     return {n: int(row[col[n]]) if row[col[n]].lstrip("-").isdigit() else 0 for n in names}
 
 
+def _leading_number(text):
+    """The whole number a name starts with ("2500 MAX" is 2500), 0 for a name without one."""
+    m = re.match(r"\s*(\d+)", text or "")
+    return int(m.group(1)) if m else 0
+
+
 def _catalog(table, locales, songs=None):
     """What some of the game server's replies need from the client's tables, as phones get them. table(rel) gives a
     table's text ("table/us/product_item.csv"), or None when there is none. The language folders hold the same rows
@@ -1043,8 +1052,16 @@ def _catalog(table, locales, songs=None):
       point_charts    the charts that cost MAX POINT to open (game.getPatternUsePointData), by chart id
       items           every item a player owns (shop.getOwnItemList), by id
       unlock_product  the level unlock product (shop.getProductForUnlock), or None
+      products        what the shop sells and what it costs, by product id (as text, JSON's keys): {item, kind, point,
+                      cash, amount}: the item it gives and its kind (the item table's item_type), its price in MAX POINT
+                      and in Q (the shop takes the one that is not 0), and for a pack of MAX POINT how many it gives (the
+                      number its name starts with). Songs and packages are left out: every song is owned and a package
+                      is sold for real money only.
+      gear            the items a player equips, which the admin pages give and take, by kind: {kind: [[item, name],
+                      ...]}, C the partners, F the add-ons, N the note skins, K the skins, each in the table's order, with
+                      the name the table gives it
     """
-    out = {"point_charts": [], "items": [], "unlock_product": None}
+    out = {"point_charts": [], "items": [], "unlock_product": None, "products": {}, "gear": {}}
     if not locales:
         return out
     loc = locales[0]
@@ -1068,6 +1085,24 @@ def _catalog(table, locales, songs=None):
             item_rows[r[col["item_id"]]] = dict(zip(header, r))
         out["items"] = sorted(int(i) for i, r in item_rows.items()
                               if i.isdigit() and r.get("item_type") not in ("S", "P") and int(i) not in NOT_OWNED)
+        # The items a player equips, by kind, in the table's order: what the admin pages list to give and take.
+        for i, r in item_rows.items():
+            if i.isdigit() and r.get("item_type") in GEAR_KINDS:
+                out["gear"].setdefault(r["item_type"], []).append([int(i), (r.get("item_name") or "").strip()])
+    if products:
+        header, rows = _table_rows(products)
+        num = lambda v: int(v) if str(v).lstrip("-").isdigit() else 0
+        for r in rows:
+            row = dict(zip(header, r))
+            item = item_rows.get(row.get("item_id", ""))
+            # A product whose item the table has, and that is neither a song nor a package.
+            if not item or not str(row.get("product_id", "")).isdigit() or item.get("item_type") in ("S", "P"):
+                continue
+            kind = item.get("item_type", "")
+            out["products"][str(int(row["product_id"]))] = {
+                "item": num(row.get("item_id")), "kind": kind, "point": max(0, num(row.get("cost_game_point"))),
+                "cash": max(0, num(row.get("cost_game_cash"))),
+                "amount": _leading_number(item.get("item_name")) if kind == "M" else 0}
     if products and UNLOCK_PRODUCT in item_rows:
         header, rows = _table_rows(products)
         col = {h: i for i, h in enumerate(header)}

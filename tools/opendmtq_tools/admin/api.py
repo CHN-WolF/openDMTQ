@@ -21,7 +21,7 @@ from flask import g, jsonify, request, send_file
 from werkzeug.exceptions import HTTPException
 
 from .. import server_data, songs
-from . import accounts, api_routes, apps, auth, backups, core, insights, jobs, lifecycle, logs, players, recordings, setup, site, site_links, song_pages, this_pc, tokens
+from . import accounts, api_routes, apps, auth, backups, core, game, insights, jobs, lifecycle, logs, players, recordings, setup, site, song_pages, tokens
 # The status page's module by another name: the route's handler is called status.
 from . import status as status_page
 from .core import Refused, app, changed, db, json_error, plain, tp
@@ -736,6 +736,115 @@ def player_live_off(args):
     """DELETE /players/{player}/live: the broadcast switch, off."""
     players.act(args["player"], "live-off", args.get("seen"))
     return {"player": one_player(args["player"])}
+
+
+# ------------------------------------------------------------------------------ a player's game state
+
+def game_view(pid):
+    """A player's game state as the player's page reads it (game.player_view), in the API's shape (PlayerGame)."""
+    try:
+        v = game.player_view(pid)
+    except Refused:
+        raise Refused(404, "player_not_found", message=f"There is no player {pid}.")
+    s = v["state"]
+    return {"player": pid, "name": v["name"], "mpoint": s["mpoint"], "qpoint": s["qpoint"], "shown_mpoint": s["shown_mpoint"],
+            "shown_qpoint": s["shown_qpoint"], "unlimited": s["unlimited"], "own_unlimited": s["own_unlimited"], "level": s["level"],
+            "exp": s["exp"], "level_start": s["level_start"], "level_next": s["level_next"], "kept": s["kept"],
+            "items": [{"id": i["id"], "kind": g["kind"], "name": i["name"], "owned": i["owned"], "how": i["how"] if i["owned"] else ""}
+                      for g in v["gear"] for i in g["items"]],
+            "ban": v["ban"], "purchases": v["purchases"], "seen": v["seen"]}
+
+
+@handler
+def player_game_get(args):
+    """GET /players/{player}/game: the player's page."""
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_game_currency(args):
+    """POST /players/{player}/game/currency: the page's Set, Add and Take of a currency (game.change_currency)."""
+    game.change_currency(args["player"], args["currency"], args["how"], args["amount"], args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_game_unlimited_on(args):
+    """POST /players/{player}/game/unlimited: the page's unlimited switch, on."""
+    game.change_unlimited(args["player"], True, args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_game_unlimited_off(args):
+    """DELETE /players/{player}/game/unlimited: the switch, off."""
+    game.change_unlimited(args["player"], False, args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_game_level(args):
+    """POST /players/{player}/game/level: the page's Set level or Set EXP (game.change_level), one of the two."""
+    game.change_level(args["player"], level=args.get("level"), exp=args.get("exp"), seen=args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_game_give(args):
+    """POST /players/{player}/game/items/{item}: the page's Give."""
+    game.change_item(args["player"], args["item"], True, args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_game_take(args):
+    """DELETE /players/{player}/game/items/{item}: the page's Take."""
+    game.change_item(args["player"], args["item"], False, args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_ban(args):
+    """POST /players/{player}/ban: the page's Ban, with days from now or a moment (until) for its end."""
+    game.ban(args["player"], args["reason"], days=args.get("days", 0), until=args.get("until"), seen=args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_unban(args):
+    """DELETE /players/{player}/ban: the page's Lift the ban."""
+    game.unban(args["player"], args.get("seen"))
+    return {"game": game_view(args["player"])}
+
+
+@handler
+def player_game_reset(args):
+    """POST /players/{player}/game/reset: the page's Reset, which makes a backup first: its name comes back."""
+    done = game.reset_game(args["player"], args.get("seen"))
+    return {"game": game_view(args["player"]), "backup": done["backup"]}
+
+
+@handler
+def bans_list(args):
+    """GET /bans: the Players page's banned players."""
+    with db() as con:
+        return {"items": [{k: b[k] for k in ("id", "name", "reason", "since", "until", "by", "seen")} for b in game.banned(con)]}
+
+
+@handler
+def game_get(args):
+    """GET /game: the Players page's game card."""
+    with db() as con:
+        return game.settings(con)
+
+
+@handler
+def game_set(args):
+    """PUT /game: the game card's switch and its start values (game.save_settings). What is left out stays as it is."""
+    if not any(name in args for name in ("unlimited", "start_mpoint", "start_qpoint", "start_level")):
+        raise bad("bad_body", "Send unlimited, start_mpoint, start_qpoint or start_level.")
+    return game.save_settings(unlimited=args.get("unlimited"), start_mpoint=args.get("start_mpoint"),
+                              start_qpoint=args.get("start_qpoint"), start_level=args.get("start_level"))
 
 
 # ------------------------------------------------------------------------------ accounts

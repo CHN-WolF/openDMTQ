@@ -1,0 +1,180 @@
+{% extends "base.html" %}{% block title %}{{ p.name }}{% endblock %}
+{% block body %}
+{% set s = p.state %}
+{# Every form of the page goes to the player's own address, with whom the page saw the number belong to: a number that has
+   gone to someone else meanwhile changes nothing (players.player_seen). #}
+{# Who the page is about, first: the level as the game's top bar shows it, the name, what they have played, and what holds for
+   them now (a ban, unlimited currency), each in its own colour only where it says a state. #}
+<section class="card player-head" id="player-head" data-region>
+  <div class="player-who">
+    <span class="lv-badge" role="img" aria-label="Lv.{{ s.level }}"><b>{{ s.level }}</b><i>Lv</i></span>
+    <div class="player-name">
+      <h2>{{ p.name }}</h2>
+      <p class="meta">{{ tp('player.fallback', id=p.id) }} · {{ t('game.summary', charts=p.charts, total='{:,}'.format(p.total)) }}</p>
+      {% if p.ban or s.unlimited %}<p class="player-chips">
+        {% if p.ban %}<span class="chip bad"><span class="lamp bad"></span>{{ t('game.chip_banned_until', when=p.ban.until|rec_date) if p.ban.until else t('game.chip_banned') }}</span>{% endif %}
+        {% if s.unlimited %}<span class="chip warn"><span class="lamp wait"></span>{{ t('game.chip_unlimited') }}</span>{% endif %}
+      </p>{% endif %}
+    </div>
+  </div>
+  <nav class="player-links" aria-label="{{ p.name }}">
+    <a class="btn btn-sm" href="{{ url_for('players_page') }}">{{ t('game.back') }}</a>
+    <a class="btn btn-sm" href="{{ public_url }}/opendmtq/player.php?id={{ p.id }}">{{ t('game.on_site') }}</a>
+  </nav>
+</section>
+
+<div class="game-grid">
+  {# The two currencies as the game's top bar shows them, each with its own form: a figure, then set, add or take. #}
+  <section class="card" id="game-currency" data-region aria-labelledby="currency-title">
+    <h2 id="currency-title">{{ t('game.currency') }}</h2>
+    <p class="lead">{{ t('game.currency_lead') }}</p>
+    {% for cur, name, shown, own, how in [('max', 'game.max', s.shown_mpoint, s.mpoint, 'game.max_how'), ('q', 'game.q', s.shown_qpoint, s.qpoint, 'game.q_how')] %}
+    <div class="purse">
+      <div class="purse-head">
+        <span class="purse-mark">{{ 'MAX' if cur == 'max' else 'Q' }}</span>
+        <span class="purse-name">{{ t(name) }}</span>
+        <span class="purse-num" id="purse-{{ cur }}">{{ '{:,}'.format(shown) }}</span>
+      </div>
+      {% if s.unlimited %}<p class="meta purse-own">{{ t('game.own', n='{:,}'.format(own)) }}</p>{% endif %}
+      <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" class="purse-form" data-inplace novalidate>
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="currency"><input type="hidden" name="currency" value="{{ cur }}">
+        <input class="input input-sm" name="amount" inputmode="numeric" pattern="[0-9,]*" maxlength="11" required autocomplete="off" placeholder="0" aria-label="{{ t('game.amount_of', what=t(name)) }}" data-bad="{{ tp('game.bad_amount') }}">
+        <div class="btns"><button class="btn btn-sm" name="how" value="set">{{ t('game.set') }}</button><button class="btn btn-sm" name="how" value="add">{{ t('game.add') }}</button><button class="btn btn-sm" name="how" value="take">{{ t('game.take') }}</button></div>
+      </form>
+      <p class="meta purse-how">{{ t(how) }}</p>
+    </div>
+    {% endfor %}
+    {# The player's own unlimited switch, as the Broadcasts page's: the state and what it does, then the one button. #}
+    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" class="game-switch" data-inplace>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="auto-line"><span class="lamp {{ 'wait' if s.own_unlimited else 'off' }}"></span><b>{{ t('game.unlimited') }}</b> <span>{{ t('state.on_word') if s.own_unlimited else t('state.off_word') }}</span></p>
+      <p class="meta">{{ t('game.unlimited_lead') }}{% if p.game.unlimited %} {{ t('game.unlimited_all', url=url_for('players_page') ~ '#game') }}{% endif %}</p>
+      <div class="btn-line"><button class="btn btn-sm" name="action" value="{{ 'unlimited-off' if s.own_unlimited else 'unlimited-on' }}">{{ t('btn.turn_off') if s.own_unlimited else t('btn.turn_on') }}</button></div>
+    </form>
+  </section>
+
+  {# The level and its gauge as the game draws them: the share of the way from this level's start to the next one's. #}
+  <section class="card" id="game-level" data-region aria-labelledby="level-title">
+    <h2 id="level-title">{{ t('game.level') }}</h2>
+    <p class="lead">{{ t('game.level_lead') }}</p>
+    <div class="level-now">
+      <span class="lv-badge big" role="img" aria-label="Lv.{{ s.level }}"><b>{{ s.level }}</b><i>Lv</i></span>
+      <div class="level-gauge">
+        <div class="gauge" role="img" aria-label="{{ (100 * s.gauge)|round|int }}%"><span style="width: {{ (100 * s.gauge)|round(1) }}%"></span></div>
+        <p class="meta">{% if s.level_next %}{{ t('game.exp_of', exp='{:,}'.format(s.exp), left='{:,}'.format(s.level_next - s.exp), next=s.level + 1) }}{% else %}{{ t('game.exp_top', exp='{:,}'.format(s.exp)) }}{% endif %}</p>
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" class="level-form" data-inplace novalidate>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">{{ t('game.level_field', top=top) }}<input class="input" name="level" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" value="{{ s.level }}" data-bad="{{ tp('game.bad_level') }}"></label>
+      <button class="btn" name="action" value="level">{{ t('game.set_level') }}</button>
+    </form>
+    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" class="level-form" data-inplace novalidate>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">{{ t('game.exp_field', most='{:,}'.format(exp_max)) }}<input class="input" name="exp" inputmode="numeric" pattern="[0-9,]*" maxlength="7" autocomplete="off" value="{{ s.exp }}" data-bad="{{ tp('game.bad_exp') }}"></label>
+      <button class="btn" name="action" value="exp">{{ t('game.set_exp') }}</button>
+    </form>
+  </section>
+
+  {# A ban: what holds now and the way to lift it, or the form. The game shows the reason to the player. #}
+  <section class="card game-ban{% if p.ban %} is-banned{% endif %}" id="game-ban" data-region aria-labelledby="ban-title">
+    <h2 id="ban-title">{{ t('game.ban') }}</h2>
+    {% if p.ban %}
+    <p class="auto-line big"><span class="lamp bad"></span><b>{{ t('game.chip_banned') }}</b></p>
+    <blockquote class="ban-reason">{{ p.ban.reason }}</blockquote>
+    <p class="meta">{{ t('game.banned_since', since=p.ban.since|rec_date, by=p.ban.by) if p.ban.by else t('game.banned_since_nobody', since=p.ban.since|rec_date) }} · {{ t('game.banned_ends', when=p.ban.until|rec_date) if p.ban.until else t('game.banned_no_end') }}</p>
+    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" data-inplace>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="btn-line"><button class="btn btn-sm" name="action" value="unban">{{ t('game.unban_button') }}</button></div>
+    </form>
+    {% else %}
+    <p class="lead">{{ t('game.ban_lead') }}</p>
+    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" class="ban-form" data-inplace novalidate>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">{{ t('game.reason') }}<textarea name="reason" rows="2" maxlength="200" required placeholder="{{ t('game.reason_hint') }}" data-bad="{{ tp('game.no_reason') }}"></textarea></label>
+      <label class="field">{{ t('game.ends') }}<select class="input" name="days">{% for d in ends %}<option value="{{ d }}">{{ t('game.end_0') if d == 0 else t('game.end_1') if d == 1 else t('game.end_n', n=d) }}</option>{% endfor %}</select></label>
+      <div class="btn-line"><button class="btn btn-sm btn-danger" name="action" value="ban" data-ask="{{ tp('game.confirm_ban', who=p.name) }}" data-yes="{{ tp('game.ban_button') }}">{{ t('game.ban_button') }}</button></div>
+    </form>
+    {% endif %}
+  </section>
+
+  {# The items a player equips, kind by kind, each with the way to give or take it. One form for all of them: each button
+     names its item. #}
+  <section class="card" id="game-items" data-region aria-labelledby="items-title">
+    <h2 id="items-title">{{ t('game.items') }}</h2>
+    {% if not p.gear|selectattr('items')|list %}
+    <p class="empty">{{ t('game.no_items') }}</p>
+    {% else %}
+    <p class="lead">{{ t('game.items_lead') }}</p>
+    <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}" id="items-form" data-inplace>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for g in p.gear if g['items'] %}
+      <details class="kind">
+        <summary><span class="kind-name">{{ t(g.words) }}</span><span class="kind-count">{{ t('game.kind_count', n=g.owned, m=g['items']|length) }}</span></summary>
+        <ul class="item-list">
+          {% for i in g['items'] %}
+          <li class="{{ 'has' if i.owned else 'not' }}">
+            <span class="item-name"><span class="lamp {{ 'on' if i.owned else 'off' }}"></span>{{ i.name }}{% if i.how_words %}<span class="item-how">{{ t(i.how_words) }}</span>{% endif %}</span>
+            <button class="btn btn-sm twin" name="action" value="{{ 'take' if i.owned else 'give' }}" formaction="{{ url_for('player_game_action', pid=p.id, seen=p.seen, item=i.id) }}" data-twin="{{ t('game.give') if i.owned else t('game.take_item') }}">{{ t('game.take_item') if i.owned else t('game.give') }}</button>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endfor %}
+    </form>
+    {% endif %}
+  </section>
+</div>
+
+{# What the player bought in the game, newest first, with what was paid: none while their currency was unlimited. #}
+<section class="card" id="game-purchases" data-region aria-labelledby="purchases-title">
+  <h2 id="purchases-title">{{ t('game.purchases') }}</h2>
+  {% if not p.purchases %}
+  <p class="empty">{{ t('game.no_purchases') }}</p>
+  {% else %}
+  <table class="data purchases">
+    <thead><tr><th>{{ t('game.th_when') }}</th><th>{{ t('game.th_item') }}</th><th class="r">{{ t('game.th_price') }}</th><th class="r">{{ t('game.th_paid') }}</th></tr></thead>
+    <tbody>
+    {% for b in p.purchases %}
+      <tr>
+        <td class="date">{{ b.at|rec_date }}</td>
+        <td class="primary">{{ b.name }}</td>
+        <td class="r" data-label="{{ t('game.th_price') }}">{% if b.currency == 'free' %}{{ t('game.price_free') }}{% else %}{{ '{:,}'.format(b.price) }} {{ 'MAX' if b.currency == 'max' else 'Q' }}{% endif %}</td>
+        <td class="r" data-label="{{ t('game.th_paid') }}">{% if b.currency == 'free' %}0{% elif b.paid == 0 %}{{ t('game.paid_unlimited') }}{% else %}{{ '{:,}'.format(b.paid) }} {{ 'MAX' if b.currency == 'max' else 'Q' }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{# Every change of this player's made here or through the API: when, what, from what to what, and who. #}
+<section class="card" id="game-changes" data-region aria-labelledby="changes-title">
+  <h2 id="changes-title">{{ t('game.changes') }}</h2>
+  {% if not p.history %}
+  <p class="empty">{{ t('game.no_changes') }}</p>
+  {% else %}
+  <ul class="changes">
+    {# As the Logs page's Changes tab lists them: when, what, on what (with the values before and after), who. #}
+    {% for c in p.history %}<li><span class="ch-when" data-tip="{{ c.ago }}" tabindex="0">{{ c.at|rec_date }}</span><span class="ch-what">{{ c.words }}</span><span class="ch-target">{{ c.target }}</span><span class="ch-who">{{ c.who }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+{# The name, which the Players page's More changes too, and the game state back to a new player's. #}
+<section class="card player-name-card" id="game-player" data-region aria-labelledby="name-title">
+  <h2 id="name-title">{{ t('game.name') }}</h2>
+  <form method="post" action="{{ url_for('player_action', pid=p.id, seen=p.seen) }}" class="inline-form rename" data-inplace>
+    {# Back to this page afterwards, not to the list (players.player_action). #}
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="back" value="player">
+    <input class="input input-sm" name="name" value="{{ p.nickname }}" placeholder="{{ tp('player.fallback', id=p.id) }}" maxlength="20" aria-label="{{ tp('players.name_of', id=p.id) }}">
+    <button class="btn btn-sm" name="action" value="rename">{{ t('players.rename') }}</button>
+  </form>
+  <h3>{{ t('game.reset') }}</h3>
+  <p class="lead">{{ t('game.reset_lead') }}</p>
+  <form method="post" action="{{ url_for('player_game_action', pid=p.id, seen=p.seen) }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="btn-line"><button class="btn btn-sm btn-danger" name="action" value="reset" data-ask="{{ tp('game.confirm_reset', who=p.name) }}" data-yes="{{ tp('game.reset_button') }}">{{ t('game.reset_button') }}</button></div>
+  </form>
+</section>
+{% endblock %}

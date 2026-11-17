@@ -357,17 +357,19 @@ def top_pages(rows, limit=6):
 AUDIT_MAX = 256 * 1024
 
 
-def audit_note(folder, what, target="", named=True, who=""):
+def audit_note(folder, what, target="", named=True, who="", extra=None):
     """One line in the record of changes made in these pages. Never gets in the way of the change itself. named: the target
     is in words as they are at this moment (lines from before that hold a number, looked up when shown). who: the account
-    that made it, empty for what nobody signed in did (a failed sign-in)."""
+    that made it, empty for what nobody signed in did (a failed sign-in). extra: more of the line's own fields (a player's
+    number, the values before and after a change of their game state), which no line of the same kind lacks."""
     path = os.path.join(folder, "changes.log")
     try:
         os.makedirs(folder, exist_ok=True)
         if os.path.exists(path) and os.path.getsize(path) > AUDIT_MAX:
             os.replace(path, path + ".1")
+        line = {"at": int(time.time()), "what": what, "target": target, "named": named, "who": who, **(extra or {})}
         with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"at": int(time.time()), "what": what, "target": target, "named": named, "who": who}, ensure_ascii=False) + "\n")
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except OSError:
         pass
 

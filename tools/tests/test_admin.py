@@ -1397,6 +1397,8 @@ class ChangeLogPageTest(unittest.TestCase):
                 for action in re.findall(r'name="action" value="([a-z-]+)[ "]', f.read()):
                     # On a saved backup, its own page.
                     owner = "backup_action" if page == "backups_page" and action in ("delete", "restore") else page
+                    # On the Players page, the Game card's start values and a ban lifted from the list: game.py's.
+                    owner = {"start": "game_settings", "unban": "player_game"}.get(action, owner) if page == "player_action" else owner
                     self.assertIn(f"{owner}:{action}", admin.logs.CHANGE_WORDS, name)
 
     def test_every_change_the_code_notes_has_its_words(self):
@@ -1404,9 +1406,9 @@ class ChangeLogPageTest(unittest.TestCase):
         # of a value can be (that value's every case named here, where the code takes them from), each in CHANGE_WORDS
         # with words in both languages. A new call, or a new value in one, fails here until it has its words.
         # A value's cases: the actions an account's buttons and the API send (refused otherwise), a player's (players.html
-        # and the API), a recording's verbs (recordings.html, act_on()).
+        # and the API), a recording's verbs (recordings.html, act_on()), a player's currencies (game.py, refused otherwise).
         cases = {("accounts.py", "action"): admin.accounts.ACTIONS, ("players.py", "action"): ("rename", "reset", "delete", "live-on", "live-off"),
-                 ("recordings.py", "verb"): ("hide", "show", "delete", "delete-player")}
+                 ("recordings.py", "verb"): ("hide", "show", "delete", "delete-player"), ("game.py", "currency"): tuple(admin.game.CURRENCIES)}
 
         def codes(module, node):
             """The strings a code's expression can be: a string, either of two (x if ... else y), pieces added, an f-string."""
@@ -2128,8 +2130,9 @@ class PlayersPageFormsTest(unittest.TestCase):
                 # None in the list itself.
                 self.assertNotIn("<form", page[page.index("<tbody>"):page.index("</tbody>")])
                 counts.append(page.count("<form"))
-        # The switches' one, More's in its template, the sign-out and the question's: as many for 1 player as for 40.
-        self.assertEqual(counts, [4, 4])
+        # The switches' one, More's in its template, the Game card's two, the sign-out and the question's: as many for 1
+        # player as for 40.
+        self.assertEqual(counts, [6, 6])
 
     def test_a_switch_sends_the_one_form_to_its_players_address(self):
         with Install() as inst:
@@ -3052,8 +3055,9 @@ class FormChecksTest(unittest.TestCase):
                     self.assertIn("novalidate", form.group(1), f"{name}: {field}")
                     self.assertRegex(field, r"""data-bad="\{\{ tp\('[\w.]+'\) \}\}\"""", f"{name}: {field}")
         # The sign-in's two, the account's ID and passwords, a token's name, the setup's ID, the other address, the two
-        # files, the recordings' limits, the plays' days and the Server page's new port: none of them left out.
-        self.assertEqual(checked, 15)
+        # files, the recordings' limits, the plays' days and the Server page's new port; a player's currency, level,
+        # experience and ban reason, and what a new player starts with: none of them left out.
+        self.assertEqual(checked, 22)
 
     def test_the_sign_in_and_the_password_fields_are_labelled_with_show_and_the_kept_id(self):
         with Install() as inst:

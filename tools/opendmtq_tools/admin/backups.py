@@ -67,6 +67,24 @@ BOARD_STAMP = "CREATE TABLE IF NOT EXISTS BoardStamp (n INTEGER NOT NULL);\n" \
         "BEGIN UPDATE BoardStamp SET n = n + 1; END;\n"
         for table in ("PlayLog", "Play", "Member") for change in ("INSERT", "UPDATE", "DELETE"))
 
+# A player's game state (game.py, server/game/src/player.php): their currencies, experience and own unlimited switch, the
+# items they bought or were given or had taken, the products a level unlock opened, their purchases, a ban, and the server's
+# game settings. The same statements as setup-db.php's: a restored database gets them with SCHEMA.
+GAME_TABLES = (
+    "CREATE TABLE IF NOT EXISTS PlayerState (guid INTEGER PRIMARY KEY, mpoint INTEGER NOT NULL, qpoint INTEGER NOT NULL, "
+    "exp INTEGER NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, changed_at INTEGER)",
+    "CREATE TABLE IF NOT EXISTS PlayerItem (guid INTEGER NOT NULL, item_id INTEGER NOT NULL, owned INTEGER NOT NULL, "
+    "how TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (guid, item_id))",
+    "CREATE TABLE IF NOT EXISTS PlayerUnlock (guid INTEGER NOT NULL, product_id INTEGER NOT NULL, at INTEGER NOT NULL, "
+    "PRIMARY KEY (guid, product_id))",
+    "CREATE TABLE IF NOT EXISTS PlayerPurchase (id INTEGER PRIMARY KEY, guid INTEGER NOT NULL, product_id INTEGER NOT NULL, "
+    "item_id INTEGER NOT NULL, currency TEXT NOT NULL, price INTEGER NOT NULL, paid INTEGER NOT NULL, at INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS PlayerPurchase_guid ON PlayerPurchase (guid, at)",
+    "CREATE TABLE IF NOT EXISTS PlayerBan (guid INTEGER PRIMARY KEY, reason TEXT NOT NULL, since INTEGER NOT NULL, "
+    "until INTEGER, by TEXT NOT NULL DEFAULT '')",
+    "CREATE TABLE IF NOT EXISTS GameSetting (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
+)
+
 SCHEMA = """CREATE TABLE IF NOT EXISTS PlayLog (id INTEGER PRIMARY KEY, user_id INTEGER, pattern_id INTEGER,
         score INTEGER, grade TEXT, judgement INTEGER, is_record INTEGER, played_at INTEGER,
         keys INTEGER NOT NULL DEFAULT 0);
@@ -85,7 +103,7 @@ CREATE INDEX IF NOT EXISTS Play_board ON Play (user_id, pattern_id, score);
 DROP INDEX IF EXISTS Play_user;
 CREATE INDEX IF NOT EXISTS Member_id ON Member (id);
 CREATE INDEX IF NOT EXISTS Member_udid ON Member (udid);
-""" + auth.ACCOUNT_TABLE + ";\n" + ACHIEVEMENT_TABLE + ";\n" + BOARD_STAMP
+""" + auth.ACCOUNT_TABLE + ";\n" + ACHIEVEMENT_TABLE + ";\n" + BOARD_STAMP + "".join(sql + ";\n" for sql in GAME_TABLES)
 
 
 def backup_files():

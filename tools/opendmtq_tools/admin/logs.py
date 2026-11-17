@@ -60,10 +60,13 @@ CHANGE_WORDS = {
     "server:stop": "change.server_stop", "server:port": "change.server_port", "server:restart": "change.server_restart",
     "server:uninstall": "change.server_uninstall",
     "server:repair": "change.server_repair", "server:delete-data": "change.server_delete_data",
-    # Play on this PC (this_pc.py): the PC client installed or opened on the server PC, by whoever pressed it.
-    "app:play_here": "change.play_here",
-    # A one-time sign-in link to the players' site the API made (site_links.py), for its token's admin.
-    "site:link": "change.site_link",
+    # A player's game state on their page (game.py), and the server's game settings on the Players page.
+    "player_game:max": "change.game_max", "player_game:q": "change.game_q", "player_game:unlimited-on": "change.game_unlimited_on",
+    "player_game:unlimited-off": "change.game_unlimited_off", "player_game:level": "change.game_level", "player_game:exp": "change.game_exp",
+    "player_game:give": "change.game_give", "player_game:take": "change.game_take", "player_game:ban": "change.game_ban",
+    "player_game:unban": "change.game_unban", "player_game:reset": "change.game_reset",
+    "game_settings:unlimited-on": "change.game_all_on", "game_settings:unlimited-off": "change.game_all_off",
+    "game_settings:start": "change.game_start",
 }
 
 

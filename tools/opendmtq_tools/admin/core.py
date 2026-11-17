@@ -657,21 +657,22 @@ def acting_who():
     return str(session.get("who", "")) if session.get("ok") else ""
 
 
-def changed(what, target=""):
+def changed(what, target="", **extra):
     """Notes a change that has happened, at the end of the request: what is the page and the form's action, target the words
     for who or what it was about, as they are now. No values beyond those: no passwords, no messages. Through the API the
     same page and action, by the admin whose token it was. In a form's job, after its request has ended, at once, by
-    whoever sent the form (acting_as)."""
+    whoever sent the form (acting_as). extra: a change of a player's game state names the player (player, their number)
+    and its values before and after (before, after; item for an item), which the player's page lists."""
     if not has_request_context():
-        insights.audit_note(os.path.dirname(DB), what, target[:100], who=getattr(_acting, "who", None) or "")
+        insights.audit_note(os.path.dirname(DB), what, target[:100], who=getattr(_acting, "who", None) or "", extra=extra)
         return
-    g.changes = getattr(g, "changes", []) + [(what, target[:100], acting_who())]
+    g.changes = getattr(g, "changes", []) + [(what, target[:100], acting_who(), extra)]
 
 
 @app.after_request
 def note_changes(response):
-    for what, target, who in getattr(g, "changes", []):
-        insights.audit_note(os.path.dirname(DB), what, target, who=who)
+    for what, target, who, extra in getattr(g, "changes", []):
+        insights.audit_note(os.path.dirname(DB), what, target, who=who, extra=extra)
     return response
 
 

@@ -80,8 +80,13 @@ def players_page():
     # Broadcasts off for the server: the switches are kept, and the page says so above them.
     # And what new players start with, which the page says with how the two switches go together.
     settings = recordings.live_settings()
+    # The game's settings for every player and the bans that last (game.py), for the card above the list and the marks in it.
+    from . import game
+    with db() as con:
+        game_settings, bans = game.settings(con), game.banned(con)
     return render_template("players.html", players=rows, live=live, seen=seen, played=played, phones=phones,
-                           broadcasts_on=settings["on"], new_players=settings["new_players"])
+                           broadcasts_on=settings["on"], new_players=settings["new_players"], game=game_settings, bans=bans,
+                           banned={b["id"] for b in bans}, top=game.LEVEL_TOP, most=game.POINTS_MAX)
 
 
 def csv_text(value):
@@ -119,11 +124,13 @@ def player_action(pid):
     # Whom the page saw the number belong to: in the address the page's buttons send to (players.html: a button sends one
     # value of its own, its action), or in the form, as a program may send it. Neither: a stale form, refused below.
     seen = request.args.get("seen") or request.form.get("seen", "")
+    # Where the page goes after: the player's own page when its form was sent from there, the list otherwise.
+    back = url_for("player_page", pid=pid) if request.form.get("back") == "player" else url_for("players_page")
     try:
         done = act(pid, action, seen, request.form.get("name", ""))
     except Refused as e:
         flash(e.words, e.tone)
-        return redirect(url_for("players_page"))
+        return redirect(back if e.code != "player_not_found" else url_for("players_page"))
     who = done["who"]
     if action == "rename":
         flash(t("players.renamed", who=who, name=done["name"]), "ok")
@@ -135,7 +142,8 @@ def player_action(pid):
     elif action == "live-off":
         # Told in the game either way: with broadcasts off for the server too, the switch stays off for when they are on.
         flash(t("players.live_off" if recordings.live_settings()["on"] else "players.live_off_held", who=who), "ok")
-    return redirect(url_for("players_page"))
+    # A player deleted has no page any more.
+    return redirect(back if action != "delete" else url_for("players_page"))
 
 
 def act(pid, action, seen, name=""):
@@ -160,7 +168,7 @@ def act(pid, action, seen, name=""):
             # Every phone of the player (a transfer code leaves two rows with one guid).
             con.execute("UPDATE Member SET nickname = ? WHERE CAST(guid AS INTEGER) = ?", (name or " ", pid))
             after = name or player_label(con, pid)
-            changed("player_action:rename", f"{who} → {after}")
+            changed("player_action:rename", f"{who} → {after}", player=pid, before=who, after=after)
         elif action in ("reset", "delete"):
             # What cannot be undone leaves a way back. No copy, no change.
             try:
@@ -180,6 +188,9 @@ def act(pid, action, seen, name=""):
                 pass
             if action == "delete":
                 con.execute("DELETE FROM Member WHERE CAST(guid AS INTEGER) = ?", (pid,))
+                # Their game state and a ban go with them: a new phone that gets the number back starts as a new player.
+                from . import game
+                game.forget(con, pid)
             if action == "delete":
                 # No switch or video left behind for a player who is gone.
                 try:
@@ -189,10 +200,10 @@ def act(pid, action, seen, name=""):
                 shutil.rmtree(recordings.live_folder(pid), ignore_errors=True)
                 # Nor recordings of them.
                 shutil.rmtree(os.path.join(recordings.rec_root(), str(int(pid))), ignore_errors=True)
-            changed("player_action:" + action, who)
+            changed("player_action:" + action, who, player=pid)
         elif action in ("live-on", "live-off"):
             recordings.live_set(con, pid, action == "live-on")
-            changed("player_action:" + action, who)
+            changed("player_action:" + action, who, player=pid)
     # Switching off: the recording is closed right away.
     if action == "live-off":
         recordings.rec_sweep_now()

@@ -1,5 +1,40 @@
 {% extends "base.html" %}{% block title %}{{ t('players.title') }}{% endblock %}
 {% block body %}
+{# The game for every player: unlimited currency for all, and what a new player starts with (game.py). #}
+<section class="card" id="game" data-region aria-labelledby="game-title">
+  <h2 id="game-title">{{ t('game.card') }}</h2>
+  <form method="post" action="{{ url_for('game_settings_action') }}" class="game-switch" data-inplace>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="auto-line"><span class="lamp {{ 'wait' if game.unlimited else 'off' }}"></span><b>{{ t('game.unlimited') }}</b> <span>{{ t('game.all_is_on') if game.unlimited else t('game.all_is_off') }}</span></p>
+    <p class="meta">{{ t('game.all_lead') }}</p>
+    <div class="btn-line"><button class="btn btn-sm" name="action" value="{{ 'unlimited-off' if game.unlimited else 'unlimited-on' }}">{{ t('btn.turn_off') if game.unlimited else t('btn.turn_on') }}</button></div>
+  </form>
+  <h3>{{ t('game.start') }}</h3>
+  <p class="lead">{{ t('game.start_lead') }}</p>
+  <form method="post" action="{{ url_for('game_settings_action') }}" class="game-start" data-inplace novalidate>
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="start">
+    <label class="field">{{ t('game.max') }}<input class="input input-sm" name="start_mpoint" inputmode="numeric" pattern="[0-9,]*" maxlength="11" value="{{ game.start_mpoint }}" autocomplete="off" data-bad="{{ tp('game.bad_amount') }}"></label>
+    <label class="field">{{ t('game.q') }}<input class="input input-sm" name="start_qpoint" inputmode="numeric" pattern="[0-9,]*" maxlength="11" value="{{ game.start_qpoint }}" autocomplete="off" data-bad="{{ tp('game.bad_amount') }}"></label>
+    <label class="field">{{ t('game.level_field', top=top) }}<input class="input input-sm" name="start_level" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="{{ game.start_level }}" autocomplete="off" data-bad="{{ tp('game.bad_level') }}"></label>
+    <button class="btn btn-sm">{{ t('game.save_start') }}</button>
+  </form>
+</section>
+{# Who is banned now, with the reason and the end, and the way to lift each ban: only while someone is. #}
+{% if bans %}
+<section class="card" id="bans" data-region aria-labelledby="bans-title">
+  <h2 id="bans-title">{{ t('game.banned_list') }} <span class="meta-inline">{{ bans|length }}</span></h2>
+  <ul class="banned-list">
+    {% for b in bans %}
+    <li>
+      <span class="primary"><a href="{{ url_for('player_page', pid=b.id) }}">{{ b.name }}</a></span>
+      <span class="ban-why">{{ b.reason }}</span>
+      <span class="ban-end">{{ t('game.banned_ends', when=b.until|rec_date) if b.until else t('game.banned_no_end') }}</span>
+      <form method="post" action="{{ url_for('player_game_action', pid=b.id, seen=b.seen) }}" data-inplace><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="back" value="players"><button class="btn btn-sm" name="action" value="unban">{{ t('game.unban_button') }}</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 <section class="card">
   {# Nobody yet: the heading and that one line, with nothing about switches or a file of a list there is not; under it, when
      a player comes to be listed, and the two pages on the way: their account, and the app on the site's Download page. #}
@@ -24,8 +59,9 @@
       {# A part the page changes in place (data-region, admin.js): the row, after its switch or its More. #}
       <tr id="player-{{ p.id }}" data-region data-k="{{ who|lower }}">
         <td data-label="ID" class="rank" data-v="{{ p.id }}">{{ p.id }}</td>
-        {# The name leads to the player's public profile. Changing it, and what cannot be undone, wait under More. #}
-        <td class="primary" data-v="{{ who|lower }}"><a href="{{ public_url }}/opendmtq/player.php?id={{ p.id }}">{{ who }}</a></td>
+        {# The name leads to the player's own page here (their game state, their ban; their profile on the site from there).
+           Changing it, and what cannot be undone, wait under More too. A banned player is marked after the name. #}
+        <td class="primary" data-v="{{ who|lower }}"><a href="{{ url_for('player_page', pid=p.id) }}">{{ who }}</a>{% if p.id in banned %}<span class="name-chip">{{ t('game.chip_banned') }}</span>{% endif %}</td>
         {# When they last played, and how the last two weeks went. #}
         <td data-label="{{ t('players.th_last') }}" class="player-last" data-v="{{ played[p.id].last or 0 }}">{{ played[p.id].spark }}<span>{{ played[p.id].ago or t('players.never') }}</span></td>
         <td data-label="{{ t('players.th_charts') }}" class="r wide-only" data-v="{{ p.charts }}">{{ p.charts }}</td>

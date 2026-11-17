@@ -358,6 +358,60 @@ def restoring(inst):
     return []
 
 
+# The client's tables as the tools turn them into catalog.json (songs.py): items everyone has, the shop's products, the items a
+# player equips by kind (two characters, a note nobody has at first, a skin).
+CATALOG = {"items": [30001, 30002, 100001], "point_charts": [], "unlock_product": None,
+           "products": {"90001": {"item": 90001, "kind": "N", "point": 2000, "cash": 0, "amount": 0}},
+           "gear": {"C": [[30001, "Made Partner"], [30002, "Second Partner"]], "N": [[90001, "Made Note"]], "K": [[100001, "Made Skin"]]}}
+
+
+def with_catalog(inst):
+    """The server's catalog, as the start's song list rebuild leaves it in custom/."""
+    inst.write("custom/catalog.json", json.dumps(CATALOG))
+    return []
+
+
+def equipped_seven(inst):
+    """The catalog, and Sena with the first character equipped on the top bar (game.setSlotItem)."""
+    with sqlite3.connect(admin.core.DB) as con:
+        con.execute("UPDATE Member SET slot_item1 = 30001 WHERE CAST(guid AS INTEGER) = 7")
+    return with_catalog(inst)
+
+
+def banned_seven(inst):
+    """Sena (player 7) banned for a week, as the player's page leaves it."""
+    with sqlite3.connect(admin.core.DB) as con:
+        admin.game.game_tables(con)
+        con.execute("INSERT INTO PlayerBan (guid, reason, since, until, by) VALUES (7, 'Made-up scores', ?, ?, 'admin')", (now(), now() + 7 * 86400))
+    return []
+
+
+def changed_seven(inst):
+    """Sena's game state changed: a currency, a level, an item given, a purchase."""
+    with sqlite3.connect(admin.core.DB) as con:
+        admin.game.game_tables(con)
+        con.execute("INSERT INTO PlayerState (guid, mpoint, qpoint, exp, unlimited, changed_at) VALUES (7, 5, 6, 644, 1, ?)", (now(),))
+        con.execute("INSERT INTO PlayerItem (guid, item_id, owned, how, at) VALUES (7, 90001, 1, 'given', ?)", (now(),))
+        con.execute("INSERT INTO PlayerPurchase (guid, product_id, item_id, currency, price, paid, at) VALUES (7, 90001, 90001, 'max', 2000, 2000, ?)", (now(),))
+    return with_catalog(inst)
+
+
+def item_taken_and_unequipped(t, inst, r):
+    """A character taken: not the player's any more, and out of its slot on the top bar where it was equipped."""
+    t.assertEqual([(i["id"], i["owned"]) for i in r.get_json()["game"]["items"] if i["id"] == 30001], [(30001, False)])
+    with sqlite3.connect(admin.core.DB) as con:
+        t.assertEqual({row[0] for row in con.execute("SELECT slot_item1 FROM Member WHERE CAST(guid AS INTEGER) = 7")}, {None})
+
+
+def start_values_reach_new_players(t, inst, r):
+    """New start values: the server's settings change, and every player already there keeps what they had."""
+    t.assertEqual(r.get_json(), {"unlimited": True, "start_mpoint": 0, "start_qpoint": 999999, "start_level": 1})
+    with sqlite3.connect(admin.core.DB) as con:
+        con.row_factory = sqlite3.Row
+        kept = {row["guid"]: (row["mpoint"], row["exp"]) for row in con.execute("SELECT guid, mpoint, exp FROM PlayerState")}
+    t.assertEqual(kept, {7: (999999, 130408), 8: (999999, 130408), 9: (999999, 130408)})
+
+
 def CASES():
     """Every route's usual answer, and its refusals."""
     closed, opened, backup = Server.names["closed"], Server.names["open"], Server.names["backup"]
@@ -604,6 +658,56 @@ def CASES():
         C("player_live_on", "POST", "/players/99/live", 404, "player_not_found"),
         C("player_live_off", "DELETE", "/players/7/live", 200),
         C("player_live_off", "DELETE", "/players/7/live?seen=0123456789abcdef", 409, "stale"),
+        # A player's game state (game.py): what a player nobody changed has, then each change and its refusals.
+        C("player_game_get", "GET", "/players/7/game", 200, setup=with_catalog,
+          check=lambda t, inst, r: t.assertEqual({k: r.get_json()["game"][k] for k in ("level", "exp", "mpoint", "qpoint", "kept", "ban")},
+                                                 {"level": 99, "exp": 130408, "mpoint": 999999, "qpoint": 999999, "kept": False, "ban": None})),
+        C("player_game_get", "GET", "/players/99/game", 404, "player_not_found"),
+        C("player_game_currency", "POST", "/players/7/game/currency", 200, json={"currency": "max", "how": "take", "amount": 1999},
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["game"]["mpoint"], r.get_json()["game"]["kept"]), (998000, True))),
+        C("player_game_currency", "POST", "/players/7/game/currency", 400, "too_much", json={"currency": "q", "how": "add", "amount": 99999999}),
+        C("player_game_currency", "POST", "/players/7/game/currency", 400, "bad_field", json={"currency": "gold", "how": "set", "amount": 1}),
+        C("player_game_currency", "POST", "/players/7/game/currency", 400, "too_little", json={"currency": "max", "how": "take", "amount": 1000000}),
+        C("player_game_unlimited_on", "POST", "/players/7/game/unlimited", 200,
+          check=lambda t, inst, r: t.assertEqual({k: r.get_json()["game"][k] for k in ("shown_mpoint", "shown_qpoint", "mpoint", "own_unlimited")},
+                                                 {"shown_mpoint": 99999999, "shown_qpoint": 99999999, "mpoint": 999999, "own_unlimited": True})),
+        C("player_game_unlimited_on", "POST", "/players/99/game/unlimited", 404, "player_not_found"),
+        C("player_game_unlimited_off", "DELETE", "/players/7/game/unlimited", 200, check=lambda t, inst, r: t.assertFalse(r.get_json()["game"]["unlimited"])),
+        C("player_game_unlimited_off", "DELETE", "/players/7/game/unlimited?seen=0123456789abcdef", 409, "stale"),
+        C("player_game_level", "POST", "/players/7/game/level", 200, json={"level": 12},
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["game"]["level"], r.get_json()["game"]["exp"], r.get_json()["game"]["level_next"]), (12, 644, 748))),
+        C("player_game_level", "POST", "/players/7/game/level", 200, json={"exp": 5669},
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["game"]["level"], r.get_json()["game"]["level_start"]), (37, 5493))),
+        C("player_game_level", "POST", "/players/7/game/level", 400, "bad_level", json={"level": 100}),
+        C("player_game_level", "POST", "/players/7/game/level", 400, "bad_exp", json={"exp": 130409}),
+        C("player_game_level", "POST", "/players/7/game/level", 400, "level_or_exp", json={"level": 3, "exp": 30}),
+        C("player_game_give", "POST", "/players/7/game/items/90001", 200, setup=with_catalog,
+          check=lambda t, inst, r: t.assertEqual([(i["id"], i["owned"], i["how"]) for i in r.get_json()["game"]["items"] if i["id"] == 90001], [(90001, True, "given")])),
+        C("player_game_give", "POST", "/players/7/game/items/12345", 404, "item_not_found", setup=with_catalog),
+        C("player_game_take", "DELETE", "/players/7/game/items/30001", 200, setup=equipped_seven, check=item_taken_and_unequipped),
+        C("player_game_take", "DELETE", "/players/99/game/items/30001", 404, "player_not_found", setup=with_catalog),
+        C("player_ban", "POST", "/players/7/ban", 200, json={"reason": "Made-up scores", "days": 7},
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["game"]["ban"]["reason"], r.get_json()["game"]["ban"]["until"] - r.get_json()["game"]["ban"]["since"]),
+                                                 ("Made-up scores", 7 * 86400))),
+        C("player_ban", "POST", "/players/7/ban", 200, json={"reason": "No end"}, check=lambda t, inst, r: t.assertIsNone(r.get_json()["game"]["ban"]["until"])),
+        C("player_ban", "POST", "/players/7/ban", 400, "no_reason", json={"reason": "   "}),
+        C("player_ban", "POST", "/players/7/ban", 400, "bad_until", json={"reason": "Past", "until": 1000}),
+        C("player_ban", "POST", "/players/7/ban", 400, "bad_field", json={"reason": "x" * 201}),
+        C("player_unban", "DELETE", "/players/7/ban", 200, setup=banned_seven, check=lambda t, inst, r: t.assertIsNone(r.get_json()["game"]["ban"])),
+        C("player_unban", "DELETE", "/players/99/ban", 404, "player_not_found"),
+        C("player_game_reset", "POST", "/players/7/game/reset", 200, setup=changed_seven,
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["game"]["kept"], r.get_json()["game"]["mpoint"], r.get_json()["backup"].endswith(".tar.gz")),
+                                                 (False, 999999, True))),
+        C("player_game_reset", "POST", "/players/99/game/reset", 404, "player_not_found"),
+        C("bans_list", "GET", "/bans", 200, setup=banned_seven, check=lambda t, inst, r: t.assertEqual([(b["id"], b["name"]) for b in r.get_json()["items"]], [(7, "Sena")])),
+        C("bans_list", "GET", "/bans", 401, "no_token", token=None),
+        C("game_get", "GET", "/game", 200, check=lambda t, inst, r: t.assertEqual(r.get_json(), {"unlimited": False, "start_mpoint": 999999,
+                                                                                               "start_qpoint": 999999, "start_level": 99})),
+        C("game_get", "GET", "/game", 401, "no_token", token=None),
+        C("game_set", "PUT", "/game", 200, json={"unlimited": True, "start_level": 1, "start_mpoint": 0},
+          check=start_values_reach_new_players),
+        C("game_set", "PUT", "/game", 400, "bad_body", json={}),
+        C("game_set", "PUT", "/game", 400, "bad_start_level", json={"start_level": 0}),
         C("accounts_list", "GET", "/accounts", 200, check=lambda t, inst, r: t.assertEqual([a["name"] for a in r.get_json()["items"]], ["friend", "helper"])),
         C("accounts_create", "POST", "/accounts", 201, json={"name": "newbie", "player": 7},
           check=lambda t, inst, r: t.assertTrue(re.fullmatch(r"[a-z2-9]{10}", r.get_json()["password"]))),
@@ -1983,7 +2087,7 @@ PAGE_ACTIONS = {
     "server_repair": ["server_repair"],
     "server_delete": ["server_data_delete"],
     "server_uninstall": ["server_uninstall"],
-    "players_page": ["players_list"],
+    "players_page": ["players_list", "game_get", "bans_list"],
     "players_page?csv": ["players_download"],
     "player_action": ["player_get"],
     "player_action:rename": ["player_rename"],
@@ -1991,6 +2095,23 @@ PAGE_ACTIONS = {
     "player_action:delete": ["player_delete"],
     "player_action:live-on": ["player_live_on"],
     "player_action:live-off": ["player_live_off"],
+    # A player's own page and its forms (game.py), and the Players page's game card.
+    "player_page": ["player_game_get"],
+    "player_game_action": ["player_game_get"],
+    "player_game_action:currency": ["player_game_currency"],
+    "player_game_action:unlimited-on": ["player_game_unlimited_on"],
+    "player_game_action:unlimited-off": ["player_game_unlimited_off"],
+    "player_game_action:level": ["player_game_level"],
+    "player_game_action:exp": ["player_game_level"],
+    "player_game_action:give": ["player_game_give"],
+    "player_game_action:take": ["player_game_take"],
+    "player_game_action:ban": ["player_ban"],
+    "player_game_action:unban": ["player_unban"],
+    "player_game_action:reset": ["player_game_reset"],
+    "game_settings_action": ["game_get"],
+    "game_settings_action:unlimited-on": ["game_set"],
+    "game_settings_action:unlimited-off": ["game_set"],
+    "game_settings_action:start": ["game_set"],
     "accounts_page": ["accounts_list", "tokens_list"],
     "accounts_page:create": ["accounts_create"],
     "accounts_page:password": ["account_password"],
@@ -2117,6 +2238,9 @@ GET_ARGS = {
     # A change to a player from the Players page: whom the page saw the number belong to, in the address, as the API's
     # writes take it.
     "player_action?seen": ("query", "player_rename", "seen"),
+    # The player's own page's forms: whom the page saw the number belong to, and the item a button gives or takes.
+    "player_game_action?seen": ("query", "player_game_currency", "seen"),
+    "player_game_action?item": ("path", "player_game_give", "item"),
     # The Logs page: its tabs, the Requests tab's filter form, the rows it fetches again while it follows the log.
     "logs_page?tab": ("view", "logs_requests", "logs_plays", "logs_changes"),
     "logs_page?q": ("query", "logs_requests", "q"),
