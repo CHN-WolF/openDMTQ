@@ -156,9 +156,25 @@ class PlayHereTest(unittest.TestCase):
 
     def test_without_an_installer_and_not_installed_it_says_so_and_offers_nothing(self):
         self.server(installer=False)
-        shown = self.page("/app")
+        with mock.patch.object(windows_client, "HERE", self.inst.path("nowhere")):
+            shown = self.page("/app")
         self.assertIn("this server keeps no installer for Windows", shown)
         self.assertNotRegex(shown, r'>Play on this PC</button>')
+
+    def test_before_the_app_is_built_the_installer_beside_the_code_is_used(self):
+        # The site hands its copy out once the app is built; the Windows bundle brings one beside its code from the start.
+        self.server(installer=False)
+        os.makedirs(self.inst.path("code"))
+        with open(self.inst.path("code/OpenDMTQ-Setup.exe"), "wb") as f:
+            f.write(b"MZ" + b"\0" * (1 << 20))
+        self.inst.write("code/OpenDMTQ-Setup.exe.version", "0.11.0\n")
+        with mock.patch.object(windows_client, "HERE", self.inst.path("code")):
+            self.assertIn("Installs the PC client on this PC", self.page("/app"))
+            _, said = self.press()
+        self.assertIn("Installed the PC client.", said)
+        [run] = self.started
+        self.assertEqual(os.path.basename(run["command"][0]), "opendmtq-pc-client-0.11.0-windows-x64-setup-%s.exe" % HOST)
+        self.assertEqual(run["end"]["account"], "admin")
 
     def test_an_installer_that_fails_or_meets_a_game_says_why(self):
         self.server(code=2)

@@ -128,6 +128,20 @@ def installed_version():
     return text[start + len("<version>"):end].strip() if 0 <= start < end else ""
 
 
+def installer():
+    """The PC client's installer this server keeps, and its version: the copy the site hands out (data/apk/out, once the
+    app is built), else the one beside this code (the Windows bundle brings it) or put in data/apk by hand, whole; (None,
+    None) without one. Nothing is fetched for it here: a server without one says so."""
+    made = apps.windows_offer()
+    if made:
+        return os.path.join(core.APK, "out", os.path.basename(str(made["file"]))), str(made.get("version") or "")
+    for path in (None, os.path.join(core.APK, windows_client.SETUP_NAME)):
+        found, version = windows_client.bundled(path)
+        if found:
+            return found, version or ""
+    return None, None
+
+
 def acting_id():
     """The site ID of whoever presses it, for the launcher's sign-in: the admin signed in to these pages (the owner's ID
     for the owner), or through the API the admin whose token it is."""
@@ -151,7 +165,7 @@ def offer():
     if kind is None:
         return None
     return {"kind": kind, "installed": installed_version() if kind == "windows" else None,
-            "installer": bool(apps.windows_offer()), "id": acting_id(), "url": site_url()}
+            "installer": installer()[0] is not None, "id": acting_id(), "url": site_url()}
 
 
 def refuse_unless_here():
@@ -163,7 +177,7 @@ def refuse_unless_here():
         raise Refused(403, "not_this_pc", t("here.not_this_pc"))
     if kind != "windows":
         raise Refused(404, "not_windows", t("here.elsewhere", url=site_url() + "/opendmtq/download.php", id=acting_id()))
-    if launcher_path() is None and not apps.windows_offer():
+    if launcher_path() is None and installer()[0] is None:
         raise Refused(404, "no_installer", t("here.no_installer"))
 
 
@@ -228,10 +242,9 @@ def install(details, say):
     """The installer this server keeps, set up for it with the ID on its end, run with --silent: it installs the PC
     client for this Windows user and opens its launcher, which takes the server and the ID. Returns (what the page says,
     whether it worked)."""
-    made = apps.windows_offer()
-    if not made:
+    source, version = installer()
+    if source is None:
         return [("bad", t("here.no_installer"))], False
-    version = str(made.get("version") or "")
     say(t("here.working_install", v=version or "?"))
     # A folder of its own in the temporary folder, under the name the site hands it out by: Windows shows that name
     # while it runs.
@@ -239,9 +252,8 @@ def install(details, say):
     target = os.path.join(folder, windows_client.download_name(core.PUBLIC_HOST, version))
     try:
         tail = windows_client.preset(details["url"], details["name"], details["ca"], details["account"])
-        with open(os.path.join(core.APK, "out", os.path.basename(str(made["file"]))), "rb") as source, \
-                open(target, "wb") as copy:
-            shutil.copyfileobj(source, copy, 1 << 20)
+        with open(source, "rb") as original, open(target, "wb") as copy:
+            shutil.copyfileobj(original, copy, 1 << 20)
             copy.write(tail)
         process = start_program([target, "--silent"], cwd=folder)
         try:
