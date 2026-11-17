@@ -441,6 +441,8 @@ class LauncherApp:
             return
         from opendmtq_client import playing
         playing.release()
+        sound = dict(self.state.values)
+        # The sound the in-game menu set during the game is taken back with the game's end, then kept (actions.finish).
         record = actions.finish(self.state, self.session)
         self.state.save()
         self.session = None
@@ -465,8 +467,10 @@ class LauncherApp:
             # The page on show follows the game's end where it shows what a game changes, in place: the last game on
             # PLAY, the player's log on Help, the app on Online (a newer one PLAY got first).
             self.follow_page(*GAME_PAGES)
-        # The game's plays are on the server now: PLAY's records asked for again.
-        self.refresh_records(force=True)
+        followed = self.guide is None and self.page in GAME_PAGES
+        if self.state.values != sound and self.page_follow is not None and not followed:
+            # The sound the in-game menu set, on the page on show (the Sound page, the guide's step), in place.
+            self.page_follow()
 
     def open_player_log(self):
         """Show the player's log for the current server's app (Explorer, the file selected); the Help page when there
@@ -1126,20 +1130,8 @@ class LauncherApp:
             # Written before the launcher last kept its settings (by the launcher itself, or by the command line's
             # --set, which keeps them after): nothing in it the launcher does not have.
             return
-        try:
-            # utf-8-sig: a file the player, or a person in Notepad, wrote with a byte-order mark.
-            with open(player.settings_path(), encoding="utf-8-sig", errors="replace") as f:
-                text = f.read()
-        except OSError:
+        if not actions.take_back(self.state):
             return
-        from opendmtq_client import values as choices
-        found = choices.took_back(self.state.values, text)
-        if not found:
-            return
-        log.info("the in-game menu set the sound: %s", ", ".join("%s=%s" % item for item in sorted(found.items())))
-        # The preset last: a band set makes the equaliser custom, and a preset the file names puts its own bands back.
-        for name in sorted(found, key=lambda n: n == "eq"):
-            self.state.set_value(name, found[name])
         self.state.save()
         if self.page_follow is not None:
             self.page_follow()

@@ -21,6 +21,22 @@ from tests.base import Folder
 from tests.test_removal import GAME, listing, write
 
 
+# Put before the stand-in player's own lines: when menu.txt is beside it, the in-game menu's changes (its name=value
+# lines) written into the settings file it was given, a moment into the game, as the player writes them.
+IN_GAME_MENU = """\
+import os, sys, time
+_menu = os.path.join(os.path.dirname(os.path.abspath(__file__)), "menu.txt")
+if "--settings" in sys.argv and os.path.isfile(_menu):
+    time.sleep(0.05)
+    _path = sys.argv[sys.argv.index("--settings") + 1]
+    _changed = dict(line.split("=", 1) for line in open(_menu, encoding="utf-8").read().split())
+    _kept = [line for line in open(_path, encoding="utf-8").read().splitlines() if line.split("=")[0] not in _changed]
+    with open(_path + ".tmp", "w", encoding="utf-8", newline="\\n") as f:
+        f.write("\\n".join(_kept + ["%s=%s" % item for item in _changed.items()]) + "\\n")
+    os.replace(_path + ".tmp", _path)
+"""
+
+
 class CommandLine(Folder):
     def setUp(self):
         super().setUp()
@@ -773,6 +789,30 @@ class Maintenance(Folder):
         code, said = self.run_main(["--set", "fps=160"])
         self.assertEqual(code, 0, said)
         self.assertEqual(st.LauncherState.load().values["fps"], "160")
+
+    def test_the_sound_set_in_the_game_stays_after_it(self):
+        # --play's game, in which the in-game menu sets master 29 and the bass preset: the stand-in writes them into the
+        # settings file it was given as the player does (the whole file again, through a rename). They are the
+        # launcher's when the game ends, and the next --play gives them to the player again.
+        code, said = self.run_main(["--server", self.site.url, "--sign-in", stub.ACCOUNT], stdin=stub.PASSWORD + "\n")
+        self.assertEqual(code, 0, said)
+        menu = os.path.join(os.path.dirname(self.player), "menu.txt")
+        with open(menu, "w", encoding="utf-8") as f:
+            f.write("volume=29\neq=bass\neq_low=6\neq_mid=0\neq_high=0\n")
+        with open(self.player, encoding="utf-8") as f:
+            stand_in = f.read()
+        with open(self.player, "w", encoding="utf-8") as f:
+            f.write(IN_GAME_MENU + stand_in)
+        code, said = self.run_main(["--play"])
+        self.assertEqual(code, 0, said)
+        values = st.LauncherState.load().values
+        self.assertEqual((values["volume"], values["eq"], values["eq_low"]), (29, "bass", 6))
+        # The next game's menu sets nothing: the player is given what the last one left.
+        os.remove(menu)
+        code, said = self.run_main(["--play"])
+        self.assertEqual(code, 0, said)
+        for line in ("volume=29", "eq=bass", "eq_low=6"):
+            self.assertIn(line, self.started()["settings"].splitlines())
 
     def test_they_run_on_their_own(self):
         for args in (["--repair", "--status"], ["--uninstall", "--clear-game-data"], ["--delete-data"]):

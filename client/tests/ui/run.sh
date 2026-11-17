@@ -41,6 +41,8 @@ docker run --rm --network none -e PYTHONDONTWRITEBYTECODE=1 -v "$REPO:/src:ro" -
       python tests/ui/flicker.py --lang \$lang --report /out/flicker-\$lang.txt || status=1
       # Each change of the server, the sign-in, the app and the launcher's version said as it comes, every time.
       python tests/ui/notices.py --lang \$lang || status=1
+      # The sound the in-game menu sets during a game stays after it: on the Sound page, and at the next PLAY.
+      python tests/ui/sound_back.py --lang \$lang || status=1
       # A field and its buttons on one height and middle, under their words; the settings' controls from one line.
       python tests/ui/rows.py --lang \$lang || status=1
       DISPLAY=:98 python tests/ui/rows.py --lang \$lang --size 2360x1520 || status=1

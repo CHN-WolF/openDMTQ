@@ -303,21 +303,56 @@ def play(state, report=lambda step, done=None, total=None: None, cancel=None, ch
     report("starting")
     # The launcher's language goes to the player too when the player chose one (none: both follow Windows).
     settings = player.write_settings(state.values, state.picked_language)
+    # The file's time as PLAY wrote it: the in-game menu's own writes during the game come after it (finish).
+    written = settings_time()
     have = apps.local(server["url"])
     # The player makes the game's data folder of the app's package name, its log in it: one that is no package name
     # stops the start here with its own words (player.NotAPackage), before anything is made of it.
     log_file = player.log_path(have["package"])
     session = player.start(apps.folder(server["url"]), settings, log_file=log_file)
+    session.settings_time = written
     log.info("started the game for %s (process %d)", server["url"], session.process.pid)
     return session
 
 
 def finish(state, session):
-    """Note how a game that ended went (the PLAY page shows it)."""
+    """Note how a game that ended went (the PLAY page shows it), and take back the sound the player's in-game menu set
+    during it (take_back): the caller keeps both with the launcher's settings, so the next PLAY gives the player the
+    sound the game was left with."""
     record = player.finish(session)
     state.last_session = record
     log.info("the game ended after %d s with %s", record["seconds"], record["exit_code"])
+    # Written since PLAY wrote it: by the in-game menu (a session from elsewhere has no time: the file is read).
+    if settings_time() != getattr(session, "settings_time", None):
+        take_back(state)
     return record
+
+
+def settings_time():
+    """The player's settings file's time (st_mtime_ns), or None while there is none."""
+    try:
+        return os.stat(player.settings_path()).st_mtime_ns
+    except OSError:
+        return None
+
+
+def take_back(state):
+    """The sound's settings the player's in-game menu wrote back into its settings file (values.took_back: those that
+    differ from the launcher's), made the launcher's own; returns them ({} for none). The caller saves the state."""
+    from opendmtq_client import values as choices
+    try:
+        # utf-8-sig: a file the player, or a person in Notepad, wrote with a byte-order mark.
+        with open(player.settings_path(), encoding="utf-8-sig", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return {}
+    found = choices.took_back(state.values, text)
+    if found:
+        log.info("the in-game menu set the sound: %s", ", ".join("%s=%s" % item for item in sorted(found.items())))
+    # The preset last: a band set makes the equaliser custom, and a preset the file names puts its own bands back.
+    for name in sorted(found, key=lambda n: n == "eq"):
+        state.set_value(name, found[name])
+    return found
 
 
 def open_folder(path):
