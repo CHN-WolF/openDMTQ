@@ -91,7 +91,6 @@ CHANGES = (
         ("FPS counter on (brings Position)", widgets.Toggle, "screen.counter", "<space>", True),
         ("FPS counter off (takes Position)", widgets.Toggle, "screen.counter", "<space>", True),
         ("render scale 75 (brings Upscaler)", widgets.Select, "screen.scale", "75", True),
-        # FSR 1 is the default below 100 % (values.DEFAULTS): another one, so that the choice changes the screen.
         ("upscaler NIS", widgets.Select, "screen.upscaler", "nis", False),
         ("render scale 100 (takes Upscaler)", widgets.Select, "screen.scale", "100", True),
         ("anti-aliasing SMAA", widgets.Select, "screen.aa", "smaa", False),
