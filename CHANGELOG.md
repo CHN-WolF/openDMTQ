@@ -21,6 +21,15 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - Notices in the game at every change of a broadcast switch, the player's or the server's under it, also when a
   broadcast ends and while the server's broadcasts are off, each with its own number (`toast_id`, `toast_kind` in
   `/live/state`); and at every change of the maintenance notice for players already in the game.
+- The server hands the PC clients that play on it their updates: those of the version of the installer it hands out, at
+  `/updates/` on its one port. A release's tools image brings them, a host install's kit carries them in, and any other
+  install fetches them from the release. A launcher looks at its server first and at GitHub's releases second, and goes
+  no further than the version its server hands out, or than the server's own version when it hands out none: launchers
+  stay matched to their server, on a network with no way out too. The admin pages' App page says what the server hands
+  out, and `GET /app/windows/updates` gives it file by file.
+- Delta packages: each release has `opendmtq.client-<version>-delta.nupkg`, what changed since the release before, which
+  a PC client of that release downloads instead of the whole update and its own updater puts the new version together
+  from. When what it puts together does not hold the release's files, the whole package comes instead.
 - The PC client's Sound page: master, music and effects volumes and an equaliser (Flat, Bass, Vocal, Treble, or three
   bands of the player's own at 120 Hz, 1 kHz and 6 kHz), with `--set music_volume=`, `effects_volume=`, `eq=` and
   `eq_low=` to `eq_high=`, and `--status`.
@@ -59,8 +68,8 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 - The release's files say what each is, for which system and architecture and which version, in lower case:
   `opendmtq-pc-client-<version>-windows-x64-setup.exe` for players, `opendmtq-server-<version>-windows-x64.zip`,
   `opendmtq-server-<version>-helm-chart.tgz`, `opendmtq-phone-runtime-<version>-android-arm64-armv7.zip`, the PC client's
-  update feed and package, and one `opendmtq-<version>-sha256sums.txt`. The player alone, `RELEASES` and
-  `assets.win.json` are no longer published, and installed PC clients update as before.
+  update feed and packages, and one `opendmtq-<version>-sha256sums.txt` with its signature. The player alone,
+  `RELEASES` and `assets.win.json` are no longer published, and installed PC clients update as before.
 - What the server hands out and keeps is named for what it is, in lower case too:
   `opendmtq-pc-client-<version>-windows-x64-setup-<address>.exe`, `opendmtq-phone-app-<date>-android-<address>.apk`,
   `opendmtq-server-backup-<time>-<why>.tar.gz` (backups named before still count), the players' and plays' files, the
