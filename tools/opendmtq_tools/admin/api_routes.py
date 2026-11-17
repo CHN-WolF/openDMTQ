@@ -380,7 +380,8 @@ SHAPES = {
     "DataPart": Shape("One part of the server's data.", [
         Field("part", "string", "Which part.", enum=["database", "recordings", "songs", "apps", "backups", "logs", "game"]),
         Field("bytes", "integer", "How much it holds."),
-        Field("can_delete", "boolean", "True when this API can delete it here (with Docker Compose the game files are the command line's).")]),
+        Field("can_delete", "boolean", "True when this API can delete it here (with Docker Compose the game files are the command line's)."),
+        Field("command", "string", "Where this API cannot delete it, the command that does on the server PC, with the part's name; \"\" where it can.")]),
     "DataParts": Shape("The server's data.", [Field("items", "[DataPart]", "Every part, in the Server page's order.")]),
     "PortMoved": Shape("A move to another port, from the server's next start.", [
         Field("port", "integer", "The new port."),

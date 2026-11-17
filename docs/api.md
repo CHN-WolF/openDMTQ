@@ -2663,6 +2663,7 @@ One part of the server's data.
 - `part` (string): Which part. One of `database`, `recordings`, `songs`, `apps`, `backups`, `logs`, `game`.
 - `bytes` (integer): How much it holds.
 - `can_delete` (boolean): True when this API can delete it here (with Docker Compose the game files are the command line's).
+- `command` (string): Where this API cannot delete it, the command that does on the server PC, with the part's name; "" where it can.
 
 #### DataParts
 

@@ -365,10 +365,25 @@ def layout():
     return server_data.Layout()
 
 
+def delete_part_command(part):
+    """The command on the server PC that deletes this part of the data where these pages cannot (its files are not
+    theirs to write): the install's own command line with the part's name, or on Kubernetes the volume's whole."""
+    kind = install_kind()
+    if kind == "docker":
+        return f"./opendmtq delete-data {part}"
+    if kind == "windows":
+        return f"OpenDMTQ.exe delete-data {part}"
+    if kind == "host":
+        return f"opendmtq delete-data {part}"
+    return commands().get("delete_data", "")
+
+
 def data_parts():
-    """Each part of the server's data, in the page's order: {"part", "bytes", "can_delete"}."""
+    """Each part of the server's data, in the page's order: {"part", "bytes", "can_delete", "command"}, the command
+    being the way to delete it on the server PC where these pages cannot ("" where they can)."""
     sizes = server_data.sizes(layout())
-    return [{"part": part, "bytes": sizes[part]["bytes"], "can_delete": sizes[part]["can_delete"]} for part in server_data.PARTS]
+    return [{"part": part, "bytes": sizes[part]["bytes"], "can_delete": sizes[part]["can_delete"],
+             "command": "" if sizes[part]["can_delete"] else delete_part_command(part)} for part in server_data.PARTS]
 
 
 def start_delete(parts, make_backup, confirm):

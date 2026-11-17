@@ -1,6 +1,6 @@
 // Live view on a computer: while the server's owner has it on for this player, the game's picture and sound go to the
 // server as MPEG-TS segments, with the requests a phone makes (src/live.cpp is the phone's, docs/live.md the protocol):
-// /live/state about every 15 seconds while the game is on screen, /live/upload for each segment, /live/end when it goes
+// /live/state about every 5 seconds while the game is on screen, /live/upload for each segment, /live/end when it goes
 // off. It is off by default, and nothing here may ever get in the way of the game: a broadcast may stutter or stop, the
 // game may not.
 //

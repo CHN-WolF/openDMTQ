@@ -796,6 +796,33 @@ class OwnerPasswordTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class DeletePartCommandTest(unittest.TestCase):
+    """ADM-166: a part of the data these pages cannot delete names the command that does on the server PC, the install's
+    own with the part's name (it named Docker Compose's for the game files on every install, whatever the part)."""
+
+    def test_each_install_names_its_own_command_and_the_part(self):
+        for kind, want in (("docker", "./opendmtq delete-data recordings"), ("windows", "OpenDMTQ.exe delete-data recordings"),
+                           ("host", "opendmtq delete-data recordings")):
+            with mock.patch.object(admin.lifecycle, "install_kind", lambda kind=kind: kind):
+                self.assertEqual(admin.lifecycle.delete_part_command("recordings"), want, kind)
+        # Kubernetes deletes the data's volumes whole: its command for every part.
+        with mock.patch.object(admin.lifecycle, "install_kind", lambda: "kubernetes"):
+            self.assertIn("delete pvc", admin.lifecycle.delete_part_command("game"))
+
+    def test_the_page_and_the_api_say_it_for_that_part_alone(self):
+        with Install() as inst, mock.patch.object(admin.lifecycle, "install_kind", lambda: "host"):
+            sizes = {part: {"bytes": 1, "can_delete": part != "logs"} for part in server_data.PARTS}
+            with mock.patch.object(server_data, "sizes", lambda layout: sizes):
+                parts = {p["part"]: p for p in admin.lifecycle.data_parts()}
+                self.assertEqual(parts["logs"]["command"], "opendmtq delete-data logs")
+                self.assertTrue(all(p["command"] == "" for name, p in parts.items() if name != "logs"))
+                inst.sign_in()
+                page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+                self.assertIn("<code>opendmtq delete-data logs</code>", page)
+                self.assertNotIn("./opendmtq delete-data game", page)
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class DeleteAndRepairTest(unittest.TestCase):
     """Deleting the data and the repair from the page and the API, as jobs (ADM-110, ADM-112, API-45, API-46)."""
 

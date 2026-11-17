@@ -95,7 +95,7 @@
       {% for p in parts %}
         <tr{% if not p.can_delete %} class="off"{% endif %}>
           <td class="pick">{% if p.can_delete %}<input type="checkbox" name="part" value="{{ p.part }}" id="part-{{ p.part }}">{% endif %}</td>
-          <td class="primary"><label for="part-{{ p.part }}">{{ t(part_words[p.part][0]) }}</label><span class="runtime">{{ t(part_words[p.part][1]) }}{% if not p.can_delete %} {{ t('data.not_here') }}{% endif %}</span></td>
+          <td class="primary"><label for="part-{{ p.part }}">{{ t(part_words[p.part][0]) }}</label><span class="runtime">{{ t(part_words[p.part][1]) }}{% if not p.can_delete %} {{ t('data.not_here', command=p.command) }}{% endif %}</span></td>
           <td class="r size" data-label="{{ t('data.size') }}">{{ p.bytes|human }}</td>
         </tr>
       {% endfor %}

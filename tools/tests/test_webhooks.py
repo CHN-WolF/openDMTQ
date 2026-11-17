@@ -729,7 +729,9 @@ class SendingTest(unittest.TestCase):
             webhooks.detect(now)
             for wait in (0, 10, 40, 100, 220, 520, 1120):
                 webhooks.deliver(now + wait + 1)
-            webhooks.deliver(now + webhooks.GIVE_UP + 1)
+            # Past the half hour by a minute of the clock as it is now: the message was dated when its change was seen,
+            # which on a busy machine is more than a second after `now`.
+            webhooks.deliver(time.time() + webhooks.GIVE_UP + 60)
             hook = webhooks.listing()[0]
             self.assertEqual((hook["waiting"], hook["given_up"]), (0, 1))
 
