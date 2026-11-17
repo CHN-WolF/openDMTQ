@@ -1060,8 +1060,10 @@ def _catalog(table, locales, songs=None):
       gear            the items a player equips, which the admin pages give and take, by kind: {kind: [[item, name],
                       ...]}, C the partners, F the add-ons, N the note skins, K the skins, each in the table's order, with
                       the name the table gives it
+      names           those items' names as the game shows them, in the admin pages' two languages: {"en": {item (as
+                      text): name}, "ko": {...}}, from the client's English and Korean tables (item_desc_us, item_desc_kr)
     """
-    out = {"point_charts": [], "items": [], "unlock_product": None, "products": {}, "gear": {}}
+    out = {"point_charts": [], "items": [], "unlock_product": None, "products": {}, "gear": {}, "names": {}}
     if not locales:
         return out
     loc = locales[0]
@@ -1089,6 +1091,18 @@ def _catalog(table, locales, songs=None):
         for i, r in item_rows.items():
             if i.isdigit() and r.get("item_type") in GEAR_KINDS:
                 out["gear"].setdefault(r["item_type"], []).append([int(i), (r.get("item_name") or "").strip()])
+    # The names the game shows for the items a player equips, in the English game and the Korean one (the item table's own
+    # names are the makers' working names, in Korean): what the admin pages list in their own language.
+    equipped = {str(i) for kind in out["gear"].values() for i, _ in kind}
+    for lang, folder in (("en", "us"), ("ko", "kr")):
+        text = table(f"table/{folder}/item_desc_{folder}.csv")
+        if not text:
+            continue
+        header, rows = _table_rows(text)
+        col = {h: i for i, h in enumerate(header)}
+        if {"item_id", "name"} <= col.keys():
+            out["names"][lang] = {r[col["item_id"]]: r[col["name"]].strip() for r in rows
+                                  if len(r) > col["name"] and r[col["item_id"]] in equipped and r[col["name"]].strip()}
     if products:
         header, rows = _table_rows(products)
         num = lambda v: int(v) if str(v).lstrip("-").isdigit() else 0

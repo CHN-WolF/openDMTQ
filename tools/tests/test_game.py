@@ -20,7 +20,9 @@ if HAVE_FLASK:
 # The client's tables as the tools turn them into catalog.json (songs.py): two characters everyone has, a note nobody has at
 # first, a skin everyone has.
 CATALOG = {"items": [30001, 30002, 100001], "point_charts": [], "unlock_product": None, "products": {},
-           "gear": {"C": [[30001, "Made Partner"], [30002, "Second Partner"]], "N": [[90001, "Made Note"]], "K": [[100001, "Made Skin"]]}}
+           "gear": {"C": [[30001, "Made Partner"], [30002, "Second Partner"]], "N": [[90001, "Made Note"]], "K": [[100001, "Made Skin"]]},
+           # The skin's name as the game shows it in each language; the others have the item table's.
+           "names": {"en": {"100001": "Yellowish"}, "ko": {"100001": "노르스름"}}}
 
 
 def changes(inst):
@@ -67,8 +69,13 @@ class PlayerGamePageTest(unittest.TestCase):
                 self.assertIn('id="purse-max">999,999<', page)
                 self.assertIn('aria-label="Lv.99"', page)
                 self.assertIn('style="width: 100.0%"', page)
-                # The items kind by kind, with how many the player has of each.
+                # The items kind by kind, with how many the player has of each, each by the name the game shows it by in
+                # the page's language (the item table's when the game has none), with its number.
                 self.assertIn("2 of 2" if lang == "en" else "2개 중 2개", page)
+                self.assertIn("Yellowish" if lang == "en" else "노르스름", page)
+                self.assertNotIn("노르스름" if lang == "en" else "Yellowish", page)
+                self.assertIn("Made Partner", page)
+                self.assertIn('<span class="item-id">100001</span>', page)
 
     def test_a_player_nobody_has_goes_back_to_the_list_with_why(self):
         with Install() as inst:

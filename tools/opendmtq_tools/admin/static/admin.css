@@ -934,6 +934,8 @@ table.data-parts .runtime { font-weight: 400; }
 .item-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: var(--ctl-sm); padding: 4px 4px 4px 12px; background: var(--deck); }
 .item-list li.not .item-name { color: var(--ash); }
 .item-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-sm); color: var(--chalk); overflow-wrap: anywhere; }
+/* The item's number, as the API names it: two items the game names alike (a note sold, the same note given) told apart. */
+.item-id { flex: none; font-size: var(--t-2xs); color: var(--ash); font-variant-numeric: tabular-nums; }
 .item-how { flex: none; padding: 1px 6px; font-size: var(--t-2xs); font-weight: 700; color: var(--ash); box-shadow: inset 0 0 0 1px var(--seam); }
 .item-list .btn { flex: none; }
 

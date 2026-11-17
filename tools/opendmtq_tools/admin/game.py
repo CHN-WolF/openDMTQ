@@ -158,14 +158,22 @@ def write_state(con, pid, values):
 
 def catalog():
     """What the client's tables give the server (custom/catalog.json, songs.py): the items everyone has, the shop's
-    products, the items a player equips by kind. Empty parts without the client's tables."""
+    products, the items a player equips by kind, and those items' names as the game shows them in each language. Empty
+    parts without the client's tables."""
     try:
         with open(os.path.join(songs.CUSTOM, "catalog.json"), encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
         data = {}
     data = data if isinstance(data, dict) else {}
-    return {"items": data.get("items") or [], "products": data.get("products") or {}, "gear": data.get("gear") or {}}
+    return {"items": data.get("items") or [], "products": data.get("products") or {}, "gear": data.get("gear") or {},
+            "names": data.get("names") or {}}
+
+
+def item_name(cat, item, name=""):
+    """An item's name as the game shows it in the page's language (the catalog's names), else the item table's own (name),
+    else its number in words."""
+    return (cat.get("names") or {}).get(core.lang(), {}).get(str(item)) or name or tp("game.item_n", id=item)
 
 
 def owned_items(con, pid, cat=None):
@@ -193,7 +201,7 @@ def gear(con, pid, cat=None):
     out = []
     for kind in GEAR_SLOTS:
         # Each item with the key of its words for how it came, when it came some way of its own (HOW_WORDS).
-        items = [{"id": int(i), "name": name or tp("game.item_n", id=i), "owned": int(i) in have, "how": have.get(int(i), ""),
+        items = [{"id": int(i), "name": item_name(cat, i, name), "owned": int(i) in have, "how": have.get(int(i), ""),
                   "how_words": HOW_WORDS.get(have.get(int(i), ""))} for i, name in cat["gear"].get(kind, [])]
         out.append({"kind": kind, "words": KIND_WORDS[kind], "items": items, "owned": sum(1 for i in items if i["owned"])})
     return out
@@ -233,7 +241,7 @@ def purchases(con, pid, limit=20):
             return tp("game.pack", amount=number(product.get("amount", 0)))
         if product.get("kind") == "L":
             return tp("game.unlock", id=row["product_id"])
-        return names.get(row["item_id"]) or tp("game.item_n", id=row["item_id"])
+        return item_name(cat, row["item_id"], names.get(row["item_id"], ""))
 
     try:
         rows = con.execute("SELECT at, product_id, item_id, currency, price, paid FROM PlayerPurchase WHERE guid = ? "
@@ -343,6 +351,8 @@ def change_item(pid, item, give, seen=None):
     if iid is None or iid not in kinds:
         raise Refused(404, "item_not_found", t("game.no_item", id=item))
     kind, name = kinds[iid]
+    # As the game shows it in the page's language (the change log keeps the words of the page it was made on).
+    name = item_name(cat, iid, name)
     with db() as con:
         game_tables(con)
         con.execute("BEGIN IMMEDIATE")
@@ -357,7 +367,7 @@ def change_item(pid, item, give, seen=None):
             # Out of its slot on every phone of the player: the game shows its default there.
             slot = f"slot_item{GEAR_SLOTS[kind]}"
             con.execute(f"UPDATE Member SET {slot} = NULL WHERE CAST(guid AS INTEGER) = ? AND {slot} = ?", (pid, iid))
-        changed("player_game:" + ("give" if give else "take"), f"{who}: {name or iid}", player=pid, before=has, after=bool(give), item=iid)
+        changed("player_game:" + ("give" if give else "take"), f"{who}: {name}", player=pid, before=has, after=bool(give), item=iid)
     return {"who": who, "name": name, "owned": bool(give)}
 
 

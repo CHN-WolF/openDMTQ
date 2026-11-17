@@ -120,6 +120,8 @@ PRODUCT_HEADER = ["product_id", "item_id", "platform_product_id", "store_product
                   "cost_game_cash", "status", "sale_start_date", "sale_end_date", "update"]
 CATEGORY_HEADER = ["category_id", "product_id", "display_order", "update"]
 DESC_HEADER = ["song_id", "fullname", "genre", "artist", "composed_by", "singer", "feat_by", "arranged_by", "visualized_by"]
+# The items' names as the game shows them in one language (item_desc_<language>.csv).
+ITEM_DESC_HEADER = ["item_id", "name", "description", "summary"]
 
 # The made-up songs the tables list, by id: name, title, charts (pattern id, line, signature, difficulty, point type,
 # point value). 1 and 5 are among the songs whose charts can cost MAX POINT (songs.POINT_SONGS); 5 is listed by the
@@ -168,7 +170,9 @@ def made_up_tables(loc):
             f"table/{loc}/product_item.csv": _table_files(ITEM_HEADER, items),
             f"table/{loc}/product_product.csv": _table_files(PRODUCT_HEADER, products),
             f"table/{loc}/category_categoryproduct.csv": _table_files(CATEGORY_HEADER, categories),
-            f"table/{loc}/song_desc_{loc}.csv": _table_files(DESC_HEADER, desc_rows)}
+            f"table/{loc}/song_desc_{loc}.csv": _table_files(DESC_HEADER, desc_rows),
+            # A name for one partner of the two in the language's own words; the other has none.
+            f"table/{loc}/item_desc_{loc}.csv": _table_files(ITEM_DESC_HEADER, [["30001", f"Made Coin ({loc})", "", ""]])}
 
 
 def made_up_library(content, custom):
@@ -555,6 +559,13 @@ class RebuildOutputTest(LibraryCase):
         self.assertEqual(catalog["point_charts"], [{"pattern_id": 102, "song_id": 1, "point_type": 1, "point_value": 300}])
         # Every item a player owns: neither songs, nor packages, nor those never handed out.
         self.assertEqual(catalog["items"], [30001, 80002])
+        # What the shop sells, with its prices, the item it gives and its kind: neither songs nor packages.
+        self.assertEqual(catalog["products"]["30001"], {"item": 30001, "kind": "C", "point": 1, "cash": 0, "amount": 0})
+        self.assertNotIn("40001", catalog["products"])
+        # The items a player equips, by kind in the table's order, with the item table's names; and the names the game
+        # shows, in English and in Korean, where the language's table has one.
+        self.assertEqual(catalog["gear"], {"C": [[30001, "made_coin"], [39001, "made_partner"]]})
+        self.assertEqual(catalog["names"], {"en": {"30001": "Made Coin (us)"}, "ko": {"30001": "Made Coin (kr)"}})
         # The level unlock's product, its keys in the order the client reads them, numbers as numbers.
         self.assertEqual(list(catalog["unlock_product"].items()), [
             ("product_id", 80002), ("platform_product_id", 1080002), ("store_product_id", ""), ("product_type", "I"),
