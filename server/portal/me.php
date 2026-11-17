@@ -241,8 +241,8 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
     </div>
     <?php if ($fig): $ranks = me_ranks($db, $guid); ?>
       <div class="stats me-places">
-        <div class="stat"><span class="lbl"><?= t('me.rank_all') ?></span><span class="num"><?= $ranks['all'] ? '#' . (int)$ranks['all'] : '–' ?></span></div>
-        <div class="stat"><span class="lbl"><?= t('me.rank_month') ?></span><span class="num"><?= $ranks['month'] ? '#' . (int)$ranks['month'] : '–' ?></span></div>
+        <div class="stat"><span class="lbl"><?= t('me.rank_all') ?></span><span class="num"><?= $ranks['all'] ? '#' . (int)$ranks['all'] : '-' ?></span></div>
+        <div class="stat"><span class="lbl"><?= t('me.rank_month') ?></span><span class="num"><?= $ranks['month'] ? '#' . (int)$ranks['month'] : '-' ?></span></div>
         <div class="stat"><span class="lbl"><?= t('player.total') ?></span><span class="num"><?= number_format((int)$fig['total']) ?></span></div>
       </div>
       <p class="me-public"><a class="btn" href="/opendmtq/player.php?id=<?= (int)$guid ?>"><?= t('me.public') ?></a><span class="meta-inline"><?= t('me.public_note') ?></span></p>

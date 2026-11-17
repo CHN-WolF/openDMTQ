@@ -215,7 +215,7 @@ class ConnectionTest(Folder):
             _, steps, _ = self.run_test()
             self.assertEqual((steps["game"].state, self.said(steps["game"])), ("bad", said))
         # The last of them in Korean.
-        self.assertEqual(self.said(steps["game"], KO), "게임 서버에 자기 주소가 정해져 있지 않습니다.")
+        self.assertEqual(self.said(steps["game"], KO), "게임 서버에 서버 주소가 정해져 있지 않습니다.")
 
     def test_not_an_address_and_a_name_that_leads_nowhere(self):
         result, steps, _ = self.run_test("not an address", signed=False)

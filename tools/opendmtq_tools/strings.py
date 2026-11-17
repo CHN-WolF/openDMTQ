@@ -2386,7 +2386,7 @@ STRINGS = {
         "change.hook_delete": "디스코드·슬랙 웹후크 삭제",
         # The owner's password on the Server page (lifecycle.py); the site's MY PAGE in the log of changes.
         "pw.title": "소유자 비밀번호",
-        "pw.lead": "소유자 아이디(<code>{user}</code>)와 이 비밀번호로 이 관리 페이지와 플레이어 사이트에 로그인합니다. 새 비밀번호는 바로 적용되고, 소유자의 다른 로그인은 모두 끝나며 지금 이 로그인은 그대로입니다.",
+        "pw.lead": "소유자 아이디(<code>{user}</code>)와 이 비밀번호로 이 관리자 페이지와 플레이어 사이트에 로그인합니다. 새 비밀번호는 바로 적용되고, 소유자의 다른 로그인은 모두 끝나며 지금 이 로그인은 그대로입니다.",
         "pw.owner_only": "소유자 아이디로 로그인한 소유자만 바꿀 수 있습니다.",
         "pw.new": "새 비밀번호",
         "pw.again": "새 비밀번호 한 번 더",
