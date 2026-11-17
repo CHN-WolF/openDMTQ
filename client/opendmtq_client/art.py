@@ -398,28 +398,23 @@ def numeral(text, colour, scale=1.0, size=34, bg=theme.BG):
 
 
 def lamp(colour, scale=1.0, bg=None, hollow=False):
-    """A state's small light, as the site's (.state i): a 7 px dot with a soft glow of its colour around it. On `bg`
-    when given (an opaque picture), else on nothing. `hollow`: a ring with half the glow, for what will change rather
-    than what is fine or wrong, so that the shape says it as well as the colour."""
+    """A state's small light, as the site's (.state i): a 7 px dot of its colour, plain (a glow round it said nothing
+    the colour does not). On `bg` when given (an opaque picture), else on nothing. `hollow`: a ring, for what will
+    change rather than what is fine or wrong, so that the shape says it as well as the colour. The picture keeps the
+    room the glow had, so that the words beside a lamp stand where they stood."""
     d = 7 * scale
     reach = 7 * scale
     size = int(math.ceil(d + 2 * reach))
     k = SS
-    glow = Image.new("L", (size * k, size * k), 0)
     c = size * k / 2.0
-    ImageDraw.Draw(glow).ellipse([c - d * k / 2, c - d * k / 2, c + d * k / 2, c + d * k / 2], fill=140)
-    glow = glow.filter(ImageFilter.GaussianBlur(reach * k / 2.5)).resize((size, size), Image.LANCZOS)
     dot = Image.new("L", (size * k, size * k), 0)
     ImageDraw.Draw(dot).ellipse([c - d * k / 2, c - d * k / 2, c + d * k / 2, c + d * k / 2], fill=255)
     if hollow:
-        # The dot's middle taken out, a ring 1.6 px thick at 100 % left; its glow halved, so that it reads quieter
-        # than a lit dot beside it.
+        # The dot's middle taken out, a ring 1.6 px thick at 100 % left.
         r = d * k / 2 - 1.6 * scale * k
         ImageDraw.Draw(dot).ellipse([c - r, c - r, c + r, c + r], fill=0)
-        glow = glow.point(lambda v: v // 2)
     dot = dot.resize((size, size), Image.LANCZOS)
     img = Image.new("RGBA", (size, size), _rgb(bg) + (255,) if bg else (0, 0, 0, 0))
-    img.paste(_rgb(colour) + (255,), (0, 0), glow)
     img.paste(_rgb(colour) + (255,), (0, 0), dot)
     return img
 
@@ -501,14 +496,15 @@ def play_button(width, height, state="normal", scale=None):
     return img.resize((width, height), Image.LANCZOS)
 
 
-# The room round a switch's pill for the accent's faint ring when it is on (pixels, whatever the scale).
+# The room round a switch's pill (pixels, whatever the scale): where a faint ring of the accent showed when it was on,
+# kept so that the controls of a page's rows still start on one line (setting_row).
 TOGGLE_HALO = 3
 
 
 def toggle(on, width, height, enabled=True, colour=None, knob=None, bg=theme.BG):
-    """An on/off switch as the site's (.screen-switch): a pill in the accent with a faint ring of it around, a dark knob
-    at its right end; off, rail metal with a light knob at its left end. The picture is the ring's 3 px wider on every
-    side, on `bg`."""
+    """An on/off switch as the site's (.screen-switch): a pill in the accent, a dark knob at its right end; off, rail
+    metal with a light knob at its left end. The lime track says on: no ring of it round the pill. The picture keeps
+    3 px of `bg` on every side (TOGGLE_HALO)."""
     k = SS
     ring = TOGGLE_HALO
     w, h = (width + 2 * ring) * k, (height + 2 * ring) * k
@@ -516,10 +512,6 @@ def toggle(on, width, height, enabled=True, colour=None, knob=None, bg=theme.BG)
     img = Image.new("RGB", (w, h), _rgb(bg))
     r = height * k / 2.0
     x0, y0, x1, y1 = ring * k, ring * k, ring * k + width * k, ring * k + height * k
-    if on and enabled:
-        halo = Image.new("L", (w, h), 0)
-        ImageDraw.Draw(halo).rounded_rectangle([0, 0, w - 1, h - 1], radius=r + ring * k, fill=int(255 * 0.35))
-        img.paste(_rgb(colour), (0, 0), halo)
     track = Image.new("L", (w, h), 0)
     ImageDraw.Draw(track).rounded_rectangle([x0, y0, x1 - 1, y1 - 1], radius=r, fill=255)
     fill = colour if on and enabled else theme.RAIL_UP
@@ -901,20 +893,32 @@ def window_button(size, glyph, state, focused, scale=1.0, under=None, bg=None):
     return img
 
 
-def corner(size, inside, outside, seam=None):
-    """A panel's top-right corner, cut: what covers a card's square corner, the page's colour beyond the cut (a seam
-    along the cut when one is given)."""
+def corner(size, inside, outside, seam=None, seam_width=1):
+    """A panel's top-right corner, cut: what covers a card's square corner, the page beyond the cut (a colour, or the
+    picture that lies there, `size` square: the page's own field behind a card) and a seam along the cut when one is
+    given (`seam_width` pixels wide, as the card's edge is)."""
     k = SS
     s = size * k
     img = Image.new("RGB", (s, s), _rgb(inside))
     cut = Image.new("L", (s, s), 0)
     ImageDraw.Draw(cut).polygon([(0, 0), (s, 0), (s, s)], fill=255)
-    img.paste(_rgb(outside), (0, 0), cut)
+    if isinstance(outside, Image.Image):
+        # The picture beyond, drawn as large as the corner is drawn here, so that it comes back to its own pixels.
+        img.paste(outside.convert("RGB").resize((s, s), Image.NEAREST), (0, 0), cut)
+    else:
+        img.paste(_rgb(outside), (0, 0), cut)
     if seam:
         line = Image.new("L", (s, s), 0)
-        ImageDraw.Draw(line).line([(0, 0), (s, s)], fill=255, width=k)
+        ImageDraw.Draw(line).line([(0, 0), (s, s)], fill=255, width=k * max(1, int(seam_width)))
         img.paste(_rgb(seam), (0, 0), line)
-    return img.resize((size, size), Image.LANCZOS)
+    img = img.resize((size, size), Image.LANCZOS)
+    if isinstance(outside, Image.Image):
+        # The page's own pixels where the cut leaves nothing of the card: the picture beyond, exactly, as the field
+        # round the card shows it (a resampled copy would differ from it by a level here and there).
+        clear = Image.new("L", (size, size), 0)
+        ImageDraw.Draw(clear).polygon([(1 + seam_width, 0), (size, 0), (size, size - 1 - seam_width)], fill=255)
+        img.paste(outside.convert("RGB"), (0, 0), clear)
+    return img
 
 
 def mark(size):

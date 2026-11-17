@@ -67,7 +67,7 @@ class Lamp(unittest.TestCase):
         warn = tuple(int(theme.WARN[i:i + 2], 16) for i in (1, 3, 5))
         panel = tuple(int(theme.PANEL[i:i + 2], 16) for i in (1, 3, 5))
         self.assertEqual(dot.getpixel(middle)[:3], warn)
-        # The ring's middle is the panel with at most a faint glow over it, far from the lamp's colour.
+        # The ring's middle is the panel, far from the lamp's colour.
         self.assertLess(sum(abs(a - b) for a, b in zip(ring.getpixel(middle)[:3], panel)), 90)
         self.assertEqual(ring.size, dot.size)
 

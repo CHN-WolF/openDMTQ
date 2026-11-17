@@ -27,6 +27,11 @@ FIELD = "#0e1216"       # inside inputs and lists (the site's .input)
 STRIP = "#151a20"       # the strip along the window's foot with PLAY (the site's bar once a page has moved)
 DIVIDER = "#2b3035"     # the faint line between rows in a card (white at 7.5 % on the deck)
 SEAM = "#2a3038"        # the line along the menu column's right edge, where the page begins
+# A card's glass edge, as the site's panels have it (style.css --glass-rim): a hairline all round (white at 6 % on the
+# deck) and its top row brighter (white at 13.5 %), the light catching the glass's upper edge. No shadow: a card lies
+# on the page, it does not float over it.
+HAIRLINE = "#282c32"
+RIM = "#393d42"
 
 # Text.
 TEXT = "#eef2f6"        # body text (--chalk)

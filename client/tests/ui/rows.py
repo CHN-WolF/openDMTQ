@@ -95,8 +95,8 @@ def main():
     # ---- The settings' controls of the Screen page (below 100 %, with every row), of the Sound page and of Help's
     # tools: what shows of each starts on one line (a row name longer than the names' column would push its control
     # out of it).
-    # Below 100 % for every row; VSync off, as a switch that is on has a faint halo of the accent round its pill, which
-    # reaches past where the pill starts.
+    # Below 100 % for every row; VSync off, as it was measured when a switch that was on had a faint ring of the accent
+    # round its pill (the measure starts at the pill either way).
     app.changed("render_scale", "75")
     app.changed("vsync", "off")
 

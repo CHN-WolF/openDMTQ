@@ -87,6 +87,110 @@ def measure(app, name, problems, root=None):
         # The boxes and the room round them (tests/ui/spacing.py): nothing touching, words inside their padding, the
         # gaps on the launcher's scale.
         problems.extend(spacing.check(root, app.ui, name))
+        # The page's own picture between and round the cards, never a slab of the field's flat colour over it.
+        field_check(app, name, problems, root)
+
+
+# Of the page's field (between and round the cards, under the page's title), how much may differ from the picture the
+# page drew behind it: none, but for a stray pixel where a box's edge meets it (a share of the field's pixels).
+FIELD_DIFFERS = 0.0005
+# How far a pixel may be from the picture's and still be its pixel (levels of 255): none on a 24-bit screen.
+FIELD_LEVELS = 2
+# Where a screen whose field differs is saved with the differing pixels in magenta (main() sets it to --out).
+FIELD_OUT = None
+
+
+def field_check(app, name, problems, root):
+    """The page's field shows the window's own background, as the page drew it (widgets.ScrollArea's picture: the
+    field, its lit top, the shards at its edges, the dots): on the screen, every pixel of the page area that is no
+    card, no part of the page's title, and not the scroll bar must be the picture's pixel there, wherever the page is
+    scrolled to. A frame of the field in a flat colour over the picture (the black slab under the cards that 0.11.0
+    had) fails it, as does a card's cut corner showing a colour where the picture is."""
+    from PIL import Image, ImageChops, ImageGrab
+    for area in [w for w in widgets_of(root) if isinstance(w, widgets.ScrollArea)]:
+        if not area.winfo_viewable():
+            continue
+        # The picture is drawn a moment after the page settles (ScrollArea._relayout): waited for.
+        end = time.time() + 3
+        while getattr(area, "_backdrop_job", None) is not None and time.time() < end:
+            root.update()
+            time.sleep(0.02)
+        root.update()
+        behind = getattr(area, "_backdrop_picture", None)
+        if behind is None:
+            problems.append("%s: the page area drew no picture behind its page" % name)
+            continue
+        c = area.canvas
+        x0, y0, width, height = c.winfo_rootx(), c.winfo_rooty(), c.winfo_width(), c.winfo_height()
+        top = int(c.canvasy(0))
+        shot = ImageGrab.grab(bbox=(x0, y0, x0 + width, y0 + height), xdisplay=os.environ.get("DISPLAY")).convert("RGB")
+        wanted = Image.new("RGB", (width, height), (0, 0, 0))
+        wanted.paste(behind.crop((0, top, min(behind.width, width), min(behind.height, top + height))), (0, 0))
+        # The field: from under the page's title down (the title and the line under it are drawn over the picture).
+        mask = Image.new("L", (width, height), 0)
+        mask.paste(255, (0, max(0, int(area._content_top) - top), width, height))
+        # Less every card (its own face and edge; its cut corner is measured with the field, below), the scroll bar,
+        # and whatever else stands on the field that is not one of the field's own frames or their pictures.
+        cut_corners = []
+        for w in widgets_of(area.inner):
+            if w is area.inner or not w.winfo_ismapped():
+                continue
+            if getattr(w, "odq_field", False) or (w.winfo_class() == "Frame" and not isinstance(w, widgets.Card)
+                                                  and _field_frame(w, area)):
+                continue
+            if any(isinstance(a, widgets.Card) for a in _ancestors_of(w, area.inner)):
+                # Inside a card: the card's box covers it.
+                continue
+            box = (w.winfo_rootx() - x0, w.winfo_rooty() - y0, w.winfo_rootx() - x0 + w.winfo_width(),
+                   w.winfo_rooty() - y0 + w.winfo_height())
+            mask.paste(0, box)
+            if isinstance(w, widgets.Card) and getattr(w, "cut", 0):
+                cut_corners.append((box, w.cut, getattr(w, "edge", 1)))
+        if area.bar.winfo_ismapped():
+            mask.paste(0, (area.bar.winfo_rootx() - x0, 0, width, height))
+        # Each card's corner past its cut, clear of the cut's own line and its smoothing: the picture beyond.
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(mask)
+        for box, cut, edge in cut_corners:
+            right, top_y = box[2], box[1]
+            draw.polygon([(right - cut + 2 + edge, top_y), (right - 1, top_y), (right - 1, top_y + cut - 3 - edge)],
+                         fill=255)
+        # Counted from the masks' histograms (each pixel 0 or 255): a page at 200 % has millions of them.
+        counted = mask.histogram()[255]
+        if not counted:
+            continue
+        # A pixel differs when any of its three colours is more than FIELD_LEVELS from the picture's.
+        diff = ImageChops.difference(shot, wanted)
+        diff = ImageChops.lighter(ImageChops.lighter(diff.getchannel(0), diff.getchannel(1)), diff.getchannel(2))
+        off = ImageChops.multiply(diff.point(lambda v: 255 if v > FIELD_LEVELS else 0), mask)
+        differing = off.histogram()[255]
+        if differing > counted * FIELD_DIFFERS:
+            where = off.getbbox()
+            if FIELD_OUT:
+                marked = shot.copy()
+                marked.paste((255, 0, 255), (0, 0), off)
+                marked.save(os.path.join(FIELD_OUT, "%s-field.png" % re.sub(r"[^A-Za-z0-9_.-]", "_", name)))
+            problems.append("%s: the page's field is not the window's picture in %d of %d pixels (around %r)" % (
+                name, differing, counted, where))
+
+
+def _ancestors_of(widget, stop):
+    """The widgets round `widget` up to `stop` (not counted)."""
+    found, parent = [], widget.master
+    while parent is not None and parent is not stop:
+        found.append(parent)
+        parent = parent.master
+    return found
+
+
+def _field_frame(frame, area):
+    """Whether `frame` is one of the page's field frames (no card's, in the field's colour): it shows the picture."""
+    if any(isinstance(a, widgets.Card) for a in _ancestors_of(frame, area.inner)):
+        return False
+    try:
+        return str(frame.cget("bg")).lower() == str(area.cget("bg")).lower()
+    except Exception:
+        return False
 
 
 def lime_check(app, name, problems):
@@ -1868,6 +1972,8 @@ def main():
     parser.add_argument("--lang", default="en")
     parser.add_argument("--size", default="1180x760")
     args = parser.parse_args()
+    global FIELD_OUT
+    FIELD_OUT = args.out
     if not safety.on_virtual_display():
         sys.exit("refusing: this opens windows; run it through client/tests/ui/run.sh")
     os.makedirs(args.out, exist_ok=True)

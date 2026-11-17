@@ -183,17 +183,18 @@ class RailList(tk.Canvas):
     """The column's list: the menu's pages, or the guide's steps, one under another.
 
     The menu: each page's name in the wide face, English in both languages as the site's and the game's menus are; ash,
-    white under the pointer; the page on show lit, its name in lime on a raised slab with the cards' cut corner and a
-    lime rule along its left edge. The keyboard reaches it first: Tab and Shift+Tab move the cyan ring along the names,
-    then on to the page; the arrow keys move the ring; Enter or Space opens the page with the ring.
+    white under the pointer; the page on show lit, its name in lime on a raised slab with the cards' cut corner (no
+    stripe along its edge: the slab and the lime name say it). The keyboard reaches it first: Tab and Shift+Tab move the
+    cyan ring along the names, then on to the page; the arrow keys move the ring; Enter or Space opens the page with the
+    ring.
 
     The guide's steps: each step's number large and leaning, its name beside it; the step on show on the raised slab,
     its number in lime and its name white, the steps taken with their numbers in lime, the steps to come grey. They
     take no keyboard (Back and Next move along them)."""
 
-    # A name's height and the gap between two, the room before a name inside its slab, the slab's cut corner and its
-    # rule, and a step's height (logical pixels).
-    ITEM_H, ITEM_GAP, NAME_PAD, CUT, RULE, STEP_H = 42, 4, 16, 10, 3, 50
+    # A name's height and the gap between two, the room before a name inside its slab, the slab's cut corner, and a
+    # step's height (logical pixels).
+    ITEM_H, ITEM_GAP, NAME_PAD, CUT, STEP_H = 42, 4, 16, 10, 50
     # The room a step's number takes before its name.
     NUMBER_W = 34
 
@@ -266,9 +267,6 @@ class RailList(tk.Canvas):
                 cut = px(self.CUT)
                 draw.polygon([(left, top), (right - cut, top), (right - 1, top + cut), (right - 1, top + row - 1),
                               (left, top + row - 1)], fill=art._rgb(fill))
-                if key == lit:
-                    # The lime rule along its left edge: where the window is.
-                    draw.rectangle([left, top, left + px(self.RULE) - 1, top + row - 1], fill=art._rgb(theme.OK))
         self._numerals = []
         if self.nav:
             for (key, words) in self.nav:
@@ -385,7 +383,19 @@ class ScrollArea(tk.Frame):
         self.offset, self.light, self.on_moved, self._moved = offset, light, on_moved, None
         self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
         self.bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview, style="Dark.Vertical.TScrollbar")
-        self.inner = tk.Frame(self.canvas, bg=bg)
+        # The column, with no colour of its own (an empty background: Tk paints nothing there, nor does the screen when
+        # it grows): its page's frame covers it, and where the page grows the picture under it stays on the screen
+        # until that frame and its picture reach there, never the field's flat colour for a moment.
+        self.inner = tk.Frame(self.canvas, bg="")
+        # A card or a frame of the page finds the page's picture through the column (Card, _paint_field).
+        self.inner.odq_area = self
+        # The page's own field between and round the cards: Tk's frames are opaque, so each frame of the field (the
+        # column, its rows, the gaps between cards) shows its part of the page's picture, a picture of its own laid
+        # under what it holds (_paint_field). Frame -> (the canvas the picture is on, the place, width and picture it
+        # was cut for, and how tall it was cut).
+        self._field = {}
+        # The cards on the page whose cut corner shows the page's picture beyond it (Card._cut_over_field).
+        self._cards = []
         px = ui.px
         self._window = self.canvas.create_window((px(self.MARGIN), px(self.TOP)), window=self.inner, anchor="nw")
         # The heading's items (the title's picture, the line under it) and where the content starts under them.
@@ -407,8 +417,9 @@ class ScrollArea(tk.Frame):
         # the area loops for ever: the bar narrows the page, the narrower page fits, the bar goes, and back).
         self.bar_room = self.bar.winfo_reqwidth()
         self.canvas.pack(fill="both", expand=True)
-        # The content's height decides how far it scrolls, and how tall the picture behind it is.
-        self.inner.bind("<Configure>", lambda e: self._relayout())
+        # The content's height decides how far it scrolls, and how tall the picture behind it is; the field's frames
+        # take their part of that picture where they now stand.
+        self.inner.bind("<Configure>", lambda e: (self._relayout(), self._paint_field()))
         # The column is as wide as the area less its margins, so text wraps instead of running off.
         self.canvas.bind("<Configure>", self._on_resize)
         # The wheel scrolls whatever is under the pointer, so bind only while the pointer is over this area. Each binding
@@ -478,6 +489,8 @@ class ScrollArea(tk.Frame):
         self._content_top = y + (px(self.GAP) if self._heading else 0)
         c.coords(self._window, px(self.MARGIN), self._content_top)
         self._relayout()
+        # The column moved on the page (a heading of another height): its frames show another part of the picture.
+        self._paint_field()
 
     def _column(self, width):
         """The column's width in an area `width` wide: between the margins, less the scroll bar's room."""
@@ -560,6 +573,8 @@ class ScrollArea(tk.Frame):
         else:
             c.itemconfigure(self._backdrop_item, image=self._backdrop_image)
         c.tag_lower(self._backdrop_item)
+        # The field's frames and the cards' cut corners show their part of the new picture.
+        self._paint_field()
 
     def _picture_on_show(self):
         """The picture a dialog draws for this area (snapshot.py), made when one asks: the part of the page's picture
@@ -578,6 +593,129 @@ class ScrollArea(tk.Frame):
             x, y = (int(v) for v in c.coords(self._heading[0]))
             picture.paste(title, (x, y - top), title)
         return picture
+
+    # ------------------------------------------------------------------------------------- the page's own field
+
+    def page_box(self, widget):
+        """Where `widget` stands on the page, in the page's picture's own pixels (left, top), or None when it is no
+        part of this page's column. Counted from the widgets' places in their parents, so it holds wherever the page is
+        scrolled to, and inside a <Configure> of any of them (Tk has moved them by then)."""
+        x = y = 0
+        found = widget
+        while found is not None and found is not self.inner:
+            x, y = x + found.winfo_x(), y + found.winfo_y()
+            found = found.master
+        if found is None:
+            return None
+        left, top = (int(round(float(v))) for v in self.canvas.coords(self._window))
+        return left + x, top + y
+
+    def picture_at(self, widget, x, y, width, height):
+        """The page's picture under the box (x, y, width, height) of `widget` (in its own pixels), as an RGB picture of
+        that size; None until the picture is drawn, or for a widget of no page. Past the picture's foot (a page grown
+        before its picture is drawn again for it), the field's own colour."""
+        from PIL import Image
+        behind = getattr(self, "_backdrop_picture", None)
+        place = self.page_box(widget)
+        if behind is None or place is None or width < 1 or height < 1:
+            return None
+        left, top = place[0] + x, place[1] + y
+        picture = Image.new("RGB", (width, height), art._rgb(self.cget("bg")))
+        # The part inside the picture, cut out and put in its place (a crop past an edge would come out black).
+        box = (max(0, left), max(0, top), min(behind.width, left + width), min(behind.height, top + height))
+        if box[0] < box[2] and box[1] < box[3]:
+            picture.paste(behind.crop(box), (box[0] - left, box[1] - top))
+        return picture
+
+    def _field_frames(self, under):
+        """The frames of the page's field from `under` down (the column, or a frame of the field): it and each frame
+        under it in the field's colour that is no card and no part of one, each with whether it may show the picture (a
+        card's own holder, pages.Sections, may not: its card covers it, and it is told apart by what it holds)."""
+        found, stack = [(under, under is self.inner or not getattr(under, "odq_holder", False))], [under]
+        field = str(self.cget("bg")).lower()
+        while stack:
+            widget = stack.pop()
+            for child in widget.winfo_children():
+                if isinstance(child, Card) or getattr(child, "odq_field", False) or child.winfo_class() != "Frame":
+                    continue
+                if str(child.cget("bg")).lower() != field:
+                    # A frame of another colour (a band of its own): no part of the field, nor what it holds.
+                    continue
+                stack.append(child)
+                found.append((child, not getattr(child, "odq_holder", False)))
+        return found
+
+    def _covered(self, frame, width, height):
+        """Whether one thing `frame` holds covers all of it (the column under its page's frame, a column under its one
+        card): nothing of the frame's own shows, so it needs no picture."""
+        for child in frame.winfo_children():
+            if getattr(child, "odq_field", False) or not child.winfo_ismapped():
+                continue
+            if (child.winfo_x() <= 0 and child.winfo_y() <= 0 and child.winfo_x() + child.winfo_width() >= width
+                    and child.winfo_y() + child.winfo_height() >= height):
+                return True
+        return False
+
+    def watch(self, frame):
+        """`frame` of the field tells when it moves or changes size: what it holds moved on the page, and its part of
+        the picture is cut again then, as Tk lays the page out (the column's own changes come through _relayout's
+        binding). Once for each frame."""
+        if frame is self.inner or getattr(frame, "odq_watched", False):
+            return
+        frame.odq_watched = True
+        frame.bind("<Configure>", lambda e: e.widget is frame and self._paint_field(frame), add="+")
+
+    def _paint_field(self, under=None):
+        """Each frame of the page's field shows its part of the page's picture where it now stands, and each card's
+        cut corner the picture beyond it: everything on the page when the picture is drawn again or the column moves,
+        what is under a frame of the field when it moves or changes size (its own <Configure>, which Tk sends while it
+        lays the page out, so the new part shows with the frame's new place, never a moment later)."""
+        from PIL import ImageTk
+        behind = getattr(self, "_backdrop_picture", None)
+        if behind is None or not self.inner.winfo_exists():
+            return
+        under = under if under is not None and under.winfo_exists() else self.inner
+        for frame, shows in self._field_frames(under):
+            self.watch(frame)
+            if not shows:
+                continue
+            width, height = frame.winfo_width(), frame.winfo_height()
+            known = self._field.get(frame)
+            holder = known[0] if known is not None and known[0].winfo_exists() else None
+            if width <= 1 or height <= 1 or (holder is None and self._covered(frame, width, height)):
+                # Not laid out yet, or nothing of it shows: no picture (one made before stays, under what covers it).
+                continue
+            place = self.page_box(frame)
+            if holder is not None and known[1] == (place, width, id(behind)) and height <= known[2]:
+                # Where it was, and no taller than its picture: the picture shows its new foot as it is.
+                continue
+            # Cut taller than the frame, by as much as the frame is tall up to the picture's own room (BACKDROP_ROOM):
+            # a page that grows by a row shows the field under it without a picture cut again.
+            tall = height + min(height, self.ui.px(BACKDROP_ROOM))
+            picture = self.picture_at(frame, 0, 0, width, tall)
+            if holder is None:
+                # Laid under everything the frame holds, as large as the frame, its picture from its top-left corner: a
+                # canvas, which draws again only the part a moved card uncovers. Nothing of the page's own (no words,
+                # no keyboard); a press on it moves the page as the field does (_pannable).
+                holder = tk.Canvas(frame, bd=0, highlightthickness=0, bg=self.cget("bg"), takefocus=0)
+                holder.odq_field = True
+                holder.place(x=0, y=0, relwidth=1.0, relheight=1.0, bordermode="outside")
+                # Under its siblings: Misc's lower, as a canvas's own lower() moves its items, not the canvas.
+                tk.Misc.lower(holder)
+                holder.odq_item = holder.create_image(0, 0, anchor="nw")
+            image = ImageTk.PhotoImage(picture, master=holder)
+            holder.itemconfigure(holder.odq_item, image=image)
+            # Kept on the canvas: Tk drops a picture the moment Python forgets it. A dialog draws the window from it.
+            holder.odq_image, holder.odq_picture = image, picture
+            self._field[frame] = (holder, (place, width, id(behind)), tall)
+        # The frames gone with a page that went, and their pictures with them; then each card under `under` (all of
+        # them for the column) cuts its corner again where it now stands.
+        self._field = {f: v for f, v in self._field.items() if f.winfo_exists()}
+        self._cards = [card for card in self._cards if card.winfo_exists()]
+        inside = str(under) + "."
+        for card in self._cards:
+            if under is self.inner or str(card).startswith(inside):
+                card._cut_over_field()
 
     def _wheel(self, on):
         """The wheel bound for the whole window to this area (on), or no longer (off); the last binding's commands go
@@ -610,7 +748,7 @@ class ScrollArea(tk.Frame):
         nothing when pressed; never a control (a field, a button, a switch, a slider, a drop-down, a link, a key's box)."""
         if not str(widget).startswith(str(self)):
             return False
-        if widget is self.canvas or isinstance(widget, tk.Frame):
+        if widget is self.canvas or isinstance(widget, tk.Frame) or getattr(widget, "odq_field", False):
             return True
         if isinstance(widget, tk.Label):
             # Words a press does something on show the pointing hand (links), or take the keyboard.
@@ -825,7 +963,7 @@ def divider(parent, ui, bg=theme.DIVIDER, pady=12):
 
 
 def lamp(parent, ui, colour, bg=theme.PANEL, hollow=False):
-    """A state's small light with its glow (art.lamp), as a label; `hollow` draws it as a ring."""
+    """A state's small light (art.lamp), as a label; `hollow` draws it as a ring."""
     from PIL import ImageTk
     picture = art.lamp(colour, ui.scale, bg=bg, hollow=hollow)
     image = ImageTk.PhotoImage(picture, master=parent)
@@ -1025,7 +1163,8 @@ class Toggle(tk.Label):
         self.bind("<Button-1>", lambda e: self.set(not self.value, notify=True))
         # Tab reaches it; Enter or Space switches it.
         focus_ring(self, ui, bg)
-        # The pill shows this far in: the keyboard's ring, then the halo's room (setting_row lines controls up by it).
+        # The pill shows this far in: the keyboard's ring, then the room round the pill (setting_row lines controls up
+        # by it).
         self.odq_inset = int(self.cget("highlightthickness")) + art.TOGGLE_HALO
         self.bind("<Return>", lambda e: self.set(not self.value, notify=True))
         self.bind("<space>", lambda e: self.set(not self.value, notify=True))
@@ -1571,7 +1710,7 @@ def setting_row(parent, ui, title, control_factory, hint=None, bg=None):
              width=0).grid(row=0, column=0, sticky="w", padx=(0, ui.px(LABEL_GAP)))
     control = control_factory(row)
     # Every control's visible left edge on one line: a switch, a row of tabs and a slider keep room for the keyboard's
-    # ring (and the switch for its halo) before what shows, so the others are set in by as much.
+    # ring (and the switch the room round its pill) before what shows, so the others are set in by as much.
     align = max(1, ui.px(2)) + art.TOGGLE_HALO
     control.grid(row=0, column=1, sticky="w", padx=(max(0, align - getattr(control, "odq_inset", 0)), 0))
     hint_label = None
@@ -1613,29 +1752,84 @@ def fit_names(container, ui, more=()):
 
 
 class Card(tk.Frame):
-    """A panel as the site's cards: the deck's colour with no border, the top-right corner cut, the site's 24 px inside,
-    and its title in Pretendard Bold with nothing after it. Content goes into `body`; `head` holds the title and
-    anything at its right end."""
+    """A panel as the site's cards: the deck's colour, opaque to read on, with the site's glass edge (a hairline all
+    round, its top row brighter: theme.HAIRLINE, theme.RIM), the top-right corner cut, the site's 24 px inside, and its
+    title in Pretendard Bold with nothing after it. Content goes into `body`; `head` holds the title and anything at its
+    right end. On a page's field, what shows beyond the cut is the page's own picture (ScrollArea._paint_field)."""
 
     CUT = 16
 
     def __init__(self, parent, ui, title=None, pad=24):
         outside = parent.cget("bg")
-        super().__init__(parent, bg=theme.PANEL)
-        self.body = tk.Frame(self, bg=theme.PANEL, padx=ui.px(pad), pady=ui.px(pad - 4))
+        # The edge's width: a pixel at 100 %, two at 200 %, as the site's 1 px line is on a screen of that density.
+        edge = max(1, ui.px(1))
+        super().__init__(parent, bg=theme.PANEL, highlightthickness=edge, highlightbackground=theme.HAIRLINE,
+                         highlightcolor=theme.HAIRLINE)
+        # The edge is the card's own, not a ring inside it (tests/ui/spacing.py measures the padding from the outside).
+        self.odq_inset = 0
+        self.ui, self.edge, self.outside = ui, edge, outside
+        # The room inside the edge: the site's padding counted from the card's outside, so its words stand where they
+        # stood before the card had an edge.
+        self.body = tk.Frame(self, bg=theme.PANEL, padx=ui.px(pad) - edge, pady=ui.px(pad - 4) - edge)
         self.body.pack(fill="both", expand=True)
+        # The top row of the edge in the brighter rim, over the hairline there (no room of its own).
+        rim = tk.Frame(self, bg=theme.RIM, height=edge)
+        rim.place(x=0, y=0, relwidth=1.0, height=edge, bordermode="outside")
         self.head = None
         if title:
             self.head = tk.Frame(self.body, bg=theme.PANEL)
             self.head.pack(fill="x", pady=(0, ui.px(12)))
             tk.Label(self.head, text=title, font=ui.fonts.card_title, fg=theme.TEXT, bg=theme.PANEL).pack(side="left")
-        # The cut: a small picture over the square corner, the page's colour beyond it.
-        cut = ui.px(self.CUT)
-        picture = art.corner(cut, theme.PANEL, outside)
+        # The cut: a small picture over the square corner (over the edge's corner too), the page beyond it, the
+        # hairline along the cut.
+        self.cut = ui.px(self.CUT)
+        self._corner_label = tk.Label(self, bd=0, highlightthickness=0, bg=outside)
+        self._corner_label.place(relx=1.0, x=-self.cut, y=0, width=self.cut, height=self.cut, bordermode="outside")
+        self._corner_key = None
+        self._paint_corner(outside)
+        # On a page's field (no card round it), the picture beyond the cut follows the card where it stands.
+        self.odq_area = None
+        holder = parent
+        while holder is not None and not isinstance(holder, Card):
+            area = getattr(holder, "odq_area", None)
+            if area is not None:
+                self.odq_area = area
+                break
+            holder = holder.master
+        if self.odq_area is not None and str(outside).lower() == str(self.odq_area.cget("bg")).lower():
+            self.odq_area._cards.append(self)
+            self.bind("<Configure>", lambda e: self._cut_over_field(), add="+")
+            self._cut_over_field()
+
+    def _paint_corner(self, beyond):
+        """The corner's picture with `beyond` past the cut: a colour, or the page's picture there."""
+        picture = art.corner(self.cut, theme.PANEL, beyond, seam=theme.HAIRLINE, seam_width=self.edge)
         self._corner = ImageTk.PhotoImage(picture, master=self)
-        corner = tk.Label(self, image=self._corner, bd=0, highlightthickness=0, bg=outside)
-        corner.odq_picture = picture
-        corner.place(relx=1.0, x=-cut, y=0, width=cut, height=cut)
+        self._corner_label.configure(image=self._corner)
+        # A dialog draws the window from the widgets (snapshot.py): the corner as it shows.
+        self._corner_label.odq_picture = picture
+
+    def _cut_over_field(self):
+        """The page's picture beyond the cut, where the card now stands (drawn again only when that changed)."""
+        area = self.odq_area
+        if area is None or not self.winfo_exists() or self.winfo_width() <= 1:
+            return
+        # Each frame between the card and the page's column tells the page when it moves (a card made anew in a holder
+        # of its own, pages.Sections, is moved by its holder, never by itself).
+        holder = self.master
+        while holder is not None and holder is not area.inner:
+            area.watch(holder)
+            holder = holder.master
+        # Where it stands and how wide, on which picture: the corner is cut again only when one of them changed (the
+        # page's field frames ask every card under them each time one of them moves).
+        key = (area.page_box(self), self.winfo_width(), id(getattr(area, "_backdrop_picture", None)))
+        if key == self._corner_key:
+            return
+        picture = area.picture_at(self, self.winfo_width() - self.cut, 0, self.cut, self.cut)
+        if picture is None:
+            return
+        self._corner_key = key
+        self._paint_corner(picture)
 
 
 class RowList(tk.Frame):

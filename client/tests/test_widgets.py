@@ -1,5 +1,7 @@
-"""The building blocks' behaviour that needs no window: the wheel and the drop-downs, a touchpad's small turns."""
+"""The building blocks' behaviour that needs no window: the wheel and the drop-downs, a touchpad's small turns, the
+pictures the cards and states are drawn with."""
 
+import math
 import unittest
 
 from opendmtq_client import widgets
@@ -79,6 +81,65 @@ class Backdrop(unittest.TestCase):
         art.backdrop(key[0], 10, key[1], key[2], offset=0, top=key[3])
         self.assertIs(art._tops[key], before)
 
+
+
+# How far a pixel the pictures leave as the card may be from the card's colour: the smoothing's tail, never a glow.
+LEVEL = 2
+
+
+class Glass(unittest.TestCase):
+    """The pictures the launcher draws without the glows that said nothing (a halo round a state's lamp, a ring of the
+    accent round a switch that is on), and a card's cut that shows the page's own picture beyond it."""
+
+    def test_a_lamp_is_its_dot_alone(self):
+        from opendmtq_client import art, theme
+        for scale in (1.0, 2.0):
+            for hollow in (False, True):
+                lamp = art.lamp(theme.OK, scale, bg=theme.PANEL, hollow=hollow)
+                c = lamp.width / 2.0
+                # Past the dot's edge (3.5 px at 100 %) by the reach of its smoothing (Lanczos, three pixels): the card,
+                # but for a level or two of the smoothing's tail (the glow was tens of levels there).
+                reach = 3.5 * scale + 3
+                panel = tuple(int(theme.PANEL[i:i + 2], 16) for i in (1, 3, 5))
+                for x in range(lamp.width):
+                    for y in range(lamp.height):
+                        if (x + 0.5 - c) ** 2 + (y + 0.5 - c) ** 2 > reach ** 2:
+                            got = lamp.getpixel((x, y))[:3]
+                            self.assertLessEqual(max(abs(a - b) for a, b in zip(got, panel)), LEVEL,
+                                                 (scale, hollow, x, y, got))
+                # The room the lamp takes is as it was, so the words beside it stand where they stood.
+                self.assertEqual(lamp.size, (int(math.ceil(21 * scale)),) * 2)
+
+    def test_a_switch_that_is_on_has_no_ring_round_it(self):
+        from opendmtq_client import art, theme
+        on = art.toggle(True, 40, 22, bg=theme.PANEL)
+        panel = tuple(int(theme.PANEL[i:i + 2], 16) for i in (1, 3, 5))
+        ring = art.TOGGLE_HALO
+        # The room round the pill: the card's colour on every side, at the middle of each edge (but for a level of the
+        # pill's smoothing; the ring was a third of the way to lime there).
+        for point in ((0, on.height // 2), (on.width - 1, on.height // 2), (on.width // 2, 0),
+                      (on.width // 2, on.height - 1)):
+            got = on.getpixel(point)[:3]
+            self.assertLessEqual(max(abs(a - b) for a, b in zip(got, panel)), LEVEL, (point, got))
+        self.assertEqual(on.size, (40 + 2 * ring, 22 + 2 * ring))
+
+    def test_the_cut_shows_the_page_beyond_it(self):
+        from PIL import Image
+        from opendmtq_client import art, theme
+        panel = tuple(int(theme.PANEL[i:i + 2], 16) for i in (1, 3, 5))
+        for size, edge in ((16, 1), (32, 2)):
+            # A picture of the page with something in every pixel (a colour per place), as the shards and dots are.
+            page = Image.new("RGB", (size, size))
+            page.putdata([((x * 13) % 256, (y * 29) % 256, (x * y) % 256) for y in range(size) for x in range(size)])
+            corner = art.corner(size, theme.PANEL, page, seam=theme.HAIRLINE, seam_width=edge)
+            for x in range(size):
+                for y in range(size):
+                    if x - y > 2 + 2 * edge:
+                        # Beyond the cut, clear of its line: the page's own pixel.
+                        self.assertEqual(corner.getpixel((x, y)), page.getpixel((x, y)), (size, x, y))
+                    elif y - x > 2 + 2 * edge:
+                        # Inside: the card.
+                        self.assertEqual(corner.getpixel((x, y)), panel, (size, x, y))
 
 
 class BuildPictures(unittest.TestCase):

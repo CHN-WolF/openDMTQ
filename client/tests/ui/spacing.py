@@ -295,7 +295,20 @@ def check(root, ui, name):
     # ---- words inside the padding of the visible box they sit in, whatever box it is: a card, the menu column (its foot
     # with it), the page's own field outside any card (no words belong there: the page's title and the line under it
     # are drawn on its picture, everything else in a card), or any band whose colour differs from what is round it.
-    page_fields = {area.inner for area in _all(root) if isinstance(area, widgets.ScrollArea)}
+    page_fields = set()
+    for area in [w for w in _all(root) if isinstance(w, widgets.ScrollArea)]:
+        # The column and every frame of the field under it (the page's own frame, its rows, the gaps): frames in the
+        # field's colour that are no card's (the column itself has no colour of its own).
+        page_fields.add(area.inner)
+        stack = [area.inner]
+        while stack:
+            frame = stack.pop()
+            for child in frame.winfo_children():
+                if isinstance(child, widgets.Card) or child.winfo_class() != "Frame":
+                    continue
+                if str(child.cget("bg")).lower() == str(area.cget("bg")).lower():
+                    page_fields.add(child)
+                    stack.append(child)
     for text, _kind_t, box_t in texts:
         surface, kind = _surface(text, page_fields)
         if surface is None:
