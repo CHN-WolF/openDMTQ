@@ -239,10 +239,24 @@ class MessageTest(unittest.TestCase):
         section = body["blocks"][0]["text"]
         self.assertEqual(section["type"], "plain_text")
         self.assertIn("<!here> & @" + ZW + "channel", section["text"])
-        # The fallback is read as markup: its three control characters escaped, the mention broken.
-        self.assertIn("&lt;!here&gt; &amp; @" + ZW + "channel", body["text"])
+        # The fallback is read as markup: its three control characters escaped, the mention broken (and Markdown's marks).
+        self.assertIn("&lt;\\!here&gt; &amp; @" + ZW + "channel", body["text"])
         self.assertNotIn("<!here>", body["text"])
         self.assertIn("<http://192.168.1.10:8791/opendmtq/song.php?id=1&chart=11|The chart's ranking>", body["blocks"][1]["elements"][0]["text"])
+
+    def test_a_long_name_is_cut(self):
+        # Nicknames are the players' own and the game sets no length: Discord refuses an embed whose text is too long.
+        body = webhooks.payload("discord", "en", "chart_top", self.chart(name="x" * 5000, before="y" * 5000), 1800000000)
+        text = body["embeds"][0]["description"]
+        self.assertLess(len(text), 600, len(text))
+        self.assertIn("x" * (webhooks.NAME_MAX - 1) + "…", text)
+
+    def test_the_slack_fallback_shows_markdown_as_written(self):
+        # Chats that take Slack's messages and read Markdown (Mattermost) would make a link and a picture of a name.
+        body = webhooks.payload("slack", "en", "chart_top", self.chart(name="[gift](https://phish.example) ![](https://t.example/p.png) *b*"), 1800000000)
+        text = body["text"]
+        self.assertNotIn("[gift](", text)
+        self.assertIn(r"\[gift\]\(https://phish.example\) \!\[\]\(https://t.example/p.png\) \*b\*", text)
 
     def test_in_the_webhooks_language(self):
         en = webhooks.payload("discord", "en", "live_on", {"player": 7, "name": "Sena", "song": "Paper Planes", "chart": "2LINE Normal 3", "rec": 1}, 0)

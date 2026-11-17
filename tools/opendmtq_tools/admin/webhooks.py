@@ -108,6 +108,12 @@ FAIL_WORDS = {"gone": "hook.fail_gone", "refused": "hook.fail_refused", "bad": "
 
 # The zero-width space that breaks a mention: "@everyone" in a name stays text, it calls nobody.
 ZW = "​"
+# The longest name a message holds, in characters: a player's nickname is theirs and the game sets it no length, and
+# Discord refuses an embed whose text is too long. A longer one is cut, its end marked.
+NAME_MAX = 64
+# What Markdown makes a link, a picture or emphasis of in a text the chats that take Slack's messages may read as Markdown
+# (Mattermost does): escaped with a backslash in the values of Slack's fallback text, so a name shows as it is.
+MARKDOWN = re.compile(r"([\\`*_~\[\]()!])")
 # What Discord reads as formatting in an embed's text: escaped with a backslash, so a name shows as it is.
 DISCORD_MARKUP = re.compile(r"([\\*_~`|<>\[\]#\-])")
 
@@ -375,6 +381,24 @@ def slack_text(text):
     return unmention(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def slack_value(text):
+    """A name, a song or a message for Slack's fallback text: Markdown's marks escaped (for the chats that read it as
+    Markdown), then as slack_text()."""
+    return slack_text(MARKDOWN.sub(r"\\\1", str(text)))
+
+
+def cut(name):
+    """A name as a message holds it: NAME_MAX characters at most, a longer one cut with its end marked."""
+    name = str(name if name is not None else "")
+    return name if len(name) <= NAME_MAX else name[:NAME_MAX - 1] + "…"
+
+
+def values_of(data, fn):
+    """data with each of its texts (names, a song, a chart, a message) passed through fn, a format's escaping; numbers and
+    lists as they are."""
+    return {k: fn(v) if isinstance(v, str) else v for k, v in data.items()}
+
+
 def length_words(language, seconds):
     """How long a broadcast ran, in words: seconds, minutes, or hours and minutes."""
     seconds = max(0, int(seconds))
@@ -447,9 +471,19 @@ def words_of(language, kind, data):
             "/opendmtq/")
 
 
+def trimmed(data):
+    """An event's data with the players' names as long as a message holds them (cut()), and the notice's message as long
+    as the notice may be, and a bit."""
+    data = dict(data, **{k: cut(data[k]) for k in ("name", "before") if data.get(k) is not None})
+    if data.get("message"):
+        data["message"] = str(data["message"])[:400]
+    return data
+
+
 def payload(chat, language, kind, data, at):
     """The body a chat takes for an event: an embed for Discord (no mention made of anyone), blocks for Slack (names as plain
     text, the fallback escaped)."""
+    data = trimmed(data)
     title, sentence, link_words, path = words_of(language, kind, data)
     url = site_address() + path
     footer = strings.text(language, "hook.msg_footer", server=core.server_name())
@@ -459,8 +493,10 @@ def payload(chat, language, kind, data, at):
                             "timestamp": datetime.datetime.fromtimestamp(at, datetime.timezone.utc).isoformat()}],
                 # Nobody is called, whatever the words hold: @everyone, @here, a role or a user.
                 "allowed_mentions": {"parse": []}}
-    # Slack: the words as plain text (nothing in them is read as markup, mentions or links), then the link.
-    return {"text": slack_text(f"{title}: {sentence}"),
+    # Slack: the words as plain text (nothing in them is read as markup, mentions or links), then the link. Its fallback
+    # text, which Slack shows in notices and some chats show as the message, has the values escaped for Markdown.
+    fallback_title, fallback_sentence, _, _ = words_of(language, kind, values_of(data, slack_value))
+    return {"text": f"{fallback_title}: {fallback_sentence}",
             "blocks": [{"type": "section", "text": {"type": "plain_text", "text": unmention(f"{title}\n{sentence}"), "emoji": False}},
                        {"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{url}|{slack_text(link_words)}> · {slack_text(footer)}"}]}]}
 
