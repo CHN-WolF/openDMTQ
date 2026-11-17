@@ -17,6 +17,13 @@ __pycache__/
 /tools/opendmtq_tools/opendmtq-player-windows.zip
 /tools/opendmtq_tools/OpenDMTQ-Setup.exe
 /tools/opendmtq_tools/OpenDMTQ-Setup.exe.version
+# And the PC client's update files beside it (its feed, its packages, the release's signed checksums), which a server
+# hands out to its launchers (tools/opendmtq_tools/client_updates.py).
+/tools/opendmtq_tools/pc-client-updates/
+
+# A test build's own public keys beside the signing module (client/packaging/windows/build.sh writes the launcher's from
+# OPENDMTQ_TEST_UPDATE_KEY, a test writes the tools'): never a release's, never the repository's.
+update-test-keys.txt
 
 # A host install's own programs and run files (host/install.sh).
 /.host/

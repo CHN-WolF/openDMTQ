@@ -4,15 +4,23 @@
 #   2. PyInstaller under Wine with a Windows Python -> one folder with OpenDMTQ.exe and OpenDMTQ-cmd.exe
 #   3. the player for Windows (opendmtq-player-windows.zip, arm32/bundle_windows.sh) into that folder as player\, and
 #      the licence texts of what the program carries into its licenses\ (docs/notice.md)
-#   4. Velopack's vpk (.NET) -> Velopack's setup and the update packages
+#   4. Velopack's vpk (.NET) -> Velopack's setup and the update packages: the whole package, and a delta package from
+#      the previous release's when it is given (previous.py: a launcher of that version then downloads what changed)
 #   5. PyInstaller again -> OpenDMTQ-Setup.exe: the installer's dialogs with Velopack's setup inside
-# Usage: [OPENDMTQ_UPDATE_SOURCE=<where releases are published>] [PLAYER_ZIP=<zip>] client/packaging/windows/build.sh OUT_DIR
-#   The version is the project's (deploy/helm/opendmtq/Chart.yaml). OPENDMTQ_UPDATE_SOURCE is a GitHub repository URL
-#   or a folder (local or HTTP) holding the update packages; the launcher looks for updates there. Without it, none.
-#   PLAYER_ZIP is the player for Windows (default _work/arm32/opendmtq-player-windows.zip, where arm32/bundle_windows.sh
-#   leaves it).
+# Usage: [OPENDMTQ_UPDATE_SOURCE=<where releases are published>] [PLAYER_ZIP=<zip>]
+#        [OPENDMTQ_PREVIOUS_RELEASE=<package or folder>] [OPENDMTQ_TEST_UPDATE_KEY=<public key>]
+#        client/packaging/windows/build.sh OUT_DIR
+#   The version is the project's (deploy/helm/opendmtq/Chart.yaml). OPENDMTQ_UPDATE_SOURCE is the GitHub repository URL
+#   whose releases the launcher looks at after its server's (client/opendmtq_client/updates.py); without it, only its
+#   server's. PLAYER_ZIP is the player for Windows (default _work/arm32/opendmtq-player-windows.zip, where
+#   arm32/bundle_windows.sh leaves it). OPENDMTQ_PREVIOUS_RELEASE names the previous release's full package (as its
+#   release has it, opendmtq.client-<version>-full.nupkg), or a folder holding it; the last build into OUT_DIR keeps its
+#   own too. Without either, no delta package is made. OPENDMTQ_TEST_UPDATE_KEY makes a test build: its launcher also
+#   takes releases signed with that key (a test's own key pair, never set for a release, whose check refuses such a
+#   launcher: .github/release_assets.py).
 # OUT_DIR/releases then holds what a release takes (.github/release_assets.py names them for it): OpenDMTQ-Setup.exe and
-# its .version, and Velopack's update feed (releases.win.json) and package (OpenDMTQ.Client-<version>-full.nupkg).
+# its .version, and Velopack's update feed (releases.win.json) and packages (OpenDMTQ.Client-<version>-full.nupkg, and
+# OpenDMTQ.Client-<version>-delta.nupkg when the previous release's package was there).
 set -euo pipefail
 OUT=$(realpath -m "${1:?usage: build.sh OUT_DIR}")
 REPO=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -59,6 +67,13 @@ own
 printf '%s' "$VERSION" > "$OUT/assets/version.txt"
 printf '%s' "${OPENDMTQ_UPDATE_SOURCE:-}" > "$OUT/assets/update-source.txt"
 echo "update address: ${OPENDMTQ_UPDATE_SOURCE:-(none)}"
+# A test build's own public key goes in the same way, beside signing.py (empty: the launcher takes the project's key
+# alone, as every release's does). Anything but a public key stops the build: it would be a launcher that takes none.
+TEST_KEY=${OPENDMTQ_TEST_UPDATE_KEY:-}
+[[ -z "$TEST_KEY" || "$TEST_KEY" =~ ^[0-9a-fA-F]{64}$ ]] \
+  || { echo "OPENDMTQ_TEST_UPDATE_KEY is not a public key (64 hex digits)" >&2; exit 2; }
+printf '%s' "$TEST_KEY" > "$OUT/assets/update-test-keys.txt"
+[ -z "$TEST_KEY" ] || echo "TEST BUILD, not for a release: its launcher also takes releases signed with the key $TEST_KEY"
 
 # ---- 2. PyInstaller under Wine (no network: everything it needs is in the image)
 rm -rf "$OUT/dist" "$OUT/work"
@@ -138,13 +153,19 @@ print(len(rows), "notices,", len(list(lic.iterdir())), "files in licenses")
 PY
 
 # ---- 4. Velopack: the installer and the update packages
-docker image inspect opendmtq-client-vpk:local >/dev/null 2>&1 || {
+# Made again when VPK_VERSION or the recipe changes (the image's label holds both): vpk makes delta packages with zstd's
+# own program (--patch-from), which the .NET image does not have, and an image made before would build no delta.
+VPK_RECIPE="vpk-$VPK_VERSION-zstd"
+if [ "$(docker image inspect -f '{{index .Config.Labels "opendmtq.recipe"}}' opendmtq-client-vpk:local 2>/dev/null)" != "$VPK_RECIPE" ]; then
   ctx=$(mktemp -d)
-  printf 'FROM mcr.microsoft.com/dotnet/sdk:8.0\nRUN dotnet tool install -g vpk --version %s\nENV PATH="${PATH}:/root/.dotnet/tools"\n' "$VPK_VERSION" > "$ctx/Dockerfile"
-  docker build -q -t opendmtq-client-vpk:local "$ctx" >/dev/null
+  printf 'FROM mcr.microsoft.com/dotnet/sdk:8.0\nRUN apt-get update && apt-get install -y --no-install-recommends zstd && rm -rf /var/lib/apt/lists/*\nRUN dotnet tool install -g vpk --version %s\nENV PATH="${PATH}:/root/.dotnet/tools"\n' "$VPK_VERSION" > "$ctx/Dockerfile"
+  docker build -q --label "opendmtq.recipe=$VPK_RECIPE" -t opendmtq-client-vpk:local "$ctx" >/dev/null
   rm -rf "$ctx"
-}
-rm -rf "$OUT/releases"
+fi
+# The previous release's full package stays beside the new one, and nothing else of an earlier build: vpk makes the
+# delta package from it, and lists it in the feed as the package the delta starts from (previous.py).
+previous=$(python3 "$HERE/previous.py" "$OUT/releases" "$VERSION" ${OPENDMTQ_PREVIOUS_RELEASE:+"$(realpath -m "$OPENDMTQ_PREVIOUS_RELEASE")"})
+echo "delta package from: $previous"
 # The package id names the install folder (%LOCALAPPDATA%\OpenDMTQ.Client), apart from the player's data in OpenDMTQ.
 docker run --rm --network none -v "$OUT:/out" opendmtq-client-vpk:local vpk "[win]" pack \
   --packId OpenDMTQ.Client --packVersion "$VERSION" --packDir /out/dist/OpenDMTQ --mainExe OpenDMTQ.exe \
@@ -156,6 +177,11 @@ rm -f "$OUT/releases/"*-Portable.zip
 # Nor are vpk's two other lists: RELEASES is the older Squirrel feed and assets.win.json the list vpk's own upload reads;
 # Velopack's GitHub source in the launcher reads releases.win.json alone (its sources/github.rs and sources/mod.rs).
 rm -f "$OUT/releases/RELEASES" "$OUT/releases/assets.win.json"
+# Nor is the previous release's package the delta was made from: it is in its own release, which the feed names.
+if [ "$previous" != none ]; then
+  find "$OUT/releases" -maxdepth 1 -iname "opendmtq.client-$previous-full.nupkg" -delete
+  ls "$OUT/releases/OpenDMTQ.Client-$VERSION-delta.nupkg" >/dev/null || { echo "vpk made no delta package from $previous" >&2; exit 1; }
+fi
 ls -la "$OUT/releases"
 
 # ---- 5. the installer people run: the launcher's dialogs around Velopack's setup, in one file

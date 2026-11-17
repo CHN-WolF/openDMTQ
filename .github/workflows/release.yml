@@ -56,6 +56,16 @@ jobs:
     # A stalled download fails after 60 minutes, not GitHub's six hours: several times what this job takes.
     timeout-minutes: 90
     steps:
+      # The release's checksums carry the project's signature, which every PC client and server checks before it uses a
+      # file (tools/opendmtq_tools/signing.py). The key never leaves the machine that holds it, and never comes here: a
+      # release is laid out, signed and published there, with the same steps as this job. So this job stops before it
+      # builds or pushes anything (.github/release_assets.py layout would refuse as well).
+      - name: A release is signed, on the machine that holds the key
+        run: |
+          if [ -z "${OPENDMTQ_SIGNING_KEY:-}" ] || [ ! -f "$OPENDMTQ_SIGNING_KEY" ]; then
+            echo "::error::the release's files would not be signed: OPENDMTQ_SIGNING_KEY names no key here. A release is published from the machine that holds the project's signing key (CONTRIBUTING.md, Releases)"
+            exit 1
+          fi
       - uses: actions/checkout@v5
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -126,8 +136,9 @@ jobs:
           cp _work/windows/OpenDMTQ-windows.zip dist/
 
       # The release's files under their names, all in lower case (what each is, for which system and architecture, which
-      # version), with their checksums, checked (.github/release_assets.py): the chart packaged for it here, pushed
-      # below. Before anything is pushed too, so that a file missing or built for another machine publishes nothing.
+      # version), with their checksums, signed and checked (.github/release_assets.py): the chart packaged for it here,
+      # pushed below. Before anything is pushed too, so that a file missing, unsigned or built for another machine
+      # publishes nothing.
       - name: The release's files
         env:
           VERSION: ${{ steps.names.outputs.version }}

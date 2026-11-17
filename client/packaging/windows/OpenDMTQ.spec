@@ -11,10 +11,12 @@ analysis = Analysis(
     [os.path.join(ROOT, "packaging", "windows", "entry.py")],
     pathex=[ROOT],
     # Fonts and their licences travel with the launcher (theme.py looks for them next to itself); the version and
-    # where releases are published (empty when the build was given none), which __init__.py and updates.py read.
+    # where releases are published (empty when the build was given none), which __init__.py and updates.py read; and the
+    # public keys a test build takes besides the project's (empty in a release's), which signing.py reads.
     datas=[(os.path.join(ROOT, "opendmtq_client", "assets"), os.path.join("opendmtq_client", "assets")),
            (os.path.join(BUILD, "version.txt"), "opendmtq_client"),
-           (os.path.join(BUILD, "update-source.txt"), "opendmtq_client")],
+           (os.path.join(BUILD, "update-source.txt"), "opendmtq_client"),
+           (os.path.join(BUILD, "update-test-keys.txt"), "opendmtq_client")],
     # Pillow finds Tk through this module at run time; PyInstaller cannot see that import.
     hiddenimports=["PIL._tkinter_finder"],
     # Nothing the launcher never uses: smaller and faster to start.
