@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <sys/prctl.h>
 
 namespace player::audio {
@@ -256,10 +258,15 @@ void Stream::mix_into(float* out, std::size_t frames) {
     const float share = share_.load(std::memory_order_relaxed);
     gain[0] *= share;
     gain[1] *= share;
+    // Into the mix, the loudest of it kept for the trace.
+    float loudest = 0.0f;
     for (std::size_t k = 0; k < made; ++k) {
-        out[k * kChannels] += scratch_[k * kChannels] * gain[0];
-        out[k * kChannels + 1] += scratch_[k * kChannels + 1] * gain[1];
+        const float left = scratch_[k * kChannels] * gain[0], right = scratch_[k * kChannels + 1] * gain[1];
+        out[k * kChannels] += left;
+        out[k * kChannels + 1] += right;
+        loudest = std::max({loudest, std::fabs(left), std::fabs(right)});
     }
+    if (loudest > peak_.load(std::memory_order_relaxed)) peak_.store(loudest, std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -417,9 +424,70 @@ void Mixer::report() {
     }
 }
 
+namespace {
+
+// A check's copy of what goes out (PLAYER_CAPTURE_AUDIO=<file>): a WAV file of 32-bit float stereo at the output's rate,
+// after the volume and the equaliser, as the device gets it. Its sizes are written again each second: the player
+// leaves with _exit and never closes it, and a file cut there still reads to its last whole second.
+class Capture {
+public:
+    Capture(const char* path, int rate) : rate_(rate) {
+        file_ = std::fopen(path, "wb");
+        if (!file_) {
+            jvm::log("player: PLAYER_CAPTURE_AUDIO=%s cannot be written: no copy of the sound", path);
+            return;
+        }
+        header();
+        jvm::log("player: a copy of the sound in %s (32-bit floats, two channels at %d Hz)", path, rate);
+    }
+    // The period just made, then the sizes once a second's worth more is in.
+    void add(const float* frames, std::size_t n) {
+        if (!file_) return;
+        std::fwrite(frames, sizeof(float) * kChannels, n, file_);
+        frames_ += n;
+        since_ += n;
+        if (since_ >= static_cast<std::size_t>(rate_)) {
+            since_ = 0;
+            header();
+            std::fseek(file_, 0, SEEK_END);
+            std::fflush(file_);
+        }
+    }
+
+private:
+    // The RIFF header for the frames written so far: format 3 (IEEE floats), two channels.
+    void header() {
+        const std::uint32_t data = static_cast<std::uint32_t>(frames_ * kChannels * sizeof(float));
+        const std::uint32_t riff = 36 + data, fmt = 16, rate = static_cast<std::uint32_t>(rate_);
+        const std::uint32_t bytes = rate * kChannels * sizeof(float);
+        const std::uint16_t tag = 3, channels = kChannels, align = kChannels * sizeof(float), bits = 32;
+        std::fseek(file_, 0, SEEK_SET);
+        std::fwrite("RIFF", 1, 4, file_);
+        std::fwrite(&riff, 4, 1, file_);
+        std::fwrite("WAVEfmt ", 1, 8, file_);
+        std::fwrite(&fmt, 4, 1, file_);
+        std::fwrite(&tag, 2, 1, file_);
+        std::fwrite(&channels, 2, 1, file_);
+        std::fwrite(&rate, 4, 1, file_);
+        std::fwrite(&bytes, 4, 1, file_);
+        std::fwrite(&align, 2, 1, file_);
+        std::fwrite(&bits, 2, 1, file_);
+        std::fwrite("data", 1, 4, file_);
+        std::fwrite(&data, 4, 1, file_);
+    }
+    int rate_;
+    std::FILE* file_ = nullptr;
+    std::size_t frames_ = 0, since_ = 0;
+};
+
+}  // namespace
+
 void Mixer::run() {
     // Its name for the stats and a debugger (the mixer's tests run without the player's thread helpers).
     prctl(PR_SET_NAME, "mixer");
+    // A check's copy of the sound, when asked for.
+    std::unique_ptr<Capture> capture;
+    if (const char* path = std::getenv("PLAYER_CAPTURE_AUDIO"); path && *path) capture = std::make_unique<Capture>(path, rate_);
     std::vector<float> buf(period_ * kChannels);
     using Clock = std::chrono::steady_clock;
     Clock::time_point last{};
@@ -471,13 +539,26 @@ void Mixer::run() {
             level_frames += period_;
             if (level_frames >= static_cast<std::size_t>(rate_)) {
                 const double rms = std::sqrt(level_sum / static_cast<double>(level_frames * kChannels));
-                jvm::log("audio: level %.1f dBFS, peak %.1f dBFS", rms > 0 ? 20 * std::log10(rms) : -200.0,
-                         level_peak > 0 ? 20 * std::log10(static_cast<double>(level_peak)) : -200.0);
+                // Each stream's loudest sample in the second too: what each of them carries.
+                std::string streams;
+                {
+                    std::lock_guard<std::mutex> l(lock_);
+                    for (const auto& s : streams_) {
+                        const float p = s->take_peak();
+                        char part[96];
+                        std::snprintf(part, sizeof part, "; %s at %d Hz %.1f", s->name().c_str(), s->rate(), p > 0 ? 20 * std::log10(static_cast<double>(p)) : -200.0);
+                        streams += part;
+                    }
+                }
+                jvm::log("audio: level %.1f dBFS, peak %.1f dBFS%s", rms > 0 ? 20 * std::log10(rms) : -200.0,
+                         level_peak > 0 ? 20 * std::log10(static_cast<double>(level_peak)) : -200.0, streams.c_str());
                 level_sum = 0;
                 level_peak = 0;
                 level_frames = 0;
             }
         }
+        // The check's copy, as the device gets it.
+        if (capture) capture->add(buf.data(), period_);
         // Away from the output longer than its buffer lasts: it ran dry.
         Clock::time_point now = Clock::now();
         if (last != Clock::time_point{} && now - last > std::chrono::duration<double, std::milli>(output_->buffer_ms())) ++late_;

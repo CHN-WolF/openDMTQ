@@ -115,6 +115,10 @@ void define_track() {
         std::size_t capacity = static_cast<std::size_t>(std::max<jint>(c.i(4), t.bytes_per_frame) / t.bytes_per_frame);
         std::string name = "AudioTrack " + std::to_string(++g_tracks);
         auto s = audio::Mixer::get().open(t.rate, channel_count(t.config), encoding_of(t.format), capacity, name);
+        // What the game asked for, as a phone's audio server would report a new track.
+        jvm::log("player: %s: %d Hz, %d channel%s of %s, a buffer of %zu frames (%.1f ms)", name.c_str(), t.rate, channel_count(t.config),
+                 channel_count(t.config) == 1 ? "" : "s", t.format == 3 ? "8-bit" : t.format == 4 ? "floats" : "16-bit", capacity,
+                 1000.0 * static_cast<double>(capacity) / t.rate);
         std::lock_guard<std::mutex> l(t.lock);
         t.stream = std::move(s);
         return Value();

@@ -9,9 +9,11 @@
 
 #include <atomic>
 #include <chrono>
-#include <map>
+#include <cstdio>
 #include <cstring>
+#include <map>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -152,6 +154,85 @@ std::uint64_t on_delete(Thread& t) {
 }
 
 constexpr arm32::HostFn kHooks[kCallCount] = {&on_sourcef, &on_play, &on_playv, &on_delete};
+
+// ---- the device the game's OpenAL plays through, and the rate it mixes at
+//
+// The game's OpenAL (OpenAL Soft 1.13) has two ways out: OpenSL ES first and android.media.AudioTrack ("Android
+// Legacy") second. Its OpenSL ES one mixes at 44,100 Hz whatever it is asked (its reset sets that rate), which is what a
+// phone plays; its AudioTrack one mixes at the rate the game's context asks for, else at the 22,050 Hz its open sets.
+// The game's sound wrapper picks the device and makes the context: both calls are said in the log, with the rate the
+// device mixes at then.
+
+// ALC's names (alc.h): a device's name, its mixing rate.
+constexpr std::uint32_t kAlcDeviceSpecifier = 0x1005, kAlcFrequency = 0x1007;
+// The two calls taken over, after the four above in the stubs' numbers, and the two only called.
+enum DeviceCall { kOpenDevice, kCreateContext, kDeviceCallCount };
+const char* const kDeviceNames[kDeviceCallCount] = {"alcOpenDevice", "alcCreateContext"};
+gaddr g_device_original[kDeviceCallCount] = {};
+gaddr g_get_string = 0, g_get_integerv = 0;
+
+// A string of guest memory, up to its end or `max` bytes; "" where it cannot be read.
+std::string guest_text(gaddr at, std::uint32_t max = 256) {
+    std::string out;
+    for (std::uint32_t i = 0; i < max && at && g().proc.mem.readable(at + i, 1); ++i) {
+        const char c = static_cast<char>(*g().proc.mem.ptr<std::uint8_t>(at + i));
+        if (!c) break;
+        out += c;
+    }
+    return out;
+}
+
+// The name OpenAL gives the device, as alcGetString says it.
+std::string device_name(Thread& t, gaddr device) {
+    if (!device || !g_get_string) return "";
+    return guest_text(static_cast<gaddr>(t.call(g_get_string, {device, kAlcDeviceSpecifier})));
+}
+
+// The rate the device mixes at, as alcGetIntegerv says it (a guest word of the calling thread's own for the answer).
+int device_rate(Thread& t, gaddr device) {
+    thread_local gaddr answer = 0;
+    if (!answer) answer = g().malloc(4);
+    if (!answer || !device || !g_get_integerv) return 0;
+    *g().proc.mem.ptr<std::uint32_t>(answer) = 0;
+    t.call(g_get_integerv, {device, kAlcFrequency, 1, answer});
+    return static_cast<int>(*g().proc.mem.ptr<std::uint32_t>(answer));
+}
+
+// An attribute list (pairs up to a 0) as the log says it: "ALC_FREQUENCY 22050, 0x1010 32", or "none".
+std::string attributes_text(gaddr list) {
+    std::string out;
+    for (std::uint32_t i = 0; list && i < 64 && g().proc.mem.readable(list + i * 8, 8); ++i) {
+        const std::uint32_t key = *g().proc.mem.ptr<std::uint32_t>(list + i * 8), value = *g().proc.mem.ptr<std::uint32_t>(list + i * 8 + 4);
+        if (!key) break;
+        char part[48];
+        if (key == kAlcFrequency) std::snprintf(part, sizeof part, "%sALC_FREQUENCY %u", out.empty() ? "" : ", ", value);
+        else std::snprintf(part, sizeof part, "%s0x%x %u", out.empty() ? "" : ", ", key, value);
+        out += part;
+    }
+    return out.empty() ? "none" : out;
+}
+
+// alcOpenDevice(name): the game's own, said with the name it asked for and the device it got.
+std::uint64_t on_open_device(Thread& t) {
+    const gaddr asked = t.arg(0);
+    const gaddr device = static_cast<gaddr>(t.call(g_device_original[kOpenDevice], {asked}));
+    const std::string want = asked ? "\"" + guest_text(asked) + "\"" : "of its own choosing";
+    if (device) jvm::log("player: sound: the game's OpenAL asked for the device %s and opened \"%s\"", want.c_str(), device_name(t, device).c_str());
+    else jvm::log("player: sound: the game's OpenAL asked for the device %s and opened none", want.c_str());
+    return device;
+}
+
+// alcCreateContext(device, attributes): the game's own, said with what it asked and the rate the device mixes at then.
+std::uint64_t on_create_context(Thread& t) {
+    const gaddr device = t.arg(0), list = t.arg(1);
+    const std::string asked = attributes_text(list);
+    const std::uint64_t context = t.call(g_device_original[kCreateContext], {device, list});
+    jvm::log("player: sound: the game's OpenAL made a context on \"%s\" (attributes: %s): it mixes at %d Hz", device_name(t, device).c_str(),
+             asked.c_str(), device_rate(t, device));
+    return context;
+}
+
+constexpr arm32::HostFn kDeviceHooks[kDeviceCallCount] = {&on_open_device, &on_create_context};
 
 // ---- a song's tracks: the music on its background tracks, the effects on the tracks the player plays
 //
@@ -404,6 +485,22 @@ gaddr symbol_entry(const Symbols& s, const char* name, gaddr at) {
 // What is said once.
 void say(const char* line) { jvm::log("%s", line); }
 
+// Puts the stub for host function `number` at `at` and points the symbol `entry` of the library (load bias `bias`) at it:
+// push {r7, lr}; movw r7, #number; movt r7, #number >> 16; svc 0; pop {r7, pc}.
+void take_over(gaddr at, std::uint32_t number, arm32::HostFn fn, gaddr entry, gaddr bias) {
+    const std::uint32_t lo = number & 0xffff, hi = number >> 16;
+    const std::uint32_t stub[5] = {0xe92d4080, 0xe3007000 | ((lo & 0xf000) << 4) | (lo & 0xfff), 0xe3407000 | ((hi & 0xf000) << 4) | (hi & 0xfff),
+                                   0xef000000, 0xe8bd8080};
+    std::memcpy(g().proc.mem.host(at), stub, sizeof stub);
+    arm32::register_host_fn(number, fn);
+    // The symbol's value from now on: the stub, as the library's own bias makes it an address.
+    *g().proc.mem.ptr<std::uint32_t>(entry + 4) = at - bias;
+}
+
+// A stub's size, and where the device's two go in the page: after the four sharing ones.
+constexpr gaddr kStubBytes = 20;
+constexpr std::uint32_t kDeviceNumber = kNumber + kCallCount;
+
 }  // namespace
 
 void soundmix_library_loaded(const std::string& name, gaddr handle) {
@@ -418,6 +515,32 @@ void soundmix_library_loaded(const std::string& name, gaddr handle) {
         say("player: sound: the game's OpenAL has not the calls or the symbol table the player expects: music and effects share one control");
         return;
     }
+    // The stubs, in a page of their own.
+    const std::int64_t page = g().proc.mem.map(0, arm32::kPageSize, arm32::kProtRead | arm32::kProtExec, false, "[soundmix]");
+    if (page < 0) {
+        say("player: sound: no guest memory for its stubs: music and effects share one control");
+        return;
+    }
+    // The device and its context first, apart from the sharing: either works without the other.
+    gaddr device_at[kDeviceCallCount] = {}, device_entries[kDeviceCallCount] = {};
+    bool devices = true;
+    for (int i = 0; i < kDeviceCallCount; ++i) {
+        device_at[i] = g().dlsym(handle, kDeviceNames[i]);
+        device_entries[i] = device_at[i] ? symbol_entry(s, kDeviceNames[i], device_at[i]) : 0;
+        devices = devices && device_entries[i];
+    }
+    g_get_string = g().dlsym(handle, "alcGetString");
+    g_get_integerv = g().dlsym(handle, "alcGetIntegerv");
+    if (devices && g_get_string && g_get_integerv) {
+        for (int i = 0; i < kDeviceCallCount; ++i) {
+            g_device_original[i] = device_at[i];
+            take_over(static_cast<gaddr>(page) + static_cast<gaddr>(kCallCount + i) * kStubBytes, kDeviceNumber + static_cast<std::uint32_t>(i),
+                      kDeviceHooks[i], device_entries[i], s.bias);
+        }
+    } else {
+        say("player: sound: the game's OpenAL has not alcOpenDevice, alcCreateContext, alcGetString and alcGetIntegerv as the player expects: "
+            "its device is not said");
+    }
     gaddr entries[kCallCount] = {};
     for (int i = 0; i < kCallCount; ++i) {
         entries[i] = at[i] ? symbol_entry(s, kNames[i], at[i]) : 0;
@@ -426,23 +549,9 @@ void soundmix_library_loaded(const std::string& name, gaddr handle) {
             return;
         }
     }
-    // The stubs, in a page of their own: push {r7, lr}; movw r7, #number; movt r7, #number >> 16; svc 0; pop {r7, pc}.
-    const std::int64_t page = g().proc.mem.map(0, arm32::kPageSize, arm32::kProtRead | arm32::kProtExec, false, "[soundmix]");
-    if (page < 0) {
-        say("player: sound: no guest memory for its stubs: music and effects share one control");
-        return;
-    }
     for (int i = 0; i < kCallCount; ++i) {
-        const std::uint32_t number = kNumber + static_cast<std::uint32_t>(i);
-        const std::uint32_t lo = number & 0xffff, hi = number >> 16;
-        const std::uint32_t stub[5] = {0xe92d4080, 0xe3007000 | ((lo & 0xf000) << 4) | (lo & 0xfff), 0xe3407000 | ((hi & 0xf000) << 4) | (hi & 0xfff),
-                                       0xef000000, 0xe8bd8080};
-        const gaddr stub_at = static_cast<gaddr>(page) + static_cast<gaddr>(i) * sizeof stub;
-        std::memcpy(g().proc.mem.host(stub_at), stub, sizeof stub);
-        arm32::register_host_fn(number, kHooks[i]);
         g_original[i] = at[i];
-        // The symbol's value from now on: the stub, as the library's own bias makes it an address.
-        *g().proc.mem.ptr<std::uint32_t>(entries[i] + 4) = stub_at - s.bias;
+        take_over(static_cast<gaddr>(page) + static_cast<gaddr>(i) * kStubBytes, kNumber + static_cast<std::uint32_t>(i), kHooks[i], entries[i], s.bias);
     }
     // The shares the settings start with (the panel changes them later: soundmix_shares).
     const audio::Levels levels = audio::levels();

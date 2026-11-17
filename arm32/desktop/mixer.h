@@ -112,6 +112,9 @@ public:
     std::uint64_t underruns() const { return underruns_.load(); }
     std::uint64_t short_frames() const { return short_frames_.load(); }
     int out_rate() const { return out_rate_; }
+    // The loudest sample this stream put in the mix since the last call, after its gains (a check's trace of what each
+    // stream carries: PLAYER_TRACE_AUDIO); taking it starts over.
+    float take_peak() { return peak_.exchange(0.0f, std::memory_order_relaxed); }
 
     // The mixer's side: adds up to `frames` output frames of this stream to `out`. Not for the game's threads.
     void mix_into(float* out, std::size_t frames);
@@ -148,6 +151,8 @@ private:
     // The mixer's scratch for this stream's frames.
     std::vector<float> scratch_;
     std::atomic<std::uint64_t> written_{0}, played_{0}, underruns_{0}, short_frames_{0};
+    // The loudest sample mixed since take_peak.
+    std::atomic<float> peak_{0.0f};
 };
 
 // The computer's sound output, as the mixer writes to it.
