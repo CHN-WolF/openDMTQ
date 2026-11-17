@@ -143,24 +143,45 @@ def _session_valid(sid):
 _sessions_load()
 
 
+def owner_stamp():
+    """What an owner's session keeps of the owner's password, so that a new one (the Server page's change) ends the owner's
+    other sign-ins: a keyed hash of it, which the browser, which can read its cookie, cannot test guesses against without
+    the key the cookie is signed with."""
+    return hmac.new(core.app.secret_key, core.PASSWORD.encode("utf-8", "replace"), hashlib.sha256).hexdigest()[:20]
+
+
+def _owner_session_current():
+    """True while an owner's session was made with the owner's password as it is now. One from before sessions kept that
+    (an older version's) counts until the password is changed after it began: its start is its end less the sessions'
+    life. Called with the sessions' lock held."""
+    kept = session.get("pw")
+    if kept is not None:
+        return same_text(str(kept), owner_stamp())
+    changed_at = core.settings().get("owner_password_at")
+    until = _sessions.get(session.get("sid"), 0)
+    return not changed_at or until - core.app.permanent_session_lifetime.total_seconds() >= changed_at
+
+
 def signed_in():
     sid = session.get("sid")
     with _sessions_lock:
         if not (session.get("ok") and _session_valid(sid)):
             return False
-    # The owner's account lives in .env and lasts as long as the session. Any other admin's ends with their account,
-    # their admin rights or their password, at the next page they open.
-    if session.get("stamp") == "owner":
-        return True
+        # The owner's account lives in .env and lasts as long as the session made with its password as it is now (a new
+        # one, on the Server page, ends the others). Any other admin's ends with their account, their admin rights or
+        # their password, at the next page they open.
+        if session.get("stamp") == "owner":
+            return _owner_session_current()
     row = account_find(session.get("who", ""))
     return bool(row and row["admin"] and not row["off"] and same_text(account_stamp(row["pass"]), session.get("stamp", "")))
 
 
 def _account_ended():
-    """The session itself is still good, but the account it is for is not (disabled, deleted, a new password, a restore)."""
+    """The session itself is still good, but the account it is for is not (disabled, deleted, a new password, a restore;
+    for the owner, a new password on the Server page)."""
     sid = session.get("sid")
     with _sessions_lock:
-        return bool(session.get("ok") and _session_valid(sid) and session.get("stamp") != "owner")
+        return bool(session.get("ok") and _session_valid(sid) and (session.get("stamp") != "owner" or not _owner_session_current()))
 
 
 def _prune(now):
@@ -279,12 +300,18 @@ def account_table(con):
     """The accounts' table as it is now: made when there is none, and the game player's column added to one made before
     it (a database from before, or restored from an older backup)."""
     con.execute(ACCOUNT_TABLE)
-    if "guid" not in {r[1] for r in con.execute("PRAGMA table_info(SiteUser)")}:
+    have = {r[1] for r in con.execute("PRAGMA table_info(SiteUser)")}
+    if "guid" not in have:
         con.execute("ALTER TABLE SiteUser ADD COLUMN guid INTEGER")
+    # The moment from which the account's sign-ins to the site count (MY PAGE's Sign out everywhere else, which the site
+    # writes): a table from before it gets it empty, and every sign-in counts. The server's start adds it too
+    # (server/game/bin/setup-db.php).
+    if "signed_out_at" not in have:
+        con.execute("ALTER TABLE SiteUser ADD COLUMN signed_out_at INTEGER")
 
 
-# The accounts' columns: what a restore copies of each (put_accounts), guid with them.
-ACCOUNT_COLUMNS = ("name", "pass", "note", "admin", "created_at", "signed_in_at", "off", "guid")
+# The accounts' columns: what a restore copies of each (put_accounts), guid and the sign-out moment with them.
+ACCOUNT_COLUMNS = ("name", "pass", "note", "admin", "created_at", "signed_in_at", "off", "guid", "signed_out_at")
 
 
 def put_accounts(con, rows):
@@ -411,6 +438,9 @@ def login():
             session.permanent = True
             sid = session_begin()
             session.update(ok=True, sid=sid, csrf=secrets.token_urlsafe(24), who=who[0], stamp=who[1])
+            # The owner's: what of the owner's password it was made with, which a new one ends (owner_stamp()).
+            if who[1] == "owner":
+                session["pw"] = owner_stamp()
             # When an account last came in, for the list of accounts (the owner's is not in it).
             if who[1] != "owner":
                 try:

@@ -31,9 +31,12 @@ ACCOUNT_TABLE = """CREATE TABLE IF NOT EXISTS SiteUser (name TEXT PRIMARY KEY CO
                    note TEXT NOT NULL DEFAULT '', admin INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
                    signed_in_at INTEGER, off INTEGER NOT NULL DEFAULT 0)"""
 ACCOUNT_GUID = "ALTER TABLE SiteUser ADD COLUMN guid INTEGER"
+# The moment from which an account's sign-ins to the site count (MY PAGE's Sign out everywhere else), which the server's
+# start and the admin pages add to an older table the same way.
+ACCOUNT_SIGNED_OUT = "ALTER TABLE SiteUser ADD COLUMN signed_out_at INTEGER"
 
 # What is copied of each account, as the admin pages' restore copies it (auth.ACCOUNT_COLUMNS there).
-ACCOUNT_COLUMNS = ("name", "pass", "note", "admin", "created_at", "signed_in_at", "off", "guid")
+ACCOUNT_COLUMNS = ("name", "pass", "note", "admin", "created_at", "signed_in_at", "off", "guid", "signed_out_at")
 
 
 def tokens_now(live):
@@ -98,7 +101,7 @@ def accounts_now(live):
 
 def keep_accounts(live, restored):
     """Gives the restored database the live one's accounts, and only them: the table made when it has none, with the game
-    player's column. Returns how many were kept, or None when the backup's stay (accounts_now)."""
+    player's column and the sign-out moment's. Returns how many were kept, or None when the backup's stay (accounts_now)."""
     rows = accounts_now(live)
     if rows is None:
         return None
@@ -109,11 +112,16 @@ def keep_accounts(live, restored):
     try:
         with con:
             con.execute(ACCOUNT_TABLE)
-            if "guid" not in {r[1] for r in con.execute("PRAGMA table_info(SiteUser)")}:
+            have = {r[1] for r in con.execute("PRAGMA table_info(SiteUser)")}
+            if "guid" not in have:
                 con.execute(ACCOUNT_GUID)
+            # The sign-out moment's column too, for a restored table from before it.
+            if "signed_out_at" not in have:
+                con.execute(ACCOUNT_SIGNED_OUT)
             # The backup's own accounts go: who may sign in, and with which password, is today's.
             con.execute("DELETE FROM SiteUser")
-            # Each account with the columns it came with: a live table without guid leaves it empty (not linked).
+            # Each account with the columns it came with: a live table without guid leaves it empty (not linked), one
+            # without the sign-out moment leaves that empty (every sign-in counts).
             con.executemany(f"INSERT INTO SiteUser ({', '.join(ACCOUNT_COLUMNS)}) VALUES ({', '.join('?' for _ in ACCOUNT_COLUMNS)})",
                             [tuple(r.get(c) for c in ACCOUNT_COLUMNS) for r in rows])
     except sqlite3.DatabaseError:

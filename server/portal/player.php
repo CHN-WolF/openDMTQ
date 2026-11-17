@@ -32,22 +32,6 @@ if ($me && has_playlog($db)) {
     }
 }
 
-/* Song and chart cells for a pattern id. $when, a play's time, joins the chart under the title,
-   where phones show both instead of their own columns. */
-function chart_cells(int $pid, array $charts, array $songs, string $when = ''): string
-{
-    [$sid, $line, $diff, $sig] = $charts[$pid] ?? [0, 0, 0, 0];
-    $song = $songs[$sid] ?? null;
-    $at = $when !== '' ? h($when) : '';
-    if (!$song) {
-        return '<td class="jk">' . row_jacket(null) . '</td><td class="song-cell">' . t('player.chart', ['id' => $pid]) . ($at ? '<span class="chart-sub">' . $at . '</span>' : '') . '</td><td class="chart"></td>';
-    }
-    // The chart has its own column, and goes under the title on phones.
-    $label = h(chart_label($line, $diff, $sig));
-    return '<td class="jk">' . row_jacket($song) . '</td><td class="song-cell"><a href="song.php?id=' . $sid . '&amp;chart=' . $pid . '">' . h(song_title($song)) . '</a>'
-        . '<span class="chart-sub">' . $label . ($at ? ' · ' . $at : '') . '</span></td><td class="chart">' . $label . '</td>';
-}
-
 // How they have been playing: plays per day over the last twelve weeks, and their records by LINE mode.
 $weeks = 12;
 $days_back = [];

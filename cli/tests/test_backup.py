@@ -253,6 +253,10 @@ class RealDatabaseTest(unittest.TestCase):
         made = re.search(r'ACCOUNT_TABLE = """(.*?)"""', pages, re.S).group(1)
         self.assertEqual(words(keep_tokens.ACCOUNT_TABLE)[:-1] + ", guid INTEGER)", words(made))
         self.assertIn(f'"{keep_tokens.ACCOUNT_GUID}"', pages)
+        # The sign-out moment's column, which all three add to an older table in the same words.
+        self.assertIn(f'"{keep_tokens.ACCOUNT_SIGNED_OUT}"', pages)
+        with open(os.path.join(REPO, "server", "game", "bin", "setup-db.php"), encoding="utf-8") as f:
+            self.assertIn(f"'{keep_tokens.ACCOUNT_SIGNED_OUT}'", f.read())
         self.assertIn(f"ACCOUNT_COLUMNS = {keep_tokens.ACCOUNT_COLUMNS!r}".replace("'", '"'), pages)
 
     def test_the_tokens_table_is_the_one_the_server_makes(self):

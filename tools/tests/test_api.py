@@ -646,6 +646,13 @@ def CASES():
         C("server_port", "POST", "/server/port", 200, setup=port_free_host, json={"port": 8792},
           check=lambda t, inst, r: t.assertIn("LISTEN_PORT=8792", open(inst.path(".env"), encoding="utf-8").read())),
         C("server_port", "POST", "/server/port", 409, "by_command", json={"port": 8792}),
+        # The owner's password: written to .env and taken at once on a host install; the command line's elsewhere; one .env
+        # would read as something else refused.
+        C("server_password", "POST", "/server/password", 200, setup=host_install, json={"password": "Xk3vQ9pLm2Rt7w"},
+          check=lambda t, inst, r: t.assertIn("ADMIN_PASSWORD=Xk3vQ9pLm2Rt7w\n", open(inst.path(".env"), encoding="utf-8").read())),
+        C("server_password", "POST", "/server/password", 409, "by_command", json={"password": "Xk3vQ9pLm2Rt7w"}),
+        C("server_password", "POST", "/server/password", 400, "bad_password", setup=host_install, json={"password": "Xk3vQ9pL$m2Rt7w"}),
+        C("server_password", "POST", "/server/password", 403, "read_only", token="reader", json={"password": "Xk3vQ9pLm2Rt7w"}),
         C("server_repair", "POST", "/server/repair", 202, setup=no_rebuild),
         C("server_repair", "POST", "/server/repair", 403, "read_only", token="reader"),
         C("server_data_get", "GET", "/server/data", 200,
@@ -2115,6 +2122,7 @@ PAGE_ACTIONS = {
     "server_page?job": ["job_get"],
     "server_restart": ["server_restart"],
     "server_port": ["server_port"],
+    "server_password": ["server_password"],
     "server_repair": ["server_repair"],
     "server_delete": ["server_data_delete"],
     "server_uninstall": ["server_uninstall"],
@@ -2235,8 +2243,10 @@ SITE_PAGES = {
     "client.php": ["status_health", "app_get", "site_link", "site_player", "site_player_records"],
     "lang.php": "the site's language switch: the API answers in English",
     "notfound.php": "the site's page for an address that leads nowhere",
+    "me.php": "a signed-in player's own page and account, and its JSON twin (me.php?json), by the site's cookie: the API's GET "
+              "/site/players/{player} and its records give the same of any player, and an account's changes are the Accounts page's",
 }
-SITE_LIBRARIES = {"lib.php", "live_lib.php", "ranking_lib.php", "auth.php", "strings.php"}
+SITE_LIBRARIES = {"lib.php", "live_lib.php", "ranking_lib.php", "auth.php", "strings.php", "me_lib.php"}
 
 # The page each template is, for its forms without an address of their own (they post to the page).
 TEMPLATE_PAGES = {"accounts.html": "accounts_page", "app.html": "app_page", "backups.html": "backups_page", "dashboard.html": "dashboard",
@@ -2315,9 +2325,12 @@ GET_ARGS = {
     "client.php?about": ("view", "status_health"),
     "client.php?signin": "the PC client's sign-in by the site's cookie: the API takes a token instead",
     "client.php?app": ("view", "app_get"),
-    "client.php?link": "the PC client's one-time sign-in link, by the site's cookie: POST /site/link makes one by a token",
-    "client.php?records": ("view", "site_player", "site_player_records"),
-    "login.php?once": "a one-time sign-in link opened in a browser: the API takes a token instead",
+    "me.php?tab": "a signed-in player's own page's tabs, which its JSON twin takes too: the API's site routes give any player's",
+    "me.php?page": "a page of a signed-in player's own plays or records, by the site's cookie: the API's site routes page any player's",
+    "me.php?json": "MY PAGE's JSON twin, for a script with the site's cookie: the API takes a token instead",
+    "me.php?do": "a change a signed-in player makes to their own account (password, ID, sign out everywhere else): the API's "
+                 "Accounts routes make an admin's",
+    "me.php?done": "the change MY PAGE says was just made, after its form",
     "lang.php?to": "the site's language: the API answers in English",
     "lang.php?next": "the page a browser goes back to after the language switch",
 }

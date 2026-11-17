@@ -264,6 +264,18 @@ $db->exec('DELETE FROM PlayerPurchase WHERE at < ' . (time() - 365 * 86400));
 $db->exec("CREATE TABLE IF NOT EXISTS SiteUser (name TEXT PRIMARY KEY COLLATE NOCASE, pass TEXT NOT NULL,
            note TEXT NOT NULL DEFAULT '', admin INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
            signed_in_at INTEGER, off INTEGER NOT NULL DEFAULT 0)");
+// The moment from which an account's sign-ins to the site count: its owner's Sign out everywhere else on MY PAGE
+// (portal/me_lib.php) sets it, and a sign-in made before it no longer counts (portal/auth.php site_user()). A table from
+// before it gets the column, empty in every row: every sign-in counts. Silenced: another start at the same moment may have
+// added it first. The admin pages add it the same way (account_table()), for a database restored while the server runs.
+$site_columns = [];
+$found = @$db->query('PRAGMA table_info(SiteUser)');
+while ($found && ($column = $found->fetchArray(SQLITE3_ASSOC))) {
+    $site_columns[] = $column['name'];
+}
+if (!in_array('signed_out_at', $site_columns, true)) {
+    @$db->exec('ALTER TABLE SiteUser ADD COLUMN signed_out_at INTEGER');
+}
 // The admin pages' API tokens, made on their Accounts page: only a hash of each, with whose it is. The game and the site
 // never read it. The same statement as TOKEN_TABLE in the admin pages (tokens.py).
 $db->exec('CREATE TABLE IF NOT EXISTS ApiToken (id TEXT PRIMARY KEY, name TEXT NOT NULL, scope TEXT NOT NULL,

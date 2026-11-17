@@ -1401,6 +1401,27 @@ class ChangeLogPageTest(unittest.TestCase):
                     owner = {"start": "game_settings", "unban": "player_game"}.get(action, owner) if page == "player_action" else owner
                     self.assertIn(f"{owner}:{action}", admin.logs.CHANGE_WORDS, name)
 
+    def test_every_change_the_site_notes_has_its_words(self):
+        # MY PAGE writes its own lines into the log of changes (server/portal/me_lib.php, me_note()): each of its codes has
+        # words in both languages, as the pages' own do, and the Logs page reads them (ADM-125).
+        site = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "server", "portal", "me_lib.php")
+        if not os.path.isfile(site):
+            self.skipTest("the portal is not at hand")
+        with open(site, encoding="utf-8") as f:
+            codes = set(re.findall(r"me_note\('([a-z]+:[a-z-]+)'", f.read()))
+        self.assertEqual(codes, {"site:password", "site:id", "site:signout"})
+        for code in codes:
+            for lang in ("en", "ko"):
+                self.assertIn(admin.logs.CHANGE_WORDS[code], admin.strings.STRINGS[lang], code)
+        # A line as MY PAGE writes it, read back on the Logs page in the reader's words.
+        with Install() as install:
+            with open(install.path("state/changes.log"), "a", encoding="utf-8") as f:
+                f.write(json.dumps({"at": int(time.time()), "what": "site:id", "target": "dmtq > sena", "named": True, "who": "sena"}) + "\n")
+            install.sign_in()
+            page = install.client.get("/opendmtq/admin/logs?tab=changes").get_data(as_text=True)
+            self.assertIn("Changed their ID on the site", page)
+            self.assertIn("dmtq &gt; sena", page)
+
     def test_every_change_the_code_notes_has_its_words(self):
         # Every changed() call in the admin's modules, read from their source: the code it notes, or the codes a code made
         # of a value can be (that value's every case named here, where the code takes them from), each in CHANGE_WORDS
@@ -3055,7 +3076,7 @@ class FormChecksTest(unittest.TestCase):
                     self.assertIn("novalidate", form.group(1), f"{name}: {field}")
                     self.assertRegex(field, r"""data-bad="\{\{ tp\('[\w.]+'\) \}\}\"""", f"{name}: {field}")
         # The sign-in's two, the account's ID and passwords, a token's name, the setup's ID, the other address, the two
-        # files, the recordings' limits, the plays' days, the Server page's new port, and the site's notice with its end:
+        # files, the recordings' limits, the plays' days, the Server page's new port and the owner's new password twice:
         # none of them left out.
         self.assertEqual(checked, 17)
 

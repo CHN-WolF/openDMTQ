@@ -63,8 +63,9 @@ function dl_key(): string
     return $key;
 }
 
-/* An account by its ID, whatever the letter case: ['name', 'pass', 'off', 'admin', 'guid'] as the admin pages keep it
-   (their Accounts page makes them; nobody makes their own), or null. */
+/* An account by its ID, whatever the letter case: ['name', 'pass', 'off', 'admin', 'guid', 'signed_out_at'] as the admin
+   pages keep it (their Accounts page makes them; nobody makes their own), or null. signed_out_at: the moment its owner
+   pressed Sign out everywhere else on MY PAGE (null before), sign-ins made before which no longer count. */
 function site_account(string $name): ?array
 {
     // The owner's account, from .env (the admin pages write its ID and password, as this table keeps one, beside the
@@ -78,9 +79,12 @@ function site_account(string $name): ?array
         return null;
     }
     // With its admin rights (guesses at such an account's password count for the whole server, dl_attempt_begin()
-    // below) and the game player it is linked to; a table from before the link has no such column yet (the
-    // admin pages add it), and then no player.
-    $q = @$db->prepare('SELECT name, pass, off, admin, guid FROM SiteUser WHERE name = :name') ?: @$db->prepare('SELECT name, pass, off, admin, NULL AS guid FROM SiteUser WHERE name = :name');
+    // below), the game player it is linked to and the moment from which its sign-ins count. A table from before the link
+    // has no such column yet (the admin pages add it), and then no player; one from before Sign out everywhere else has
+    // no moment (the server's start adds it, bin/setup-db.php), and then every sign-in counts.
+    $q = @$db->prepare('SELECT name, pass, off, admin, guid, signed_out_at FROM SiteUser WHERE name = :name')
+        ?: @$db->prepare('SELECT name, pass, off, admin, guid, NULL AS signed_out_at FROM SiteUser WHERE name = :name')
+        ?: @$db->prepare('SELECT name, pass, off, admin, NULL AS guid, NULL AS signed_out_at FROM SiteUser WHERE name = :name');
     if (!$q) {
         // No table yet: no accounts.
         return null;
@@ -100,10 +104,28 @@ function site_owner(): ?array
         $owner = null;
         $lines = @file(odq_state_dir() . '/owner.pass', FILE_IGNORE_NEW_LINES);
         if (is_array($lines) && count($lines) >= 2 && preg_match('/^[A-Za-z0-9._-]{1,40}$/', $lines[0]) && strpos($lines[1], 'pbkdf2_sha256$') === 0) {
-            $owner = ['name' => $lines[0], 'pass' => $lines[1], 'off' => 0, 'admin' => 1, 'guid' => null];
+            $owner = ['name' => $lines[0], 'pass' => $lines[1], 'off' => 0, 'admin' => 1, 'guid' => null, 'signed_out_at' => owner_signed_out_at()];
         }
     }
     return $owner;
+}
+
+// Where the moment the owner pressed Sign out everywhere else on MY PAGE is kept: the owner's account has no row in the
+// accounts' table to keep it in (it lives in .env), so a small file beside the database holds it.
+const OWNER_SIGNED_OUT = 'owner-signed-out';
+
+/* The moment the owner's sign-ins count from (Sign out everywhere else), or null when the owner never pressed it. */
+function owner_signed_out_at(): ?int
+{
+    $at = trim((string)@file_get_contents(odq_state_dir() . '/' . OWNER_SIGNED_OUT));
+    return ctype_digit($at) ? (int)$at : null;
+}
+
+/* When this browser's sign-in was made, from its cookie's end (dl_cookie() makes it DL_DAYS from then): null without one. */
+function dl_signed_in_at(): ?int
+{
+    $c = (string)($_COOKIE[DL_COOKIE] ?? '');
+    return preg_match('/^(\d{10})\./', $c, $m) ? (int)$m[1] - DL_DAYS * 86400 : null;
 }
 
 /* Whether $password is the one kept as $stored: PBKDF2-SHA256, as the admin pages write it (account_hash()). */
@@ -157,17 +179,21 @@ function dl_mac(string $expires, string $name, string $pass): string
 }
 
 /* The account this browser is signed in as, or null: a cookie that has not run out, of an account that is there and on,
-   signed with its password as it is now. Worked out once per page. */
-function site_user(): ?string
+   signed with its password as it is now, made since the account's Sign out everywhere else. Worked out once per page;
+   $again works it out anew (MY PAGE, after a change that made this browser's cookie again). */
+function site_user(bool $again = false): ?string
 {
     static $who = false;
-    if ($who === false) {
+    if ($who === false || $again) {
         $who = null;
         $c = (string)($_COOKIE[DL_COOKIE] ?? '');
         if (dl_key() !== '' && preg_match('/^(\d{10})\.((?:[0-9a-f]{2}){3,20})\.([0-9a-f]{64})$/', $c, $m) && (int)$m[1] >= time()) {
             $row = site_account((string)hex2bin($m[2]));
-            // A banned player's account is signed out, as one switched off is.
-            if ($row && !$row['off'] && hash_equals(dl_mac($m[1], (string)$row['name'], (string)$row['pass']), $m[3]) && site_ban($row) === null) {
+            // When this sign-in was made: the cookie's end less its days. One made before Sign out everywhere else was
+            // pressed for the account no longer counts.
+            $made = (int)$m[1] - DL_DAYS * 86400;
+            $since = $row && $row['signed_out_at'] !== null ? (int)$row['signed_out_at'] : 0;
+            if ($row && !$row['off'] && $made >= $since && hash_equals(dl_mac($m[1], (string)$row['name'], (string)$row['pass']), $m[3])) {
                 $who = (string)$row['name'];
             }
         }
@@ -208,16 +234,29 @@ function require_sign_in(bool $json = false): void
     exit;
 }
 
-/* Mark this browser as signed in to the account $name (as site_check() gave it), and note when, for the owner's list. */
-function dl_sign_in(string $name): void
+/* This browser's cookie for the account $name, as the account is now: made again after its password or its ID changed on
+   MY PAGE, so that this browser stays signed in while every other one's sign-in ends. False when there is no such account. */
+function dl_cookie(string $name): bool
 {
     $row = site_account($name);
     if (!$row) {
-        return;
+        return false;
     }
     $expires = (string)(time() + DL_DAYS * 86400);
     setcookie(DL_COOKIE, $expires . '.' . bin2hex((string)$row['name']) . '.' . dl_mac($expires, (string)$row['name'], (string)$row['pass']),
         ['expires' => (int)$expires, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => visit_is_https()]);
+    // The rest of this request reads the new cookie as the browser will send it: MY PAGE's answer shows the account as it is.
+    $_COOKIE[DL_COOKIE] = $expires . '.' . bin2hex((string)$row['name']) . '.' . dl_mac($expires, (string)$row['name'], (string)$row['pass']);
+    return true;
+}
+
+/* Mark this browser as signed in to the account $name (as site_check() gave it), and note when, for the owner's list. */
+function dl_sign_in(string $name): void
+{
+    $row = site_account($name);
+    if (!$row || !dl_cookie((string)$row['name'])) {
+        return;
+    }
     // A database this page cannot write does not stop the sign-in.
     try {
         $db = new SQLite3(DB);

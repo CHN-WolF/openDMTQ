@@ -1371,8 +1371,8 @@ body.signed-out:has(.door) .bar .logo { visibility: hidden; }
 .who-text { display: grid; gap: 1px; min-width: 0; max-width: 12em; line-height: 1.2; }
 .who-name { font-size: var(--t-sm); font-weight: 700; color: #fff; overflow-wrap: anywhere; transition: color var(--quick); }
 .who-sub { font-size: var(--t-2xs); font-weight: 500; color: var(--ash); overflow-wrap: anywhere; }
-/* Leading to the player's own page (an account linked to its game player): the name takes the section's colour under the
-   pointer and the badge brightens. */
+/* Leading to MY PAGE, the account's own page: the name takes the section's colour under the pointer and the badge
+   brightens. */
 a.auth-who:hover .who-name { color: var(--accent); }
 a.auth-who:hover .who-badge { filter: brightness(1.08) saturate(1.1); }
 a.auth-who:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; border-radius: 6px; }
@@ -1820,3 +1820,75 @@ table.board.parts td.name a::after { content: none; }
 html:not(.notice-closed) .site-notice ~ .stage { --bar-h: 0px; }
 
 /* ---------------------------------------------------------------------- MY PAGE (me.php) */
+
+/* Who the page is about, as the game's lobby shows a player: a big round badge with the first letter of the name in the
+   section's light, the name, the account's ID under it, their places as the game's point boxes, and the way to what
+   others see of them. On a phone the places and the way on take the card's width under the name. */
+.me-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px 20px; }
+.me-badge {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font: 800 30px/1 var(--display);
+  color: var(--accent-ink);
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--accent) 55%, #fff), var(--accent) 58%, color-mix(in srgb, var(--accent) 72%, #000));
+  box-shadow: 0 0 0 3px var(--deck), 0 0 0 4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.me-who { min-width: 0; }
+.me-who h2 { margin: 0; font-size: clamp(22px, 3vw, 32px); line-height: 1.15; letter-spacing: -0.02em; }
+.me-who .meta { margin: 4px 0 0; }
+.me-places { grid-template-columns: repeat(3, max-content); gap: 6px 30px; }
+.me-places .num { font-size: clamp(24px, 3vw, 32px); }
+/* The way to the public page under the name, with what it shows beside it. */
+.me-public { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0; }
+.me-unlinked { grid-column: 2 / -1; margin: 0; }
+@media (max-width: 860px) {
+  .me-head { grid-template-columns: auto minmax(0, 1fr); }
+  .me-places, .me-public, .me-unlinked { grid-column: 1 / -1; }
+  .me-places { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 14px; }
+}
+@media (max-width: 520px) { .me-places > .stat:last-child:nth-child(odd) { grid-column: auto; } }
+/* What the game keeps for the player: its figures as counters, three to a row (two on a phone), then the in-game items
+   one to a line, each with its level at the line's end. */
+.me-game { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.me-game .num { font-size: 26px; }
+.me-items { display: grid; gap: 6px; margin: 18px 0 0; padding: 0; list-style: none; }
+.me-items li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 12px; background: var(--rail); }
+.me-items b { font: 800 var(--t-md)/1.2 var(--display); color: #fff; white-space: nowrap; }
+.me-game + .me-items + .meta { margin-top: 12px; }
+/* The achievements held, newest first: what each asked for, its points and its day, a line between them; two columns
+   where there is room for both. */
+.me-ach { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); column-gap: 28px; margin: 0; padding: 0; list-style: none; }
+.me-ach li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 4px 14px; padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.075); }
+.me-ach-words { color: var(--chalk); overflow-wrap: anywhere; }
+.me-ach-points { font: 800 var(--t-sm)/1 var(--display); color: #fff; white-space: nowrap; }
+.me-ach .meta-inline { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* A broadcast's state as the bar says the server's: a light by the words, red on air (LIVE's colour), the game's green
+   while the switch is on, grey while it is off. */
+.me-state { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-weight: 700; color: #fff; }
+.me-state i { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--ash); }
+.me-state.on i { background: var(--bad); box-shadow: 0 0 7px var(--bad); }
+.me-state.wait i { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
+.me-casts .meta { margin: 6px 0 0; }
+/* Everything the site keeps about the account: a name and its value on each line, a thin line between them; on a phone
+   the name over its value. */
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 28px; margin: 0; }
+.facts dt, .facts dd { margin: 0; padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.075); }
+.facts > :nth-child(-n + 2) { border-top: 0; padding-top: 0; }
+.facts dt { color: var(--ash); font-size: var(--t-sm); }
+.facts dd { min-width: 0; color: var(--chalk); overflow-wrap: anywhere; }
+.facts + .meta { margin-top: 14px; }
+@media (max-width: 520px) {
+  .facts { grid-template-columns: minmax(0, 1fr); }
+  .facts dd { border-top: 0; padding-top: 2px; }
+  .facts > :nth-child(2) { padding-top: 2px; }
+}
+/* The account's forms in the sign-in's look: one field under the other, each with its mark at its left (a person for the
+   ID, a lock for a password) and Show inside a password; what is wrong under the field. */
+.me-form { display: grid; gap: 14px; max-width: 460px; margin: 16px 0 0; }
+.me-form .field input { padding-left: 44px; }
+.me-form .meta, .me-form .btn-line { margin: 0; }
+/* A page's way to the next page of a long list (as the admin pages' Plays tab has it). */
+.pager { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 14px 0 0; }

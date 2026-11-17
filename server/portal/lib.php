@@ -748,8 +748,9 @@ function lang_switch(): string
         $who = site_user();
         // Whose account it is, as the game's lobby shows a player: a round badge with the first letter of the name, then
         // the name and, small under it, the place in the rankings and the account's ID (an owner may have several
-        // accounts). An account linked to its game player shows that player and leads to their page; any other shows its
-        // ID alone. Not a key: the way out beside it is the only key there. A phone has room for the badge alone.
+        // accounts). An account linked to its game player shows that player; any other shows its ID alone. Either leads
+        // to MY PAGE (me.php), the account's own page. Not a key: the way out beside it is the only key there. A phone has
+        // room for the badge alone.
         $me = $who !== null ? site_me() : null;
         $db = $me !== null ? db() : null;
         $fig = $db ? player_figures($db, $me) : null;
@@ -758,12 +759,12 @@ function lang_switch(): string
         $badge = '<span class="who-badge" aria-hidden="true">' . h($first !== '' ? $first : '?') . '</span>';
         $sub = $fig ? '<span class="who-sub">' . ($fig['rank'] ? h(tp('player.rank_short', ['n' => $fig['rank']])) . ' · ' : '') . h((string)$who) . '</span>' : '';
         $text = '<span class="who-text"><span class="who-name">' . h($name) . '</span>' . $sub . '</span>';
-        // Its words again beside it, for the badge alone (below 1100 px): under a pointer and on the keyboard's focus, and on
-        // a finger's press where the badge leads nowhere (tips.js). The badge that leads to the player's page goes there
-        // when pressed, and that page says the same.
+        // Its words again beside it, for the badge alone (below 1100 px): under a pointer and on the keyboard's focus
+        // (tips.js). Pressed, it goes to MY PAGE, which says the same at its top. Its name for a screen reader says where it
+        // leads.
         $title = h($name . ($fig ? ' · ' . ($fig['rank'] ? t('player.rank_short', ['n' => $fig['rank']]) . ' · ' : '') . $who : ''));
-        $label = $fig ? '<a class="auth-who" href="/opendmtq/player.php?id=' . $me . '" aria-label="' . h($name) . '" data-tip="' . $title . '">' . $badge . $text . '</a>'
-                      : '<span class="auth-who" data-tip="' . $title . '" tabindex="0">' . $badge . $text . '</span>';
+        $label = '<a class="auth-who" href="/opendmtq/me.php" aria-label="' . h(tp('me.open', ['name' => $name])) . '" data-tip="' . $title . '"'
+            . (basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) === 'me.php' ? ' aria-current="page"' : '') . '>' . $badge . $text . '</a>';
         $out .= $who !== null
             ? '<form class="auth-form" method="post" action="/opendmtq/login.php?logout=1">' . $label . '<button class="auth">' . t('nav.signout') . '</button></form>'
             : '<a class="auth sign-in" href="/opendmtq/login.php?next=' . $back . '">' . t('nav.signin') . '</a>';
@@ -1073,6 +1074,22 @@ function keys_count_mark(int $n): string
     }
     $words = h(tp('mark.keys_in', ['n' => $n]));
     return '<span class="keys-mark" role="img" aria-label="' . $words . '" data-tip="' . $words . '" tabindex="0"></span>';
+}
+
+/* Song and chart cells for a pattern id, in a list of plays or records (a player's public page, MY PAGE). $when, a play's
+   time, joins the chart under the title, where phones show both instead of their own columns. */
+function chart_cells(int $pid, array $charts, array $songs, string $when = ''): string
+{
+    [$sid, $line, $diff, $sig] = $charts[$pid] ?? [0, 0, 0, 0];
+    $song = $songs[$sid] ?? null;
+    $at = $when !== '' ? h($when) : '';
+    if (!$song) {
+        return '<td class="jk">' . row_jacket(null) . '</td><td class="song-cell">' . t('player.chart', ['id' => $pid]) . ($at ? '<span class="chart-sub">' . $at . '</span>' : '') . '</td><td class="chart"></td>';
+    }
+    // The chart has its own column, and goes under the title on phones.
+    $label = h(chart_label($line, $diff, $sig));
+    return '<td class="jk">' . row_jacket($song) . '</td><td class="song-cell"><a href="song.php?id=' . $sid . '&amp;chart=' . $pid . '">' . h(song_title($song)) . '</a>'
+        . '<span class="chart-sub">' . $label . ($at ? ' · ' . $at : '') . '</span></td><td class="chart">' . $label . '</td>';
 }
 
 /* ---------------------------------------------------------------------- download sign-in */
