@@ -341,8 +341,9 @@ SHAPES = {
         Field("at", "integer", "When (Unix time)."),
         Field("code", "string", "What happened: gone (404: no such webhook), refused (401, 403: its address is wrong or no longer "
               "valid), bad (another 4xx: the message refused), limited (429: the chat asked to wait), server (5xx), timeout, "
-              "unreachable, redirect (the address leads elsewhere).",
-              enum=["gone", "refused", "bad", "limited", "server", "timeout", "unreachable", "redirect"]),
+              "unreachable, redirect (the address leads elsewhere), local (its name leads to the server itself or its network "
+              "link's own address).",
+              enum=["gone", "refused", "bad", "limited", "server", "timeout", "unreachable", "redirect", "local"]),
         Field("status", "integer", "The chat's HTTP status; null without an answer.", nullable=True),
         Field("message", "string", "The same in a sentence.")]),
     "WebhookList": Shape("The webhooks.", [Field("items", "[Webhook]", "Every one, the first added first.")]),
@@ -963,7 +964,8 @@ ROUTES = [
                 Field("language", "string", "The language of its messages. Left out: English.", optional=True, enum=["en", "ko"]),
                 Field("events", "[string]", "What it hears of (Webhook's events). Left out: all but live_off.", optional=True)],
           answer="WebhookAnswer", status=201,
-          errors=[(400, "bad_url", "No address of a webhook: another scheme, a name or password in it, spaces, or too long."),
+          errors=[(400, "bad_url", "No address of a webhook: another scheme, a name or password in it, spaces, too long, Discord's "
+                   "ending for GitHub's events, or the server itself or its network link's own address (loopback, link-local)."),
                   (400, "bad_events", "No events, or one this server does not know."),
                   (409, "webhook_taken", "A webhook with that address is here already.")]),
     Route("PUT", "/webhooks/{webhook}", "write", "webhook_set", "Webhooks", "Changes what a webhook hears of and its language, as the card's Save does.",

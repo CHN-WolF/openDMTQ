@@ -17,10 +17,12 @@ added (the server has no language of its own), and can be changed."""
 import calendar
 import datetime
 import http.client
+import ipaddress
 import json
 import os
 import re
 import secrets
+import socket
 import sqlite3
 import threading
 import time
@@ -52,6 +54,25 @@ DISCORD_HOSTS = {"discord.com", "discordapp.com", "ptb.discord.com", "canary.dis
 
 # The longest address taken: a Discord or Slack webhook's is about 120 characters.
 URL_MAX = 1000
+
+# The server itself and its network link's own addresses (loopback, link-local such as a cloud's metadata at
+# 169.254.169.254, the unspecified one) are no chat: a webhook there would let a test's answer say what answers on the
+# server's own ports. Refused when added and found out again when a message would go (a name may lead there). The tests'
+# stand-in chats on the loopback set this (a chat on the local network is one, and needs nothing).
+LOOPBACK_OK = False
+
+
+def own_address(address):
+    """True for an address (a string) of the server itself or of its network link: loopback, link-local, unspecified, an
+    IPv4 one of those written as IPv6."""
+    try:
+        ip = ipaddress.ip_address(address.split("%")[0])
+    except ValueError:
+        return False
+    # An IPv4 address written as IPv6 (::ffff:127.0.0.1) is that IPv4 address.
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_link_local or ip.is_unspecified
 
 # How often the loop looks, in seconds.
 EVERY = 5
@@ -103,6 +124,7 @@ LOCK = threading.RLock()
 
 # A failure's kinds, with their words (keys of strings.py, written out).
 FAIL_WORDS = {"gone": "hook.fail_gone", "refused": "hook.fail_refused", "bad": "hook.fail_bad", "limited": "hook.fail_limited",
+              "local": "hook.fail_local",
               "server": "hook.fail_server", "timeout": "hook.fail_timeout", "unreachable": "hook.fail_unreachable",
               "redirect": "hook.fail_redirect"}
 
@@ -184,6 +206,10 @@ def check_url(raw):
     # Discord's address for GitHub's events takes nothing else.
     if (parts.hostname or "").lower() in DISCORD_HOSTS and pieces_of(url)[1][-1:] == ["github"]:
         raise Refused(400, "bad_url", t("hook.github"))
+    # The server itself, by its name or its numbers, or its network link's own addresses.
+    host = (parts.hostname or "").lower()
+    if not LOOPBACK_OK and (host == "localhost" or host.endswith(".localhost") or own_address(host)):
+        raise Refused(400, "bad_url", t("hook.local"))
     return url
 
 
@@ -516,6 +542,16 @@ _opener = urllib.request.build_opener(_NoRedirect)
 def post(url, body, timeout=TIMEOUT):
     """Sends one body to a chat. {"ok", "status", "code", "retry_after"}: whether it took it, the HTTP status (None without an
     answer), the kind of failure (FAIL_WORDS) and, when the chat asked to wait, for how many seconds."""
+    # Where the name leads now: not to the server itself or its network link (a name can lead anywhere, and change).
+    parts = urllib.parse.urlsplit(url)
+    if not LOOPBACK_OK:
+        try:
+            found = socket.getaddrinfo(parts.hostname or "", parts.port or (443 if parts.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+        except (OSError, UnicodeError) as e:
+            app.logger.warning("webhook: %s: %s", masked(url), e)
+            return {"ok": False, "status": None, "code": "unreachable", "retry_after": None}
+        if any(own_address(str(info[4][0])) for info in found):
+            return {"ok": False, "status": None, "code": "local", "retry_after": None}
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST", headers={
         "Content-Type": "application/json; charset=utf-8",
@@ -952,7 +988,7 @@ def settle(con, row, me, result, now):
     if result["ok"]:
         con.execute("UPDATE WebhookMessage SET state = 'sent', done_at = ?, claim = NULL WHERE id = ? AND claim = ?", (int(now), row["id"], me))
         return
-    stop = result["code"] in ("gone", "refused", "bad", "redirect") or (result["code"] != "limited" and row["tries"] + 1 > len(BACKOFF))
+    stop = result["code"] in ("gone", "refused", "bad", "redirect", "local") or (result["code"] != "limited" and row["tries"] + 1 > len(BACKOFF))
     if stop:
         con.execute("UPDATE WebhookMessage SET state = 'failed', done_at = ?, claim = NULL, tries = tries + 1 WHERE id = ? AND claim = ?",
                     (int(now), row["id"], me))

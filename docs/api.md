@@ -705,7 +705,7 @@ Answer: `201` with [WebhookAnswer](#webhookanswer).
 
 Refusals:
 
-- `400 bad_url`: No address of a webhook: another scheme, a name or password in it, spaces, or too long.
+- `400 bad_url`: No address of a webhook: another scheme, a name or password in it, spaces, too long, Discord's ending for GitHub's events, or the server itself or its network link's own address (loopback, link-local).
 - `400 bad_events`: No events, or one this server does not know.
 - `409 webhook_taken`: A webhook with that address is here already.
 
@@ -2530,7 +2530,7 @@ A chat the server sends messages to, through its webhook.
 A message a chat did not take.
 
 - `at` (integer): When (Unix time).
-- `code` (string): What happened: gone (404: no such webhook), refused (401, 403: its address is wrong or no longer valid), bad (another 4xx: the message refused), limited (429: the chat asked to wait), server (5xx), timeout, unreachable, redirect (the address leads elsewhere). One of `gone`, `refused`, `bad`, `limited`, `server`, `timeout`, `unreachable`, `redirect`.
+- `code` (string): What happened: gone (404: no such webhook), refused (401, 403: its address is wrong or no longer valid), bad (another 4xx: the message refused), limited (429: the chat asked to wait), server (5xx), timeout, unreachable, redirect (the address leads elsewhere), local (its name leads to the server itself or its network link's own address). One of `gone`, `refused`, `bad`, `limited`, `server`, `timeout`, `unreachable`, `redirect`, `local`.
 - `status` (integer, or null): The chat's HTTP status; null without an answer.
 - `message` (string): The same in a sentence.
 

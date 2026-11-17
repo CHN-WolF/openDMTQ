@@ -85,6 +85,9 @@ class Server(Install):
 
     def __enter__(self):
         super().__enter__()
+        # The stand-in chat is on this machine's loopback, which a real webhook may not be.
+        self._loopback = mock.patch.object(webhooks, "LOOPBACK_OK", True)
+        self._loopback.start()
         songs_json(self)
         self._content = mock.patch.object(admin.songs, "CONTENT", self.path("content"))
         self._content.start()
@@ -103,6 +106,7 @@ class Server(Install):
     def __exit__(self, *exc):
         self.chat.close()
         self._content.stop()
+        self._loopback.stop()
         return super().__exit__(*exc)
 
     def play(self, guid, pattern, score, judgement=900, at=None):
@@ -153,8 +157,22 @@ class Server(Install):
 class AddressTest(unittest.TestCase):
     """What a webhook's address may be, its format by its host, and how the pages show it (ADM-120)."""
 
-    def test_an_address_of_a_webhook_is_taken_and_anything_else_refused(self):
+    def test_this_servers_own_and_link_local_addresses_are_no_chat(self):
+        # A webhook to the server itself or to its network link's own addresses (a cloud's metadata) would let the test's
+        # answers say what answers there: refused, by name and by number; a chat on the local network is one.
         with admin.app.test_request_context():
+            for url in ("http://127.0.0.1:8080/hook", "http://localhost/hook", "http://chat.localhost/hook", "http://[::1]/hook",
+                        "http://169.254.169.254/latest/meta-data", "http://0.0.0.0/hook", "http://[::ffff:127.0.0.1]/hook", "http://[fe80::1]/hook"):
+                with self.assertRaises(webhooks.Refused, msg=url) as e:
+                    webhooks.check_url(url)
+                self.assertEqual((e.exception.code, e.exception.words), ("bad_url", admin.core.t("hook.local")), url)
+            self.assertEqual(webhooks.check_url("http://192.168.1.20:8065/hooks/abc"), "http://192.168.1.20:8065/hooks/abc")
+        # A name that leads to one of them is not sent to either: found out when a message would go.
+        with mock.patch.object(webhooks.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 443))]):
+            self.assertEqual(webhooks.post("https://chat.example/hook", {})["code"], "local")
+
+    def test_an_address_of_a_webhook_is_taken_and_anything_else_refused(self):
+        with admin.app.test_request_context(), mock.patch.object(webhooks, "LOOPBACK_OK", True):
             for url in ("https://discord.com/api/webhooks/1/abc", "http://127.0.0.1:8080/hook", "https://hooks.slack.com/services/T/B/x"):
                 self.assertEqual(webhooks.check_url(f"  {url} "), url)
             for url in ("", "ftp://chat.example/hook", "javascript:alert(1)", "https://name:pw@chat.example/hook", "https://:pw@chat.example/x",
