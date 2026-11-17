@@ -472,6 +472,12 @@ class PortMoveTest(unittest.TestCase):
                 taken = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8792}, headers=headers)
             self.assertEqual((taken.status_code, taken.get_json()["error"]["code"]), (409, "port_taken"))
             self.assertIn("Port 8792 is taken on this computer by another program", taken.get_json()["error"]["message"])
+            # A port below 1024 that this computer keeps from the server's user: said so, never as another program's.
+            with mock.patch.object(admin.lifecycle, "port_free", lambda port: False), \
+                    mock.patch.object(admin.lifecycle, "port_allowed", lambda port: False):
+                kept = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 80}, headers=headers)
+            self.assertEqual((kept.status_code, kept.get_json()["error"]["code"]), (409, "port_not_allowed"))
+            self.assertIn("keeps ports below 1024, port 80 among them", kept.get_json()["error"]["message"])
             same = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8791}, headers=headers)
             self.assertEqual(same.get_json()["error"]["code"], "same_port")
             bad = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 70000}, headers=headers)

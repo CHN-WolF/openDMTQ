@@ -251,6 +251,19 @@ def port_free(port):
             return False
 
 
+def port_allowed(port):
+    """False when this computer keeps the port from the user the server runs as (below 1024 on Linux, without the right
+    to take one); True otherwise, a port another program holds among them."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("0.0.0.0", port))
+        except PermissionError:
+            return False
+        except OSError:
+            pass
+    return True
+
+
 def move_port(raw):
     """Moves the server to another port (a host install, the Windows bundle): LISTEN_PORT and the port in PUBLIC_HOST in
     .env, from its next start, when the app is built again for the new address and the site's download page tells players
@@ -265,6 +278,9 @@ def move_port(raw):
     if port == port_now() and next_address() is None:
         raise Refused(409, "same_port", t("port.same", port=port), tone="ok")
     if port != port_now() and not port_free(port):
+        # Kept from the server's user, or held by another program: said as it is.
+        if not port_allowed(port):
+            raise Refused(409, "port_not_allowed", t("port.not_allowed", port=port))
         raise Refused(409, "port_taken", t("port.taken", port=port))
     host, _ = setup.address_parts(core.PUBLIC_HOST)
     new = host if port == 80 else f"{host}:{port}"

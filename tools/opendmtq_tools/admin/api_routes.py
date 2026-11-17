@@ -1010,6 +1010,7 @@ ROUTES = [
           errors=[(400, "bad_port", "Not a port from 1 to 65535."),
                   (409, "same_port", "The server is on that port already."),
                   (409, "port_taken", "Another program holds that port on this computer."),
+                  (409, "port_not_allowed", "This computer keeps that port from the user the server runs as (below 1024)."),
                   (409, "by_command", "Docker Compose or Kubernetes: the command line moves the server (the message names the command).")]),
     Route("POST", "/server/password", "write", "server_password", "Server", "Changes the owner's password, as the Server page's Change the password does.",
           "A host install and the Windows bundle, with a token of the owner's own: ADMIN_PASSWORD in .env, taken at once by the "

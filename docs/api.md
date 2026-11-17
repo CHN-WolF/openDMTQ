@@ -868,6 +868,7 @@ Refusals:
 - `400 bad_port`: Not a port from 1 to 65535.
 - `409 same_port`: The server is on that port already.
 - `409 port_taken`: Another program holds that port on this computer.
+- `409 port_not_allowed`: This computer keeps that port from the user the server runs as (below 1024).
 - `409 by_command`: Docker Compose or Kubernetes: the command line moves the server (the message names the command).
 
 #### `POST /server/password`
