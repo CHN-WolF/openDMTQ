@@ -77,12 +77,14 @@ collect() {
 trap collect EXIT
 
 # The bundle's copy with tests/windows/wine.sh's changes for Wine (its WMI module, which Wine cannot load, and Wine's
-# own C runtime), in a folder with a space in its name.
+# own C runtime), in a folder with a space in its name. The C runtime the program's own folder has, else Wine's: the
+# PC client's installer, which the server starts and which inherits this, has none of its own beside it for every part
+# of it, and with Wine told to take none but a program's own it waits for ever before its first line.
 cp -r /bundle "/tmp/Open DMTQ"
 cd "/tmp/Open DMTQ" || exit 1
 rm -f runtime/python/_wmi.pyd
 sed -i '/runtime\/python\/_wmi\.pyd$/d' app/MANIFEST.sha256 2>/dev/null || true
-export WINEDLLOVERRIDES="vcruntime140=n;vcruntime140_1=n"
+export WINEDLLOVERRIDES="vcruntime140=n,b;vcruntime140_1=n,b"
 PASSWORD=winetest
 printf 'PUBLIC_HOST=127.0.0.1:%s\r\nLISTEN_PORT=%s\r\nADMIN_PASSWORD=%s\r\n' "$PORT" "$PORT" "$PASSWORD" > .env
 (OPENDMTQ_START_WAIT=5 timeout 1800 wine OpenDMTQ.exe 2>&1 | cat > /out/server.log &)
