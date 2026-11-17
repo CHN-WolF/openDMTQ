@@ -914,7 +914,8 @@ ROUTES = [
           errors=[(400, "notice_empty", "No words, or only spaces."),
                   (400, "notice_too_long", "Longer than 200 characters."),
                   (400, "notice_not_text", "Characters that cannot be shown (control or formatting characters)."),
-                  (400, "notice_end_past", "The end has come already.")]),
+                  (400, "notice_end_past", "The end has come already."),
+                  (400, "notice_end_far", "The end is more than ten years away.")]),
     Route("DELETE", "/notice", "write", "notice_clear", "Notice", "Takes the notice down.",
           "No notice to take down is no error: the answer says there is none.", answer="SiteNotice"),
     # The Notices page's Discord and Slack (webhooks.py).

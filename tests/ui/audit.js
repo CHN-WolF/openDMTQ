@@ -2207,6 +2207,13 @@ async function ownersNotice(contexts) {
   await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
   check('the Notices page has the notice card first, saying there is none', /No notice/.test(await textOf(owner, '#notice'))
     && await owner.evaluate(() => document.querySelector('#notice').compareDocumentPosition(document.querySelector('#maintenance')) === Node.DOCUMENT_POSITION_FOLLOWING));
+  // Refused (an end that has passed): said on the same page, in place, with the words typed still in their field.
+  await owner.$eval('#notice input[name=text]', e => { e.value = 'Words for a moment gone by.'; });
+  await owner.$eval('#notice input[name=until]', e => { e.value = '2020-01-01T09:00'; });
+  await press(owner, '#notice button[name=action][value=show]');
+  check('PAGE-69: a refused notice is said on the Notices page, its words kept in the field',
+    new URL(owner.url()).pathname === '/opendmtq/admin/maintenance' && /That moment has passed already/.test(await textOf(owner, '.bar .flash'))
+    && await owner.$eval('#notice input[name=text]', e => e.value) === 'Words for a moment gone by.', `${owner.url()} | ${await textOf(owner, '.bar .flash')}`);
   await putUp(LONG);
   check("the owner's form puts it up, and the card says so in place", /Shown on the site/.test(await textOf(owner, '#notice')), await textOf(owner, '#notice .auto-line'));
   // Under the bar on the site, for someone signed in; nothing of it for a stranger at the sign-in.
@@ -2215,6 +2222,13 @@ async function ownersNotice(contexts) {
   await site.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
   check('PAGE-65: every page of the site has it under the bar, its words whole', await textOf(site, 'body > .site-notice .notice-text') === LONG
     && await site.evaluate(() => document.querySelector('body > .site-notice').compareDocumentPosition(document.querySelector('body > h1.page-title')) === Node.DOCUMENT_POSITION_FOLLOWING));
+  // On every page of the site the sweep looks at, its words whole there too.
+  const without = [];
+  for (const [name, url] of NOTICE.filter(([n]) => !n.startsWith('admin'))) {
+    await site.goto(url, { waitUntil: 'domcontentloaded' });
+    if (await textOf(site, 'body > .site-notice .notice-text') !== LONG) without.push(name);
+  }
+  check('PAGE-65: and on every other page of the site', without.length === 0, without.join(' '));
   const stranger = await contexts.anon.newPage();
   await stranger.goto(`${P}/ranking.php`, { waitUntil: 'domcontentloaded' });
   check('PAGE-65: a stranger at the sign-in sees nothing of it', (await stranger.$('.site-notice')) === null && !(await stranger.content()).includes('Three new songs'));
@@ -2261,23 +2275,29 @@ async function ownersNotice(contexts) {
   };
   await putUp('The server is open all night.');
   await all('The server is open all night.', 'PAGE-68: put up, the pages left open show it by themselves');
-  // The order under the bar when maintenance comes too: the sentence of what is wrong first, the notice under it.
+  // Closed on the home page left open; the live page keeps it.
+  const [home, live] = open;
+  await home.click('.notice-close');
+  // Maintenance begun: both pages put its sentence in place by themselves. On the live page the notice comes under it; on
+  // the home page, where it was closed, it stays closed (the page's own look takes the page again).
   await owner.bringToFront();
   await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
   await pressAndConfirm(owner, '#maintenance button[name=action][value=on]');
-  const ordered = [];
-  for (const page of open) {
-    ordered.push(await until(page, () => {
-      const alert = document.querySelector('body > .site-alert'), band = document.querySelector('body > .site-notice');
-      return !!alert && !!band && alert.compareDocumentPosition(band) === Node.DOCUMENT_POSITION_FOLLOWING;
-    }));
-  }
-  check('PAGE-68: with maintenance begun, its sentence comes above the notice', ordered.every(Boolean), ordered.join(' '));
+  const ordered = await until(live, () => {
+    const alert = document.querySelector('body > .site-alert'), band = document.querySelector('body > .site-notice');
+    return !!alert && !!band && alert.compareDocumentPosition(band) === Node.DOCUMENT_POSITION_FOLLOWING;
+  });
+  check('PAGE-68: with maintenance begun, its sentence comes above the notice', ordered);
+  const stayed = await until(home, () => !!document.querySelector('body > .site-alert')) && await home.evaluate(() => {
+    const band = document.querySelector('body > .site-notice');
+    return !band || getComputedStyle(band).display === 'none';
+  });
+  check('PAGE-68: and where it was closed it stays closed as the page takes maintenance in', stayed && await keptOpen(home));
   await owner.bringToFront();
   await owner.goto(`${A}/maintenance`, { waitUntil: 'domcontentloaded' });
   await press(owner, '#maintenance button[name=action][value=off]');
   await putUp('Back to normal hours tomorrow.');
-  await all('Back to normal hours tomorrow.', 'PAGE-68: new words, the pages left open say them by themselves');
+  await all('Back to normal hours tomorrow.', 'PAGE-68: new words, the pages left open say them by themselves, where the old were closed too');
   await takeDown();
   await all(null, 'PAGE-68: taken down, it goes from the pages left open by themselves');
   for (const page of open) await page.browserContext().close();

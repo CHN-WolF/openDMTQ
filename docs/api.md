@@ -666,6 +666,7 @@ Refusals:
 - `400 notice_too_long`: Longer than 200 characters.
 - `400 notice_not_text`: Characters that cannot be shown (control or formatting characters).
 - `400 notice_end_past`: The end has come already.
+- `400 notice_end_far`: The end is more than ten years away.
 
 #### `DELETE /notice`
 

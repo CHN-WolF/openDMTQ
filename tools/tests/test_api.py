@@ -415,6 +415,8 @@ def start_values_reach_new_players(t, inst, r):
 def CASES():
     """Every route's usual answer, and its refusals."""
     closed, opened, backup = Server.names["closed"], Server.names["open"], Server.names["backup"]
+    # An end of the site's notice a day from now (an end has to be ahead, and within ten years).
+    soon = int(time.time()) + 86400
 
     def everyone_touched():
         # (new players start on, the players with no choice of the owner on record): none left after the turn.
@@ -614,13 +616,16 @@ def CASES():
         C("notice_set", "PUT", "/notice", 200, json={"text": "Open late tonight.\r\nNew songs on Friday."},
           check=lambda t, inst, r: t.assertEqual((r.get_json()["text"], r.get_json()["shown"], r.get_json()["until"], r.get_json()["by"]),
                                                  ("Open late tonight. New songs on Friday.", True, None, "admin (owner)"))),
-        C("notice_set", "PUT", "/notice", 200, json={"text": "Until nine.", "until": 4102444800},
-          check=lambda t, inst, r: t.assertEqual((r.get_json()["until"], admin.notice.read()["until"]), (4102444800, 4102444800))),
+        C("notice_set", "PUT", "/notice", 200, json={"text": "Until nine.", "until": soon},
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["until"], admin.notice.read()["until"]), (soon, soon))),
         C("notice_set", "PUT", "/notice", 400, "notice_too_long", json={"text": "x" * 201},
           check=lambda t, inst, r: t.assertEqual(r.get_json()["error"]["message"], "The notice is longer than 200 characters.")),
         C("notice_set", "PUT", "/notice", 400, "notice_empty", json={"text": " \n "}),
         C("notice_set", "PUT", "/notice", 400, "notice_not_text", json={"text": "Open \u202elate"}),
         C("notice_set", "PUT", "/notice", 400, "notice_end_past", json={"text": "Gone.", "until": 1000}),
+        # An end the server's clock cannot even write (past the year 9999): refused before anything is kept.
+        C("notice_set", "PUT", "/notice", 400, "notice_end_far", json={"text": "Far.", "until": 300000000000},
+          check=lambda t, inst, r: t.assertIsNone(admin.notice.read())),
         C("notice_set", "PUT", "/notice", 400, "bad_field", json={"text": "Soon.", "until": "tomorrow"}),
         C("notice_set", "PUT", "/notice", 403, "read_only", token="reader", json={"text": "No."}),
         C("notice_clear", "DELETE", "/notice", 200, setup=lambda inst: [admin.notice.put("Up for a moment.")][:0],
