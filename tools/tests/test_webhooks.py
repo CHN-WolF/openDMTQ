@@ -520,13 +520,30 @@ class RulesTest(unittest.TestCase):
                 con.close()
 
 
-def _turns(db, content, custom, turns):
-    """A second admin process's loop (multiprocessing): its own turns of detect and deliver on the same database."""
+def _turns(db, content, custom, start, done):
+    """Another admin process's loop (multiprocessing): its own turns of detect and deliver on the same database, from the
+    moment every process is ready (start, a barrier) until no message waits; then how many it sent, on done."""
     with mock.patch.multiple(admin.core, DB=db, PUBLIC_HOST=HOST, server_health=lambda fresh=False: None), \
-            mock.patch.object(admin.songs, "CONTENT", content), mock.patch.object(admin.songs, "CUSTOM", custom):
-        for _ in range(turns):
-            webhooks.run_once()
-            time.sleep(0.01)
+            mock.patch.object(admin.songs, "CONTENT", content), mock.patch.object(admin.songs, "CUSTOM", custom), \
+            mock.patch.object(webhooks, "LOOPBACK_OK", True):
+        start.wait()
+        done.put(_until_sent())
+
+
+def _until_sent():
+    """Turns of the loop until nothing waits or is being sent; how many messages this process sent."""
+    sent = 0
+    for _ in range(400):
+        sent += webhooks.run_once()
+        con = sqlite3.connect(admin.core.DB)
+        try:
+            left = con.execute("SELECT COUNT(*) FROM WebhookMessage WHERE state IN ('waiting', 'sending')").fetchone()[0]
+        finally:
+            con.close()
+        if not left:
+            break
+        time.sleep(0.01)
+    return sent
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
@@ -534,30 +551,55 @@ class OnceTest(unittest.TestCase):
     """Two admin processes on one database: each event is queued once and each message sent once (SRV-51)."""
 
     def test_two_processes_send_each_message_once(self):
+        # Twenty chats hear of maintenance; three processes (two spawned, this one) turn the loop from one moment on, each
+        # message taking a tenth of a second at the chat, so that their sends overlap. Each chat gets its message once.
         with Server() as inst:
-            inst.chat.delay = 0.05
-            inst.hook(events=["chart_top", "maint_on"])
+            inst.chat.delay = 0.1
+            for i in range(20):
+                inst.hook(events=["maint_on"], path=f"/hooks/{i}")
             webhooks.detect()
-            # Events for all of them to find: two charts taken, maintenance on.
-            inst.play(8, 11, 950000)
-            inst.play(9, 12, 850000)
             admin.songs.set_maintenance(True, "Back soon.", HOST)
-            # Processes of their own (spawned: nothing of this one's threads), each importing the admin service anew.
+            # Processes of their own (spawned: nothing of this one's threads), each importing the admin service anew, and
+            # all three starting together.
             ctx = multiprocessing.get_context("spawn")
-            others = [ctx.Process(target=_turns, args=(admin.core.DB, inst.path("content"), inst.path("custom"), 25)) for _ in range(2)]
+            start, done = ctx.Barrier(3), ctx.Queue()
+            others = [ctx.Process(target=_turns, args=(admin.core.DB, inst.path("content"), inst.path("custom"), start, done)) for _ in range(2)]
             for p in others:
                 p.start()
-            # This process is a third one at the same time.
-            for _ in range(25):
-                webhooks.run_once()
-                time.sleep(0.01)
+            start.wait()
+            mine = _until_sent()
+            theirs = [done.get(timeout=120) for _ in others]
             for p in others:
                 p.join(60)
-            webhooks.run_once()
-            kinds = [title_of(m["body"]) for m in inst.chat.got]
-            # Each event once: chart 11 to Yuna, chart 12 to Riku, maintenance on (whichever process took each).
-            self.assertEqual(sorted(kinds), sorted(["New #1 on a chart"] * 2 + ["Maintenance"]), kinds)
+            paths = sorted(m["path"] for m in inst.chat.got)
+            self.assertEqual(paths, sorted(f"/hooks/{i}" for i in range(20)))
+            self.assertEqual(mine + sum(theirs), 20)
+            # The sends overlapped: more than one process sent some.
+            self.assertGreater(sum(1 for n in [mine] + theirs if n), 1, [mine] + theirs)
             self.assertTrue(all(state == "sent" for _, _, _, state in inst.queued()))
+
+    def test_two_looks_from_one_state_write_once(self):
+        # Two looks from the same state, at two moments, each finding Sena newly on air (without a recording, each look's
+        # start is its own moment, so their messages' keys differ): only the first written counts.
+        with Server() as inst:
+            inst.hook(events=["live_on"])
+            now = time.time()
+            webhooks.detect(now)
+            inst.on_air(7, 0)
+            looks = []
+            con1, con2 = webhooks.connect(), webhooks.connect()
+            try:
+                state = webhooks.read_state(con1)
+                for con, at in ((con1, now + 5), (con2, now + 7)):
+                    events, new, tops = webhooks.look(con, state, at)
+                    events += webhooks.look_live(con, new, at)
+                    looks.append((con, events, new, tops, at))
+                self.assertEqual({e[1] for _, events, _, _, _ in looks for e in events}, {f"live_on:7:{int(now + 5)}", f"live_on:7:{int(now + 7)}"})
+                written = [webhooks.write(con, state, events, new, tops, at) for con, events, new, tops, at in looks]
+            finally:
+                con1.close()
+                con2.close()
+            self.assertEqual((written, [k for _, k, _, _ in inst.queued()]), ([1, 0], ["live_on"]))
 
     def test_a_look_begun_before_the_loop_forgot_writes_nothing(self):
         # A look found Yuna's first place; before it writes, the owner deletes the webhook and adds another, whose first
@@ -585,18 +627,22 @@ class OnceTest(unittest.TestCase):
             inst.hook(events=["chart_top"])
             webhooks.detect()
             inst.play(8, 11, 950000)
-            start = threading.Barrier(4)
+            start, failed = threading.Barrier(4), []
 
             def one():
                 start.wait()
-                webhooks.detect()
+                try:
+                    webhooks.detect()
+                except Exception as e:  # pylint: disable=broad-except
+                    # A look that fails (a database that waits on itself) fails the test.
+                    failed.append(repr(e))
 
             threads = [threading.Thread(target=one) for _ in range(4)]
             for th in threads:
                 th.start()
             for th in threads:
                 th.join()
-            self.assertEqual([k for _, k, _, _ in inst.queued()], ["chart_top"])
+            self.assertEqual((failed, [k for _, k, _, _ in inst.queued()]), ([], ["chart_top"]))
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
