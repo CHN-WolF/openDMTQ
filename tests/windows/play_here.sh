@@ -211,7 +211,8 @@ print("LEAK" if ("\\users\\root" in text or "127.0.0.1:" + sys.argv[2] in text) 
 PY
 wine "/tmp/Open DMTQ/runtime/python/python.exe" -I 'Z:\out\read-report.py' 'Z:\out\report.zip' "$PORT" > /out/report-list.txt 2>&1
 cat /out/report-list.txt
-for name in about.txt launcher/launcher.log settings/settings.json settings/player-settings.txt system/displays.txt system/sound.txt system/connection-test.txt; do
+# The player's settings file is written when the launcher starts the game, which this run never does: not asked for.
+for name in about.txt launcher/launcher.log settings/settings.json system/displays.txt system/sound.txt system/connection-test.txt; do
   expect "the report has $name" grep -q "^$name" /out/report-list.txt
 done
 expect "and none of the user's name in its paths, nor the server's address" grep -q '^CLEAN' /out/report-list.txt
