@@ -661,7 +661,9 @@ def present(con, now):
     board = month_leader(con, start)
     air = {str(g): broadcast(p, now) for g, p in on_air(con, now).items()}
     tops = [tuple(r) for r in con.execute(ALL_TOPS, (core.CHECK_UDID,))]
-    state = {"rev": 0, "cursor": int(cursor), "mark": mark_of(con, int(cursor)) if cursor else None, "at": int(now),
+    # A start of its own (gen): a look begun from an earlier start, before the loop forgot it (the last webhook deleted, a
+    # restore), writes nothing into this one, whatever its number.
+    state = {"gen": secrets.token_hex(8), "rev": 0, "cursor": int(cursor), "mark": mark_of(con, int(cursor)) if cursor else None, "at": int(now),
              "month": {"start": start, "leader": board[0]["id"] if board else None}, "air": air, "maint": maintenance_now()}
     return state, tops
 
@@ -802,15 +804,17 @@ def look_live(con, new, now):
     return events
 
 
-def write(con, rev, events, new, tops, now):
-    """Queues the events for every webhook that takes them and keeps the new state, in one transaction, unless another
-    process wrote since rev (then it found the same, and nothing is done here). Returns how many messages were queued."""
+def write(con, state, events, new, tops, now):
+    """Queues the events for every webhook that takes them and keeps the new state, in one transaction, unless the state
+    the look began from is no longer the one kept: another process wrote since (it found the same, and nothing is done
+    here), or the loop forgot it and took a new start (its gen). Returns how many messages were queued."""
     con.execute("BEGIN IMMEDIATE")
     try:
         kept = read_state(con)
-        if kept is None or kept["rev"] != rev:
+        if kept is None or kept.get("gen") != state.get("gen") or kept["rev"] != state["rev"]:
             con.execute("ROLLBACK")
             return 0
+        rev = state["rev"]
         queued = 0
         hooks = [(int(h["id"]), h["events"].split(",")) for h in con.execute("SELECT id, events FROM Webhook")]
         for kind, key, data, at in events:
@@ -868,7 +872,7 @@ def detect(now=None):
         finally:
             con.execute("COMMIT")
         events += look_live(con, new, now)
-        return write(con, state["rev"], events, new, tops, now)
+        return write(con, state, events, new, tops, now)
     finally:
         con.close()
 

@@ -527,6 +527,27 @@ class OnceTest(unittest.TestCase):
             self.assertEqual(sorted(kinds), sorted(["New #1 on a chart"] * 2 + ["Maintenance"]), kinds)
             self.assertTrue(all(state == "sent" for _, _, _, state in inst.queued()))
 
+    def test_a_look_begun_before_the_loop_forgot_writes_nothing(self):
+        # A look found Yuna's first place; before it writes, the owner deletes the webhook and adds another, whose first
+        # look takes the present as its start: the old look's finding is no news for the new webhook.
+        with Server() as inst:
+            inst.hook(events=["chart_top"])
+            webhooks.detect()
+            inst.play(8, 11, 950000)
+            real_write = webhooks.write
+
+            def write_after_the_loop_forgot(*args, **kw):
+                with admin.app.test_request_context():
+                    webhooks.delete(1)
+                    inst.hook(events=["chart_top"], path="/new")
+                # The new webhook's first look, in another process: the present is its start.
+                webhooks.detect()
+                return real_write(*args, **kw)
+
+            with mock.patch.object(webhooks, "write", write_after_the_loop_forgot):
+                webhooks.detect()
+            self.assertEqual(inst.queued(), [])
+
     def test_two_looks_at_once_queue_one_message(self):
         with Server() as inst:
             inst.hook(events=["chart_top"])
