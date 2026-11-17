@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # The update of a Windows bundle of an earlier release to this tree's, under Wine, as its owner does it: the release's
-# OpenDMTQ.exe started once (its first start writes .env: this PC's address, the port, the password, and in 0.10.0 the
+# OpenDMTQ.exe started once (its first start writes .env: this PC's address on port 80, the password, and in 0.10.0 the
 # admin pages' own port, ADMIN_PORT=8791), its window closed, this tree's bundle unpacked over the folder (the guide's four
-# lines again: .env and data stay), and OpenDMTQ.exe started again. Afterwards the server keeps its port (the one the
-# phones' app calls), the players' site, the admin pages and the API answer on it, nothing answers on the admin pages' old
-# port, .env no longer names it, the window names one address, and the owner's ID and password open both doors (DEP-47).
+# lines again: .env and data stay), and OpenDMTQ.exe started again. Afterwards the server has left port 80 for the port
+# its admin pages had (8791): the players' site, the admin pages and the API answer there and nothing on port 80, .env
+# names the new address and no longer the admin pages' own port, the window says the move once and names one address,
+# status says it once, the site's download page tells players to install the app for the new address, the app builder
+# works for it, and the owner's ID and password open both doors (DEP-47, DEP-72).
 #
 # Usage: tests/windows/update.sh      (FROM=v0.10.0, the release whose bundle is fetched into CACHE, default
 #                                      _work/update-cache; OUT, default _work/windows, this tree's bundle, built unless
@@ -114,39 +116,57 @@ expect "where they answered, as they did" is 200 "http://127.0.0.1:$old_admin/op
 wineserver -k 2>/dev/null || true
 sleep 3
 
+expect "the release served port 80 (LISTEN_PORT=$port, PUBLIC_HOST=$host)" sh -c "test '$port' = 80 && test '${host#*:}' = '$host'"
+
 # 2. This tree's bundle over it, as the guide's four lines unpack it: its files over the folder's, .env and data kept.
 cp -r /new/. "/tmp/Open DMTQ/"
 wine_ready
 expect "after the update OpenDMTQ.exe starts the server again" start /tmp/new.log
-expect "on the port it had, the one the phones' app calls ($port)" sh -c "test '$(setting LISTEN_PORT)' = '$port' && test '$(setting PUBLIC_HOST)' = '$host'"
-expect "the players' site answers on it" sh -c "case \$(curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:$port/opendmtq/health.php) in 200 | 503) exit 0 ;; esac; exit 1"
+# The port it moved to, the admin pages' own before (8791), and the address with it.
+moved=$(setting LISTEN_PORT)
+new_host=$host:$old_admin
+expect "it left port 80 for the port its admin pages had ($moved)" sh -c "test '$moved' = '$old_admin' && test '$(setting PUBLIC_HOST)' = '$new_host'"
+expect "the players' site answers there" sh -c "case \$(curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:$moved/opendmtq/health.php) in 200 | 503) exit 0 ;; esac; exit 1"
 for _ in $(seq 1 30); do
-  is 200 "http://127.0.0.1:$port/opendmtq/admin/login" && break
+  is 200 "http://127.0.0.1:$moved/opendmtq/admin/login" && break
   sleep 2
 done
-expect "the admin pages answer on that same port" is 200 "http://127.0.0.1:$port/opendmtq/admin/login"
-expect "and the API" is 401 "http://127.0.0.1:$port/opendmtq/api/v1/status"
-expect "nothing answers on the admin pages' old port ($old_admin)" is 000 "http://127.0.0.1:$old_admin/opendmtq/admin/login"
-expect ".env no longer names it, and keeps the rest" sh -c "! grep -q '^ADMIN_PORT=' .env && test '$(setting ADMIN_PASSWORD)' = '$password'"
+expect "the admin pages answer on that same port" is 200 "http://127.0.0.1:$moved/opendmtq/admin/login"
+expect "and the API" is 401 "http://127.0.0.1:$moved/opendmtq/api/v1/status"
+expect "nothing answers on port 80, where the release served" is 000 "http://127.0.0.1:80/opendmtq/health.php"
+expect ".env no longer names the admin pages' own port, and keeps the rest" sh -c "! grep -q '^ADMIN_PORT=' .env && test '$(setting ADMIN_PASSWORD)' = '$password'"
 inner=$(tr -d '\r\n' < .host/run/admin.port 2>/dev/null || true)
-expect "the admin service's own port is neither the old one nor the server's (${inner:-none})" \
-  sh -c "test -n '$inner' && test '$inner' != '$old_admin' && test '$inner' != '$port'"
-# One address in the window: the admin pages under the site's, and no other port.
-admin_line=$(grep "/opendmtq/admin/" /tmp/new.log | head -n 1 || true)
-echo "INFO the window: ${admin_line:-nothing}"
-expect "the window names the admin pages at the server's one address" grep -q "http://$host/opendmtq/admin/" /tmp/new.log
-expect "and never the old port" sh -c "! grep -q ':$old_admin\\b' /tmp/new.log"
+expect "the admin service's own port is not the server's (${inner:-none})" sh -c "test -n '$inner' && test '$inner' != '$moved'"
+# The window: the move said once, and one address, the admin pages under the site's.
+grep -E "moved|/opendmtq/admin/" /tmp/new.log | sed 's/^/INFO the window: /' | head -n 4 || true
+expect "the window says the move from port 80 once" sh -c "test \$(grep -c 'The server moved from port 80 to $moved: http://$new_host/' /tmp/new.log) = 1"
+expect "the window names the admin pages at the server's one address" grep -q "http://$new_host/opendmtq/admin/" /tmp/new.log
+expect "and never the address on port 80" sh -c "! grep -Eq 'http://$host/' /tmp/new.log"
+# status once, then no more.
+wine OpenDMTQ.exe status 2>&1 | cat > /tmp/status1.log || true
+wine OpenDMTQ.exe status 2>&1 | cat > /tmp/status2.log || true
+expect "status says the move once" sh -c "grep -q 'moved from port 80 to $moved' /tmp/status1.log && ! grep -q 'moved from port' /tmp/status2.log"
+# The app builder worked for the new address (without a game client here it waits for one: its status names the address).
+expect "the app builder works for the new address" grep -q "\"host\": \"$new_host\"" data/apk/out/build.json
 # The owner's ID and password from .env, on both doors, each in a browser of its own.
 jar=$(mktemp)
-curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null "http://127.0.0.1:$port/opendmtq/admin/login"
+curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null "http://127.0.0.1:$moved/opendmtq/admin/login"
 signed=$(curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' --data-urlencode name=admin \
-  --data-urlencode "password=$password" "http://127.0.0.1:$port/opendmtq/admin/login" || true)
+  --data-urlencode "password=$password" "http://127.0.0.1:$moved/opendmtq/admin/login" || true)
 expect "the owner signs in to the admin pages there ($signed)" test "$signed" = 302
+# The Server page says the move once.
+page=$(curl -s -m 30 -b "$jar" "http://127.0.0.1:$moved/opendmtq/admin/server" || true)
+again=$(curl -s -m 30 -b "$jar" "http://127.0.0.1:$moved/opendmtq/admin/server" || true)
+first=$(printf '%s' "$page" | grep -c 'id="moved-80"' || true)
+second=$(printf '%s' "$again" | grep -c 'id="moved-80"' || true)
+expect "the Server page says the move once ($first, then $second)" test "$first$second" = 10
 jar=$(mktemp)
-curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null "http://127.0.0.1:$port/opendmtq/login.php"
+curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null "http://127.0.0.1:$moved/opendmtq/login.php"
 signed=$(curl -s -m 30 -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' --data-urlencode user=admin \
-  --data-urlencode "password=$password" -d next=/opendmtq/ "http://127.0.0.1:$port/opendmtq/login.php" || true)
+  --data-urlencode "password=$password" -d next=/opendmtq/ "http://127.0.0.1:$moved/opendmtq/login.php" || true)
 expect "and to the players' site with the same ID and password ($signed)" test "$signed" = 303
+# The download page tells players where the server is now and that phones need the app for that address.
+expect "the download page says the move" sh -c "curl -s -m 30 -b '$jar' http://127.0.0.1:$moved/opendmtq/download.php | grep -q 'it is at $new_host now, $host before'"
 wineserver -k 2>/dev/null || true
 
 echo "$([ $failures = 0 ] && echo PASS || echo FAIL) the update of a Windows bundle from $FROM under Wine: $failures failure(s)"

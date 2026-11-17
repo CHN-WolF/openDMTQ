@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # The update of a host install of an earlier release to this tree's, in a clean computer (a container), as its owner does
 # it: the release installed by its own one command and set up by its own setup (which writes .env: this computer's
-# address, the port, the password, and in 0.10.0 the admin pages' own port, ADMIN_PORT=8791), then the one command again
+# address, port 80, the password, and in 0.10.0 the admin pages' own port, ADMIN_PORT=8791), then the one command again
 # with this tree, which stops the server and puts the new code over the old with the settings and the data kept, and a
-# start. Afterwards the server keeps its port (the one the phones' app calls), the players' site, the admin pages and the
-# API answer on it, nothing answers on the admin pages' old port, .env no longer names it, status names one address, and
-# the owner's ID and password open both doors (DEP-47).
+# start. Afterwards the server has left port 80 for the port its admin pages had (8791): the players' site, the admin
+# pages and the API answer there and nothing on port 80, .env names the new address and no longer the admin pages' own
+# port, the start says the move once and status once, status names one address, the site's download page tells players to
+# install the app for the new address, the app builder works for it, and the owner's ID and password open both doors
+# (DEP-47, DEP-72).
 #
 # Usage: tests/host/update.sh      (FROM=v0.10.0, the release to update from; DISTRO=debian:12 for another system;
 #                                   NEW=<a git ref> updates to that ref instead of this working tree, so that the checks can
@@ -100,32 +102,42 @@ else
   tail -n 20 "$WORK/new-install.log"
   fail "the one command again updates the install"
 fi
+expect "the release served port 80 (LISTEN_PORT=$port, PUBLIC_HOST=$host)" sh -c "test '$port' = 80 && test '${host#*:}' = '$host'"
 inside "cd OpenDMTQ && ./opendmtq start" > "$WORK/start.log" 2>&1 || true
 sed 's/^/    /' "$WORK/start.log"
-expect "the updated server keeps its port and address, the ones the phones' app calls" \
-  sh -c "test '$(setting LISTEN_PORT)' = '$port' && test '$(setting PUBLIC_HOST)' = '$host'"
-expect "the players' site answers on it" sh -c "case \$(docker exec -u player $NAME curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:$port/opendmtq/health.php) in 200 | 503) exit 0 ;; esac; exit 1"
+# The port it moved to, the admin pages' own before (8791), and the address with it.
+moved=$(setting LISTEN_PORT)
+new_host=$host:$old_admin
+expect "the updated server left port 80 for the port its admin pages had ($moved)" \
+  sh -c "test '$moved' = '$old_admin' && test '$(setting PUBLIC_HOST)' = '$new_host'"
+expect "the players' site answers there" sh -c "case \$(docker exec -u player $NAME curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:$moved/opendmtq/health.php) in 200 | 503) exit 0 ;; esac; exit 1"
 for _ in $(seq 1 30); do
-  is 200 "http://127.0.0.1:$port/opendmtq/admin/login" && break
+  is 200 "http://127.0.0.1:$moved/opendmtq/admin/login" && break
   sleep 2
 done
-expect "the admin pages answer on that same port" is 200 "http://127.0.0.1:$port/opendmtq/admin/login"
-expect "and the API" is 401 "http://127.0.0.1:$port/opendmtq/api/v1/status"
-expect "nothing answers on the admin pages' old port ($old_admin)" is 000 "http://127.0.0.1:$old_admin/opendmtq/admin/login"
-expect ".env no longer names it, and keeps the rest" \
+expect "the admin pages answer on that same port" is 200 "http://127.0.0.1:$moved/opendmtq/admin/login"
+expect "and the API" is 401 "http://127.0.0.1:$moved/opendmtq/api/v1/status"
+expect "nothing answers on port 80, where the release served" is 000 "http://127.0.0.1:80/opendmtq/health.php"
+expect ".env no longer names the admin pages' own port, and keeps the rest" \
   sh -c "! docker exec -u player $NAME grep -q '^ADMIN_PORT=' /home/player/OpenDMTQ/.env && test '$(setting ADMIN_PASSWORD)' = '$password'"
 inner=$(inside "cat OpenDMTQ/.host/run/admin.port 2>/dev/null" | tr -d '\r\n' || true)
-expect "the admin service's own port is neither the old one nor the server's (${inner:-none})" \
-  sh -c "test -n '$inner' && test '$inner' != '$old_admin' && test '$inner' != '$port'"
+expect "the admin service's own port is not the server's (${inner:-none})" sh -c "test -n '$inner' && test '$inner' != '$moved'"
+expect "start says the move from port 80 once" sh -c "test \$(grep -c 'The server moved from port 80 to $moved: http://$new_host/' '$WORK/start.log') = 1"
 inside "cd OpenDMTQ && ./opendmtq status" > "$WORK/status.log" 2>&1 || true
+inside "cd OpenDMTQ && ./opendmtq status" > "$WORK/status2.log" 2>&1 || true
 sed 's/^/    /' "$WORK/status.log"
-expect "status names the admin pages at the server's one address" grep -q "http://$host/opendmtq/admin/" "$WORK/status.log"
-expect "start and status never name the old port" sh -c "! grep -q ':$old_admin\\b' '$WORK/status.log' '$WORK/start.log'"
+expect "status names the admin pages at the server's one address" grep -q "http://$new_host/opendmtq/admin/" "$WORK/status.log"
+expect "status says the move once" sh -c "grep -q 'moved from port 80 to $moved' '$WORK/status.log' && ! grep -q 'moved from port' '$WORK/status2.log'"
+expect "start and status never name the address on port 80" sh -c "! grep -q 'http://$host/' '$WORK/status.log' '$WORK/start.log'"
+expect "the app builder works for the new address" sh -c "docker exec -u player $NAME grep -q '\"host\": \"$new_host\"' /home/player/OpenDMTQ/data/apk/out/build.json"
 # The owner's ID and password from .env, on both doors, each in a browser of its own.
-signed=$(inside "j=\$(mktemp); curl -s -m 30 -c \$j -b \$j -o /dev/null http://127.0.0.1:$port/opendmtq/admin/login; curl -s -m 30 -c \$j -b \$j -o /dev/null -w '%{http_code}' --data-urlencode name=admin --data-urlencode 'password=$password' http://127.0.0.1:$port/opendmtq/admin/login" || true)
+signed=$(inside "j=\$(mktemp); curl -s -m 30 -c \$j -b \$j -o /dev/null http://127.0.0.1:$moved/opendmtq/admin/login; curl -s -m 30 -c \$j -b \$j -o /dev/null -w '%{http_code}' --data-urlencode name=admin --data-urlencode 'password=$password' http://127.0.0.1:$moved/opendmtq/admin/login" || true)
 expect "the owner signs in to the admin pages there ($signed)" test "$signed" = 302
-signed=$(inside "j=\$(mktemp); curl -s -m 30 -c \$j -b \$j -o /dev/null http://127.0.0.1:$port/opendmtq/login.php; curl -s -m 30 -c \$j -b \$j -o /dev/null -w '%{http_code}' --data-urlencode user=admin --data-urlencode 'password=$password' -d next=/opendmtq/ http://127.0.0.1:$port/opendmtq/login.php" || true)
+signed=$(inside "j=\$(mktemp); curl -s -m 30 -c \$j -b \$j -o /dev/null http://127.0.0.1:$moved/opendmtq/login.php; curl -s -m 30 -c \$j -b \$j -o /dev/null -w '%{http_code}' --data-urlencode user=admin --data-urlencode 'password=$password' -d next=/opendmtq/ http://127.0.0.1:$moved/opendmtq/login.php" || true)
 expect "and to the players' site with the same ID and password ($signed)" test "$signed" = 303
+# The download page, to that signed-in browser: where the server is now, and the app for that address.
+said=$(inside "j=\$(mktemp); curl -s -m 30 -c \$j -b \$j -o /dev/null http://127.0.0.1:$moved/opendmtq/login.php; curl -s -m 30 -c \$j -b \$j -o /dev/null --data-urlencode user=admin --data-urlencode 'password=$password' -d next=/opendmtq/ http://127.0.0.1:$moved/opendmtq/login.php; curl -s -m 30 -b \$j http://127.0.0.1:$moved/opendmtq/download.php" || true)
+expect "the download page says the move" grep -q "it is at $new_host now, $host before" <<<"$said"
 
 echo "$([ $failures = 0 ] && echo PASS || echo FAIL) the update of a host install from $FROM on $DISTRO: $failures failure(s)"
 exit $((failures > 0))
