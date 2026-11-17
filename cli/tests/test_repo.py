@@ -932,7 +932,8 @@ class HostVersionTest(unittest.TestCase):
             self.skipTest("not a git checkout")
         from opendmtq_cli import system
         mine = self.version(ROOT)
-        self.assertRegex(mine, r"^\d+\.\d+\.\d+(-[0-9a-f]{7})?$")
+        # Seven hex digits of the commit, or more when seven would name two objects of the clone (git lengthens it then).
+        self.assertRegex(mine, r"^\d+\.\d+\.\d+(-[0-9a-f]{7,})?$")
         self.assertTrue(mine.startswith(system.release_of(ROOT)), mine)
         with mock.patch.object(system, "ROOT", ROOT):
             self.assertEqual(system.code_version(), mine)
