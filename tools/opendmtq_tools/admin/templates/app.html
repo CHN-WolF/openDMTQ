@@ -13,13 +13,18 @@
       <span class="offer-meta">{{ offer.size|human }} · {{ t('app.built_on', when=offer.built_at[:16].replace('T', ' ')) }} · {{ t('app.runtime', v=offer.runtime) if offer.runtime else t('app.no_runtime') }}</span>
       <span class="offer-state"><span class="lamp {{ state[0] }}"></span>{{ state[1] }}</span>
       {% if windows %}<span class="offer-meta">{{ t('app.windows', size=windows.size|human) }}</span>{% endif %}
+      {# The PC client's updates the site hands out with it (client_updates.py), or that it hands out none. #}
+      {% if updates %}<span class="offer-meta">{{ t('app.updates', v=updates.version, size=updates_size) }}</span>{% elif windows %}<span class="offer-meta">{{ t('app.updates_none') }}</span>{% endif %}
     </div>
   </div>
   {% else %}
   <p class="empty">{{ t('app.offer_none') }}</p>
   {# The installer for Windows is kept apart from the app: its size shows here too when there is no app yet. #}
   {% if windows %}<p class="meta">{{ t('app.windows', size=windows.size|human) }}</p>{% endif %}
+  {% if updates %}<p class="meta">{{ t('app.updates', v=updates.version, size=updates_size) }}</p>{% elif windows %}<p class="meta">{{ t('app.updates_none') }}</p>{% endif %}
   {% endif %}
+  {# A release's file the tools refused for its signature: what the site does not hand out, and why. #}
+  {% for said in refused %}<p class="flash bad" role="status">{{ said }}</p>{% endfor %}
   <p class="meta">{{ t('app.offer_rule', host=public_host) }}</p>
   {# Where its name comes from and where it is changed, as this install changes it. #}
   <p class="meta">{{ t('app.name_k8s') if kubernetes else t('app.name_host') if host_install else t('app.name_docker') }}</p>

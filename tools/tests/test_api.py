@@ -37,6 +37,9 @@ V1 = "/opendmtq/api/v1"
 TOOLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 ADMIN_DIR = os.path.join(TOOLS, "opendmtq_tools", "admin")
 PORTAL = os.path.join(TOOLS, "..", "server", "portal")
+# The PC client's updates of a made-up release 0.8.1, as the builder keeps them in data/apk/out/updates.
+UPDATE_FILES = ("releases.win.json", "opendmtq.client-0.8.1-full.nupkg", "opendmtq.client-0.8.1-delta.nupkg",
+                "opendmtq-0.8.1-sha256sums.txt", "opendmtq-0.8.1-sha256sums.txt.sig")
 
 
 # ------------------------------------------------------------------------------ a server to ask
@@ -375,6 +378,25 @@ def CASES():
                                                        "copied_at": "2026-11-09T12:00:00"}))
         return []
 
+    def with_updates(inst):
+        # The PC client's updates as the builder leaves them (client_updates.py): the files, and updates.json describing
+        # them at their sizes.
+        files = {}
+        os.makedirs(inst.path("apk/out/updates"), exist_ok=True)
+        for name in UPDATE_FILES:
+            inst.write("apk/out/updates/" + name, name)
+            files[name] = {"size": len(name), "sha256": "0" * 64}
+        inst.write("apk/out/updates.json", json.dumps({"version": "0.8.1", "files": files, "full": "opendmtq.client-0.8.1-full.nupkg",
+                                                       "delta": "opendmtq.client-0.8.1-delta.nupkg", "delta_from": "0.8.0",
+                                                       "signed_by": "ab" * 32, "source": "the release",
+                                                       "kept_at": "2026-11-17T12:00:00"}))
+        return []
+
+    def with_refused_updates(inst):
+        # The builder refused a package that is not the file the release signed (client_updates.py notes why).
+        inst.write("apk/client-updates-error.txt", "opendmtq.client-0.8.1-full.nupkg is not the file the release signed\n")
+        return []
+
     def with_windows_half_copied(inst):
         # windows.json says another size than the file has: a copy cut off, which is not handed out.
         return with_windows(inst, size=4)
@@ -424,6 +446,18 @@ def CASES():
         C("app_windows", "GET", "/app/windows", 412, "precondition_failed", setup=with_windows, headers={"If-Match": '"another"'}),
         C("app_windows", "GET", "/app/windows", 416, "range_not_satisfiable", setup=with_windows, headers={"Range": "bytes=100000-"},
           check=lambda t, inst, r: t.assertRegex(r.headers["Content-Range"], r"^bytes \*/\d+$")),
+        # API-65: what the site hands the launchers that play here, and what the builder refused for its signature.
+        C("app_windows_updates", "GET", "/app/windows/updates", 200,
+          check=lambda t, inst, r: t.assertEqual((r.get_json()["version"], r.get_json()["files"], r.get_json()["refused"]),
+                                                 (None, [], []))),
+        C("app_windows_updates", "GET", "/app/windows/updates", 200, setup=with_updates,
+          check=lambda t, inst, r: (t.assertEqual((r.get_json()["version"], r.get_json()["delta_from"]), ("0.8.1", "0.8.0")),
+                                    t.assertEqual([f["file"] for f in r.get_json()["files"]],
+                                                  sorted(UPDATE_FILES)))),
+        C("app_windows_updates", "GET", "/app/windows/updates", 200, setup=with_refused_updates,
+          check=lambda t, inst, r: t.assertEqual(r.get_json()["refused"], [
+              "opendmtq.client-0.8.1-full.nupkg is not the file the OpenDMTQ release signed, so the server did not take it."])),
+        C("app_windows_updates", "GET", "/app/windows/updates", 401, "no_token", token=None),
         C("app_icon", "GET", "/app/icon", 200),
         C("app_icon", "GET", "/app/icon", 404, "not_found", setup=no_icon),
         C("builds_list", "GET", "/builds", 200, check=lambda t, inst, r: t.assertEqual(len(r.get_json()["items"]), 2)),
@@ -1867,7 +1901,7 @@ PAGE_ACTIONS = {
     # The frame every page's script asks for, with the bar's word and the sentence about the game server: the status.
     "look": ["status"],
     "look?for": ["status"],
-    "app_page": ["app_get", "builds_list", "builds_start", "job_get"],
+    "app_page": ["app_get", "app_windows_updates", "builds_list", "builds_start", "job_get"],
     "app_page?built": ["job_get"],
     "app_page?job": ["job_get"],
     "app_page?host": ["builds_start"],
@@ -1980,6 +2014,8 @@ SITE_PAGES = {
     "download.php": ["site_home", "invite_get", "invite_qr", "app_icon"],
     "apk.php": ["build_download"],
     "windows.php": ["app_windows"],
+    # The launchers' updates: the release's own files with no sign-in, which the route names and describes.
+    "updates.php": ["app_windows_updates"],
     "icon.php": ["app_icon"],
     "qr.php": ["invite_qr"],
     "songs.php": ["site_songs"],

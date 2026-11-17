@@ -265,6 +265,25 @@ def said(e):
     return t(e.key, **e.values) if isinstance(e, songs.SongError) else str(e)
 
 
+# A release's file the tools refused for its signature, by the English sentence signing.py and runtime.py word it with
+# (the tools note it so, for the log and the command line): the key of the same in the pages' words, and its values.
+REFUSALS = (
+    (re.compile(r"^(?P<file>\S+) is not the file the release signed$"), "release.unsigned_file"),
+    (re.compile(r"^(?P<file>\S+) is not signed by the OpenDMTQ project$"), "release.unsigned_sums"),
+    (re.compile(r"^the release (?P<v>\S+) has no signed checksums$"), "release.no_sums"),
+)
+
+
+def refusal(sentence):
+    """A release's file the tools refused for its signature, by the English sentence they noted (REFUSALS), in the page
+    language as HTML; None for any other sentence."""
+    for pattern, key in REFUSALS:
+        found = pattern.match((sentence or "").strip())
+        if found:
+            return t(key, **found.groupdict())
+    return None
+
+
 def server_name():
     """The server's name in the app's title, as patch_apk.server_name() decides for this address:
     SERVER_NAME, or the address exactly as set, port included (several servers can share a host)."""

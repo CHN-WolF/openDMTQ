@@ -836,7 +836,10 @@ def setup_page():
         view["running"] = bool(jobs.running_build()) or builder_running()
         # The runtime for phones without 32-bit support: in the app when it is here.
         view["runtime"] = runtime_in_place()
-        view["runtime_failed"] = runtime_failure()
+        # Refused for its signature: said in the page's words, without the sentence's own full stop (the line has one).
+        failed = runtime_failure()
+        refused = core.refusal(failed)
+        view["runtime_failed"] = refused.rstrip(".") if refused is not None else failed
         view["has_apk"] = has_base_apk()
         # The QR code of the download page, made with the app (an app from before it has none).
         view["qr"] = os.path.isfile(os.path.join(core.APK, "out", "download-qr.svg"))

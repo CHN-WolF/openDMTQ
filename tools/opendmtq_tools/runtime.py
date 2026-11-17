@@ -16,6 +16,11 @@ and it comes to data/apk/arm32 from the first of:
 Otherwise what is in place stays: an app's build does not replace a runtime built here (arm32/bundle.sh) behind the back of whoever
 built it.
 
+What comes from a release is checked before it is used: the release's checksums, fetched with it, carry the OpenDMTQ project's
+signature (signing.py), and the zip is the file they sum. A copy put in data/apk by hand is checked the same way when the release's
+checksums and their signature are beside it (a host install's kit carries them); one that does not match is refused, in words the
+setup page shows (strings.py release.unsigned_file).
+
 Usage: python3 -m opendmtq_tools.runtime                 the runtime, unless it is in place
        python3 -m opendmtq_tools.runtime --refresh       the same, and the latest release's when it is another version
        python3 -m opendmtq_tools.runtime --pack DIR ZIP  a bundle as that zip, for a release and the Windows bundle
@@ -33,6 +38,13 @@ import urllib.error
 import urllib.request
 import zipfile
 import zlib
+
+try:
+    # In the tools' package.
+    from . import signing
+except ImportError:
+    # Run as a file of its own (python3 runtime.py --pack, by the release job): the module beside it.
+    import signing
 
 # The zip's name beside this file, in data/apk and in a release job's build.
 ZIP_NAME = "opendmtq-arm32-runtime.zip"
@@ -88,6 +100,74 @@ def latest_version(releases=None):
 def release_url(name, version, releases=None):
     """Where the release `version` keeps its file `name` (a pattern with {version})."""
     return f"{releases or RELEASES}/download/v{version}/{name.format(version=version)}"
+
+
+class Missing(RuntimeError_):
+    """A release with no such file (404): a release from before its files were signed, or no release of that version."""
+
+
+def _small(url, limit):
+    """A release's small file (its checksums, their signature) as bytes, at most `limit` and one more."""
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
+            return r.read(limit + 1)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise Missing(f"{url} is not there") from None
+        raise RuntimeError_(f"could not fetch {url}: {e}") from e
+    except (OSError, http.client.HTTPException) as e:
+        raise RuntimeError_(f"could not fetch {url}: {e}") from e
+
+
+def release_sums(version, releases=None):
+    """{file name: SHA-256} of the release `version`: its checksums, fetched with their signature and checked against the
+    project's key (signing.check_sums). signing.Unsigned when they do not check out; Missing for a release without them."""
+    try:
+        data = _small(release_url(signing.SUMS_NAME, version, releases), signing.SUMS_LIMIT)
+    except Missing:
+        # No such file: no release of that version, or one from before releases were signed (strings.py words it).
+        raise Missing(f"the release {version} has no signed checksums") from None
+    try:
+        signature = _small(release_url(signing.SUMS_NAME + signing.SIG_SUFFIX, version, releases), signing.SIG_SIZE)
+    except Missing:
+        # Checksums and no signature: nothing says the project made them.
+        raise signing.Unsigned(f"{signing.sums_name(version)} is not signed by the OpenDMTQ project") from None
+    return signing.check_sums(data, signature, version)
+
+
+def sums_beside(folder, version):
+    """{file name: SHA-256} of the release `version` from its checksums and their signature in `folder` (put there with a
+    file of the release, by hand or by a host install's kit), checked; None when they are not there. signing.Unsigned when
+    they are and do not check out."""
+    path = os.path.join(folder, signing.sums_name(version))
+    try:
+        with open(path, "rb") as f:
+            data = f.read(signing.SUMS_LIMIT + 1)
+        with open(path + signing.SIG_SUFFIX, "rb") as f:
+            signature = f.read(signing.SIG_SIZE + 1)
+    except OSError:
+        return None
+    return signing.check_sums(data, signature, version)
+
+
+def checked(path, name, version, sums):
+    """Nothing when the file at `path` is the release `version`'s file `name` as its signed checksums give it; else
+    RuntimeError_ with the words of signing.Unsigned ("... is not the file the release signed"), which the setup page shows
+    in its own language (strings.py release.unsigned_file)."""
+    try:
+        signing.check_file(sums, name.format(version=version), path)
+    except signing.Unsigned as e:
+        raise RuntimeError_(str(e)) from None
+
+
+def version_named(path, pattern):
+    """The version a release's file name says (the part that stands for {version} in `pattern`), or None."""
+    head, _, tail = pattern.partition("{version}")
+    name = os.path.basename(path)
+    if not (name.startswith(head) and name.endswith(tail)):
+        return None
+    found = name[len(head):len(name) - len(tail)]
+    return found if re.fullmatch(r"[0-9][0-9A-Za-z.+-]*", found) else None
 
 
 def by_hand(apk_dir):
@@ -207,6 +287,14 @@ def add_runtime(apk_dir=None, refresh=False):
     if os.path.isfile(came_with_the_program):
         put_in_place(came_with_the_program, dest, have)
     elif put_there:
+        # A release's file with the release's signed checksums beside it (a kit carries them): checked against them first.
+        version = version_named(put_there, RELEASE_NAME)
+        try:
+            sums = sums_beside(apk_dir, version) if version else None
+        except signing.Unsigned as e:
+            raise RuntimeError_(str(e)) from None
+        if sums is not None:
+            checked(put_there, RELEASE_NAME, version, sums)
         put_in_place(put_there, dest, have)
         # The one taken goes, and with it any older one downloaded before: the next build would take that one back.
         for path in [put_there] + glob.glob(os.path.join(glob.escape(apk_dir), RELEASE_GLOB)):
@@ -217,7 +305,14 @@ def add_runtime(apk_dir=None, refresh=False):
         work = tempfile.mkdtemp(dir=apk_dir, prefix=".runtime-")
         try:
             path = os.path.join(work, ZIP_NAME)
-            fetch(release_url(RELEASE_NAME, latest_version()), path)
+            latest = latest_version()
+            # The release's signed checksums first: without them nothing of it is fetched.
+            try:
+                sums = release_sums(latest)
+            except signing.Unsigned as e:
+                raise RuntimeError_(str(e)) from None
+            fetch(release_url(RELEASE_NAME, latest), path)
+            checked(path, RELEASE_NAME, latest, sums)
             put_in_place(path, dest, have)
         finally:
             shutil.rmtree(work, ignore_errors=True)

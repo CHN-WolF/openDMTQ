@@ -390,6 +390,20 @@ def windows_view(made):
 
 
 @handler
+def app_windows_updates(args):
+    """GET /app/windows/updates: what the App page says of the PC client's updates the site hands out (apps.pc_updates),
+    file by file, and what the tools refused for its signature."""
+    kept, refused = apps.pc_updates()
+    kept = kept or {}
+    return {"version": kept.get("version"),
+            "files": [{"file": name, "size": about.get("size"), "sha256": about.get("sha256")}
+                      for name, about in sorted((kept.get("files") or {}).items())],
+            "full": kept.get("full"), "delta": kept.get("delta"), "delta_from": kept.get("delta_from"),
+            "signed_by": kept.get("signed_by"), "source": kept.get("source"), "kept_at": kept.get("kept_at"),
+            "refused": [plain(said) for said in refused]}
+
+
+@handler
 def app_windows(args):
     """GET /app/windows: the App page's Download for Windows (apps.windows_download), as the site hands it out."""
     if not apps.windows_offer():

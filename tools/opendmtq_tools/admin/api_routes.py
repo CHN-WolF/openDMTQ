@@ -248,6 +248,27 @@ SHAPES = {
         Field("sha256", "string", "Its SHA-256 as kept."),
         Field("version", "string", "The OpenDMTQ version it is from; null for a copy put on the server by hand.", nullable=True),
         Field("copied_at", "string", "When the builder put it beside the app (YYYY-MM-DDTHH:MM:SS).")]),
+    "PcClientUpdates": Shape("The PC client's updates the site hands to the launchers that play on this server, at /updates/ on "
+                             "its one port, as the builder keeps them: those of the installer's version, checked against the "
+                             "OpenDMTQ project's signature.", [
+        Field("version", "string", "The version they update to; null when the site hands out none (the launchers then look "
+              "at GitHub's releases, up to this server's version).", nullable=True),
+        Field("files", "[UpdateFile]", "Each file the site hands out: the update feed, the full package, the delta "
+              "package, the release's checksums and their signature."),
+        Field("full", "string", "The full package's file name.", nullable=True),
+        Field("delta", "string", "The delta package's file name; null when there is none.", nullable=True),
+        Field("delta_from", "string", "The version the delta package starts from: a launcher of that version downloads it "
+              "instead of the full package.", nullable=True),
+        Field("signed_by", "string", "The public key (hex) whose signature the checksums carry.", nullable=True),
+        Field("source", "string", "Where the builder took them from.", nullable=True,
+              enum=["beside the code", "data/apk", "the release"]),
+        Field("kept_at", "string", "When the builder put them there (YYYY-MM-DDTHH:MM:SS).", nullable=True),
+        Field("refused", "[string]", "A release's file the builder refused because it is not the one the OpenDMTQ "
+              "project signed (the installer, or these updates), each said in a sentence.")]),
+    "UpdateFile": Shape("One file of the PC client's updates.", [
+        Field("file", "string", "Its name, as the release has it and /updates/ hands it out."),
+        Field("size", "integer", "Its size (bytes)."),
+        Field("sha256", "string", "Its SHA-256.")]),
     "Build": Shape("A build of the app.", [
         Field("file", "string", "Its file name."),
         Field("address", "string", "The address it is built for."),
@@ -738,6 +759,11 @@ ROUTES = [
                                                "or other details on its end): download it again from the start."),
                   (416, "range_not_satisfiable", "The part asked for begins past the end; `Content-Range: bytes */length` says the "
                                                  "length.")]),
+    # What the site hands the launchers that play here (client_updates.py, apps.pc_updates).
+    Route("GET", "/app/windows/updates", "read", "app_windows_updates", "App", "The PC client's updates the site hands out "
+          "to the launchers that play on this server, and what the builder refused for its signature.",
+          "Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks "
+          "there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.", answer="PcClientUpdates"),
     Route("GET", "/app/icon", "read", "app_icon", "App", "The launcher icon of the app on offer, as the builder kept it.",
           download="image/png", errors=[(404, "not_found", "No icon is kept.")]),
     Route("GET", "/builds", "read", "builds_list", "App", "Every build of the app, newest first.", answer="BuildList"),

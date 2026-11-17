@@ -112,13 +112,24 @@ jobs:
           arm32/build_windows.sh player
           arm32/bundle_windows.sh dist/opendmtq-player-windows.zip
 
+      # The previous release's full package of the PC client (the latest release, before this one is made), from which
+      # the build makes this release's delta package (client/packaging/windows/previous.py).
+      - name: The previous release's PC client package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p _work/previous
+          gh release download --repo "${{ github.repository }}" --dir _work/previous --pattern '*-full.nupkg' || true
+          ls -la _work/previous
+
       # The PC client: its installer, with the release for players and for servers that fetch it, and in the tools image
       # and the Windows bundle beside the code that hands it out set up for each server
       # (tools/opendmtq_tools/windows_client.py), as OpenDMTQ-Setup.exe with its version; and Velopack's update feed and
-      # package, from which installed clients update themselves (this repository's releases).
+      # packages, from which installed clients update themselves (through their server, or this repository's releases).
       - name: The PC client
         env:
           OPENDMTQ_UPDATE_SOURCE: ${{ github.server_url }}/${{ github.repository }}
+          OPENDMTQ_PREVIOUS_RELEASE: _work/previous
           PLAYER_ZIP: dist/opendmtq-player-windows.zip
         run: |
           client/packaging/windows/build.sh _work/client-release
@@ -146,6 +157,13 @@ jobs:
           helm package deploy/helm/opendmtq --version "$VERSION" --app-version "$VERSION" -d dist
           python3 .github/release_assets.py layout "$VERSION" dist/release --runtime dist/opendmtq-arm32-runtime.zip \
             --client dist/client --windows dist/OpenDMTQ-windows.zip --chart "dist/opendmtq-$VERSION.tgz"
+          # The PC client's update files, signed, beside the tools' code: the tools image below carries them, and a server
+          # of this release hands them to its launchers without fetching them (tools/opendmtq_tools/client_updates.py).
+          # The Windows bundle cannot: the checksums name its own hash.
+          mkdir -p tools/opendmtq_tools/pc-client-updates
+          cp dist/release/releases.win.json dist/release/opendmtq.client-"$VERSION"-*.nupkg \
+            dist/release/opendmtq-"$VERSION"-sha256sums.txt dist/release/opendmtq-"$VERSION"-sha256sums.txt.sig \
+            tools/opendmtq_tools/pc-client-updates/
 
       - name: Server image (amd64, arm64)
         uses: docker/build-push-action@v7

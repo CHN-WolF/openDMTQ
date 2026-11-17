@@ -6,10 +6,17 @@ file to set the launcher up for this server. Players then sign in from the launc
 The installer comes from the first of: the copy beside this code (a release's tools image and the Windows bundle have
 one); one in data/apk (put there by hand or by a host install's kit, for a server without internet, or fetched there
 before; one put there as downloaded from a release, opendmtq-pc-client-1.2.3-windows-x64-setup.exe, takes this
-program's name with its version beside it); the project's latest release, fetched into data/apk when there is none, as
-the runtime for newer phones is (runtime.py). A copy in data/apk a week old gives way to the latest release's, and
-stays when that cannot be had. A fetch that fails is not tried again for a day: a server without internet would wait
-for it at every start. Without any copy, the site offers none.
+program's name with its version beside it); the project's release of this server's own version (OPENDMTQ_VERSION's
+release part), else the latest release, fetched into data/apk when there is none, as the runtime for newer phones is
+(runtime.py). A copy in data/apk a week old gives way to that release's, and stays when that cannot be had. A fetch that
+fails is not tried again for a day: a server without internet would wait for it at every start. Without any copy, the
+site offers none.
+
+What is fetched is checked before it is used: the release's checksums carry the OpenDMTQ project's signature
+(signing.py), and the installer is the file they sum. One put in data/apk by hand is checked the same way when the
+release's checksums and their signature are beside it. One that does not match is refused and said
+(client-windows-error.txt), and what was there stays. The PC client's updates the server hands out follow the
+installer's version (client_updates.py).
 
 The builder copies it into data/apk/out, where the portal reads it, and describes it in windows.json there (keep()).
 """
@@ -25,7 +32,7 @@ import struct
 import time
 import urllib.request
 
-from . import runtime
+from . import runtime, signing
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # The installer as a release ships it, and the file beside it that says its version.
@@ -99,12 +106,39 @@ def bundled(path=None):
     return path, version_beside(path)
 
 
-def fetch(releases, path):
-    """The latest release's installer to `path`, through a file beside it that takes its name once whole and checked, with
-    its version beside it: a copy already there stays when the download fails or brings a damaged one."""
-    # Which release is the latest: its version is in the installer's name there.
+def own_release():
+    """The release this server's code is (OPENDMTQ_VERSION's first part: 0.11.0 for 0.11.0 and for 0.11.0-16e0b56, a
+    copy past it), or None when it names none."""
+    found = re.match(r"(\d+\.\d+\.\d+)(?:-|$)", os.environ.get("OPENDMTQ_VERSION") or "")
+    return found.group(1) if found else None
+
+
+def wanted_release(releases):
+    """(version, its signed checksums) of the release whose installer this server hands out: the release of its own
+    version when there is one, so that its launchers are matched to it; else (a copy past its last release that names
+    the next one already, or one that names none) the latest. signing.Unsigned when the checksums do not check out."""
+    own = own_release()
+    if own:
+        try:
+            return own, runtime.release_sums(own, releases)
+        except runtime.Missing:
+            # No release of this version yet: the latest instead.
+            pass
     latest = runtime.latest_version(releases)
-    url = runtime.release_url(RELEASE_NAME, latest, releases)
+    return latest, runtime.release_sums(latest, releases)
+
+
+def fetch(releases, path):
+    """The installer of the release this server hands out (wanted_release) to `path`, through a file beside it that takes
+    its name once whole and checked against the release's signed checksums, with its version beside it: a copy already
+    there stays when the download fails or brings another file. A copy there that is already that release's file stays
+    as it is, its time made new, and nothing is downloaded."""
+    version, sums = wanted_release(releases)
+    name = RELEASE_NAME.format(version=version)
+    if os.path.isfile(path) and version_beside(path) == version and sums.get(name) == sha256(path):
+        os.utime(path)
+        return
+    url = runtime.release_url(RELEASE_NAME, version, releases)
     print(f"builder: fetching the installer for Windows from {url}", flush=True)
     part = path + ".part"
     try:
@@ -113,10 +147,12 @@ def fetch(releases, path):
         # Read whole before it replaces anything: a file damaged on its way is no installer.
         if not whole(part):
             raise ValueError(f"{SETUP_NAME} from {url} is damaged")
+        # And the file the release signed, before it replaces anything either.
+        signing.check_file(sums, name, part)
         os.replace(part, path)
         # The tag's version: where GitHub's redirects end (its file store) names none.
         with open(path + ".version", "w", encoding="utf-8") as f:
-            f.write(latest + "\n")
+            f.write(version + "\n")
     finally:
         # What a cut-off or damaged download left (a stop of the builder too: SystemExit passes through here).
         remove(part)
@@ -131,6 +167,17 @@ def adopt(apk_dir, placed):
     newest = max(found, key=runtime.numbers_in)
     # The version from the name: ...-pc-client-1.2.3-windows-x64-setup.exe.
     version = re.search(r"-pc-client-([0-9][0-9a-z.+]*)-windows-", os.path.basename(newest))
+    # The release's signed checksums beside it (a host install's kit carries them): it is checked against them first,
+    # and one that is not the file the release signed is not taken; it stays, and the note says why.
+    try:
+        sums = runtime.sums_beside(apk_dir, version.group(1)) if version else None
+        if sums is not None:
+            signing.check_file(sums, os.path.basename(newest), newest)
+    except signing.Unsigned as e:
+        print(f"builder: {os.path.basename(newest)} in data/apk is refused: {e}", flush=True)
+        with open(os.path.join(apk_dir, FAILED), "w", encoding="utf-8") as f:
+            f.write(f"{e}\n")
+        return
     if whole(newest):
         os.replace(newest, placed)
         with open(placed + ".version", "w", encoding="utf-8") as f:

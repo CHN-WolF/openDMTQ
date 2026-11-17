@@ -14,7 +14,7 @@ from flask import Response, abort, flash, redirect, render_template, request, se
 from werkzeug.exceptions import NotFound
 from werkzeug.http import http_date
 
-from .. import windows_client
+from .. import client_updates, windows_client
 from . import core, jobs
 from .core import Refused, app, BASE, changed, human, safe_name, t, tp
 
@@ -227,9 +227,11 @@ def app_page():
     listed = builds()
     offer, state, _ = offer_state(listed)
     typed = job.get("host") or request.args.get("host") or ""
+    updates, refused = pc_updates()
     return render_template("app.html", offer=offer, state=state, windows=windows_offer(offer), others=[b for b in listed if not b["current"]],
                            job=wanted or None, running=jobs.running_build(), host=typed if typed != core.PUBLIC_HOST else "",
-                           icon=os.path.isfile(os.path.join(core.APK, "out", "app-icon.png")))
+                           icon=os.path.isfile(os.path.join(core.APK, "out", "app-icon.png")), updates=updates,
+                           updates_size=updates_size(updates), refused=refused)
 
 
 @app.route(BASE + "/app/icon.png")
@@ -289,6 +291,31 @@ def download(name):
 @app.route(BASE + "/app/download/<name>")
 def app_download(name):
     return download(name)
+
+
+def pc_updates():
+    """The PC client's updates the site hands out (client_updates.py's updates.json, or None), and what the tools refused
+    for its signature, the installer or those updates, each in the page's words (core.refusal): the App page's lines,
+    and GET /app/windows/updates."""
+    notes = [client_updates.failure(core.APK)]
+    try:
+        with open(os.path.join(core.APK, windows_client.FAILED), encoding="utf-8") as f:
+            notes.append(f.read().strip())
+    except OSError:
+        pass
+    refused = [said for said in (core.refusal(note) for note in notes) if said is not None]
+    return client_updates.kept(os.path.join(core.APK, "out")), refused
+
+
+def updates_size(updates):
+    """What a PC client downloads for the update: the full package's size, and the delta package's from the version it
+    starts from when there is one."""
+    if not updates:
+        return ""
+    files = updates.get("files") or {}
+    size = human((files.get(updates.get("full")) or {}).get("size") or 0)
+    delta = (files.get(updates.get("delta")) or {}).get("size")
+    return tp("app.updates_size", size=size, delta=human(delta), base=updates.get("delta_from")) if delta else size
 
 
 def windows_offer(offer=None):

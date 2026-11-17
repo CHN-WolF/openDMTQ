@@ -3,6 +3,7 @@ release), what a damaged copy, a failed fetch or a stop leave, how it is describ
 address it carries on its end as it is handed out."""
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -10,6 +11,7 @@ import struct
 import tempfile
 import time
 import unittest
+import urllib.error
 import urllib.request
 from unittest import mock
 
@@ -48,16 +50,34 @@ class Answer(io.BytesIO):
         return self.url
 
 
-def release(download, version):
+# A key made for these tests: the signing module takes it in place of the project's while they run (Place).
+TEST_SEED = bytes(range(32))
+TEST_KEY = windows_client.signing.public_key(TEST_SEED).hex()
+
+
+def release(download, version, signed=None, seed=TEST_SEED, releases=None):
     """urlopen as GitHub answers it for the release `version`: its /latest (a HEAD request) redirected to the tag's page,
-    then `download` for the installer. The calls are kept in `.asked`, each as (method, address)."""
+    its checksums of the installer as released (`signed`, the bytes of `download` unless given) and their signature with
+    `seed`, then `download` for the installer. `releases`: {version: installer bytes} of other releases there are (one
+    of another version is 404 otherwise). The calls are kept in `.asked`, each as (method, address), the checksums' in
+    `.signed`."""
     def answer(url, timeout=None):
         if isinstance(url, urllib.request.Request):
             answer.asked.append((url.get_method(), url.full_url))
             return Answer(b"", f"{windows_client.RELEASES}/tag/v{version}")
+        if url.endswith(("-sha256sums.txt", "-sha256sums.txt.sig")):
+            answer.signed.append(url)
+            tag = url.split("/download/v", 1)[1].split("/", 1)[0]
+            body = (signed if signed is not None else download.getvalue()) if tag == version else (releases or {}).get(tag)
+            if body is None:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            name = windows_client.RELEASE_NAME.format(version=tag)
+            sums = f"{hashlib.sha256(body).hexdigest()}  {name}\n".encode()
+            return io.BytesIO(windows_client.signing.sign(seed, sums) if url.endswith(".sig") else sums)
         answer.asked.append(("GET", url))
-        return download
-    answer.asked = []
+        tag = url.split("/download/v", 1)[1].split("/", 1)[0]
+        return download if tag == version else Answer((releases or {})[tag], url)
+    answer.asked, answer.signed = [], []
     return answer
 
 
@@ -78,8 +98,11 @@ class Place:
         os.makedirs(self.out)
         os.makedirs(self.code)
         # Nothing beside the code unless a test puts it there, and no way out to the internet unless a test opens one.
+        # The test's key in place of the project's, and no version of the server's own unless a test gives one.
         self._patches = [mock.patch.object(windows_client, "HERE", self.code),
                          mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=OSError("no way out")),
+                         mock.patch.object(windows_client.signing, "KEYS", (TEST_KEY,)),
+                         mock.patch.dict(os.environ, {"OPENDMTQ_VERSION": ""}),
                          contextlib.redirect_stdout(io.StringIO())]
         for p in self._patches:
             p.__enter__()
@@ -177,6 +200,88 @@ class FindTest(unittest.TestCase):
             with open(placed, "rb") as f:
                 self.assertEqual(f.read(6), b"MZgood")
             self.assertFalse(os.path.exists(placed + ".part"))
+
+    def test_the_installer_is_the_file_the_release_signed_or_it_replaces_nothing(self):
+        # DEP-64: the release's signed checksums are asked for before the installer, and an installer that is not the
+        # file they sum replaces nothing; the note says why in the words the App page shows (admin/core.py REFUSALS).
+        with Place() as p:
+            placed = installer(os.path.join(p.apk, windows_client.SETUP_NAME), body=b"good", version="1.0.0")
+            written_ago(placed, days=8)
+            other = Answer(b"MZother" + bytes(windows_client.SMALLEST), "https://objects.example.com/a1b2")
+            answer = release(other, "1.1.0", signed=b"MZsigned" + bytes(windows_client.SMALLEST))
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=answer):
+                self.assertEqual(windows_client.find(p.apk), (placed, "1.0.0"))
+            self.assertEqual([u.rsplit("/", 1)[1] for u in answer.signed],
+                             ["opendmtq-1.1.0-sha256sums.txt", "opendmtq-1.1.0-sha256sums.txt.sig"])
+            with open(placed, "rb") as f:
+                self.assertEqual(f.read(6), b"MZgood")
+            with open(os.path.join(p.apk, windows_client.FAILED), encoding="utf-8") as f:
+                self.assertEqual(f.read().strip(), "opendmtq-pc-client-1.1.0-windows-x64-setup.exe is not the file the release signed")
+            self.assertFalse(os.path.exists(placed + ".part"))
+
+    def test_a_release_signed_by_another_key_gives_nothing(self):
+        with Place() as p:
+            fetched = Answer(b"MZ" + bytes(windows_client.SMALLEST), "https://objects.example.com/c3d4")
+            answer = release(fetched, "2.0.0", seed=bytes(32))
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=answer):
+                self.assertEqual(windows_client.find(p.apk), (None, None))
+            # The installer itself is never asked for.
+            self.assertEqual([a for a in answer.asked if a[0] == "GET"], [])
+            with open(os.path.join(p.apk, windows_client.FAILED), encoding="utf-8") as f:
+                self.assertEqual(f.read().strip(), "opendmtq-2.0.0-sha256sums.txt is not signed by the OpenDMTQ project")
+
+    def test_the_servers_own_release_comes_before_the_latest(self):
+        # A server of 0.8.1 (past it by a commit) hands out 0.8.1's installer, whatever the latest is: its launchers are
+        # matched to it. A server whose own version has no release takes the latest.
+        with Place() as p:
+            own = b"MZ0.8.1" + bytes(windows_client.SMALLEST)
+            latest = Answer(b"MZ0.9.0" + bytes(windows_client.SMALLEST), "https://objects.example.com/e5f6")
+            answer = release(latest, "0.9.0", releases={"0.8.1": own})
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=answer), \
+                    mock.patch.dict(os.environ, {"OPENDMTQ_VERSION": "0.8.1-16e0b56"}):
+                path, version = windows_client.find(p.apk)
+            self.assertEqual(version, "0.8.1")
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(7), b"MZ0.8.1")
+            # No HEAD for the latest: the server's own release was there.
+            self.assertEqual([a for a in answer.asked if a[0] == "HEAD"], [])
+            os.remove(path)
+            os.remove(path + ".version")
+            answer = release(latest, "0.9.0")
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=answer), \
+                    mock.patch.dict(os.environ, {"OPENDMTQ_VERSION": "0.9.1-abcdef0"}):
+                self.assertEqual(windows_client.find(p.apk)[1], "0.9.0")
+
+    def test_a_week_old_copy_that_is_the_releases_own_file_is_not_downloaded_again(self):
+        with Place() as p:
+            body = b"MZsame" + bytes(windows_client.SMALLEST)
+            placed = os.path.join(p.apk, windows_client.SETUP_NAME)
+            with open(placed, "wb") as f:
+                f.write(body)
+            with open(placed + ".version", "w", encoding="utf-8") as f:
+                f.write("1.1.0\n")
+            written_ago(placed, days=8)
+            answer = release(Answer(body, "https://objects.example.com/a1b2"), "1.1.0")
+            with mock.patch.object(windows_client.urllib.request, "urlopen", side_effect=answer):
+                self.assertEqual(windows_client.find(p.apk), (placed, "1.1.0"))
+            self.assertEqual([a for a in answer.asked if a[0] == "GET"], [])
+            # Its time is made new: the next look is a week from now.
+            self.assertTrue(windows_client.fresh(placed, windows_client.REFRESH_AFTER))
+
+    def test_one_by_hand_with_its_releases_checksums_beside_it_is_checked_against_them(self):
+        with Place() as p:
+            name = windows_client.RELEASE_NAME.format(version="0.11.0")
+            installer(os.path.join(p.apk, name), body=b"kit")
+            sums = f"{hashlib.sha256(b'another').hexdigest()}  {name}\n".encode()
+            with open(os.path.join(p.apk, "opendmtq-0.11.0-sha256sums.txt"), "wb") as f:
+                f.write(sums)
+            with open(os.path.join(p.apk, "opendmtq-0.11.0-sha256sums.txt.sig"), "wb") as f:
+                f.write(windows_client.signing.sign(TEST_SEED, sums))
+            self.assertEqual(windows_client.find(p.apk), (None, None))
+            # Refused, and left where it was put; the note says why.
+            self.assertTrue(os.path.isfile(os.path.join(p.apk, name)))
+            with open(os.path.join(p.apk, windows_client.FAILED), encoding="utf-8") as f:
+                self.assertEqual(f.read().strip(), name + " is not the file the release signed")
 
     def test_a_damaged_copy_goes(self):
         with Place() as p:

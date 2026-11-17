@@ -5,7 +5,8 @@ when there is none yet, or the newest one was made for another address, another 
 older patcher, another signing key or another arm32 runtime bundle, or its file is damaged.
 Otherwise it exits at once. The runtime for newer phones comes first, when it is not in place yet (runtime.py). Each run leaves its outcome in data/apk/out/build.json for the portal,
 the admin pages and the command line. The installer for Windows (windows_client.py) is put beside the app once build.json
-says the app is done: what becomes of it changes nothing for phones.
+says the app is done, and the PC client's updates of its version after it (client_updates.py): what becomes of them
+changes nothing for phones.
 
 Usage (inside the tools container): python3 -m opendmtq_tools.builder [--force]
 """
@@ -20,7 +21,7 @@ import sys
 import threading
 import time
 
-from . import patch_apk, runtime, windows_client
+from . import client_updates, patch_apk, runtime, windows_client
 
 OUT = os.path.join(patch_apk.APK_DIR, "out")
 # A status still saying "building" after this long belongs to a run that was cut off (its container
@@ -132,6 +133,14 @@ def windows_installer():
         return
     if name:
         print(f"builder: installer for Windows {name}", flush=True)
+    # The PC client's updates of the installer's version, which the site hands to the launchers that play here
+    # (client_updates.py): with the installer, and stopping nothing either.
+    try:
+        client_updates.keep(OUT)
+    except Exception as e:  # noqa: BLE001 - a full disk, a damaged file: the app and the installer are still good
+        print(f"builder: no updates for PC clients: {short_reason(e)}", flush=True)
+    except (SystemExit, KeyboardInterrupt) as e:
+        print(f"builder: the updates for PC clients {short_reason(e)}", flush=True)
 
 
 def main(argv=None):

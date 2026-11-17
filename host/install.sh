@@ -231,6 +231,21 @@ main() {
     fi
     ok "the installer for Windows, for the site"
   fi
+  # The release's checksums and their signature, beside the two above: the app builder checks each against them
+  # (tools/opendmtq_tools/signing.py); and with them the PC client's update feed and packages, which the site hands to
+  # the launchers that play on this server (tools/opendmtq_tools/client_updates.py).
+  local sums version name
+  sums=$(kit_file 'opendmtq-*-sha256sums.txt' '')
+  if [[ -n $sums && -f $sums.sig ]]; then
+    mkdir -p "$REPO/data/apk/pc-client-updates"
+    cp "$sums" "$sums.sig" "$REPO/data/apk/"
+    cp "$sums" "$sums.sig" "$REPO/data/apk/pc-client-updates/"
+    version=$(basename "$sums" | sed 's/^opendmtq-\(.*\)-sha256sums\.txt$/\1/')
+    for name in releases.win.json "opendmtq.client-$version-full.nupkg" "opendmtq.client-$version-delta.nupkg"; do
+      [[ ! -f $KIT/$name ]] || cp "$KIT/$name" "$REPO/data/apk/pc-client-updates/"
+    done
+    ok "the release's signed checksums, and the PC client's updates for the site"
+  fi
 
   step "The opendmtq command"
   # From now on ./opendmtq in this clone runs the server without containers (the marker tells it so).

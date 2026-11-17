@@ -1,5 +1,6 @@
 """The arm32 runtime, ready-made: one zip with everything in it, from a copy at hand or the latest release, swapped in whole."""
 
+import hashlib
 import io
 import json
 import os
@@ -73,8 +74,20 @@ class Answer(io.BytesIO):
         return self.url
 
 
+# A key made for these tests: the signing module takes it in place of the project's while they run.
+TEST_SEED = bytes(range(32))
+TEST_KEY = runtime.signing.public_key(TEST_SEED).hex()
+
+
+def signed_sums(files, seed=TEST_SEED):
+    """A release's checksums of {name: bytes} as sha256sum writes them, and their signature with `seed`."""
+    sums = "".join(f"{hashlib.sha256(data).hexdigest()}  {name}\n" for name, data in files.items()).encode()
+    return sums, runtime.signing.sign(seed, sums)
+
+
 class AddTest(unittest.TestCase):
-    """The whole way, with the release's server stood in for."""
+    """The whole way, with the release's server stood in for: its signed checksums of the zip as it was released
+    (self.signed, or the zip it serves when that is None), signed with the test's key (self.seed)."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -86,9 +99,14 @@ class AddTest(unittest.TestCase):
         os.makedirs(self.here)
         self.fetched = []
         self.asked = []
+        self.signed_asked = []
         self.release = None
+        self.signed = None
+        self.seed = TEST_SEED
+        self.no_sums = False
         for patch in (mock.patch.object(runtime, "HERE", self.here), mock.patch.object(runtime, "log"),
-                      mock.patch.object(runtime.urllib.request, "urlopen", self.urlopen)):
+                      mock.patch.object(runtime.urllib.request, "urlopen", self.urlopen),
+                      mock.patch.object(runtime.signing, "KEYS", (TEST_KEY,))):
             patch.start()
             self.addCleanup(patch.stop)
 
@@ -104,6 +122,14 @@ class AddTest(unittest.TestCase):
         if isinstance(url, urllib.request.Request):
             self.asked.append((url.get_method(), url.full_url))
             return Answer(b"", runtime.RELEASES + "/tag/v" + self.LATEST)
+        if url.endswith(("-sha256sums.txt", "-sha256sums.txt.sig")):
+            # The release's checksums and their signature: of the zip as released, by the test's key unless said.
+            self.signed_asked.append(url)
+            if self.no_sums:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            with open(self.signed or self.release, "rb") as f:
+                sums, signature = signed_sums({runtime.RELEASE_NAME.format(version=self.LATEST): f.read()}, self.seed)
+            return io.BytesIO(signature if url.endswith(".sig") else sums)
         self.fetched.append(url)
         with open(self.release, "rb") as f:
             return io.BytesIO(f.read())
@@ -143,6 +169,66 @@ class AddTest(unittest.TestCase):
             with self.assertRaises(runtime.RuntimeError_) as e:
                 runtime.latest_version()
         self.assertIn("has no release", str(e.exception))
+
+    def test_the_releases_signed_checksums_come_first_and_the_zip_is_the_file_they_sum(self):
+        # DEP-63: the checksums and their signature before the zip; a zip that is not the one the release signed is
+        # refused in the words the setup page shows (admin/core.py REFUSALS), and nothing is in place.
+        self.release = self.made_zip("v2")
+        self.signed = self.made_zip("v1")
+        with self.assertRaises(runtime.RuntimeError_) as e:
+            runtime.add_runtime(self.apk)
+        self.assertEqual(str(e.exception), "opendmtq-phone-runtime-1.2.3-android-arm64-armv7.zip is not the file the release signed")
+        self.assertIsNone(self.in_place())
+        self.assertEqual([u.rsplit("/", 1)[1] for u in self.signed_asked],
+                         ["opendmtq-1.2.3-sha256sums.txt", "opendmtq-1.2.3-sha256sums.txt.sig"])
+        # The one it signed is taken.
+        self.signed = None
+        runtime.add_runtime(self.apk)
+        self.assertEqual(self.in_place(), "v2")
+
+    def test_a_release_its_project_did_not_sign_gives_nothing(self):
+        # By another key: refused before the zip is asked for.
+        self.release = self.made_zip()
+        self.seed = bytes(32)
+        with self.assertRaises(runtime.RuntimeError_) as e:
+            runtime.add_runtime(self.apk)
+        self.assertEqual(str(e.exception), "opendmtq-1.2.3-sha256sums.txt is not signed by the OpenDMTQ project")
+        self.assertEqual(self.fetched, [])
+        # A release without checksums (every one before 0.11.0): nothing of it either.
+        self.seed, self.no_sums = TEST_SEED, True
+        with self.assertRaises(runtime.RuntimeError_) as e:
+            runtime.add_runtime(self.apk)
+        self.assertEqual(str(e.exception), "the release 1.2.3 has no signed checksums")
+        self.assertEqual(self.fetched, [])
+        self.assertIsNone(self.in_place())
+
+    def test_a_copy_by_hand_with_its_releases_checksums_beside_it_is_checked_against_them(self):
+        # A host install's kit carries the checksums and their signature: the zip is the one they sum, or it is refused
+        # and stays where it was put.
+        os.makedirs(self.apk)
+        name = runtime.RELEASE_NAME.format(version="0.11.0")
+        shutil.copy(self.made_zip("kit"), os.path.join(self.apk, name))
+        with open(self.made_zip("other"), "rb") as f:
+            sums, signature = signed_sums({name: f.read()})
+        with open(os.path.join(self.apk, "opendmtq-0.11.0-sha256sums.txt"), "wb") as f:
+            f.write(sums)
+        with open(os.path.join(self.apk, "opendmtq-0.11.0-sha256sums.txt.sig"), "wb") as f:
+            f.write(signature)
+        self.assertFalse(runtime.add_or_note(self.apk))
+        with open(os.path.join(self.apk, runtime.NOTE), encoding="utf-8") as f:
+            self.assertEqual(f.read(), name + " is not the file the release signed")
+        self.assertIsNone(self.in_place())
+        self.assertTrue(os.path.isfile(os.path.join(self.apk, name)))
+        # With the checksums of the file put there, it is taken.
+        with open(os.path.join(self.apk, name), "rb") as f:
+            sums, signature = signed_sums({name: f.read()})
+        with open(os.path.join(self.apk, "opendmtq-0.11.0-sha256sums.txt"), "wb") as f:
+            f.write(sums)
+        with open(os.path.join(self.apk, "opendmtq-0.11.0-sha256sums.txt.sig"), "wb") as f:
+            f.write(signature)
+        self.assertTrue(runtime.add_or_note(self.apk))
+        self.assertEqual(self.in_place(), "kit")
+        self.assertEqual(self.fetched, [])
 
     def test_a_copy_downloaded_from_a_release_and_put_there_by_hand_is_taken_the_newest_first(self):
         os.makedirs(self.apk)

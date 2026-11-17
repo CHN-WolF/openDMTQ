@@ -324,6 +324,7 @@ The App page: the app on offer, its builds, the way players get it.
 |:---|:---:|:---|
 | [`GET /app`](#get-app) | read | The app players get: its build, whether it is right for this server, a build running now. |
 | [`GET /app/windows`](#get-appwindows) | read | The installer for Windows as the site hands it to computers, set up for this server (its address on the installer's end). |
+| [`GET /app/windows/updates`](#get-appwindowsupdates) | read | The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. |
 | [`GET /app/icon`](#get-appicon) | read | The launcher icon of the app on offer, as the builder kept it. |
 | [`GET /builds`](#get-builds) | read | Every build of the app, newest first. |
 | [`POST /builds`](#post-builds) | write | Starts a build of the app, as the App page's buttons do. |
@@ -351,6 +352,12 @@ Refusals:
 - `404 not_found`: This server keeps no installer for Windows.
 - `412 precondition_failed`: `If-Match` names another file than this server hands out now (another installer, or other details on its end): download it again from the start.
 - `416 range_not_satisfiable`: The part asked for begins past the end; `Content-Range: bytes */length` says the length.
+
+#### `GET /app/windows/updates`
+
+The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.
+
+Answer: `200` with [PcClientUpdates](#pcclientupdates).
 
 #### `GET /app/icon`
 
@@ -1953,6 +1960,28 @@ The installer for Windows (the PC client) as the builder keeps it, before the se
 - `sha256` (string): Its SHA-256 as kept.
 - `version` (string, or null): The OpenDMTQ version it is from; null for a copy put on the server by hand.
 - `copied_at` (string): When the builder put it beside the app (YYYY-MM-DDTHH:MM:SS).
+
+#### PcClientUpdates
+
+The PC client's updates the site hands to the launchers that play on this server, at /updates/ on its one port, as the builder keeps them: those of the installer's version, checked against the OpenDMTQ project's signature.
+
+- `version` (string, or null): The version they update to; null when the site hands out none (the launchers then look at GitHub's releases, up to this server's version).
+- `files` (list of [UpdateFile](#updatefile)): Each file the site hands out: the update feed, the full package, the delta package, the release's checksums and their signature.
+- `full` (string, or null): The full package's file name.
+- `delta` (string, or null): The delta package's file name; null when there is none.
+- `delta_from` (string, or null): The version the delta package starts from: a launcher of that version downloads it instead of the full package.
+- `signed_by` (string, or null): The public key (hex) whose signature the checksums carry.
+- `source` (string, or null): Where the builder took them from. One of `beside the code`, `data/apk`, `the release`.
+- `kept_at` (string, or null): When the builder put them there (YYYY-MM-DDTHH:MM:SS).
+- `refused` (list of string): A release's file the builder refused because it is not the one the OpenDMTQ project signed (the installer, or these updates), each said in a sentence.
+
+#### UpdateFile
+
+One file of the PC client's updates.
+
+- `file` (string): Its name, as the release has it and /updates/ hands it out.
+- `size` (integer): Its size (bytes).
+- `sha256` (string): Its SHA-256.
 
 #### Build
 
