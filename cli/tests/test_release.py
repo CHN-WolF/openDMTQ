@@ -459,35 +459,10 @@ class DeltaTest(TestKey, unittest.TestCase):
 
 
 class NotesTest(unittest.TestCase):
-    """DEP-52: the release notes open with which file is for whom, then the images and their platforms."""
+    """DEP-52: the release notes are the changelog's section of the version, as the project's other releases have them:
+    no table of files (their names say what each is, and docs/install.md says it at length)."""
 
-    def test_the_head_says_who_downloads_what_and_what_programs_read(self):
-        head = assets.notes_head(V)
-        lines = head.splitlines()
-        self.assertEqual(lines[0], "## Which file is for you")
-        # Every file is in it, by its name.
-        for name in assets.names(V).values():
-            self.assertIn(f"`{name}`", head)
-        # A person finds their row by who they are, before any file a program reads.
-        table = [line for line in lines if line.startswith("| ")][2:]
-        self.assertEqual([row.split("|")[1].strip().split(":")[0] for row in table],
-                         ["Players on a PC", "Server owners on Windows", "Server owners on Kubernetes",
-                          "Server owners on Linux or macOS"])
-        self.assertIn("No file: the [install guide](https://github.com/kanggu12/openDMTQ/blob/v1.2.3/docs/install.md)", head)
-        self.assertLess(head.index("Players on a PC"), head.index("Read by programs"))
-        self.assertLess(head.index("Read by programs"), head.index("`releases.win.json`"))
-
-    def test_the_images_platforms_are_the_ones_release_yml_builds(self):
-        head = assets.notes_head(V)
-        workflow = read(".github", "workflows", "release.yml")
-        for image, _, platforms in assets.IMAGES:
-            # The platforms the workflow's build step of that image names, as the notes write them.
-            step = re.search(rf"context: (\w+)\n\s+platforms: ([\w/,]+)\n(?:.*\n){{0,4}}.*/{image}:", workflow)
-            self.assertIsNotNone(step, image)
-            self.assertEqual(platforms.split(" (")[0], " and ".join(step.group(2).split(",")), image)
-            self.assertIn(f"`ghcr.io/kanggu12/{image}`", head)
-
-    def test_release_notes_print_the_head_then_the_changelog(self):
+    def test_release_notes_are_the_changelog_section_alone(self):
         notes = load("release_notes")
         chart, _ = notes.chart_versions(notes.ROOT)
         out = io.StringIO()
@@ -495,9 +470,19 @@ class NotesTest(unittest.TestCase):
         with redirect_stdout(out):
             self.assertEqual(notes.main(["v" + chart, "--root", ROOT]), 0)
         text = out.getvalue()
-        self.assertTrue(text.startswith("## Which file is for you\n"))
-        self.assertIn(f"\n## What changed in {chart}\n", text)
-        self.assertLess(text.index("Which file"), text.index("What changed"))
+        # Exactly the section, each paragraph on one line, and nothing before or after it.
+        section = notes.section(read("CHANGELOG.md"), chart)
+        self.assertEqual(text, notes.unwrap(section) + "\n")
+        # No table of files and no heading of the notes' own.
+        self.assertNotIn("Which file is for you", text)
+        self.assertNotIn("## What changed in", text)
+
+    def test_install_guide_names_every_file_a_person_downloads(self):
+        # What the notes no longer say, the install guide does: every file a person downloads, by its name's pattern.
+        guide = read("docs", "install.md")
+        for key in ("client", "server-windows", "chart"):
+            name = dict((k, n) for k, n, _, _ in assets.FILES)[key].replace("{version}", "<version>")
+            self.assertIn(name, guide, key)
 
 
 class WorkflowTest(unittest.TestCase):

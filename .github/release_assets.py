@@ -66,8 +66,8 @@ TEST_KEYS_ENTRY = "opendmtq_client/update-test-keys.txt"
 # The id the package's manifest must carry: an installed launcher takes another id's package for another program.
 PACKAGE_ID = "OpenDMTQ.Client"
 
-# Every file of a release, in the order the notes list them: (key, name, who it is for, what it runs on). A person
-# downloads one of the first three; programs read the others, and the notes say so. Every name in lower case.
+# Every file of a release: (key, name, who it is for, what it runs on), as docs/install.md describes them. A person
+# downloads one of the first three; programs read the others. Every name in lower case.
 FILES = (
     ("client", "opendmtq-pc-client-{version}-windows-x64-setup.exe", "Players on a PC: the PC client's installer",
      "Windows 10 and 11, x64; Linux with Wine"),
@@ -85,18 +85,10 @@ FILES = (
      ""),
     ("sig", "opendmtq-{version}-sha256sums.txt.sig", "", ""),
 )
-# The ones a person downloads: the table at the top of the notes.
-FOR_PEOPLE = ("client", "server-windows", "chart")
 # The ones a release may be without: the delta package, when there is no release before it to make it from.
 OPTIONAL = ("delta",)
 # The ones the checksums do not list: the checksums themselves, and their signature.
 NOT_SUMMED = ("sums", "sig")
-
-# The images the release pushes, with the platforms each is built for (release.yml's Server image and Tools image).
-IMAGES = (
-    ("opendmtq-server", "the game server and the players' site", "linux/amd64 and linux/arm64"),
-    ("opendmtq-tools", "the server's setup, admin pages and app builder", "linux/amd64 (its 7-Zip is an x86-64 build)"),
-)
 
 # The machine type in a Windows program's header for x64 (IMAGE_FILE_MACHINE_AMD64).
 X64 = 0x8664
@@ -328,36 +320,6 @@ def layout(version, out, runtime, client, windows, chart, signed=True):
             (out / want["sig"]).unlink()
             raise SystemExit(f"the key in {key} is not the project's (its public key {signer} is not in signing.KEYS)")
     return check(version, out, signed=key is not None)
-
-
-def notes_head(version):
-    """The release notes' first part, in Markdown: which file a person downloads, what the others are, the images."""
-    want = names(version)
-    rows = ["## Which file is for you", "", "| Who | File | Runs on |", "| --- | --- | --- |"]
-    for key, _, who, where in FILES:
-        if key in FOR_PEOPLE:
-            rows.append(f"| {who} | `{want[key]}` | {where} |")
-    # Linux and macOS servers have no file: the repository and the images are what they install.
-    rows.append(f"| Server owners on Linux or macOS | No file: the [install guide]({REPO}/blob/v{version}/docs/install.md) "
-                f"(one command, or Docker Compose) | Debian 12, Ubuntu 24.04, macOS, Docker |")
-    rows += ["", "Read by programs, nothing to download by hand:", ""]
-    described = [(key, who) for key, _, who, _ in FILES if key not in FOR_PEOPLE]
-    for i, (key, who) in enumerate(described):
-        # A file with no words of its own goes with the one before (the update feed and its packages, the checksums
-        # and their signature).
-        if not who:
-            continue
-        files = [f"`{want[key]}`"]
-        for k, w in described[i + 1:]:
-            if w:
-                break
-            files.append(f"`{want[k]}`")
-        rows.append(f"- {', '.join(files[:-1]) + ' and ' + files[-1] if len(files) > 1 else files[0]}: {who}")
-    rows += ["", f"Images on GHCR, tagged `{version}` and `latest`:", ""]
-    for image, what, platforms in IMAGES:
-        rows.append(f"- `{REGISTRY}/{image}`: {what}; {platforms}")
-    rows.append(f"- The chart also as `oci://{REGISTRY}/charts/opendmtq`, version `{version}`")
-    return "\n".join(rows)
 
 
 def main(argv=None):
