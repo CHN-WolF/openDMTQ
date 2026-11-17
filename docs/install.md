@@ -16,10 +16,11 @@ All four run the same server. Phones join over the same Wi-Fi, or over the inter
 - **The song data**, if you want the songs: the `DMQ` folder with their music and charts, and `viewImg` for the
   jackets. It can come with the client data or later on its own.
 
-The setup finds them in Downloads or on the Desktop by their names: an archive or an app with `dmtq`, `djmax` or
-`technika` in its name, and a folder by what is in it. Files of other names, or in another place: pick their folder in
-the setup's picker, or `./opendmtq setup --from <folder>` with Docker. The setup says what each file is before it imports
-anything. [The game's files](game-files.md) has every form it accepts.
+The setup finds them by itself in Downloads and on the Desktop, and on Windows and a host install in Documents and your
+home folder too: an archive with `dmtq`, `djmax` or `technika` in its name, an app beside the game's other files or
+named like them, and a folder by what is in it. Files elsewhere: give their folder in the setup (paste its path, or
+click your way to it), or `./opendmtq setup --from <folder>` with Docker. The setup says what each file is before it
+imports anything. [The game's files](game-files.md) has every form it accepts.
 
 <p align="center">
   <img src="images/setup.jpg" alt="The setup in the browser: the game's Android app, the client data and the song data found in Downloads, each labeled with what it is, with a button to import them" width="100%">
@@ -42,6 +43,10 @@ It unpacks to `C:\Users\<you>\OpenDMTQ` and starts the server, and the setup ope
 files in Downloads, on the Desktop or in Documents, or takes the path you paste. It then asks for the address phones
 use and an account for each player, and builds the app.
 
+- **The server's window says where everything is:** the players' site at `http://<this PC>:8791/`, the admin pages at
+  the same address with `/opendmtq/admin/`, and the owner's ID and password, which sign in to both (the password is
+  kept in `.env` in the folder, which Notepad opens).
+
 - **Windows Firewall** asks about Apache: allow it on private networks. If your Wi-Fi is a public network, set it to
   **Private** in Settings, or phones cannot connect.
 - **The server runs while its window is open.** To stop it, close the window, or press **Stop the server** on the admin
@@ -53,14 +58,15 @@ use and an account for each player, and builds the app.
 <details>
 <summary>Without PowerShell</summary>
 
-Download `opendmtq-server-<version>-windows-x64.zip` from [Releases](https://github.com/kanggu12/openDMTQ/releases/latest)
-and unpack it outside OneDrive and Program Files, for example to `C:\OpenDMTQ`. Start `OpenDMTQ.exe`. If Windows says it
-protected your PC, click **More info**, then **Run anyway**: OpenDMTQ.exe is not signed by a publisher Windows knows.
+Download `opendmtq-server-<version>-windows-x64.zip` from
+[Releases](https://github.com/kanggu12/openDMTQ/releases/latest) and unpack it to a folder of your own where it can
+write, for example `C:\OpenDMTQ`. Start `OpenDMTQ.exe`. If Windows says it protected your PC, click **More info**, then
+**Run anyway**: OpenDMTQ.exe is not signed by a publisher Windows knows.
 
 Each release has `opendmtq-<version>-sha256sums.txt`, the SHA-256 of every file in it, signed by the OpenDMTQ project
-([a release's files](#a-releases-files)). In PowerShell, compare `Get-FileHash opendmtq-server-<version>-windows-x64.zip`
-with its line; on Linux, run `sha256sum -c --ignore-missing opendmtq-<version>-sha256sums.txt` in the folder you
-downloaded to.
+([a release's files](#a-releases-files)). In PowerShell, compare
+`Get-FileHash opendmtq-server-<version>-windows-x64.zip` with its line; on Linux, run
+`sha256sum -c --ignore-missing opendmtq-<version>-sha256sums.txt` in the folder you downloaded to.
 </details>
 
 ## Linux or macOS
@@ -71,9 +77,10 @@ Debian, Ubuntu, or a Mac with [Homebrew](https://brew.sh); on another Linux, use
 curl -fsSL https://raw.githubusercontent.com/kanggu12/openDMTQ/main/host/get.sh | sh
 ```
 
-It downloads OpenDMTQ into `~/openDMTQ` (`OPENDMTQ_DIR=<folder>` before `sh` chooses another), installs Apache, PHP, Java and Python from the system's packages, starts the
-server and opens the same setup in the browser. It asks for your password (sudo) to install packages; without a screen
-it prints the setup's address instead. Running it again updates OpenDMTQ.
+It downloads OpenDMTQ into `~/openDMTQ` (`OPENDMTQ_DIR=<folder>` before `sh` chooses another), installs Apache, PHP,
+Java and Python from the system's packages, starts the server and opens the same setup in the browser. It asks for your
+password (sudo) to install packages; without a screen it prints the setup's address instead. Running it again updates
+OpenDMTQ.
 
 ```sh
 cd ~/openDMTQ
@@ -101,8 +108,9 @@ server, builds the app, checks it all and ends with a QR code for phones. Files 
 ```
 
 Sign in to the admin pages at the address the setup ends with (`./opendmtq status` shows it again): the server's own
-address with `/opendmtq/admin/`, for example `http://192.168.1.10:8791/opendmtq/admin/`, as `admin` with `ADMIN_PASSWORD`
-from `.env`. The same ID and password sign in to the players' site. Make an account there for each player. To update, `git pull`, then `./opendmtq up`.
+address with `/opendmtq/admin/`, for example `http://192.168.1.10:8791/opendmtq/admin/`, as `admin` with
+`ADMIN_PASSWORD` from `.env`. The same ID and password sign in to the players' site. Make an account for each player on
+the admin pages' **Accounts** page. To update, `git pull`, then `./opendmtq up`.
 
 ## Kubernetes
 
@@ -132,7 +140,7 @@ Android phone or tablet, or the PC client on a Windows PC: [playing on a server]
 | Move it to another port | admin pages, **Server**, **Move to this port** (or `OpenDMTQ.exe port <port>`) | `./opendmtq port <port>`, or the same page | `./opendmtq port <port>` |
 | Change the owner's password | admin pages, **Server**, **The owner's password** (or `OpenDMTQ.exe password`) | `./opendmtq password`, or the same page | `./opendmtq password` |
 
-Everything else is on the admin pages: the app, songs, players, accounts, recordings and backups.
+Everything else is on the admin pages: the app, songs, players, accounts, broadcasts, backups and notices.
 
 `uninstall` stops the server and removes what it set up, then its folder; `--keep-data` leaves `data` and `.env` in it.
 On Windows that is the folder, the firewall rules Windows made for its programs (Windows asks for permission once) and
@@ -141,20 +149,28 @@ its shortcuts; on Linux and macOS its start with the computer and the `opendmtq`
 images built for it. `delete-data` without parts lists them with their size: `database` (players, scores, accounts),
 `recordings`, `songs` (added ones), `apps`, `backups`, `logs`, `game` (the imported game files); a backup comes first.
 
-An update keeps `data` and `.env`. Phones get a newer app on the site when the update brings one, and PCs update the
-launcher on its **Launcher** page ([the PC client](windows-player.md#the-launcher)).
+An update keeps `data` and `.env`. Phones get a newer app on the site when the update brings one. The PC clients that
+play on the server take the update to its version from the server itself: each launcher offers it on its status line
+and its **Launcher** page ([the PC client](windows-player.md#updates)).
+
+## The server's port
 
 Everything is on the server's one port: the game, the players' site, the admin pages (`/opendmtq/admin/`) and the API
-(`/opendmtq/api/v1/`). A new install takes 8791. A server set up before 0.11.0 on port 80 moves at its first start
-after the update to the port its admin pages had (8791 unless you set another, or the first free one after it), as
-`port` moves it: the app is built again for the new address, the site's download page tells players to install it, and
-the start, `status` and the Server page say it once. A server on another port keeps it. Its admin pages are on that one
-port after the update: nothing answers on their old port, and `.env` no longer names it.
+(`/opendmtq/api/v1/`). A new install takes 8791, or the first free port after it when another program has 8791.
 
-To move a server to another port, use `port` (or the Server page): it sets `LISTEN_PORT` and the port in `PUBLIC_HOST`,
-and from the server's next start it answers there. The app is built again for the new address then, and the site's
-download page tells players, for a month, to install it over the old one (each phone keeps its account). A port another
-program holds is refused. Exposed to the internet, forward the new port on the router instead of the old one.
+To move a server to another port, use `port <port>` (`OpenDMTQ.exe port <port>` on Windows) or the Server page's **Move
+to this port**: it sets `LISTEN_PORT` and the port in `PUBLIC_HOST`, and from the server's next start it answers there.
+The app is built again for the new address then, and the site's download page tells players, for a month, to install it
+over the old one (each phone keeps its account; a Windows PC runs the installer from the page again). A port another
+program holds is refused, and so is a port below 1024 that the computer keeps from the server's user. Exposed to the
+internet, forward the new port on the router instead of the old one.
+
+A server set up before 0.11.0 on port 80 moves off it at its first start after the update, as `port` moves a server:
+to the port its admin pages had, 8791 unless you set another (or the first free one after it). The app is built again
+for the new address, so every phone installs it again from the site's download page; the start, `status` and the
+Server page say it once, and on WSL the Windows firewall rule moves with it. Its admin pages answer on the one port
+after the update, nothing answers on their old port, and `.env` no longer names it. A server on another port keeps it,
+and so does one on port 80 by `port 80`.
 
 ## Backups and a new computer
 
@@ -210,6 +226,11 @@ Each release on [Releases](https://github.com/kanggu12/openDMTQ/releases) has th
 - `opendmtq-<version>-sha256sums.txt`: the SHA-256 of every other file here.
 - `opendmtq-<version>-sha256sums.txt.sig`: the OpenDMTQ project's signature over the checksums. Servers and PC clients
   check it before they use a file of the release: what does not match the signed checksums is not used.
+
+The release's two images, `ghcr.io/kanggu12/opendmtq-server:<version>` and `ghcr.io/kanggu12/opendmtq-tools:<version>`,
+and the Helm chart as `oci://ghcr.io/kanggu12/charts/opendmtq`, are on GitHub's container registry: the chart runs the
+images, and Docker Compose runs them in place of its own builds with `OPENDMTQ_SERVER_IMAGE` and `OPENDMTQ_TOOLS_IMAGE`
+([without internet](closed-network.md)).
 
 The signature is Ed25519, by the project's key, whose public half is built into the server and the PC client:
 `8ead95551a5d5d216dca12de20138465d4cfbcec48ec2b2611c9e49fc47b77d7`. To check a release by hand with OpenSSL 3, save the
