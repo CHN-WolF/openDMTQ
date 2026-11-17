@@ -638,10 +638,18 @@ def look(con, state, now):
         if current is None:
             tops[pattern] = None
             continue
-        tops[pattern] = (int(current["user_id"]), int(current["score"] or 0), current["judgement"])
+        holder = int(current["user_id"])
+        # The best scores are read as they are now, past this look's share of the plays: a holder whose play this look has
+        # not read yet is not known as the holder until a look reads it, which then tells of it. Known so: the holder
+        # before, the same holder (their own record), or a holder who played in this look's share.
+        if known is None and holder not in players:
+            continue
+        if known is not None and holder != int(known["user_id"]) and holder not in players:
+            continue
+        tops[pattern] = (holder, int(current["score"] or 0), current["judgement"])
         # A chart nobody held before (its first clear) has nobody to take its #1 from; the same player again is their own
         # record.
-        if known is None or int(known["user_id"]) == int(current["user_id"]) or int(current["user_id"]) not in players:
+        if known is None or int(known["user_id"]) == holder:
             continue
         # Who it was taken from: the #1 the loop knew, still there with the score it held. A #1 gone otherwise (their
         # scores reset, their player deleted) was taken from nobody.
@@ -667,14 +675,20 @@ def look(con, state, now):
         board = month_leader(con, start) if month_plays else []
         leader = board[0] if board else None
         players = {int(p["user_id"]) for p in month_plays if p["user_id"] is not None}
-        # A new leader who played since the last look took it; the first of a new month too.
+        # A new leader who played in this look's share of the plays took it; the first of a new month too. One whose plays
+        # this look has not read yet (the board is read as it is now) leads from the look that reads them, which tells of
+        # it: until then the leader the loop knew stays.
         if leader and leader["id"] != known and leader["id"] in players:
             before = next((b for b in board[1:] if b["id"] == known), None) if known is not None else None
             # The one before: the runner-up now, when that is the leader the loop knew.
             events.append(("month_top", f"month_top:{start}:{leader['id']}:{leader['score']}",
                            {"player": leader["id"], "name": leader["name"], "score": leader["score"], "start": start, "first": known is None,
                             "before": before["name"] if before else None, "before_score": before["score"] if before else None}))
-        new["month"] = {"start": start, "leader": leader["id"] if leader else known}
+            new["month"] = {"start": start, "leader": leader["id"]}
+        elif leader and leader["id"] != known:
+            new["month"] = {"start": start, "leader": known}
+        else:
+            new["month"] = {"start": start, "leader": leader["id"] if leader else known}
     # Who is on air. A broadcast is a player on air, from the first look that sees them until they have been off air for
     # OFF_AIR seconds: whatever its recordings do meanwhile (none for a while, a new one each hour, a new one after a short
     # drop), it is one start and one end. Its key is when it began, as the look that first saw it kept it.
@@ -762,7 +776,12 @@ def detect(now=None):
                 con.execute("ROLLBACK")
                 raise
             return 0
-        events, new, tops = look(con, state, now)
+        # Everything the look reads, from one moment of the database: the plays and the best scores they made, together.
+        con.execute("BEGIN")
+        try:
+            events, new, tops = look(con, state, now)
+        finally:
+            con.execute("COMMIT")
         return write(con, state["rev"], events, new, tops, now)
     finally:
         con.close()

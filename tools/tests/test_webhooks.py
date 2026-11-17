@@ -266,6 +266,35 @@ class RulesTest(unittest.TestCase):
             webhooks.detect()
             self.assertEqual(len(inst.queued()), 1)
 
+    def test_a_first_place_taken_by_a_play_past_a_looks_share_is_told_at_the_next(self):
+        # A look reads so many plays (BATCH), and the best scores as they are: the one who took first place by a play past
+        # that look's share is told of when a look reads that play, not taken for the first place's holder before it.
+        with Server() as inst, mock.patch.object(webhooks, "BATCH", 2):
+            inst.hook(events=["chart_top"])
+            webhooks.detect()
+            inst.play(9, 11, 100000)
+            inst.play(9, 21, 100000)
+            inst.play(8, 11, 950000)
+            for _ in range(3):
+                webhooks.detect()
+            self.assertEqual([(k, d["name"], d["before"]) for _, k, d, _ in inst.queued()], [("chart_top", "Yuna", "Sena")])
+
+    def test_the_months_leader_by_a_play_past_a_looks_share_is_told_at_the_next(self):
+        with Server() as inst, mock.patch.object(webhooks, "BATCH", 2):
+            inst.hook(events=["month_top"])
+            month = admin.site.month_start()
+            con = sqlite3.connect(admin.core.DB)
+            con.execute("UPDATE PlayLog SET played_at = ?", (month - 100,))
+            con.commit()
+            con.close()
+            webhooks.detect()
+            inst.play(7, 12, 100, at=month + 10)
+            inst.play(7, 21, 100, at=month + 11)
+            inst.play(8, 11, 960000, at=month + 20)
+            for _ in range(3):
+                webhooks.detect()
+            self.assertEqual([(d["name"], d["first"]) for _, k, d, _ in inst.queued()], [("Yuna", True)])
+
     def test_a_first_clear_a_tie_and_a_hidden_song_are_no_news(self):
         with Server() as inst:
             inst.hook(events=["chart_top"])
