@@ -617,6 +617,22 @@ class SendingTest(unittest.TestCase):
             hook = webhooks.listing()[0]
             self.assertEqual((hook["waiting"], hook["given_up"]), (0, 1))
 
+    def test_a_message_the_chat_may_have_taken_is_never_sent_twice(self):
+        # The process stopped after the chat took the message and before it noted so: at most once, never again.
+        with Server() as inst:
+            inst.hook(events=["maint_on"])
+            now = time.time()
+            webhooks.detect(now)
+            admin.songs.set_maintenance(True, "", HOST)
+            webhooks.detect(now)
+            with mock.patch.object(webhooks, "settle", side_effect=RuntimeError("stopped")):
+                with self.assertRaises(RuntimeError):
+                    webhooks.deliver(now)
+            for later in (61, webhooks.CLAIM + 1, 1200):
+                webhooks.deliver(now + later)
+            self.assertEqual(len(inst.chat.got), 1)
+            self.assertEqual([s for _, _, _, s in inst.queued()], ["failed"])
+
     def test_news_is_as_old_as_what_it_tells(self):
         # The admin service away for two hours: a first place taken then is no news now, and is not sent.
         with Server() as inst:

@@ -65,8 +65,9 @@ TIMEOUT = 5
 BACKOFF = (10, 30, 60, 120, 300, 600, 1200)
 # A message still not sent this long after its event is given up (news an hour late reads as news of now).
 GIVE_UP = 1800
-# How long a claimed message is another process's: longer than a send can take.
-CLAIM = 60
+# How long a message being sent may take before it counts as lost (the process sending it stopped): far longer than a send
+# takes. It is never sent again: the chat may have taken it (at most once).
+CLAIM = 600
 # The messages sent at one look, at most, and to one chat (Discord lets a webhook post about 5 every 2 seconds).
 SEND_AT_ONCE, SEND_PER_CHAT = 20, 5
 # How long sent and given-up messages stay in the queue's table, for the card's counts.
@@ -79,8 +80,8 @@ HOOK_TABLE = """CREATE TABLE IF NOT EXISTS Webhook (id INTEGER PRIMARY KEY, url 
                 lang TEXT NOT NULL, events TEXT NOT NULL, made_by TEXT NOT NULL DEFAULT '', made_at INTEGER NOT NULL,
                 ok_at INTEGER, fail_at INTEGER, fail_code TEXT, fail_status INTEGER, gave_up INTEGER NOT NULL DEFAULT 0)"""
 # The queue: one message for one webhook, by the event's key (one event is queued once per webhook), its data as JSON,
-# when it was queued and when it is next due (to the fraction of a second), its tries, which process holds it and until when, where it ended (waiting,
-# sent, failed, dropped) and when.
+# when what it tells happened and when it is next due (to the fraction of a second), its tries, which process is sending it
+# and until when it may, where it is (waiting, sending, sent, failed, dropped) and when it ended.
 MESSAGE_TABLE = """CREATE TABLE IF NOT EXISTS WebhookMessage (id INTEGER PRIMARY KEY, hook INTEGER NOT NULL, key TEXT NOT NULL,
                    kind TEXT NOT NULL, event TEXT NOT NULL, made_at INTEGER NOT NULL, next_at REAL NOT NULL,
                    tries INTEGER NOT NULL DEFAULT 0, claim TEXT, claim_until INTEGER, state TEXT NOT NULL DEFAULT 'waiting',
@@ -875,9 +876,11 @@ def detect(now=None):
 # ------------------------------------------------------------------------------ the sending
 
 def claim(con, me, now):
-    """The next message due, claimed for this process (me) until CLAIM seconds from now, in one transaction: nobody else
-    sends it meanwhile. First the messages too old to send are given up and counted on their webhooks, and what ended a day
-    ago leaves the table. None when nothing is due."""
+    """The next message due, taken by this process (me) to be sent, in one transaction: it is "sending" from then on, and
+    no process sends it again whatever happens (at most once: a process that stopped after the chat took it and before it
+    noted so must not send it twice). First the messages too old to send are given up and counted on their webhooks, one
+    still being sent CLAIM seconds on is lost (its process stopped), and what ended a day ago leaves the table. None when
+    nothing is due."""
     con.execute("BEGIN IMMEDIATE")
     try:
         old = con.execute("SELECT hook, COUNT(*) FROM WebhookMessage WHERE state = 'waiting' AND made_at < ? GROUP BY hook",
@@ -885,13 +888,16 @@ def claim(con, me, now):
         for hook, n in old:
             con.execute("UPDATE Webhook SET gave_up = gave_up + ? WHERE id = ?", (n, hook))
         con.execute("UPDATE WebhookMessage SET state = 'dropped', done_at = ? WHERE state = 'waiting' AND made_at < ?", (int(now), int(now) - GIVE_UP))
-        con.execute("DELETE FROM WebhookMessage WHERE state != 'waiting' AND done_at < ?", (int(now) - KEEP_DONE,))
+        # Being sent for longer than any send takes: its process stopped. Never sent again (the chat may have it); the claim
+        # stays, so that a send that does end still notes how it went.
+        con.execute("UPDATE WebhookMessage SET state = 'failed', done_at = ? WHERE state = 'sending' AND claim_until < ?", (int(now), now))
+        con.execute("DELETE FROM WebhookMessage WHERE state NOT IN ('waiting', 'sending') AND done_at < ?", (int(now) - KEEP_DONE,))
         row = con.execute("""SELECT m.id, m.hook, m.kind, m.event, m.made_at, m.tries, w.url, w.kind AS chat, w.lang
                                FROM WebhookMessage m JOIN Webhook w ON w.id = m.hook
-                              WHERE m.state = 'waiting' AND m.next_at <= ? AND (m.claim_until IS NULL OR m.claim_until < ?)
-                              ORDER BY m.id LIMIT 1""", (now, now)).fetchone()
+                              WHERE m.state = 'waiting' AND m.next_at <= ?
+                              ORDER BY m.id LIMIT 1""", (now,)).fetchone()
         if row:
-            con.execute("UPDATE WebhookMessage SET claim = ?, claim_until = ? WHERE id = ?", (me, int(now) + CLAIM, row["id"]))
+            con.execute("UPDATE WebhookMessage SET state = 'sending', claim = ?, claim_until = ? WHERE id = ?", (me, int(now) + CLAIM, row["id"]))
         con.execute("COMMIT")
         return row
     except BaseException:
@@ -900,9 +906,9 @@ def claim(con, me, now):
 
 
 def settle(con, row, me, result, now):
-    """A claimed message's end: sent; or tried again after its wait (the chat's own when it asked for one), its webhook's
-    other messages after it, so that they keep their order; or stopped (the webhook gone, refused, the message refused, the
-    last wait over). Only while this process still holds it."""
+    """A message this process took (claim()) and sent, its end: sent; or waiting again for its next try after its wait (the
+    chat's own when it asked for one), its webhook's other messages after it, so that they keep their order; or stopped (the
+    webhook gone, refused, the message refused, the last wait over). Only a message this process holds."""
     if result["ok"]:
         con.execute("UPDATE WebhookMessage SET state = 'sent', done_at = ?, claim = NULL WHERE id = ? AND claim = ?", (int(now), row["id"], me))
         return
@@ -914,8 +920,8 @@ def settle(con, row, me, result, now):
     wait = result["retry_after"] if result["code"] == "limited" else BACKOFF[row["tries"]]
     # To the fraction of a second: a chat that asks for 2.5 seconds gets them, no more.
     due = now + wait
-    con.execute("UPDATE WebhookMessage SET next_at = ?, claim = NULL, claim_until = NULL, tries = tries + 1 WHERE id = ? AND claim = ?",
-                (due, row["id"], me))
+    con.execute("UPDATE WebhookMessage SET state = 'waiting', next_at = ?, claim = NULL, claim_until = NULL, tries = tries + 1 "
+                "WHERE id = ? AND claim = ?", (due, row["id"], me))
     # The webhook's later messages wait as long: a chat hears of things in the order they happened.
     con.execute("UPDATE WebhookMessage SET next_at = MAX(next_at, ?) WHERE hook = ? AND state = 'waiting' AND id != ?", (due, row["hook"], row["id"]))
 
