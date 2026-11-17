@@ -9,7 +9,7 @@ server on its end and starts with it; one from a release asks for the address.
 
 | Path | What it is |
 |---|---|
-| `opendmtq_client/` | The launcher (Python and Tk): `app.py` (the window), `pages.py`, `guide.py` (the first-start guide), `actions.py` (what the buttons do, shared with the command line in `main.py`), `server.py` (the server's `client.php` and `/apk`), `apps.py` (each server's app on this PC), `player.py`, `values.py` (the PC settings), `installer.py` (the installer's dialogs), `maintenance.py` (Help's Repair, Clear game data, Start over and Uninstall, and the launcher's update: the questions and the work under way), `repair.py` and `removal.py` (the files those tools put back and delete) |
+| `opendmtq_client/` | The launcher (Python and Tk): `app.py` (the window), `pages.py`, `guide.py` (the first-start guide), `actions.py` (what the buttons do, shared with the command line in `main.py`), `server.py` (the server's `client.php` and `/apk`), `apps.py` (each server's app on this PC), `player.py`, `values.py` (the PC settings), `installer.py` (the installer's dialogs), `maintenance.py` (Help's Repair, Clear game data, Start over and Uninstall, and the launcher's update: the questions and the work under way), `repair.py` and `removal.py` (the files those tools put back and delete), `connection.py` (the connection test), `report.py` (Help's report) |
 | `packaging/windows/` | The Windows build: PyInstaller under Wine, the player beside the launcher, Velopack's packages, the installer |
 | `tests/` | Unit tests, the UI screenshots on a virtual screen (`tests/ui`), and the installer to the game under Wine (`tests/windows`) |
 
