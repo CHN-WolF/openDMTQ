@@ -133,7 +133,7 @@ Android phone or tablet, or the PC client on a Windows PC: [playing on a server]
 | Update | close the window, then run the [five lines](#windows) again | run the `curl` line again | `git pull`, then `./opendmtq up` |
 | Start with the computer | a shortcut in `shell:startup` | `./opendmtq service` | `RESTART=unless-stopped` in `.env`, or `cli/install.sh --service` |
 | Import songs | admin pages, **Songs**, or a folder dropped on `OpenDMTQ.exe` (the game's files in it too) | admin pages, **Songs** | `./opendmtq import --songs <folder>` |
-| Name the app (`TECHNIKA Q (<name>)`) | `SERVER_NAME=<name>` in `.env`, restart, then build the app (admin pages, **App**) | the same | `./opendmtq name <name>` |
+| Name the app (`TECHNIKA Q (<name>)`) | admin pages, **Server**, **Change the name** (or `OpenDMTQ.exe name <name>`) | `./opendmtq name <name>`, or the same page | `./opendmtq name <name>` |
 | Repair it | admin pages, **Server**, **Check and repair** | `./opendmtq repair`, or the same page | `./opendmtq repair` |
 | Delete its data | admin pages, **Server**, the parts ticked | `./opendmtq delete-data <part>...`, or the same page | `./opendmtq delete-data <part>...` |
 | Remove it | admin pages, **Server**, **Uninstall** (or `OpenDMTQ.exe uninstall`) | `./opendmtq uninstall`, or the same page | `./opendmtq uninstall` |
@@ -198,7 +198,7 @@ then restart.
 | Line | What it is | Set by |
 |---|---|---|
 | `PUBLIC_HOST` | The address the app uses: a LAN IPv4 address with its port (`192.168.1.10:8791`), or `host:port` when exposed | the setup, `./opendmtq host`, `./opendmtq expose` |
-| `SERVER_NAME` | The name after the game's title on phones, `TECHNIKA Q (<name>)`; empty: the whole address | `./opendmtq name` |
+| `SERVER_NAME` | The name after the game's title on phones, `TECHNIKA Q (<name>)`; empty: the whole address | `./opendmtq name`, the admin pages' Server page |
 | `LISTEN_PORT` | The server's one port, for the game, the players' site, the admin pages and the API (8791 on a new install): the port in a LAN `PUBLIC_HOST`, or the forwarded one | the setup, `./opendmtq host`, `./opendmtq expose`, `./opendmtq port` |
 | `PORT_80` | `chosen`: port 80 by your own choice (`./opendmtq port 80`), which every start keeps; a server only set up on port 80 before 0.11.0 moves off it | `./opendmtq port 80` |
 | `BASE_APK` | The client to patch when `data/apk/base` holds several (a file name there) | `./opendmtq apk --base` |

@@ -340,7 +340,7 @@ fetches the images of its screens from the server), so the server reports itself
   key's hash>`, so that apps of different servers and the original game can sit side by side on a device. It follows
   the signing key: a change of address keeps it, and a key restored from a backup brings it back.
 - **The app's name** (`axml.py`): `TECHNIKA Q (<server name>)`. The name is the whole address, port included, unless
-  `SERVER_NAME` (`./opendmtq name`) says otherwise.
+  `SERVER_NAME` (`./opendmtq name`, the admin pages' Server page) says otherwise.
 - **Signing:** v1+v2+v3 with a key made at the first build in `data/apk/keystore/` and reused, so later builds install
   over earlier ones. Once an app has been signed, a missing key stops the build instead of being replaced by a new one
   (phones could not install that over theirs).

@@ -524,6 +524,83 @@ class HostPasswordCommandTest(unittest.TestCase):
         self.assertIn("10 to 64 characters", said)
 
 
+class HostNameCommandTest(unittest.TestCase):
+    """opendmtq name on a host install (OpenDMTQ.exe name on Windows), the twin of the Server page's Change the name: the
+    app's name shown, or SERVER_NAME in .env changed from the next start, with a running server started again on Linux
+    and macOS, and on Windows the window to close and open again said; a name .env cannot take refused (CLI-70)."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "host"))
+        from opendmtq_host import commands
+        cls.commands = commands
+
+    def run_name(self, name, running=None, windows=False, env_text="PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\n"):
+        """The command on a host install's .env: (exit status, .env after, what it said, whether it restarted)."""
+        import argparse
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env_file = os.path.join(tmp.name, ".env")
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write(env_text)
+        said, restarted = [], []
+        patches = [mock.patch.object(self.commands, "ENV_FILE", env_file),
+                   mock.patch.object(self.commands, "require_settings", lambda: env.load(env_file)),
+                   mock.patch.object(self.commands, "running_pid", lambda: running),
+                   mock.patch.object(self.commands, "WINDOWS", windows),
+                   mock.patch.object(self.commands, "cmd_restart", lambda args: restarted.append(True)),
+                   mock.patch.object(self.commands, "say", said.append),
+                   mock.patch.object(self.commands, "ok", said.append),
+                   mock.patch.object(self.commands, "tell", said.append),
+                   mock.patch.object(self.commands, "die", lambda msg, code=1: (said.append(msg), sys.exit(code)))]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        try:
+            code = self.commands.cmd_name(argparse.Namespace(name=name))
+        except SystemExit as e:
+            code = e.code
+        return code, env.load(env_file), " ".join(said), bool(restarted)
+
+    def test_shown_with_the_address_while_it_has_none(self):
+        code, values, said, restarted = self.run_name(None)
+        self.assertEqual((code, restarted), (0, False))
+        self.assertIn("TECHNIKA Q (192.168.0.10:8791) on phones", said)
+
+    def test_changed_from_the_next_start_and_a_running_server_started_again(self):
+        code, values, said, restarted = self.run_name("Living Room", running=4242)
+        self.assertEqual((code, values["SERVER_NAME"], restarted), (0, "Living Room", True))
+        self.assertIn("the app is called TECHNIKA Q (Living Room) from the server's next start", said)
+        # Back to none: the address names the app.
+        code, values, said, restarted = self.run_name("", env_text="PUBLIC_HOST=192.168.0.10:8791\nSERVER_NAME=Living Room\n")
+        self.assertEqual((code, values.get("SERVER_NAME"), restarted), (0, "", False))
+        self.assertIn("TECHNIKA Q (192.168.0.10:8791) from the server's next start", said)
+
+    def test_on_windows_the_window_is_said(self):
+        code, values, said, restarted = self.run_name("거실 서버", running=4242, windows=True)
+        self.assertEqual((code, values["SERVER_NAME"], restarted), (0, "거실 서버", False))
+        self.assertIn("start OpenDMTQ.exe again", said)
+
+    def test_refused_and_nothing_changed(self):
+        for name in ('My "server"', "a$b", "x" * 81, "tab\there"):
+            code, values, said, restarted = self.run_name(name, running=4242)
+            self.assertEqual((code, values.get("SERVER_NAME"), restarted), (1, None, False), name)
+        self.assertIn("at most 80 characters", said)
+        # The one it has already: nothing to do.
+        code, values, said, restarted = self.run_name("Den", env_text="PUBLIC_HOST=192.168.0.10:8791\nSERVER_NAME=Den\n")
+        self.assertEqual((code, restarted), (0, False))
+        self.assertIn("already", said)
+
+    def test_the_command_line_has_it(self):
+        # Registered as the other host commands are, with its name optional (run as a normal user, as the command asks).
+        from opendmtq_host import cli
+        with mock.patch.object(self.commands, "require_settings", lambda: {"PUBLIC_HOST": "192.168.0.10:8791"}), \
+                mock.patch.object(self.commands, "say") as said, mock.patch("os.geteuid", return_value=1000, create=True):
+            self.assertEqual(cli.main(["name"]), 0)
+        self.assertIn("TECHNIKA Q (192.168.0.10:8791)", said.call_args[0][0])
+
+
 class FirewallTest(unittest.TestCase):
     def test_before_setup_opens_nothing(self):
         # Without an address the rule's scope is unknown; it must not default to "from anywhere".

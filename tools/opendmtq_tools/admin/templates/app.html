@@ -27,8 +27,9 @@
   {# A release's file the tools refused for its signature: what the site does not hand out, and why. #}
   {% for said in refused %}<p class="flash bad" role="status">{{ said }}</p>{% endfor %}
   <p class="meta">{{ t('app.offer_rule', host=public_host) }}</p>
-  {# Where its name comes from and where it is changed, as this install changes it. #}
-  <p class="meta">{{ t('app.name_k8s') if kubernetes else t('app.name_host') if host_install else t('app.name_docker') }}</p>
+  {# Where its name comes from, and the Server page where it is changed (with the command there, where the command line
+     changes it). #}
+  <p class="meta">{{ t('app.name_where', url=url_for('server_page') ~ '#name') }}</p>
   <div class="btn-line">
     {# data-again: a build that fails gives the button back, with its own word (data-label), for another try. #}
     <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="host" value="{{ public_host }}"><button class="btn btn-primary" data-again data-label="{{ tp('app.rebuild') if offer else tp('app.build') }}" {% if running %}disabled{% endif %}>{{ t('app.building') if running else (t('app.rebuild') if offer else t('app.build')) }}</button></form>

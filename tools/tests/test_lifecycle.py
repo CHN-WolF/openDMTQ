@@ -595,6 +595,132 @@ class PortMoveTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class AppNameTest(unittest.TestCase):
+    """The app's name (TECHNIKA Q and the server's name) from the Server page and the API (ADM-196, API-96): SERVER_NAME in
+    .env, from the next start, when the app is built again with it; refused in words for what .env or the app cannot
+    take and the name it has already, and where the command line does it (the command named)."""
+
+    def host(self, inst, env_text="PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=pw\n"):
+        """A host install's pages, with its .env as a server set up on 8791 has it."""
+        env_file = inst.path(".env")
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write(env_text)
+        return mock.patch.multiple(admin.setup, HOST_INSTALL=True, RUN_DIR=inst.path("run"), ENV_FILE=env_file)
+
+    def token(self, inst):
+        """A token for the API, on a server's database (the tokens' table is in it)."""
+        server_with_data(inst.root)
+        with admin.app.test_request_context():
+            _, token = admin.tokens.make("test", "write", ("admin", True, None))
+        return {"Authorization": f"Bearer {token}"}
+
+    def env(self, inst):
+        with open(inst.path(".env"), encoding="utf-8") as f:
+            return f.read()
+
+    def test_a_new_name_from_the_page_takes_effect_at_the_next_start(self):
+        with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", "192.168.0.10:8791"), \
+                mock.patch.dict(os.environ, {"SERVER_NAME": ""}):
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            # What phones show now, and the form with the address standing in for a name not given.
+            self.assertIn("On phones the app is called TECHNIKA Q (192.168.0.10:8791)", page)
+            self.assertIn('action="/opendmtq/admin/server/name"', page)
+            self.assertIn('placeholder="192.168.0.10:8791"', page)
+            with inst.client.session_transaction("/opendmtq/admin/") as s:
+                csrf = s["csrf"]
+            r = inst.client.post("/opendmtq/admin/server/name", data={"csrf": csrf, "name": "  Living Room "})
+            self.assertEqual((r.status_code, r.headers["Location"].rsplit("/", 1)[-1]), (302, "server#name"))
+            self.assertEqual(self.env(inst), "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nADMIN_PASSWORD=pw\nSERVER_NAME=Living Room\n")
+            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            # Said, and kept in sight until the next start, the field holding the name to come.
+            self.assertIn("Saved. The app is called TECHNIKA Q (Living Room) from the server's next start", page)
+            self.assertIn("From the next start: TECHNIKA Q (Living Room)", page)
+            self.assertIn('value="Living Room"', page)
+            # In the log of changes, in words.
+            log = admin.insights.audit_read(inst.path("state"))
+            self.assertEqual((log[0]["what"], log[0]["target"]), ("server:name", "TECHNIKA Q (192.168.0.10:8791) > TECHNIKA Q (Living Room)"))
+            # The server started again with it: nothing waits any more.
+            with mock.patch.dict(os.environ, {"SERVER_NAME": "Living Room"}):
+                page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+                self.assertIn("On phones the app is called TECHNIKA Q (Living Room)", page)
+                self.assertNotIn("From the next start:", page)
+                # Back to none: the address names the app again.
+                inst.client.post("/opendmtq/admin/server/name", data={"csrf": csrf, "name": ""})
+                self.assertIn("SERVER_NAME=\n", self.env(inst))
+                self.assertIn("From the next start: TECHNIKA Q (192.168.0.10:8791)", inst.client.get("/opendmtq/admin/server").get_data(as_text=True))
+
+    def test_what_is_refused_is_said_and_the_api_does_the_same(self):
+        # A server started with the name its .env gives it.
+        with Install() as inst, self.host(inst, "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nSERVER_NAME=Den\n"), \
+                mock.patch.object(admin.core, "PUBLIC_HOST", "192.168.0.10:8791"), mock.patch.dict(os.environ, {"SERVER_NAME": "Den"}):
+            headers = self.token(inst)
+            for name in ('My "server"', "a$b", "x#y", "back\\slash", "tick`", "x" * 81, "line\nbreak"):
+                r = inst.client.post("/opendmtq/api/v1/server/name", json={"name": name}, headers=headers)
+                self.assertEqual((r.status_code, r.get_json()["error"]["code"]), (400, "bad_name" if len(name) <= 80 else "bad_field"), name)
+            same = inst.client.post("/opendmtq/api/v1/server/name", json={"name": "Den"}, headers=headers)
+            self.assertEqual((same.status_code, same.get_json()["error"]["code"]), (409, "same_name"))
+            self.assertIn("The app is called TECHNIKA Q (Den) already.", same.get_json()["error"]["message"])
+            # Nothing written by any of them.
+            self.assertEqual(self.env(inst), "PUBLIC_HOST=192.168.0.10:8791\nLISTEN_PORT=8791\nSERVER_NAME=Den\n")
+            renamed = inst.client.post("/opendmtq/api/v1/server/name", json={"name": "거실 서버"}, headers=headers)
+            self.assertEqual(renamed.get_json(), {"name": "거실 서버", "app_name": "TECHNIKA Q (거실 서버)", "from_next_start": True})
+            got = inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()
+            self.assertEqual((got["name"], got["app_name"], got["next_name"]), ("Den", "TECHNIKA Q (Den)", "거실 서버"))
+            # The page refuses the same in its words, under the field, before anything is sent (pattern and maxlength).
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            self.assertRegex(page, r'name="name" maxlength="80" pattern="[^"]+" [^>]*data-bad="A name here is at most 80 characters')
+
+    def test_in_containers_the_command_line_does_it(self):
+        with Install() as inst:
+            r = inst.client.post("/opendmtq/api/v1/server/name", json={"name": "Den"}, headers=self.token(inst))
+            self.assertEqual((r.status_code, r.get_json()["error"]["code"]), (409, "by_command"))
+            self.assertIn("./opendmtq name <name>", r.get_json()["error"]["message"])
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            self.assertIn("./opendmtq name &lt;name&gt;", page)
+            self.assertNotIn('action="/opendmtq/admin/server/name"', page)
+            with mock.patch.object(admin.setup, "IN_KUBERNETES", True):
+                page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            self.assertIn("--reuse-values --set serverName=&lt;name&gt;", page)
+
+    def test_the_app_page_leads_to_the_server_page_for_it(self):
+        # The App page no longer says to edit .env: where the name comes from, and the Server page that changes it.
+        with Install() as inst, self.host(inst):
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/app").get_data(as_text=True)
+            self.assertIn('set on the <a href="/opendmtq/admin/server#name">Server</a> page.', page)
+            self.assertNotIn("SERVER_NAME", page)
+            self.assertNotIn("<code>.env</code>", page)
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class WithoutTheProgramTest(unittest.TestCase):
+    """A host install's pages started without its program's run folder or .env (by hand, as the pages' suite once did):
+    each card says where it is done, the install's own command, never a lead with nothing after it (ADM-197)."""
+
+    def test_each_card_names_the_installs_own_command(self):
+        for kind, cli in (("host", "opendmtq"), ("windows", "OpenDMTQ.exe")):
+            with Install() as inst, mock.patch.multiple(admin.setup, HOST_INSTALL=True, RUN_DIR="", ENV_FILE=""), \
+                    mock.patch.object(admin.lifecycle, "install_kind", lambda kind=kind: kind):
+                inst.sign_in()
+                page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+            for command in (f"{cli} uninstall", f"{cli} port &lt;port&gt;", f"{cli} name &lt;name&gt;", f"{cli} password"):
+                self.assertIn(command, page, kind)
+            # The uninstall card's list, with the command after it.
+            self.assertRegex(page, r'<ul class="removes">.*?</ul>\s*<pre class="log cmd">' + re.escape(f"{cli} uninstall"), kind)
+            self.assertNotIn('action="/opendmtq/admin/server/restart"', page)
+            if kind == "host":
+                self.assertIn("opendmtq stop\nopendmtq restart", page)
+                self.assertIn("the first command stops the server, the second restarts it:", page)
+            else:
+                self.assertIn("closing the server's window stops it, and OpenDMTQ.exe starts it again.", page)
+            # The folder it would remove, which these pages do not know here: said without an empty name.
+            self.assertIn("<li>Its folder, with everything in it</li>", page, kind)
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class OwnerPasswordTest(unittest.TestCase):
     """The owner's password on the Server page and the API (ADM-124, API-54): on a host install and the Windows bundle,
     written to .env and taken at once, the owner's sign-in for the site written again with it, this sign-in kept and the

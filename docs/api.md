@@ -833,6 +833,7 @@ The Server page: the server's state, stopping and restarting it, the repair, its
 | [`POST /server/stop`](#post-serverstop) | write | Stops the server, as the Server page's Stop the server does. |
 | [`POST /server/restart`](#post-serverrestart) | write | Restarts the server, as the Server page's Restart does. |
 | [`POST /server/port`](#post-serverport) | write | Moves the server to another port, as the Server page's Move to this port does. |
+| [`POST /server/name`](#post-servername) | write | Changes the server's name in the app's title, as the Server page's Change the name does. |
 | [`POST /server/password`](#post-serverpassword) | write | Changes the owner's password, as the Server page's Change the password does. |
 | [`POST /server/repair`](#post-serverrepair) | write | Checks and repairs the server, as the Server page's Check and repair does. |
 | [`GET /server/data`](#get-serverdata) | read | The server's data, part by part, with how much each holds. |
@@ -884,6 +885,23 @@ Refusals:
 - `409 port_taken`: Another program holds that port on this computer.
 - `409 port_not_allowed`: This computer keeps that port from the user the server runs as (below 1024).
 - `409 by_command`: Docker Compose or Kubernetes: the command line moves the server (the message names the command).
+
+#### `POST /server/name`
+
+Changes the server's name in the app's title, as the Server page's Change the name does. A host install and the Windows bundle only. SERVER_NAME in .env: the server takes it at its next start (POST /server/restart makes it now), when the app is built again with it. Phones keep working with the app they have, which calls the same address. With Docker Compose `./opendmtq name <name>` changes it, on Kubernetes the chart's serverName (the refusal names the command).
+
+Body (JSON):
+
+- `name` (string, 80 characters at most): The new name: at most 80 characters, without quotes, $, #, \ or `. Empty: the address names the app.
+
+Answer: `200` with [Renamed](#renamed).
+
+Refusals:
+
+- `400 bad_name`: Longer than 80 characters, with a character that cannot be printed, or with a quote, $, #, \ or `.
+- `409 same_name`: The server has that name from its next start already.
+- `409 by_command`: Docker Compose or Kubernetes: the command line changes it (the message names the command).
+- `500 name_failed`: .env could not be written: nothing changed.
 
 #### `POST /server/password`
 
@@ -2654,9 +2672,12 @@ The server as the Server page shows it.
 - `version` (string, or null): Its version.
 - `started` (integer, or null): When the admin service started, with the server (Unix time).
 - `runs_itself` (boolean): True where this API can stop, restart and uninstall the server (a host install, the Windows bundle).
-- `commands` (object of string): Where it cannot: the command for each action, on the server PC or the cluster. With Docker Compose stop, restart, repair, delete_data, uninstall and port; on Kubernetes stop, restart, delete_data, uninstall and port; none on a host install, which does each through this API.
+- `commands` (object of string): Where it cannot: the command for each action, on the server PC or the cluster. With Docker Compose stop, restart, repair, delete_data, uninstall, port and name; on Kubernetes stop, restart, delete_data, uninstall, port and name; on a host install, which does each through this API, none, or the install's own command for what this API cannot do when its pages were started without the install's run folder or .env.
 - `port` (integer): Its one port, its own: the game, the players' site, the admin pages and this API, the port POST /server/port moves.
 - `public_port` (integer): The port in its address, the one the phones' app calls: the same as port, or another that is forwarded to port (a router's).
+- `name` (string): Its name in the app's title, TECHNIKA Q (name) on phones (SERVER_NAME): "" while it has none, its address naming the app then.
+- `app_name` (string): The app's name on phones now: TECHNIKA Q and the name, or the address while there is none.
+- `next_name` (string, or null): The name it takes at its next start (POST /server/name), when another than now: "" for none; null otherwise.
 - `next_address` (string, or null): The address it moves to at its next start (http://host:port/), when it was moved (POST /server/port); null otherwise.
 - `moved_from` (integer, or null): The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.
 - `moved` ([Moved](#moved), or null): Its last move to another address, which the site's download page tells players of for a month: null otherwise.
@@ -2685,6 +2706,14 @@ One part of the server's data.
 The server's data.
 
 - `items` (list of [DataPart](#datapart)): Every part, in the Server page's order.
+
+#### Renamed
+
+The server's name in the app's title, from its next start.
+
+- `name` (string): The new name: "" for none, its address naming the app then.
+- `app_name` (string): The app's name on phones from the next start, when the app is built again with it.
+- `from_next_start` (boolean): True: the server takes it at its next start, and builds the app again with it then.
 
 #### PortMoved
 

@@ -27,10 +27,11 @@
     <form method="post" action="{{ url_for('server_restart') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-ask="{{ tp('server.restart_confirm') }}" data-yes="{{ tp('server.restart') }}">{{ t('server.restart') }}</button></form>
     <form method="post" action="{{ url_for('server_stop') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-danger" data-ask="{{ tp('server.confirm') }}" data-yes="{{ tp('server.stop') }}">{{ t('server.stop') }}</button></form>
   </div>
-  {% elif commands %}
+  {% elif kind in command_leads %}
+  {# Where these pages cannot: the commands that do it (on Windows the server's window, said in the lead). #}
   <p class="lead">{{ t(command_leads[kind]) }}</p>
-  <pre class="log cmd">{{ commands.stop }}
-{{ commands.restart }}</pre>
+  {% if commands.stop %}<pre class="log cmd">{{ commands.stop }}
+{{ commands.restart }}</pre>{% endif %}
   {% endif %}
 </section>
 {# The server's one port: what it carries, and a move to another, from the next start (a host install); elsewhere the
@@ -55,6 +56,26 @@
   {% elif commands.port %}
   <p class="meta">{{ t('port.by_command_lead') }}</p>
   <pre class="log cmd">{{ commands.port }}</pre>
+  {% endif %}
+</section>
+{# The app's name on phones, TECHNIKA Q and the server's name: a new one from the next start, when the app is built again
+   (a host install, as the port's move); elsewhere the command that changes it. Phones keep working with the app they
+   have: no question first. #}
+<section class="card" id="name">
+  <h2>{{ t('name.title') }}</h2>
+  <p class="lead">{{ t('name.lead', app=app_name) }}</p>
+  {% if next_name is not none %}<p class="setup-state"><span class="lamp wait"></span>{{ t('name.pending', app='TECHNIKA Q (' ~ (next_name or public_host) ~ ')') }}</p>{% endif %}
+  {% if can_move_port %}
+  {# Checked on the page (admin.js, novalidate), as the other forms: what is wrong said under the field. Empty: the address
+     names the app. #}
+  <form method="post" action="{{ url_for('server_name') }}" class="form-row" novalidate>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="field grow">{{ t('name.new') }} <input class="input" name="name" maxlength="80" pattern="[^&quot;'$#\\`]*" autocomplete="off" spellcheck="false" value="{{ name if next_name is none else next_name }}" placeholder="{{ public_host }}" data-bad="{{ tp('name.bad') }}"></label>
+    <button class="btn">{{ t('name.change') }}</button>
+  </form>
+  {% elif commands.name %}
+  <p class="meta">{{ t('name.by_command_lead') }}</p>
+  <pre class="log cmd">{{ commands.name }}</pre>
   {% endif %}
 </section>
 {# The owner's password: the ID and password in .env, which open these pages and the players' site. Changed here on the server
@@ -115,8 +136,10 @@
 <section class="card" id="remove">
   <h2>{{ t('server.remove_title') }}</h2>
   <p class="lead">{{ t(remove_leads[kind]) }}</p>
+  {# The install's folder by its path, where these pages know it (OPENDMTQ_ROOT, from the install's program). #}
+  {% macro removes_list() %}<ul class="removes">{% for item in removes %}<li>{{ t('server.removes_folder_unnamed') if item == 'folder' and not root else t(remove_words[item], root=root) }}</li>{% endfor %}</ul>{% endmacro %}
   {% if can_run %}
-  <ul class="removes">{% for item in removes %}<li>{{ t(remove_words[item], root=root) }}</li>{% endfor %}</ul>
+  {{ removes_list() }}
   <form method="post" action="{{ url_for('server_uninstall') }}">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="confirm" value="">
     <div class="btn-line data-go">
@@ -124,8 +147,8 @@
       <button class="btn btn-danger" data-ask="{{ tp('server.remove_confirm') }}" data-yes="{{ tp('server.remove') }}" data-type="{{ tp('server.remove_word') }}" data-type-label="{{ tp('server.type_label', word='{word}') }}">{{ t('server.remove') }}</button>
     </div>
   </form>
-  {% elif commands %}
-  <ul class="removes">{% for item in removes %}<li>{{ t(remove_words[item], root=root) }}</li>{% endfor %}</ul>
+  {% elif commands.uninstall %}
+  {{ removes_list() }}
   <pre class="log cmd">{{ commands.uninstall }}{% if kind == 'kubernetes' %}
 {{ commands.delete_data }}{% endif %}</pre>
   {% endif %}

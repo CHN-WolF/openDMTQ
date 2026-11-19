@@ -32,7 +32,9 @@ KIND_WORDS = {"windows": "server.kind_windows", "host": "server.kind_host", "doc
               "kubernetes": "server.kind_kubernetes"}
 REMOVE_LEADS = {"windows": "server.remove_lead_windows", "host": "server.remove_lead_host",
                 "docker": "server.remove_lead_docker", "kubernetes": "server.remove_lead_kubernetes"}
-COMMAND_LEADS = {"docker": "server.by_command_docker", "kubernetes": "server.by_command_kubernetes"}
+COMMAND_LEADS = {"docker": "server.by_command_docker", "kubernetes": "server.by_command_kubernetes",
+                 # A host install's pages started without its program's run folder (by hand): what stops and starts it.
+                 "host": "server.by_command_host", "windows": "server.by_command_windows"}
 PART_WORDS = {"database": ("data.database", "data.database_note"), "recordings": ("data.recordings", "data.recordings_note"),
               "songs": ("data.songs", "data.songs_note"), "apps": ("data.apps", "data.apps_note"),
               "backups": ("data.backups", "data.backups_note"), "logs": ("data.logs", "data.logs_note"),
@@ -74,11 +76,13 @@ def kube_names():
 
 def commands():
     """The command for each action on an install where these pages cannot do it: Docker Compose's ./opendmtq, or
-    Kubernetes' kubectl and helm. {} on a host install, which does each from here."""
+    Kubernetes' kubectl and helm. On a host install, which does each from here, only what its pages cannot do when they
+    were started without its program's run folder or .env (by hand): the program's own command for it."""
     kind = install_kind()
     if kind == "docker":
         return {"stop": "./opendmtq down", "restart": "./opendmtq restart", "repair": "./opendmtq repair",
-                "delete_data": "./opendmtq delete-data", "uninstall": "./opendmtq uninstall", "port": "./opendmtq port <port>"}
+                "delete_data": "./opendmtq delete-data", "uninstall": "./opendmtq uninstall", "port": "./opendmtq port <port>",
+                "name": "./opendmtq name <name>"}
     if kind == "kubernetes":
         release, ns = kube_names()
         host, _ = setup.address_parts(core.PUBLIC_HOST)
@@ -86,8 +90,18 @@ def commands():
                 "restart": f"kubectl -n {ns} rollout restart deploy -l app.kubernetes.io/instance={release}",
                 "uninstall": f"helm uninstall {release} -n {ns}",
                 "delete_data": f"kubectl -n {ns} delete pvc -l app.kubernetes.io/instance={release}",
-                "port": f"helm upgrade {release} <chart> -n {ns} --reuse-values --set publicHost={host}:<port>"}
-    return {}
+                "port": f"helm upgrade {release} <chart> -n {ns} --reuse-values --set publicHost={host}:<port>",
+                "name": f"helm upgrade {release} <chart> -n {ns} --reuse-values --set serverName=<name>"}
+    # The install's own command: OpenDMTQ.exe on Windows, the opendmtq its setup put on the PATH elsewhere. On Windows
+    # the server stops with its window and starts with OpenDMTQ.exe: no command for those (COMMAND_LEADS says so).
+    cli = "OpenDMTQ.exe" if kind == "windows" else "opendmtq"
+    found = {}
+    if not can_run_itself():
+        found.update({"stop": f"{cli} stop", "restart": f"{cli} restart"} if kind == "host" else {})
+        found["uninstall"] = f"{cli} uninstall"
+    if not setup.ENV_FILE:
+        found.update(port=f"{cli} port <port>", name=f"{cli} name <name>")
+    return found
 
 
 def removes():
@@ -314,6 +328,59 @@ def move_port(raw):
     return {"port": port, "address": f"http://{new}/", "from_next_start": True}
 
 
+# The server's name in the app's title (TECHNIKA Q (name)) as these pages take a new one: no longer than the app builder
+# takes (patch_apk.MAX_SERVER_NAME), printable, and with nothing .env could read as something else (a quote, a $ that
+# names a variable, a # that starts a comment, a backslash or a backquote), as ./opendmtq name takes it.
+NAME_MAX = 80
+NAME_REFUSED = re.compile(r"[\"'$#\\`]")
+
+
+def name_now():
+    """The server's name as it runs (SERVER_NAME, which the builder and the site read at their start), or "" while it
+    has none: its address names the app then."""
+    return os.environ.get("SERVER_NAME", "").strip()
+
+
+def next_name():
+    """The name .env gives the server from its next start, when it is another than the one it runs with (renamed on the
+    Server page or by the command line): "" for none, the address then. None when it is the same, and where these pages
+    cannot read .env."""
+    if not (setup.HOST_INSTALL and setup.ENV_FILE):
+        return None
+    # Not in .env at all: no name, as the server reads it.
+    kept = (env_setting("SERVER_NAME") or "").strip()
+    return kept if kept != name_now() else None
+
+
+def app_title(name):
+    """The app's name on phones for a server of this name: the address in place of a name it does not have."""
+    return f"TECHNIKA Q ({name or core.PUBLIC_HOST})"
+
+
+def rename_server(raw):
+    """The server's name in the app's title (SERVER_NAME in .env), on a host install and the Windows bundle: from its next
+    start, when the app is built again with it. Phones keep working with the app they have: it calls the same address.
+    Empty: the address names the app. Refused: too long, a character .env or the app cannot take, the name it has from
+    its next start already, or an install where the command line does it (Docker Compose, Kubernetes: the command).
+    Returns {name, app_name, from_next_start}."""
+    if not (setup.HOST_INSTALL and setup.ENV_FILE):
+        raise Refused(409, "by_command", t("name.by_command", command=commands().get("name", "")))
+    name = str(raw if raw is not None else "").strip()
+    if len(name) > NAME_MAX or not name.isprintable() or NAME_REFUSED.search(name):
+        raise Refused(400, "bad_name", t("name.bad"))
+    # The name it will have: the one waiting for the next start, else the one it runs with.
+    waiting = next_name()
+    if name == (waiting if waiting is not None else name_now()):
+        raise Refused(409, "same_name", t("name.same", app=app_title(name)), tone="ok")
+    try:
+        setup.save_env({"SERVER_NAME": name})
+    except OSError as e:
+        # .env as it was: nothing changed.
+        raise Refused(500, "name_failed", t("name.not_saved", why=core.why(e)))
+    changed("server:name", f"{app_title(name_now())} > {app_title(name)}")
+    return {"name": name, "app_name": app_title(name), "from_next_start": True}
+
+
 # The owner's password as these pages take a new one: it goes into .env as typed, where Docker Compose reads it too, so
 # nothing there could read it as something else (a space, a quote, a $ that names a variable, a # that starts a comment, a
 # backslash or a backquote), and at least as long as an account's with admin rights (accounts.ADMIN_PASSWORD_MIN).
@@ -339,6 +406,9 @@ def password_commands():
         return [f"kubectl -n {ns} create secret generic {admin_secret()} --from-literal=ADMIN_PASSWORD=<password> "
                 "--dry-run=client -o yaml | kubectl apply -f -",
                 f"kubectl -n {ns} rollout restart deploy -l app.kubernetes.io/instance={release}"]
+    # A host install's pages started without its .env (by hand): its program's own command changes it.
+    if not setup.ENV_FILE:
+        return ["OpenDMTQ.exe password" if kind == "windows" else "opendmtq password"]
     return []
 
 
@@ -532,6 +602,8 @@ def server_page():
                            port=port_now(), public_port=public_port(), next_address=next_address(), moved_80=moved_off_80(),
                            admin_at=admin_address(),
                            can_move_port=bool(setup.HOST_INSTALL and setup.ENV_FILE),
+                           # The app's name: as phones show it now, and the one waiting for the next start.
+                           app_name=app_title(name_now()), name=name_now(), next_name=next_name(),
                            # The owner's password: changed here by the owner, or the command that changes it.
                            password_here=bool(setup.HOST_INSTALL and setup.ENV_FILE), password_commands=password_commands(),
                            is_owner=session.get("stamp") == "owner", owner_id=core.ADMIN_USER,
@@ -564,6 +636,18 @@ def server_port():
     except Refused as e:
         flash(e.words, e.tone)
     return redirect(url_for("server_page") + "#port")
+
+
+@app.route(BASE + "/server/name", methods=["POST"])
+def server_name():
+    """The server's name in the app's title from its next start (a host install): said on this page, and from then on
+    above the Restart that makes it now, as a move to another port is."""
+    try:
+        renamed = rename_server(request.form.get("name"))
+        flash(t("name.saved", app=renamed["app_name"]), "ok")
+    except Refused as e:
+        flash(e.words, e.tone)
+    return redirect(url_for("server_page") + "#name")
 
 
 @app.route(BASE + "/server/password", methods=["POST"])

@@ -285,6 +285,36 @@ def cmd_port(args):
     return 0
 
 
+def cmd_name(args):
+    """Show the server's name in the app's title (TECHNIKA Q (name) on phones), or change it (SERVER_NAME in .env): from
+    the next start, when the app is built again with it, as the admin pages' Server page does. Phones keep working with
+    the app they have, which calls the same address. A running server is started again here, as host does (on Windows
+    its window is closed and opened again). Empty: the address names the app."""
+    values = require_settings()
+    current = values.get("SERVER_NAME", "").strip()
+    # The app's name for a name: the address in place of none.
+    titled = lambda name: f"TECHNIKA Q ({name or values['PUBLIC_HOST']})"
+    if args.name is None:
+        say(f"{titled(current)} on phones" + ("" if current else ": the address, as the server has no name"))
+        return 0
+    name = args.name.strip()
+    # What .env and the app take, as the Server page and ./opendmtq name take it.
+    if len(name) > 80 or not name.isprintable() or any(c in name for c in "\"'$`\\#"):
+        die("a name here is at most 80 characters, without quotes, $, #, \\ or `")
+    if name == current:
+        ok(f"the app is called {titled(name)} already")
+        return 0
+    env.save(ENV_FILE, {"SERVER_NAME": name})
+    ok(f"the app is called {titled(name)} from the server's next start, when it is built again")
+    # The server takes it at its start: a running one is started again now (on Windows, by its window).
+    if running_pid():
+        if WINDOWS:
+            tell("Close the server's window and start OpenDMTQ.exe again: the app is built again with the new name then.")
+        else:
+            cmd_restart(args)
+    return 0
+
+
 def cmd_password(args):
     """Change the owner's password (ADMIN_PASSWORD in .env), which with the owner's ID opens the admin pages and the
     players' site: typed twice on a terminal, or one made when nothing is typed or there is no terminal. The admin pages'

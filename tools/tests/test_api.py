@@ -718,6 +718,13 @@ def CASES():
         C("server_password", "POST", "/server/password", 409, "by_command", json={"password": "Xk3vQ9pLm2Rt7w"}),
         C("server_password", "POST", "/server/password", 400, "bad_password", setup=host_install, json={"password": "Xk3vQ9pL$m2Rt7w"}),
         C("server_password", "POST", "/server/password", 403, "read_only", token="reader", json={"password": "Xk3vQ9pLm2Rt7w"}),
+        # The app's name: into .env from the next start on a host install; the command line's elsewhere; one .env would
+        # read as something else refused (API-96).
+        C("server_name", "POST", "/server/name", 200, setup=host_install, json={"name": "Living Room"},
+          check=lambda t, inst, r: t.assertIn("SERVER_NAME=Living Room\n", open(inst.path(".env"), encoding="utf-8").read())),
+        C("server_name", "POST", "/server/name", 409, "by_command", json={"name": "Living Room"}),
+        C("server_name", "POST", "/server/name", 400, "bad_name", setup=host_install, json={"name": "a$b"}),
+        C("server_name", "POST", "/server/name", 403, "read_only", token="reader", json={"name": "Living Room"}),
         C("server_repair", "POST", "/server/repair", 202, setup=no_rebuild),
         C("server_repair", "POST", "/server/repair", 403, "read_only", token="reader"),
         C("server_data_get", "GET", "/server/data", 200,
@@ -2224,6 +2231,7 @@ PAGE_ACTIONS = {
     "server_restart": ["server_restart"],
     "server_port": ["server_port"],
     "server_password": ["server_password"],
+    "server_name": ["server_name"],
     "server_repair": ["server_repair"],
     "server_delete": ["server_data_delete"],
     "server_uninstall": ["server_uninstall"],

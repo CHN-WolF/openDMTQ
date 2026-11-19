@@ -1010,6 +1010,7 @@ async function formsLook(contexts) {
     ["the setup's account", `${A}/setup?step=players`, 'form[action$="/setup/player"]', 'input[name=name]', '!', 'form[action$="/setup/player"] button'],
     ["the recordings' limits", `${A}/recordings`, '.rec-limits', 'input[name=cap_gb]', '0', '.rec-limits button'],
     ['Add a webhook', `${A}/maintenance`, '.hook-new', 'input[name=url]', 'not an address', '.hook-new button:not([type=button])'],
+    ["The app's name", `${A}/server`, '#name form', 'input[name=name]', 'My "server"', '#name form button'],
   ];
   for (const [width, height] of [[360, 740], [1280, 800]]) {
     for (const lang of ['en', 'ko']) {

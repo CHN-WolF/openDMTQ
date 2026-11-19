@@ -76,8 +76,8 @@ CHANGE_WORDS = {
     "player_game:unban": "change.game_unban", "player_game:reset": "change.game_reset",
     "game_settings:unlimited-on": "change.game_all_on", "game_settings:unlimited-off": "change.game_all_off",
     "game_settings:start": "change.game_start",
-    # The owner's password changed on the Server page (lifecycle.py).
-    "server:password": "change.server_password",
+    # The owner's password and the app's name changed on the Server page (lifecycle.py).
+    "server:password": "change.server_password", "server:name": "change.server_name",
     # What a player changed of their own account on the site's MY PAGE (server/portal/me_lib.php writes these lines).
     "site:password": "change.site_password", "site:id": "change.site_id", "site:signout": "change.site_signout",
 }

@@ -659,6 +659,8 @@ def server_get(args):
             "runs_itself": lifecycle.can_run_itself(), "commands": lifecycle.commands(), "data": lifecycle.data_parts(),
             # Its own port, and the one in its address that the phones' app calls (a router's, forwarded to it, or the same).
             "port": lifecycle.port_now(), "public_port": lifecycle.public_port(),
+            # The app's name, as the Server page's card shows it: now, and from the next start when another.
+            "name": lifecycle.name_now(), "app_name": lifecycle.app_title(lifecycle.name_now()), "next_name": lifecycle.next_name(),
             # A URL as the other addresses are (lifecycle.next_address gives host:port).
             "next_address": f"http://{lifecycle.next_address()}/" if lifecycle.next_address() else None,
             "moved_from": (lifecycle.moved_off_80(once=False) or {}).get("was"),
@@ -678,6 +680,12 @@ def server_stop(args):
 def server_port(args):
     """POST /server/port: the Server page's Move to this port (lifecycle.move_port), from the server's next start."""
     return lifecycle.move_port(args["port"])
+
+
+@handler
+def server_name(args):
+    """POST /server/name: the Server page's Change the name (lifecycle.rename_server), from the server's next start."""
+    return lifecycle.rename_server(args["name"])
 
 
 @handler

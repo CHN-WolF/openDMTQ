@@ -367,9 +367,12 @@ SHAPES = {
         Field("version", "string", "Its version.", nullable=True),
         Field("started", "integer", "When the admin service started, with the server (Unix time).", nullable=True),
         Field("runs_itself", "boolean", "True where this API can stop, restart and uninstall the server (a host install, the Windows bundle)."),
-        Field("commands", "{string}", "Where it cannot: the command for each action, on the server PC or the cluster. With Docker Compose stop, restart, repair, delete_data, uninstall and port; on Kubernetes stop, restart, delete_data, uninstall and port; none on a host install, which does each through this API."),
+        Field("commands", "{string}", "Where it cannot: the command for each action, on the server PC or the cluster. With Docker Compose stop, restart, repair, delete_data, uninstall, port and name; on Kubernetes stop, restart, delete_data, uninstall, port and name; on a host install, which does each through this API, none, or the install's own command for what this API cannot do when its pages were started without the install's run folder or .env."),
         Field("port", "integer", "Its one port, its own: the game, the players' site, the admin pages and this API, the port POST /server/port moves."),
         Field("public_port", "integer", "The port in its address, the one the phones' app calls: the same as port, or another that is forwarded to port (a router's)."),
+        Field("name", "string", "Its name in the app's title, TECHNIKA Q (name) on phones (SERVER_NAME): \"\" while it has none, its address naming the app then."),
+        Field("app_name", "string", "The app's name on phones now: TECHNIKA Q and the name, or the address while there is none."),
+        Field("next_name", "string", "The name it takes at its next start (POST /server/name), when another than now: \"\" for none; null otherwise.", nullable=True),
         Field("next_address", "string", "The address it moves to at its next start (http://host:port/), when it was moved (POST /server/port); null otherwise.", nullable=True),
         Field("moved_from", "integer", "The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.", nullable=True),
         Field("moved", "Moved", "Its last move to another address, which the site's download page tells players of for a month: null otherwise.", nullable=True),
@@ -385,6 +388,10 @@ SHAPES = {
         Field("can_delete", "boolean", "True when this API can delete it here (with Docker Compose the game files are the command line's)."),
         Field("command", "string", "Where this API cannot delete it, the command that does on the server PC, with the part's name; \"\" where it can.")]),
     "DataParts": Shape("The server's data.", [Field("items", "[DataPart]", "Every part, in the Server page's order.")]),
+    "Renamed": Shape("The server's name in the app's title, from its next start.", [
+        Field("name", "string", "The new name: \"\" for none, its address naming the app then."),
+        Field("app_name", "string", "The app's name on phones from the next start, when the app is built again with it."),
+        Field("from_next_start", "boolean", "True: the server takes it at its next start, and builds the app again with it then.")]),
     "PortMoved": Shape("A move to another port, from the server's next start.", [
         Field("port", "integer", "The new port."),
         Field("address", "string", "The server's address from its next start: the players' site, with the admin pages and this API under it."),
@@ -1015,6 +1022,16 @@ ROUTES = [
                   (409, "port_taken", "Another program holds that port on this computer."),
                   (409, "port_not_allowed", "This computer keeps that port from the user the server runs as (below 1024)."),
                   (409, "by_command", "Docker Compose or Kubernetes: the command line moves the server (the message names the command).")]),
+    Route("POST", "/server/name", "write", "server_name", "Server", "Changes the server's name in the app's title, as the Server page's Change the name does.",
+          "A host install and the Windows bundle only. SERVER_NAME in .env: the server takes it at its next start (POST /server/restart makes "
+          "it now), when the app is built again with it. Phones keep working with the app they have, which calls the same address. With "
+          "Docker Compose `./opendmtq name <name>` changes it, on Kubernetes the chart's serverName (the refusal names the command).",
+          body=[Field("name", "string", "The new name: at most 80 characters, without quotes, $, #, \\ or `. Empty: the address names the app.", max_length=80)],
+          answer="Renamed",
+          errors=[(400, "bad_name", "Longer than 80 characters, with a character that cannot be printed, or with a quote, $, #, \\ or `."),
+                  (409, "same_name", "The server has that name from its next start already."),
+                  (409, "by_command", "Docker Compose or Kubernetes: the command line changes it (the message names the command)."),
+                  (500, "name_failed", ".env could not be written: nothing changed.")]),
     Route("POST", "/server/password", "write", "server_password", "Server", "Changes the owner's password, as the Server page's Change the password does.",
           "A host install and the Windows bundle, with a token of the owner's own: ADMIN_PASSWORD in .env, taken at once by the "
           "admin pages and this API (the owner's tokens keep working), the owner's sign-in for the players' site written again "
