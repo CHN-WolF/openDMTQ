@@ -180,10 +180,16 @@ def pieces_of(url):
     return host, [p for p in parts.path.split("/") if p]
 
 
+def host_name(url):
+    """An address's host name as the hosts above are written: in lower case, without the dot a fully written name may end
+    in (discord.com. is discord.com)."""
+    return (urllib.parse.urlsplit(url).hostname or "").lower().rstrip(".")
+
+
 def kind_of(url):
     """The format a webhook's address takes: Discord's for Discord's hosts, Slack's for every other, and for a Discord
     address that ends in /slack (Discord takes Slack's messages there)."""
-    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    host = host_name(url)
     if host in DISCORD_HOSTS:
         return "slack" if pieces_of(url)[1][-1:] == ["slack"] else "discord"
     return "slack"
@@ -204,10 +210,10 @@ def check_url(raw):
             or not parts.hostname or parts.username is not None or parts.password is not None):
         raise Refused(400, "bad_url", t("hook.bad_url"))
     # Discord's address for GitHub's events takes nothing else.
-    if (parts.hostname or "").lower() in DISCORD_HOSTS and pieces_of(url)[1][-1:] == ["github"]:
+    if host_name(url) in DISCORD_HOSTS and pieces_of(url)[1][-1:] == ["github"]:
         raise Refused(400, "bad_url", t("hook.github"))
-    # The server itself, by its name or its numbers, or its network link's own addresses.
-    host = (parts.hostname or "").lower()
+    # The server itself, by its name (written with its last dot or not) or its numbers, or its network link's own addresses.
+    host = host_name(url)
     if not LOOPBACK_OK and (host == "localhost" or host.endswith(".localhost") or own_address(host)):
         raise Refused(400, "bad_url", t("hook.local"))
     return url
@@ -215,12 +221,12 @@ def check_url(raw):
 
 def masked(url):
     """An address as the pages show it, its secret masked (dots, then its last four characters): Discord's token, after the
-    webhook's id (an ending of Discord's own after it stays as it is); the last part of Slack's; of any other chat's, all
-    of its path past its first part (where its secret is is not known), or its one part. A query, which can hold a key too,
-    the same way."""
+    webhook's id (an ending of Discord's own after it stays as it is); the last part of Slack's; of any other chat's, its
+    whole path as one (where its secret is is not known: its first part may be it). A query, which can hold a key too, the
+    same way."""
     parts = urllib.parse.urlsplit(url)
     host, pieces = pieces_of(url)
-    hostname = (parts.hostname or "").lower()
+    hostname = host_name(url)
     if hostname in DISCORD_HOSTS and len(pieces) >= 4 and pieces[:2] == ["api", "webhooks"]:
         # api/webhooks/<id>/<token>[/slack]: the token masked, the rest as it is.
         ending = pieces[4:] if pieces[4:] and pieces[4] in DISCORD_ENDINGS else []
@@ -228,11 +234,9 @@ def masked(url):
     elif hostname == "hooks.slack.com" and pieces:
         # services/<team>/<bot>/<secret>: the last part masked.
         shown = pieces[:-1] + ["••••" + pieces[-1][-4:]]
-    elif len(pieces) >= 2:
-        # Its first part, then the rest masked as one.
-        shown = pieces[:1] + ["••••" + "/".join(pieces[1:])[-4:]]
     else:
-        shown = ["••••" + pieces[0][-4:]] if pieces else []
+        # Every part masked as one.
+        shown = ["••••" + "/".join(pieces)[-4:]] if pieces else []
     out = host + ("/" + "/".join(shown) if shown else "")
     if parts.query:
         out += "?••••" + parts.query[-4:]

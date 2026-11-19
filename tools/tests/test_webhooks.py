@@ -183,8 +183,18 @@ class AddressTest(unittest.TestCase):
                 self.assertEqual((e.exception.status, e.exception.code), (400, "bad_url"), url)
 
     def test_the_host_decides_the_format(self):
-        for host in ("discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com", "DISCORD.COM"):
+        # A name written with its last dot is the same name (ADM-172; main sent Slack's format to discord.com.).
+        for host in ("discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com", "DISCORD.COM", "discord.com.",
+                     "Discord.Com."):
             self.assertEqual(webhooks.kind_of(f"https://{host}/api/webhooks/1/x"), "discord", host)
+        self.assertEqual(webhooks.kind_of("https://discord.com./api/webhooks/1/x/slack"), "slack")
+        self.assertEqual(webhooks.masked("https://discord.com./api/webhooks/123456/TOKENsecretTOKEN"),
+                         "discord.com./api/webhooks/123456/••••OKEN")
+        with admin.app.test_request_context():
+            # Discord's ending for GitHub's events, and the server's own name, with the dot too.
+            for url in ("https://discord.com./api/webhooks/1/x/github", "http://localhost./hook", "http://LOCALHOST./hook"):
+                with self.assertRaises(webhooks.Refused, msg=url):
+                    webhooks.check_url(url)
         for url in ("https://hooks.slack.com/services/T/B/x", "https://chat.example/hooks/abc", "https://discord.com.example/x"):
             self.assertEqual(webhooks.kind_of(url), "slack", url)
 
@@ -201,12 +211,17 @@ class AddressTest(unittest.TestCase):
                 webhooks.check_url("https://discord.com/api/webhooks/123456/TOKENsecretTOKEN/github")
         self.assertEqual(e.exception.code, "bad_url")
 
-    def test_another_chats_address_shows_only_its_first_part(self):
-        # Where the secret is in another chat's address is not known: all of it past its first part is masked.
-        self.assertEqual(webhooks.masked("https://chat.example/hooks/LONGSECRETVALUE/abc"), "chat.example/hooks/••••/abc")
+    def test_another_chats_address_shows_none_of_its_path(self):
+        # Where the secret is in another chat's address is not known, its first part too: its whole path is masked as one
+        # (ADM-172; main showed the first part).
+        self.assertEqual(webhooks.masked("https://chat.example/hooks/LONGSECRETVALUE/abc"), "chat.example/••••/abc")
         self.assertEqual(webhooks.masked("https://chat.example/LONGSECRETVALUE"), "chat.example/••••ALUE")
-        for url in ("https://chat.example/hooks/LONGSECRETVALUE/abc", "https://chat.example/LONGSECRETVALUE"):
-            self.assertNotIn("SECRET", webhooks.masked(url))
+        self.assertEqual(webhooks.masked("https://chat.example.com/SecretFirstPartXYZ1/hook"), "chat.example.com/••••hook")
+        # A Discord address in another form than api/webhooks/<id>/<token>: the same.
+        self.assertEqual(webhooks.masked("https://discord.com/api/v10/webhooks/123456/AbCdEfSecretTokenXYZ1"), "discord.com/••••XYZ1")
+        for url in ("https://chat.example/hooks/LONGSECRETVALUE/abc", "https://chat.example/LONGSECRETVALUE",
+                    "https://chat.example.com/SecretFirstPartXYZ1/hook"):
+            self.assertNotIn("Secret", webhooks.masked(url).replace("SECRET", "Secret"))
 
     def test_shown_masked_never_whole(self):
         cases = {"https://discord.com/api/webhooks/1234/secret-part-9876": "discord.com/api/webhooks/1234/••••9876",

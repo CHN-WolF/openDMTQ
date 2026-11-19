@@ -210,7 +210,7 @@ and links to that page of the site. Discord's are embeds and Slack's blocks, and
 (@everyone, @here, a role or a user). A Discord address ending in `/slack` gets Slack's format.
 
 The address is kept in the database and shown masked everywhere, in the API and the log of changes too (Discord's
-token, the secret at the end of Slack's, everything past the first part of another chat's); a backup holds it whole, as
+token, the secret at the end of Slack's, the whole path of another chat's); a backup holds it whole, as
 it holds the app's signing key. An address of the server itself or of its network link's own (loopback, link-local such
 as a cloud's metadata) is refused, by its numbers when added and by where its name leads when a message goes; a chat on
 the local network is fine. A message a chat does not take is tried again after a wait, the chat's own when it asks for
