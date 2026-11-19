@@ -29,11 +29,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from opendmtq_client import safety  # noqa: E402
 
-# The launcher's measure of boxes and room, from the file beside this one.
+# The launcher's measure of boxes and room, and its film of a page switch, from the files beside this one.
 import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("spacing", os.path.join(os.path.dirname(__file__), "spacing.py"))
 spacing = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(spacing)
+_spec = importlib.util.spec_from_file_location("flicker", os.path.join(os.path.dirname(__file__), "flicker.py"))
+flicker = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(flicker)
 
 # Velopack's setup's log as it writes it, line by line (its real words, a run of 0.10.0's under Wine).
 SETUP_LOG = """[setup:448] [11:47:52] [INFO] Starting Velopack Setup (1.2.161)
@@ -659,6 +662,58 @@ def main():
     program(__version__)
     run("apps-uninstall", lambda: installer.Installer(start="uninstall", folder=folder),
         [lambda made: settle(made.root, 1.5), red_main_button])
+
+    # ---- The page switches filmed as the launcher's menu is (WIN-244, flicker.film_switch): the page before stays
+    # whole on the screen while the next one is made, and leaves it whole before its widgets go (main took its widgets
+    # away one by one on the screen, the page's flat frame showing where each had been, as the launcher's pages did).
+    setup = {"fails": False}
+
+    def setup_stand_in(path):
+        """Velopack's setup for the switches: one that cannot start (its file missing), or one that runs a minute."""
+        if setup["fails"]:
+            raise OSError(2, "No such file or directory", "Setup.exe")
+        return Process(60, 0)
+
+    def switches(steps):
+        """A window as the installer opens it, each (name, act(made)) of `steps` filmed as a switch of its page, then
+        the window closed (its timers first, as run() does). The page before's buttons are gone once the switch's own
+        work is done: a second click waiting in Tk's queue, which Tk takes before its idle work, reaches nothing (a
+        double click on Install started Velopack's setup once)."""
+        made = installer.Installer()
+        settle(made.root, 1.0)
+        for name, act in steps:
+            before, left = list(made.window.buttons), []
+
+            def switch(act=act, before=before, left=left):
+                act(made)
+                # The switch's own turn over: what of the page before's buttons is still there.
+                left.extend(button.words for button in before if button.winfo_exists())
+
+            filmed = flicker.film_switch(made.root, made.window.page_area, switch)
+            problems.extend(flicker.switch_problems("setup-%s: the page switch %s" % (tag, name), filmed))
+            if left:
+                problems.append("setup-%s: the page switch %s: the page before's buttons still there after its work "
+                                "(%s)" % (tag, name, ", ".join(left)))
+        for job in made.root.tk.splitlist(made.root.tk.call("after", "info")):
+            made.root.after_cancel(job)
+        try:
+            made.root.destroy()
+        except tk.TclError:
+            # A timer's command, cancelled through the window above, is deleted again by the widget that made it (the
+            # bar's easing): the window is gone all the same, as run() finds.
+            pass
+
+    with mock.patch.object(installer, "run_setup", setup_stand_in):
+        # On a PC with OpenDMTQ: to the uninstall's page and back, a repair whose setup cannot start (its progress,
+        # then what went wrong, in one turn), Try again, then a repair under way.
+        switches([("choose to uninstall", lambda made: made.uninstall_page()),
+                  ("uninstall to choose", lambda made: made.ask()),
+                  ("choose to failed", lambda made: (setup.update(fails=True), made.work("repair"))),
+                  ("failed to choose", lambda made: (setup.update(fails=False), made._again())),
+                  ("choose to repairing", lambda made: made.work("repair"))])
+        # On a PC without it: Install.
+        shutil.rmtree(folder, ignore_errors=True)
+        switches([("install to installing", lambda made: made.work("install"))])
     for patch in patches:
         patch.stop()
     stopped_window(args, tag, problems)

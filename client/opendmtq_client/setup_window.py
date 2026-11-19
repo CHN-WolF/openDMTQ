@@ -7,9 +7,9 @@ It has no title bar of Windows' (frameless.py): its own header holds the page's 
 window's minimise and close buttons in the launcher's quiet metal, and the window's top (the header and the column above
 its steps) moves the window.
 
-installer.py decides what each page says and does; this module only draws: SetupWindow.page() starts a page,
-Options a list of choices on it, Progress the work under way, and lines() what came of it. Nothing here asks the
-system anything but frameless.py's calls for the window itself.
+installer.py decides what each page says and does; this module only draws: SetupWindow.page() starts a page, made off
+the screen and shown whole by show_page(), Options a list of choices on it, Progress the work under way, and lines()
+what came of it. Nothing here asks the system anything but frameless.py's calls for the window itself.
 """
 
 import tkinter as tk
@@ -169,8 +169,11 @@ class SetupWindow:
         self.mover.bind(self.header)
         for widget in (column, mark):
             self.mover.bind(widget, lambda e: e.y_root - self.root.winfo_rooty() < self.header.tall)
-        self.buttons = []
+        # The page's buttons (the coming page's while one is made), the ones in the strip now, and what Esc does there.
+        self.buttons, self.shown_buttons = [], []
         self.escape = None
+        # The page being made off the screen, with what it shows once it takes the old one's place (page()), or None.
+        self.coming = None
 
     def _escape(self):
         """Esc: the page's quiet answer (Cancel, Close, Back), when it has one and nothing is under way."""
@@ -181,19 +184,46 @@ class SetupWindow:
 
     def page(self, title, lead, steps, step):
         """A new page: its title and the line under it over the field, the column's steps with `step` lit. Returns the
-        frame the page's cards go in; the strip's buttons and note are cleared for it (set_buttons, say)."""
-        for child in self.page_area.inner.winfo_children():
-            child.destroy()
-        # The title in the header, the line under it at the page's top, where the title's foot is.
-        self.header.set_title(title)
-        self.page_area.set_heading("", lead)
-        self.steps.show(steps, step)
-        content = tk.Frame(self.page_area.inner, bg=theme.BG)
-        content.pack(fill="both", expand=True)
-        self.page_area.to_top()
-        self.say("")
-        self.set_buttons([])
+        frame the page's cards go in, made off the screen while the page on show stays whole on it; the strip's buttons
+        and note start empty for it, and what the caller gives it then (set_buttons, say) is kept for it too. Once the
+        caller has made it, show_page() puts it in the old one's place whole, with its title, line, steps, buttons and
+        note: never the old page taken apart on the screen while the next is made, as the launcher's pages."""
+        if self.coming is not None:
+            # A page begun before this one and not shown (its caller turned to this one instead) goes unseen.
+            self._drop_coming()
+        content = self.page_area.new_page()
+        self.coming = {"content": content, "title": title, "lead": lead, "steps": (list(steps), step),
+                       "buttons": [], "escape": None, "note": ("", theme.MUTED)}
+        self.buttons = []
+        # At the latest once the window has nothing more to do, should its caller not show it: never a page left made
+        # and unseen. The caller shows it itself, in its own turn, so that the page before and its buttons are gone
+        # before anything else can reach them (Tk takes a second click waiting in its queue before its idle work).
+        self.root.after_idle(self.show_page)
         return content
+
+    def _drop_coming(self):
+        """The page being made goes without having shown, its buttons with it."""
+        coming, self.coming = self.coming, None
+        for button in coming["buttons"]:
+            button.destroy()
+        coming["content"].destroy()
+
+    def show_page(self):
+        """The page made off the screen (page()) takes the place of the one on show, whole: the title in the header,
+        the line under it at the page's top, where the title's foot is, the column's steps, the page (the old one leaves
+        the screen whole before its widgets go, widgets.ScrollArea.show_page), the strip's buttons and its note. All of
+        it is drawn once the turn is over, together."""
+        coming, self.coming = self.coming, None
+        if coming is None:
+            # Shown already (page()'s own late look, after its caller showed it).
+            return
+        self.header.set_title(coming["title"])
+        self.page_area.set_heading("", coming["lead"])
+        self.steps.show(*coming["steps"])
+        self.page_area.show_page(coming["content"])
+        self._put_buttons(coming["buttons"])
+        self.escape = coming["escape"]
+        self._say(*coming["note"])
 
     def card(self, parent, title=None, last=True):
         """A card on the page, as the launcher's: its title, the cut corner, the site's room inside."""
@@ -204,23 +234,40 @@ class SetupWindow:
     def set_buttons(self, buttons, default=None, escape=None):
         """The strip's buttons from the left: [(words, command, kind)], kind "primary" (lime), "remove" (filled red: the
         main button when it removes for good), "danger" (quiet red) or "secondary" (quiet); the one at `default` takes
-        the keyboard (Enter presses it); `escape` is what Esc does."""
-        for button in self.buttons:
-            button.destroy()
-        self.buttons = []
-        px = self.ui.px
-        for i, (words, command, kind) in enumerate(buttons):
-            button = widgets.Button(self.button_row, self.ui, words, command, kind=kind)
-            button.pack(side="left", padx=(px(10) if i else 0, 0))
-            self.buttons.append(button)
-        self.escape = escape
-        if default is not None and 0 <= default < len(self.buttons):
+        the keyboard (Enter presses it); `escape` is what Esc does. For a page being made (page()), they come with it,
+        and the page on show keeps its own until then."""
+        made = [widgets.Button(self.button_row, self.ui, words, command, kind=kind) for words, command, kind in buttons]
+        if self.coming is not None:
+            # Given again while the page is made: the ones given first go unseen.
+            for button in self.coming["buttons"]:
+                button.destroy()
+            self.coming.update(buttons=made, escape=escape)
+        else:
+            self._put_buttons(made)
+            self.escape = escape
+        self.buttons = made
+        if default is not None and 0 <= default < len(made):
             # After the window is drawn, so that the keyboard lands there and not on the page before it.
-            self.focus_later(self.buttons[default])
-        return self.buttons
+            self.focus_later(made[default])
+        return made
+
+    def _put_buttons(self, buttons):
+        """`buttons` (made in the strip's row) in the strip, in place of the ones there."""
+        for button in self.shown_buttons:
+            button.destroy()
+        px = self.ui.px
+        for i, button in enumerate(buttons):
+            button.pack(side="left", padx=(px(10) if i else 0, 0))
+        self.shown_buttons = list(buttons)
 
     def say(self, text, colour=theme.MUTED):
-        """The line at the strip's left end."""
+        """The line at the strip's left end; for a page being made (page()), said as the page shows."""
+        if self.coming is not None:
+            self.coming["note"] = (text, colour)
+            return
+        self._say(text, colour)
+
+    def _say(self, text, colour):
         # Wrapped to what the buttons leave of the strip, so that a long path breaks instead of pushing them off.
         room = max(self.ui.px(120), self.strip.winfo_width() - self.button_row.winfo_reqwidth() - self.ui.px(16))
         self.note.configure(text=text, fg=colour, wraplength=room)

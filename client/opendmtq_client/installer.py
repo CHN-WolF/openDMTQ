@@ -313,8 +313,9 @@ class Installer:
     # ------------------------------------------------------------------------------------------------ pages
 
     def _page(self, title, lead, steps, step):
-        """A new page with these steps down the column (their keys under setup.step), `step` on show. Kept, so that a
-        page that comes of the work (waiting for the game, a failure) shows the same steps where the work was."""
+        """A new page with these steps down the column (their keys under setup.step), `step` on show, made off the
+        screen until its builder shows it (self.window.show_page()). Kept, so that a page that comes of the work
+        (waiting for the game, a failure) shows the same steps where the work was."""
         w = self.words
         self.flow = (steps, step)
         # The page that went took its look at the PC with it.
@@ -392,6 +393,8 @@ class Installer:
         self.window.set_buttons([(w("setup.cancel"), self.root.destroy, "secondary"),
                                  (w("setup.install"), lambda: self.work("install"), "primary")],
                                 default=1, escape=self.root.destroy)
+        # Made: in the place of the page before, whole.
+        self.window.show_page()
         # Installed meanwhile (another installer, an update): the page for an installed PC instead.
         self.watch = lambda: installed_version(self.folder) is not None and self.ask()
 
@@ -490,6 +493,8 @@ class Installer:
         main_button = buttons[1]
         # The keyboard on the choices first: the arrow keys move them, Enter does the main button's.
         self.window.focus_later(options_list)
+        # Made: in the place of the page before, whole.
+        self.window.show_page()
 
     def uninstall_page(self):
         """Uninstall: the data kept or deleted, each with its size (counted on a worker thread), then Uninstall."""
@@ -526,6 +531,8 @@ class Installer:
                                 escape=back[1])
         # The keyboard on the choices first, as on the page before it.
         self.window.focus_later(options_list)
+        # Made: in the place of the page before, whole.
+        self.window.show_page()
 
         def counted(sizes):
             self.sizes = sizes
@@ -588,17 +595,21 @@ class Installer:
         self.window.say(w("setup.waiting"))
         self.window.set_buttons([(w("setup.close"), self.root.destroy, "secondary")], default=0,
                                 escape=self.root.destroy)
+        # Made: in the place of the page before, whole.
+        self.window.show_page()
         # The game looked at every second: closed, the work starts.
         self.watch = lambda: not game_running() and again()
 
     def progress_page(self, title, lead, steps, step, stages):
-        """The work under way: the column's steps at the work's, and the card with its progress and its stages."""
+        """The work under way: the column's steps at the work's, and the card with its progress and its stages. Made
+        off the screen: the caller shows it once the work has started, in the same turn."""
         w = self.words
         content = self._page(title, lead, steps, step)
         card = self.window.card(content)
         progress = self.ui_module.Progress(card.body, self.ui, [w("setup.stage." + key) for key in stages])
         progress.pack(fill="x")
         self.window.say(w("setup.working.stay"))
+        # Shown by the caller once the work has started (self.window.show_page()), or the page of its failure instead.
         return progress
 
     def done_page(self, title, lead, steps, rows, open_button=True):
@@ -614,6 +625,8 @@ class Installer:
         else:
             self.window.set_buttons([(w("setup.close"), self.root.destroy, "primary")], default=0,
                                     escape=self.root.destroy)
+        # Made: in the place of the page before, whole.
+        self.window.show_page()
 
     def failed(self, why, title=None):
         """What went wrong (`why`: plain words, or "" when the title says it all), with Try again as the main answer
@@ -636,6 +649,8 @@ class Installer:
             buttons.append((w("setup.open_log"), self._open_log, "secondary"))
         buttons.append((w("setup.retry"), self._again, "primary"))
         self.window.set_buttons(buttons, default=len(buttons) - 1, escape=self.root.destroy)
+        # Made: in the place of the page before, whole.
+        self.window.show_page()
 
     def _failed_title(self):
         w = self.words
@@ -684,6 +699,9 @@ class Installer:
             log.exception("could not start Velopack's setup")
             self.failed(self.words.failed("setup.no_setup", e, network=False))
             return
+        # The work under way: its page in the place of the page before, whole, in this same turn (the page before's
+        # buttons gone with it, so that a second click on Install waiting in Tk's queue reaches nothing).
+        self.window.show_page()
         self.busy = True
         self.started_at = time.time()
         self.root.after(POLL, self._wait_setup)
@@ -795,6 +813,8 @@ class Installer:
             log.exception("could not start Velopack's uninstaller")
             self.failed(w("setup.failed.start_uninstaller", error=w.error(e)))
             return
+        # The work under way: its page in the place of the page before, whole, in this same turn.
+        self.window.show_page()
         self.busy = True
         self.started_at = time.time()
         self.ended_at = None
