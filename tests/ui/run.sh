@@ -63,7 +63,12 @@ mkdir -p "$REPORT/shots"
 chmod -R a+rwX "$REPORT"
 
 # The stand-in game files, and the folders a server keeps its state in.
-mkdir -p "$DATA/content" "$DATA/state" "$DATA/apk/out" "$DATA/custom" "$DATA/backups" "$DATA/ts"
+mkdir -p "$DATA/content" "$DATA/state" "$DATA/apk/out" "$DATA/custom" "$DATA/backups" "$DATA/ts" "$DATA/install/run"
+# The install's own folder, as a host install's program hands it to the admin pages: its .env as the setup writes it
+# (the same address and password the services start with) and its run folder, where the Server page leaves its requests
+# (restart, stop, uninstall) for a program that nobody runs here.
+printf '# OpenDMTQ settings. Written by ./opendmtq; safe to edit by hand.\nPUBLIC_HOST=127.0.0.1:%s\nLISTEN_PORT=%s\nADMIN_PASSWORD=%s\n' \
+  "$SITE_PORT" "$SITE_PORT" "$PASSWORD" > "$DATA/install/.env"
 chmod -R a+rwX "$DATA"
 docker run --rm -u 33:33 -v "$DATA/content:/content" -v "$UI:/ui:ro" --entrypoint php "opendmtq-server:$TAG" /ui/make_content.php /content
 
@@ -112,6 +117,7 @@ docker run -d --name "$ADMIN" --network "$NET" --cpus 2 --memory 1g -u 33:33 --r
   --tmpfs /home/player:mode=1777 -e HOME=/home/player -e OPENDMTQ_HOST_INSTALL=yes \
   -e PUBLIC_HOST="$HOST" -e ADMIN_PASSWORD="$PASSWORD" -e SERVER_URL="http://$SITE:8080" -e TZ=Asia/Seoul \
   -e OPENDMTQ_VERSION=0.9.3-abc1234 \
+  -e OPENDMTQ_ENV_FILE=/install/.env -e OPENDMTQ_RUN=/install/run -e OPENDMTQ_ROOT=/install -v "$DATA/install:/install" \
   -v "$DATA/state:/data" -v "$DATA/apk:/apk" -v "$DATA/custom:/custom" -v "$DATA/backups:/backups" \
   -v "$DATA/content:/srv/content:ro" -p "127.0.0.1:$ADMIN_PORT:8000" \
   --entrypoint gunicorn "opendmtq-tools:$TAG" -w 1 --threads 4 -b 0.0.0.0:8000 opendmtq_tools.admin:app >/dev/null
