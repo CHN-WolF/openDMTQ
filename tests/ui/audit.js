@@ -765,7 +765,10 @@ async function hoverOnly(contexts) {
       // marks, each showing its words. On a laptop's screen, once a page.
       if (!touch && await page.$('[data-tips] [data-tip]')) {
         const moved = await page.evaluate(async () => {
-          const group = [...document.querySelectorAll('[data-tips]')].find(g => [...g.querySelectorAll('[data-tip]')].some(m => m.getClientRects().length && m.tabIndex === 0));
+          // A group with marks to go between: a group of one (the Status page's resources an admin service has sampled
+          // once, a server minutes old) has no other mark for an arrow key to reach.
+          const groups = [...document.querySelectorAll('[data-tips]')].filter(g => [...g.querySelectorAll('[data-tip]')].some(m => m.getClientRects().length && m.tabIndex === 0));
+          const group = groups.find(g => [...g.querySelectorAll('[data-tip]')].filter(m => m.getClientRects().length).length > 1) || groups[0];
           if (!group) return 'no group with a stop';
           const stops = [...group.querySelectorAll('[data-tip]')].filter(m => m.tabIndex === 0);
           if (stops.length !== 1) return `${stops.length} stops in one group`;
