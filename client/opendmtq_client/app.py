@@ -672,16 +672,21 @@ class LauncherApp:
 
         def work():
             try:
-                actions.move_server(self.state, old, found, change=self.post)
-                self.post(lambda: self._moved(found))
+                # The entry moved on the window's own thread together with what follows it (saved, said, tested again):
+                # one task, so that nothing the window does in between finds PLAY on the new address under the old
+                # address's words.
+                actions.move_server(self.state, old, found,
+                                    change=lambda move: self.post(lambda: self._moved(found, move)))
             except Exception as e:  # noqa: BLE001  (said on the status line)
                 log.info("could not move to %s: %s", found, e)
                 self.post(lambda error=e: self.set_status(i18n.Said("status.error", error=error), "bad", sticky=True))
 
         threading.Thread(target=work, daemon=True, name="move").start()
 
-    def _moved(self, found):
-        """Moved: said, saved, and the test run again on the new address."""
+    def _moved(self, found, move):
+        """The move made (`move`, actions.move_server's change), then said, saved, and the test run again on the new
+        address, in the same task."""
+        move()
         self.state.save()
         self.address_draft = None
         self.download_error, self.app_note = None, None

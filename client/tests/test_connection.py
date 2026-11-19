@@ -502,3 +502,53 @@ class OtherHttps:
     def stop(self):
         self.httpd.shutdown()
         self.httpd.server_close()
+
+
+class UseThisAddress(Folder):
+    """Use this address in the window: the server moved to the address found, the status line saying so and the test
+    of the new address started, all in one task of the window's own thread, so that nothing the window does between
+    them (a ready check's answer, the next frame a test or a person looks at) finds PLAY on the new address under the
+    words of the old one."""
+
+    def window(self, state):
+        """A stand-in for the window with Use this address's own methods and the status line's, its tasks kept in order
+        (app.post) for the test to run one at a time; nothing drawn, no ready check or test run."""
+        import types
+        from opendmtq_client import app as launcher
+        app = types.SimpleNamespace(
+            state=state, busy=False, download=None, session=None, words=i18n.Words("en"), status_message=None,
+            status_tone="normal", status_action=None, status_transient=False, status_sticky=False, update_found=None,
+            checks=[], address_draft="typed", download_error=None, app_note=None, connection_test={"running": False},
+            tasks=[], tests=[], _paint_status=lambda: None, refresh_checks=lambda force=False: None,
+            follow_page=lambda *pages: None)
+        app.post = app.tasks.append
+        app.test_connection = lambda: app.tests.append(state.current)
+        for name in ("use_found_address", "_moved", "set_status", "user_acted", "_say_state", "busy_now", "_game_open",
+                     "ready", "server_answers"):
+            setattr(app, name, getattr(launcher.LauncherApp, name).__get__(app))
+        app.text = lambda: launcher.LauncherApp.status_text.fget(app)
+        return app
+
+    def test_the_move_and_its_words_come_in_one_task(self):
+        site = stub.Site().start()
+        self.addCleanup(site.stop)
+        old = "http://127.0.0.1:%d" % closed_port()
+        state = st.LauncherState()
+        state.add_server(old, "Stand-in")
+        app = self.window(state)
+        app.use_found_address(site.url)
+        # The worker asks the new address, then hands its changes over: wait for it to be done.
+        for thread in [t for t in threading.enumerate() if t.name == "move"]:
+            thread.join(10)
+        self.assertTrue(app.tasks)
+        # The window's task pump, a task at a time: once PLAY is on the new address, the line says so already, and
+        # the new address's test has started.
+        for task in list(app.tasks):
+            task()
+            if state.current == site.url:
+                # In the launcher's words for the server it plays on now (its name, as PLAY's line names it).
+                self.assertEqual(app.status_message.key, "test.used")
+                self.assertEqual(app.text(), EN("test.used", name=state.server()["name"]))
+                self.assertEqual(app.tests, [site.url])
+        self.assertEqual(state.current, site.url)
+        self.assertIsNone(app.address_draft)
