@@ -6,6 +6,18 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-11-20
+
+OpenDMTQ 0.11.2 fixes how the runtime that plays the game on PCs and on phones without 32-bit support answers a signal
+sent to a thread that has ended.
+
+### Fixed
+
+- The runtime that plays the game on Windows and on phones without 32-bit support passed a signal meant for a thread
+  that had ended (`tkill` or `tgkill` naming thread 0, as the C library does for a thread that has ended and is not
+  joined yet) to the whole game, where another of its threads ran the signal's handler; it now refuses it, as a
+  phone's kernel does.
+
 ## [0.11.1] - 2026-11-19
 
 OpenDMTQ 0.11.1 closes holes in the game server's currency and bans, keeps a server's address and its phones through
