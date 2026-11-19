@@ -11,6 +11,8 @@ import re
 import threading
 import tkinter as tk
 
+from PIL import ImageTk
+
 from opendmtq_client import actions, apps, art, dialogs, displays, i18n, keys, maintenance, player, theme, updates, widgets
 from opendmtq_client import server as srv
 from opendmtq_client import state as st
@@ -296,16 +298,37 @@ def server_silent(app):
     return any(c.key == "server" and not c.ok and not c.blocks for c in (app.shown_checks or ()))
 
 
+# The page's head card's cut corners (logical pixels): its top one deeper than a card's 16, and its foot's, the hero of
+# the page.
+HEAD_CUT, HEAD_FOOT = 24, 12
+# The room inside the player's plate on the head card, at its sides and over and under its line (logical pixels).
+PLATE_PADX, PLATE_PADY = 10, 4
+
+
+def server_state(app):
+    """How the server PLAY plays on stands as the last ready check found it, for the head's light: "ok" (it answers),
+    "change" (it does not), or "wait" (no check has come back yet)."""
+    if server_silent(app):
+        return "change"
+    if any(c.key == "server" and c.ok for c in (app.shown_checks or ())):
+        return "ok"
+    return "wait"
+
+
 def _server_card(app, parent):
-    """PLAY's head: the server it plays on, its name large, under it its address and the sign-in with its lamp, and its
-    button at the right on the block's middle (Connect, Sign in, or the player's page on the site); while the server does
-    not answer, that it does (a sign-in cannot reach it then: Sign in stays plain, never the screen's lime action)."""
+    """PLAY's head, the page's hero: the server it plays on, its light (lime while it answers, a yellow ring while it
+    does not) and its name large, its address under it, then the player on a plate (the sign-in's lamp and words: who
+    is signed in, or that the sign-in ended); its button at the right on the block's middle (Connect, Sign in, or the
+    player's page on the site). While the server does not answer, the plate says so (a sign-in cannot reach it then:
+    Sign in stays plain, never the screen's lime action). A larger cut than a card's, as the page's first card."""
     ui, w, px = app.ui, app.words, app.ui.px
-    # No title: the server's name is the card's heading, in the page's largest words under its title.
-    card = widgets.Card(parent, ui)
+    # The hero's surface: a step nearer than the deck, its edge's light brighter, its corners cut deeper than a card's
+    # and the foot's too, the family's silhouette at the page's head.
+    card = widgets.Card(parent, ui, cut=HEAD_CUT, foot=HEAD_FOOT, fill=theme.PANEL_HI, rim=theme.RIM_HI)
     card.pack(fill="x")
     server = app.state.server()
-    line = tk.Frame(card.body, bg=theme.PANEL)
+    bg = card.fill
+    line = tk.Frame(card.body, bg=bg)
     line.pack(fill="x")
     if server is None:
         # No server yet: what to do, and Connect, the screen's main action.
@@ -325,25 +348,67 @@ def _server_card(app, parent):
         button = widgets.Button(line, ui, w("play.mypage"), app.open_my_page)
     # At the block's right, on its middle (pack's own), the room of a gutter before it.
     button.pack(side="right", padx=(px(16), 0))
-    words = tk.Frame(line, bg=theme.PANEL)
+    words = tk.Frame(line, bg=bg)
     words.pack(side="left", fill="x", expand=True)
+    # The server's light before its name, on the name's middle: whether it answers, as the last ready check found it.
+    name_line = tk.Frame(words, bg=bg)
+    name_line.pack(fill="x")
+    state = server_state(app)
+    colour = {"ok": theme.OK, "change": theme.WARN, "wait": theme.FAINT}[state]
+    widgets.lamp(name_line, ui, colour, bg=bg, hollow=state != "ok").pack(side="left", padx=(0, px(8)))
     if st.has_own_name(server):
-        # Its name, large, and its address under it.
-        widgets.label(words, ui, server["name"], font=ui.fonts.head, wrap_margin=0).pack(fill="x")
-        widgets.label(words, ui, server["url"], font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0).pack(
-            fill="x", pady=(px(2), 0))
+        # Its name, large, and its address under it, from the name's own left edge.
+        widgets.label(name_line, ui, server["name"], font=ui.fonts.head, wrap_margin=0).pack(side="left", fill="x",
+                                                                                            expand=True)
+        address = widgets.label(words, ui, server["url"], font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0)
+        address.pack(fill="x", pady=(px(2), 0))
     else:
         # A server with no name of its own calls itself by its address: said once, in the name's place.
-        widgets.label(words, ui, server["url"], font=ui.fonts.head, wrap_margin=0).pack(fill="x")
+        widgets.label(name_line, ui, server["url"], font=ui.fonts.head, wrap_margin=0).pack(side="left", fill="x",
+                                                                                           expand=True)
     if silent:
         # What stands in the way first: the server does not answer (the ready check's Server row leads to the test).
-        state = widgets.check_line(words, ui, "change", w("play.server_down"))
+        said, tone = w("play.server_down"), "change"
     else:
-        account = (w("play.signed", account=server["account"]) if signed else
-                   w("play.not_signed", account=server["account"]) if server.get("account") else w("play.no_account"))
-        state = widgets.check_line(words, ui, "ok" if signed else "change", account)
-    # A list's step under the name and its address: the sign-in's state is a fact of its own.
-    state.pack(fill="x", pady=(px(8), 0))
+        said = (w("play.signed", account=server["account"]) if signed else
+                w("play.not_signed", account=server["account"]) if server.get("account") else w("play.no_account"))
+        tone = "ok" if signed else "change"
+    _player_plate(app, words, said, tone).pack(anchor="w", pady=(px(10), 0))
+
+
+def _player_plate(app, words_frame, said, tone):
+    """The player on a plate under the head's name: a small plate let into the hero as a field is (the inputs' dark),
+    its corner cut as a card's, the sign-in's lamp and its words on one line (wrapping within the head's words when
+    long), as a name plate is set on a game's player card."""
+    ui, px = app.ui, app.ui.px
+    surface = theme.FIELD
+    plate = tk.Frame(words_frame, bg=surface)
+    light = widgets.lamp(plate, ui, {"ok": theme.OK, "change": theme.WARN, "bad": theme.BAD}[tone], bg=surface,
+                         hollow=tone == "change")
+    light.pack(side="left", anchor="n", padx=(px(PLATE_PADX), 0), pady=(px(PLATE_PADY), px(PLATE_PADY)))
+    # The words' line on the lamp's middle, as a ready-check row's (widgets.check_line).
+    middle = px(PLATE_PADY) + light.winfo_reqheight() / 2.0
+    top = max(0, int(round(middle - ui.fonts.body.metrics("linespace") / 2.0)))
+    text = tk.Label(plate, text=said, font=ui.fonts.body, fg=theme.TEXT, bg=surface, justify="left", anchor="w")
+    text.pack(side="left", anchor="n", padx=(px(6), px(PLATE_PADX)), pady=(top, 0))
+
+    def fit(event=None):
+        # As wide as the words take, up to the head's words' room less the plate's own: a long line wraps there.
+        room = words_frame.winfo_width() - light.winfo_reqwidth() - px(6 + 2 * PLATE_PADX)
+        if room > 1 and str(text.cget("wraplength")) != str(room):
+            text.configure(wraplength=room)
+
+    words_frame.bind("<Configure>", fit, add="+")
+    # The plate's cut corner, as small as the plate (the page's cards' form at its size).
+    cut = px(8)
+    beyond = words_frame.cget("bg")
+    corner = tk.Label(plate, bd=0, highlightthickness=0, bg=beyond)
+    picture = art.corner(cut, surface, beyond)
+    corner.odq_image = ImageTk.PhotoImage(picture, master=plate)
+    corner.odq_picture = picture
+    corner.configure(image=corner.odq_image)
+    corner.place(relx=1.0, x=-cut, y=0, width=cut, height=cut)
+    return plate
 
 
 def build_play(app, parent):
@@ -373,14 +438,43 @@ def build_play(app, parent):
     app.refresh_records()
 
 
-def _ready_card(app, holder):
-    """PLAY's ready check: a row a check, filled in when the worker thread finishes it, with Check again at its title's
-    right end, as on Help; as tall as the last game beside it."""
+def checks_card(app, parent, title, recheck=True, fill=False):
+    """A ready check's card (PLAY's, Help's, the guide's last step's): a checklist, a row a check filled in when the
+    worker thread finishes it (refresh_checks), its title led by the whole check's light (lime when every row is fine,
+    a yellow ring when one will change, red when one stops PLAY), Check again at the title's right end."""
     ui, w = app.ui, app.words
-    ready = _card(holder, ui, w("play.ready"), fill=True)
-    widgets.Button(ready.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
-    app.check_box = tk.Frame(ready.body, bg=theme.PANEL)
+    # A status panel: its title and its light on the header strip.
+    card = widgets.Card(parent, ui, title, strip=theme.STRIP_HEAD)
+    card.pack(fill="both" if fill else "x", expand=bool(fill))
+    # Before the title, on its line's middle: the light the rows' worst state gives (refresh_checks sets it).
+    light = tk.Label(card.head, bd=0, bg=card.head.cget("bg"))
+    light.pack(side="left", before=card.title, padx=(0, ui.px(8)))
+    app.check_light = light
+    _paint_check_light(app, None)
+    if recheck:
+        widgets.Button(card.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
+    app.check_box = tk.Frame(card.body, bg=theme.PANEL)
     app.check_box.pack(fill="x")
+    return card
+
+
+def _paint_check_light(app, state):
+    """The ready check's light in a state: "ok", "change", "bad", or None (no check has come back yet: a faint ring)."""
+    light = getattr(app, "check_light", None)
+    if light is None or not light.winfo_exists() or getattr(light, "odq_state", "") == state:
+        return
+    colour, hollow = {"ok": (theme.OK, False), "change": (theme.WARN, True), "bad": (theme.BAD, False),
+                      None: (theme.FAINT, True)}[state]
+    picture = art.lamp(colour, app.ui.scale, bg=light.cget("bg"), hollow=hollow, lead=False)
+    light.odq_image = ImageTk.PhotoImage(picture, master=light)
+    light.odq_picture = picture
+    light.configure(image=light.odq_image)
+    light.odq_state = state
+
+
+def _ready_card(app, holder):
+    """PLAY's ready check (checks_card), as tall as the last game beside it."""
+    checks_card(app, holder, app.words("play.ready"), fill=True)
 
 
 def _server_key(app):
@@ -389,7 +483,7 @@ def _server_key(app):
     if server is None:
         return None
     return (server["url"], server["name"], st.has_own_name(server), app.state.signed_in(server), server.get("account"),
-            server_silent(app))
+            server_silent(app), server_state(app))
 
 
 # How many of each of the records' lists PLAY shows: the rest is on the player's page on the site.
@@ -413,7 +507,10 @@ def _records_card(app, holder):
         return
     ui, w = app.ui, app.words
     answer = app.records["answer"]
-    card = _card(holder, ui, w("play.records"), last=True)
+    # A scoreboard: a status panel's strip, its two corners cut as the game's panels (the last game's), its scores in the
+    # game's wide face.
+    card = widgets.Card(holder, ui, w("play.records"), foot=True, strip=theme.STRIP_HEAD)
+    card.pack(fill="x")
     if answer["player"] is None:
         # The site's account has no game player linked to it on this server (the owner links them).
         widgets.label(card.body, ui, w("play.records.unlinked", account=answer["account"] or app.records["key"][1]),
@@ -436,13 +533,20 @@ def _records_card(app, holder):
             _record_row(app, column, row, recent)
             keys = keys or row["keys"]
     if keys:
-        # What the keyboard's mark means, said once under the lists for every row that has it (never only by hover).
-        widgets.divider(card.body, ui, pady=CHECK_GAP)
-        legend = tk.Frame(card.body, bg=theme.PANEL)
-        legend.pack(fill="x")
-        _keys_mark(app, legend).pack(side="left")
-        widgets.label(legend, ui, w("play.records.keys"), font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL).pack(
-            side="left", padx=(ui.px(6), 0))
+        # What the keyboard's mark means, said once for every row that has it (never only by hover): at the strip's right
+        # end, a key to the board as a scoreboard has one, its words on the title's baseline.
+        legend = tk.Frame(card.head, bg=card.head.cget("bg"))
+        _keys_mark(app, legend, bg=legend.cget("bg")).pack(side="left")
+        said = widgets.label(legend, ui, w("play.records.keys"), font=ui.fonts.small, fg=theme.MUTED)
+        said.pack(side="left", padx=(ui.px(6), 0))
+        # The title stands on the middle of the strip's line (a button's height, pack's own centring): its baseline
+        # there, and the key's words' top put on it (the mark on their middle, as it is in the legend).
+        title, small = card.title, ui.fonts.small
+        title_edge = (title.winfo_reqheight() - ui.fonts.card_title.metrics("linespace")) // 2
+        baseline = (ui.px(widgets.Button.HEIGHT) - title.winfo_reqheight()) // 2 + title_edge + \
+            ui.fonts.card_title.metrics("ascent")
+        said_edge = (said.winfo_reqheight() - small.metrics("linespace")) // 2
+        legend.pack(side="right", anchor="n", pady=(max(0, baseline - said_edge - small.metrics("ascent")), 0))
 
 
 # The records' two lists stand side by side down to this width of the card's body (logical pixels): each list's rows then
@@ -450,62 +554,111 @@ def _records_card(app, holder):
 RECORDS_STACK_BELOW = 640
 
 
-def _keys_mark(app, parent):
-    """The keyboard's mark as a label (art.keys_mark), the site's own, in the hints' colour on the card's deck."""
-    from PIL import ImageTk
-    picture = art.keys_mark(theme.MUTED, app.ui.scale, bg=theme.PANEL)
+def _keys_mark(app, parent, bg=theme.PANEL):
+    """The keyboard's mark as a label (art.keys_mark), the site's own, in the hints' colour on the card's deck (or on
+    `bg`: the records' header strip)."""
+    picture = art.keys_mark(theme.MUTED, app.ui.scale, bg=bg)
     image = ImageTk.PhotoImage(picture, master=parent)
-    mark = tk.Label(parent, image=image, bg=theme.PANEL, bd=0)
+    mark = tk.Label(parent, image=image, bg=bg, bd=0)
     # Kept on the label: Tk drops a picture the moment Python forgets it.
     mark.odq_image, mark.odq_picture = image, picture
     return mark
 
 
 def _record_row(app, parent, row, recent):
-    """One record: the song's title, under it the chart and when (a play's new record said), and at the right end the
-    score (the keyboard's mark before it) over the place on that chart."""
+    """One record, a scoreboard's line: the song's title, under it the chart and when (a play's new record said, in the
+    colour of what went well), and at the right end the score in the game's wide face (the keyboard's mark before it)
+    over the place on that chart. The title and the score on one baseline, the second lines on another, whatever the
+    two faces' heights."""
     ui, w = app.ui, app.words
+    title_font, score_font, small = ui.fonts.body, ui.fonts.score, ui.fonts.small
+    # The first lines' tops that put the title's and the score's baselines on one line (the taller ascent sets it).
+    title_top = max(0, score_font.metrics("ascent") - title_font.metrics("ascent"))
+    score_top = max(0, title_font.metrics("ascent") - score_font.metrics("ascent"))
+    # And the second lines' tops, the lower of the two first lines' feet for both.
+    left_foot = title_top + title_font.metrics("linespace")
+    right_foot = score_top + score_font.metrics("linespace")
     line = tk.Frame(parent, bg=theme.PANEL)
     line.pack(fill="x")
     end = tk.Frame(line, bg=theme.PANEL)
     end.pack(side="right", anchor="n", padx=(ui.px(12), 0))
     figure = tk.Frame(end, bg=theme.PANEL)
-    figure.pack(anchor="e")
+    figure.pack(anchor="e", pady=(score_top, 0))
     if row["keys"]:
         _keys_mark(app, figure).pack(side="left", padx=(0, ui.px(6)))
-    tk.Label(figure, text="{:,}".format(row["score"]), font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL).pack(
-        side="left")
+    # The score as the game's result screens set one, in the wide face, its digits right-aligned in the column.
+    tk.Label(figure, text="{:,}".format(row["score"]), font=score_font, fg=theme.TEXT, bg=theme.PANEL).pack(side="left")
     if row["rank"]:
-        tk.Label(end, text=w("play.records.place", n=row["rank"], all=max(row["players"], row["rank"])),
-                 font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL).pack(anchor="e")
+        place = tk.Label(end, text=w("play.records.place", n=row["rank"], all=max(row["players"], row["rank"])),
+                         font=small, fg=theme.MUTED, bg=theme.PANEL)
+        place.pack(anchor="e", pady=(max(0, left_foot - right_foot), 0))
+        # Its room puts it on the second line's baseline (tests/ui/spacing.py takes it for no gap of the scale).
+        place.odq_aligned = True
     words = tk.Frame(line, bg=theme.PANEL)
     words.pack(side="left", fill="x", expand=True)
     title = row["title"] or w("play.records.chart", id=row.get("chart", ""))
-    widgets.label(words, ui, title, bg=theme.PANEL, wrap_margin=0).pack(fill="x")
+    widgets.label(words, ui, title, bg=theme.PANEL, wrap_margin=0).pack(fill="x", pady=(title_top, 0))
     # The chart as the launcher names a mode everywhere else ("3 LINE Hard 9", as How to play and Controls say it).
     sub = [whole_modes(choices.chart_words(row["chart_name"]))] if row["chart_name"] else []
     if row["at"]:
         sub.append(w.say(i18n.ago(row["at"])))
-    if recent and row["new_record"]:
-        sub.append(w("play.records.new"))
-    elif not recent and row["grade"]:
+    if not recent and row["grade"]:
         sub.append(w("play.records.grade", grade=row["grade"]))
-    if sub:
-        widgets.label(words, ui, "  ·  ".join(sub), font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL,
-                      wrap_margin=0).pack(fill="x")
+    new = recent and row["new_record"]
+    if sub or new:
+        second = tk.Frame(words, bg=theme.PANEL)
+        second.pack(fill="x", pady=(max(0, right_foot - left_foot), 0))
+        # Its room puts it on the place's baseline (tests/ui/spacing.py takes it for no gap of the scale).
+        second.odq_aligned = True
+        if sub:
+            tk.Label(second, text="  ·  ".join(sub), font=small, fg=theme.MUTED, bg=theme.PANEL).pack(side="left")
+        if new:
+            # The player's own new record, in the colour of what went well: the one word of the list in colour.
+            tk.Label(second, text=("  ·  " if sub else "") + w("play.records.new"), font=small, fg=theme.OK,
+                     bg=theme.PANEL).pack(side="left")
 
 
 def _last_card(app, holder):
-    """The PLAY page's Last game: how the last game went, and the player's log one press away after a crash; as tall as
-    the ready check beside it, its words at its top."""
-    ui, w = app.ui, app.words
-    last = _card(holder, ui, w("play.last"), fill=True)
+    """The PLAY page's Last game, a result panel as the game sets one: how long it played as a figure in the game's wide
+    face, how it ended under it, the state's colour only where it means something (a red light when the game closed by
+    itself or could not start, nothing for a game closed as it should be); the player's log one press away after a
+    crash. Its two corners cut, as the game's panels are; as tall as the ready check beside it, the result on the
+    middle of the room under its strip, as a result is shown on its own."""
+    ui, w, px = app.ui, app.words, app.ui.px
+    # A status panel's strip, and the foot cut a game's panels have.
+    last = widgets.Card(holder, ui, w("play.last"), foot=True, strip=theme.STRIP_HEAD)
+    last.pack(fill="both", expand=True)
     record = app.state.last_session or {}
     if record.get("crashed") or record.get("failed_start"):
         # The reason is in the player's log: one press away, on the card's own line at its title's right end (as Help
         # has Check again).
         widgets.Button(last.head, ui, w("status.open_log"), app.open_player_log).pack(side="right")
-    widgets.label(last.body, ui, _last_session(app), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+    # The result as one block on the middle of the body's room (pack centres what it does not stretch): in one column,
+    # where the card is only as tall as the result, at its top.
+    result = tk.Frame(last.body, bg=theme.PANEL)
+    result.pack(fill="x", expand=True)
+    if not record:
+        widgets.label(result, ui, w("play.last.none"), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+        return
+    if record.get("failed_start"):
+        widgets.check_line(result, ui, "bad", w("play.last.failed")).pack(fill="x")
+        return
+    seconds = record.get("seconds", 0)
+    # The figure and its unit on one baseline: the length in whole minutes, or in seconds under a minute.
+    figure = tk.Frame(result, bg=theme.PANEL)
+    figure.pack(anchor="w")
+    number = tk.Label(figure, text=str(seconds // 60 if seconds >= 60 else seconds), font=ui.fonts.figure,
+                      fg=theme.TEXT, bg=theme.PANEL)
+    number.pack(side="left", anchor="n")
+    unit = tk.Label(figure, text=w("play.last.unit.min" if seconds >= 60 else "play.last.unit.s"), font=ui.fonts.body,
+                    fg=theme.MUTED, bg=theme.PANEL)
+    # Its baseline the figure's: down by the difference of their ascents.
+    unit.pack(side="left", anchor="n", padx=(px(6), 0),
+              pady=(max(0, ui.fonts.figure.metrics("ascent") - ui.fonts.body.metrics("ascent")), 0))
+    if record.get("crashed"):
+        widgets.check_line(result, ui, "bad", w("play.last.end.crash")).pack(fill="x", pady=(px(8), 0))
+    else:
+        widgets.label(result, ui, w("play.last.end.ok"), fg=theme.MUTED, wrap_margin=0).pack(fill="x", pady=(px(8), 0))
 
 
 # A space that never ends a line (Tk breaks its lines at plain spaces only): inside a LINE mode's name ("2 LINE"), which
@@ -516,17 +669,6 @@ NO_BREAK = "\u00a0"
 def whole_modes(text):
     """`text` with each LINE mode's name in it kept whole on its line ("2 LINE" with a space that never ends one)."""
     return re.sub(r"(\d) LINE\b", "\\1" + NO_BREAK + "LINE", text)
-
-
-def _last_session(app):
-    record, w = app.state.last_session, app.words
-    if not record:
-        return w("play.last.none")
-    minutes = record.get("seconds", 0) // 60
-    span = w("common.minutes", m=minutes) if minutes else w("common.seconds", s=record.get("seconds", 0))
-    if record.get("failed_start"):
-        return w("play.last.failed")
-    return w("play.last.crash" if record.get("crashed") else "play.last.ok", time=span)
 
 
 def refresh_checks(app):
@@ -541,6 +683,7 @@ def refresh_checks(app):
     # rows do not blink to "..." and back each time a page asks for one.
     checks = app.checks if app.checks is not None else getattr(app, "shown_checks", None)
     if checks is None:
+        _paint_check_light(app, None)
         if getattr(box, "odq_shown", None) != "waiting":
             for child in box.winfo_children():
                 child.destroy()
@@ -552,6 +695,9 @@ def refresh_checks(app):
     root = installed.root()
     rows = [(check, check_row(check, w, on_play=app.page == "play" and app.guide is None, in_guide=app.guide is not None,
                               installed=bool(root))) for check in checks]
+    # The whole check's light, its worst row's: a problem, then something that will change, else fine.
+    states = [row["state"] for _check, row in rows]
+    _paint_check_light(app, "bad" if "bad" in states else "change" if "change" in states else "ok")
     # What the rows say, in the window's language: the same as on show, nothing is made again.
     shown = tuple((check.key, w("check." + check.key), tuple(sorted(row.items()))) for check, row in rows)
     if getattr(box, "odq_shown", None) == shown:
@@ -1913,7 +2059,9 @@ def test_panel(app, parent):
     if test_key(app) is None:
         return
     ui, w = app.ui, app.words
-    card = _card(parent, ui, w("test.title"))
+    # A status panel, as the ready check: its title, Copy and the steps' state under the header strip.
+    card = widgets.Card(parent, ui, w("test.title"), strip=theme.STRIP_HEAD)
+    card.pack(fill="x")
     shown = test["shown"] = {"rows": {}}
     copy = widgets.Button(card.head, ui, w("test.copy"), app.copy_test)
     copy.pack(side="right")
@@ -2228,12 +2376,8 @@ def build_help(app, parent):
 
 
 def _help_checks(app, parent):
-    ui, w = app.ui, app.words
-    card = _card(parent, ui, w("help.checks"), last=True)
-    # Check again at the title's right end: the server asked again too, whatever its last answer.
-    widgets.Button(card.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
-    app.check_box = tk.Frame(card.body, bg=theme.PANEL)
-    app.check_box.pack(fill="x")
+    # The ready check as PLAY has it (its light, Check again: the server asked again too, whatever its last answer).
+    checks_card(app, parent, app.words("help.checks"))
     app.refresh_checks()
     refresh_checks(app)
 
@@ -2321,13 +2465,17 @@ def build_about(app, parent):
 
     widgets.setting_row(rows.add().body, ui, w("about.guide"),
                         lambda p: widgets.Button(p, ui, w("about.guide.run"), rerun)).pack(fill="x")
-    card = _card(parent, ui, w("about.legal"), last=True)
+    # About, plain and quiet: a step deeper than the deck, no light along its top, its lines in the small words of a
+    # page's foot, as the site's footers set them.
+    card = widgets.Card(parent, ui, w("about.legal"), fill=theme.QUIET, rim=None)
+    card.pack(fill="x")
     for i, key in enumerate(("about.license", "about.notice")):
         if i:
             widgets.divider(card.body, ui, pady=CHECK_GAP)
-        widgets.label(card.body, ui, w(key), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+        widgets.label(card.body, ui, w(key), font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0).pack(fill="x")
     # The notice's second line under its first, as the site's footers have the two.
-    widgets.label(card.body, ui, w("about.notice.2"), fg=theme.MUTED, wrap_margin=0).pack(fill="x", pady=(ui.px(4), 0))
+    widgets.label(card.body, ui, w("about.notice.2"), font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0).pack(
+        fill="x", pady=(ui.px(4), 0))
 
 
 def _updates_row(app, parent):

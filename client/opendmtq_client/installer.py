@@ -616,7 +616,8 @@ class Installer:
         """What came of it: a line each, and Open OpenDMTQ as the main answer when there is a launcher to open."""
         w = self.words
         content = self._page(title, lead, steps, len(steps) - 1)
-        card = self.window.card(content)
+        # What came of the work: a result's panel, its foot's corner cut as the launcher's last game.
+        card = self.window.card(content, foot=True)
         self.window.lines(card.body, rows)
         if open_button:
             self.window.set_buttons([(w("setup.close"), self.root.destroy, "secondary"),
@@ -637,7 +638,8 @@ class Installer:
         self.busy = False
         steps, step = getattr(self, "flow", (("ready",), 0))
         content = self._page(w("setup.title.failed"), title, steps, step)
-        card = self.window.card(content)
+        # What came of the work, as the end page's.
+        card = self.window.card(content, foot=True)
         rows = [("bad", why)] if why else []
         log_file = self.log_path if os.path.isfile(self.log_path) else None
         if log_file:

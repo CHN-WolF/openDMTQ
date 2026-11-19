@@ -290,11 +290,10 @@ class Guide:
     # ------------------------------------------------------------------------- 6 STAGE START
 
     def _stage(self, parent):
-        app, ui, w = self.app, self.app.ui, self.app.words
-        # The ready check before the first song, the step's one card.
-        card = pages._card(parent, ui, w("play.ready"), last=True)
-        app.check_box = tk.Frame(card.body, bg=theme.PANEL)
-        app.check_box.pack(fill="x")
+        app, w = self.app, self.app.words
+        # The ready check before the first song, the step's one card, its light as PLAY's (no Check again: the step
+        # asks again by itself).
+        pages.checks_card(app, parent, w("play.ready"), recheck=False)
         app.refresh_checks()
         pages.refresh_checks(app)
 

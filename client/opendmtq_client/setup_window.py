@@ -227,9 +227,10 @@ class SetupWindow:
         self.escape = coming["escape"]
         self._say(*coming["note"])
 
-    def card(self, parent, title=None, last=True):
-        """A card on the page, as the launcher's: its title, the cut corner, the site's room inside."""
-        card = widgets.Card(parent, self.ui, title)
+    def card(self, parent, title=None, last=True, foot=False):
+        """A card on the page, as the launcher's: its title, the cut corner, the site's room inside; `foot`: its foot's
+        corner cut too, a result's panel as the launcher's last game (what came of the work)."""
+        card = widgets.Card(parent, self.ui, title, foot=foot)
         card.pack(fill="x", pady=(0, 0 if last else self.ui.px(16)))
         return card
 

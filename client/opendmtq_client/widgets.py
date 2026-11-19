@@ -2072,15 +2072,25 @@ def fit_names(container, ui, more=()):
     return width
 
 
+# The room over and under a header strip's line (Card's strip), in logical pixels: a list's step, so that the strip
+# stays a band over the card's body rather than a block of its own.
+STRIP_PAD = 8
+
+
 class Card(tk.Frame):
     """A panel as the site's cards: the deck's colour, opaque to read on, with the site's glass edge (a hairline all
     round, its top row brighter: theme.HAIRLINE, theme.RIM), the top-right corner cut, the site's 24 px inside, and its
     title in Pretendard Bold with nothing after it. Content goes into `body`; `head` holds the title and anything at its
-    right end. On a page's field, what shows beyond the cut is the page's own picture (ScrollArea._paint_field)."""
+    right end. On a page's field, what shows beyond the cut is the page's own picture (ScrollArea._paint_field).
+
+    Each card's role gives it its own surface and silhouette from the same few means, one family: a surface a step
+    nearer or deeper than the deck (`fill`), the edge's light brighter or none (`rim`), a deeper cut (`cut`) and one at
+    its foot (`foot`), a header strip for its title (`strip`). pages.py has the roles: the PLAY page's head, the panels
+    that report a state, the results, the quiet About."""
 
     CUT = 16
 
-    def __init__(self, parent, ui, title=None, pad=24):
+    def __init__(self, parent, ui, title=None, pad=24, cut=None, foot=False, fill=None, rim=theme.RIM, strip=None):
         # What lies beyond the cut: the colour of the nearest frame round the card that has one (a card's holder on a
         # page has none of its own, pages._holder: the page's field round it shows).
         round_it, outside = parent, parent.cget("bg")
@@ -2089,34 +2099,59 @@ class Card(tk.Frame):
             outside = round_it.cget("bg")
         # The edge's width: a pixel at 100 %, two at 200 %, as the site's 1 px line is on a screen of that density.
         edge = max(1, ui.px(1))
-        super().__init__(parent, bg=theme.PANEL, highlightthickness=edge, highlightbackground=theme.HAIRLINE,
+        # Its surface: the deck (a reading surface, opaque), or the role's own (`fill`: the page's head a step nearer,
+        # About a step deeper); `strip`: a header strip of that colour under the edge's light, across the card, holding
+        # its title (a status panel's); `rim`: the edge's top row of light (None: the hairline alone, a quiet card).
+        self.fill = fill or theme.PANEL
+        super().__init__(parent, bg=self.fill, highlightthickness=edge, highlightbackground=theme.HAIRLINE,
                          highlightcolor=theme.HAIRLINE)
         # The edge is the card's own, not a ring inside it (tests/ui/spacing.py measures the padding from the outside).
         self.odq_inset = 0
-        self.ui, self.edge, self.outside = ui, edge, outside
+        self.ui, self.edge, self.outside, self.strip = ui, edge, outside, strip if title else None
         # The room inside the edge: the site's padding counted from the card's outside, so its words stand where they
         # stood before the card had an edge.
-        self.body = tk.Frame(self, bg=theme.PANEL, padx=ui.px(pad) - edge, pady=ui.px(pad - 4) - edge)
-        self.body.pack(fill="both", expand=True)
-        # The top row of the edge in the brighter rim, over the hairline there (no room of its own).
-        rim = tk.Frame(self, bg=theme.RIM, height=edge)
-        rim.place(x=0, y=0, relwidth=1.0, height=edge, bordermode="outside")
-        self.head = None
+        self.body = tk.Frame(self, bg=self.fill, padx=ui.px(pad) - edge, pady=ui.px(pad - 4) - edge)
+        # Under a strip, the body's room counted from the strip's foot (no edge there): the edge's width more above it.
+        self.body.pack(fill="both", expand=True, pady=(edge if self.strip else 0, 0))
+        self.head, self.title = None, None
         if title:
-            self.head = tk.Frame(self.body, bg=theme.PANEL)
-            self.head.pack(fill="x", pady=(0, ui.px(12)))
-            tk.Label(self.head, text=title, font=ui.fonts.card_title, fg=theme.TEXT, bg=theme.PANEL).pack(side="left")
+            if self.strip:
+                # Across the card, over the body, with the card's padding at its sides and a list's step over and under
+                # its line, counted from the card's outside at its top (the edge's light is the strip's top row) and
+                # from the strip's foot: the edge's width more room under the line, made by a band along its foot.
+                self.head = tk.Frame(self, bg=self.strip, padx=ui.px(pad) - edge, pady=ui.px(STRIP_PAD) - edge)
+                self.head.pack(fill="x", before=self.body)
+                tk.Frame(self.head, bg=self.strip, height=edge).pack(side="bottom", fill="x")
+            else:
+                self.head = tk.Frame(self.body, bg=self.fill)
+                self.head.pack(fill="x", pady=(0, ui.px(12)))
+            surface = self.head.cget("bg")
+            self.title = tk.Label(self.head, text=title, font=ui.fonts.card_title, fg=theme.TEXT, bg=surface)
+            self.title.pack(side="left")
             # The title's line as tall as a button whether one stands at its right end or not: every card's title on one
             # line with its neighbour's in a row of cards, and what follows it at one depth in every card.
-            tk.Frame(self.head, bg=theme.PANEL, width=1, height=ui.px(Button.HEIGHT)).pack(side="right")
+            tk.Frame(self.head, bg=surface, width=1, height=ui.px(Button.HEIGHT)).pack(side="right")
+        if rim:
+            # The top row of the edge in the brighter rim, over the hairline there (no room of its own).
+            light = tk.Frame(self, bg=rim, height=edge)
+            light.place(x=0, y=0, relwidth=1.0, height=edge, bordermode="outside")
         # The cut: a small picture over the square corner (over the edge's corner too), the page beyond it, the
-        # hairline along the cut.
-        self.cut = ui.px(self.CUT)
+        # hairline along the cut. `cut`: its size in logical pixels (the page's head has a larger one).
+        self.cut = ui.px(cut or self.CUT)
         self._corner_label = tk.Label(self, bd=0, highlightthickness=0, bg=outside)
         self._corner_label.place(relx=1.0, x=-self.cut, y=0, width=self.cut, height=self.cut, bordermode="outside")
         # Where the corner was last cut for, and what it shows beyond the cut (_cut_over_field).
         self._corner_key, self._corner_shown = None, None
         self._paint_corner(outside)
+        # `foot`: its bottom-left corner cut too (True: as deep as the top one; a number: that deep), the diagonal pair a
+        # game's panels have (the last game, the records, the page's head), its picture the top one turned half round.
+        self._foot_label = None
+        if foot:
+            self.foot = self.cut if foot is True else ui.px(foot)
+            self._foot_label = tk.Label(self, bd=0, highlightthickness=0, bg=outside)
+            self._foot_label.place(x=0, rely=1.0, y=-self.foot, width=self.foot, height=self.foot, bordermode="outside")
+            self._foot_key, self._foot_shown = None, None
+            self._paint_foot(outside)
         # On a page's field (no card round it), the picture beyond the cut follows the card where it stands.
         self.odq_area = None
         holder = parent
@@ -2132,19 +2167,37 @@ class Card(tk.Frame):
             self.bind("<Configure>", lambda e: self._cut_over_field(), add="+")
             self._cut_over_field()
 
-    def _paint_corner(self, beyond):
-        """The corner's picture with `beyond` past the cut: a colour, or the page's picture there (the card's part laid
-        over it, made once: art.corner_layer)."""
+    def _corner_picture(self, beyond, half_round=False):
+        """A cut corner's picture with `beyond` past the cut: a colour, or the page's picture there (the card's part
+        laid over it, made once: art.corner_layer); `half_round`: the bottom-left one, the top-right turned half
+        round. The card's own surface inside the cut: its header strip's at the top when it has one."""
+        size = self.foot if half_round else self.cut
+        inside = self.fill if half_round or not self.strip else self.strip
         if isinstance(beyond, str):
-            picture = art.corner(self.cut, theme.PANEL, beyond, seam=theme.HAIRLINE, seam_width=self.edge)
-        else:
-            layer = art.corner_layer(self.cut, theme.PANEL, seam=theme.HAIRLINE, seam_width=self.edge)
-            picture = beyond.convert("RGB")
-            picture.paste(layer, (0, 0), layer)
+            picture = art.corner(size, inside, beyond, seam=theme.HAIRLINE, seam_width=self.edge)
+            return picture.rotate(180) if half_round else picture
+        layer = art.corner_layer(size, inside, seam=theme.HAIRLINE, seam_width=self.edge)
+        if half_round:
+            layer = layer.rotate(180)
+        picture = beyond.convert("RGB")
+        picture.paste(layer, (0, 0), layer)
+        return picture
+
+    def _paint_corner(self, beyond):
+        """The top-right corner's picture with `beyond` past the cut (_corner_picture)."""
+        picture = self._corner_picture(beyond)
         self._corner = ImageTk.PhotoImage(picture, master=self)
         self._corner_label.configure(image=self._corner)
         # A dialog draws the window from the widgets (snapshot.py): the corner as it shows.
         self._corner_label.odq_picture = picture
+
+    def _paint_foot(self, beyond):
+        """The bottom-left corner's picture with `beyond` past its cut (_corner_picture, turned half round)."""
+        picture = self._corner_picture(beyond, half_round=True)
+        self._foot = ImageTk.PhotoImage(picture, master=self)
+        self._foot_label.configure(image=self._foot)
+        # As the top corner's, for a dialog's picture of the window.
+        self._foot_label.odq_picture = picture
 
     def _cut_over_field(self):
         """The page's picture beyond the cut, where the card now stands, without the field's faint dots (art.without_dots):
@@ -2161,7 +2214,10 @@ class Card(tk.Frame):
             holder = holder.master
         # Where it stands and how wide, on which picture: the corner is cut again only when one of them changed (the
         # page's field frames ask every card under them each time one of them moves).
-        key = (area.page_box(self), self.winfo_width(), id(getattr(area, "_backdrop_picture", None)))
+        place, backdrop = area.page_box(self), id(getattr(area, "_backdrop_picture", None))
+        key = (place, self.winfo_width(), backdrop)
+        if self._foot_label is not None:
+            self._cut_foot_over_field(area, place, backdrop)
         if key == self._corner_key:
             return
         picture = area.picture_at(self, self.winfo_width() - self.cut, 0, self.cut, self.cut)
@@ -2174,6 +2230,23 @@ class Card(tk.Frame):
             return
         self._corner_shown = shown
         self._paint_corner(beyond)
+
+    def _cut_foot_over_field(self, area, place, backdrop):
+        """The bottom-left corner's cut over the page's picture where the card now stands, as the top one's: drawn
+        again only when what shows there changed (a card that grows moves its foot)."""
+        key = (place, self.winfo_height(), backdrop)
+        if key == self._foot_key:
+            return
+        picture = area.picture_at(self, 0, self.winfo_height() - self.foot, self.foot, self.foot)
+        if picture is None:
+            return
+        self._foot_key = key
+        beyond = art.without_dots(picture, self.ui.scale)
+        shown = beyond.tobytes()
+        if shown == self._foot_shown:
+            return
+        self._foot_shown = shown
+        self._paint_foot(beyond)
 
 
 # The room either side of the faint line between two rows of a card's settings (logical pixels): a row's room, on the

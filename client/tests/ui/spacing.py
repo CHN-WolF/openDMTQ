@@ -23,8 +23,8 @@ LEAST_GAP = 4
 # The least room between words and a box beside them on their line that they are no part of (logical pixels).
 LEAST_TEXT_GAP = 4
 # A card's padding: its words and boxes this far inside its edges, at the sides and at its top and foot (widgets.Card's
-# 24 and 24 - 4 logical pixels).
-CARD_SIDES, CARD_ENDS = 24, 20
+# 24 and 24 - 4 logical pixels); a status panel's header strip keeps a list's step over and under its line (8).
+CARD_SIDES, CARD_ENDS, STRIP_ENDS = 24, 20, 8
 # The menu column's padding: its room either side (widgets.Rail.EDGE), and above and under what it holds (its foot
 # stands 20 above the window's foot, the wordmark 22 under its top).
 RAIL_SIDES, RAIL_ENDS = 18, 18
@@ -337,13 +337,22 @@ def check(root, ui, name):
         whole = _whole(card, origin)
         room = (whole[0] + ui.px(CARD_SIDES), whole[1] + ui.px(CARD_ENDS), whole[2] - ui.px(CARD_SIDES),
                 whole[3] - ui.px(CARD_ENDS))
+        # A header strip (widgets.Card's strip): what it holds keeps the card's sides and the strip's own room over and
+        # under its line; the body under it keeps the card's room from the strip's foot down.
+        head = getattr(card, "head", None)
+        strip = _raw(head, origin) if getattr(card, "strip", None) and head is not None else None
         for child, kind_c, box_c in found:
             if child is card or not _inside(child, card) or kind_c in ("card",):
                 continue
             # Only what shows whole: a box the page's scroll cuts is measured where it is whole.
             if _whole(child, origin) != box_c:
                 continue
-            short = [room[0] - box_c[0], room[1] - box_c[1], box_c[2] - room[2], box_c[3] - room[3]]
+            if strip is not None and _inside(child, head):
+                # From the card's outside at its top (the edge's light is the strip's top row), from its foot under.
+                bounds = (room[0], whole[1] + ui.px(STRIP_ENDS), room[2], strip[3] - ui.px(STRIP_ENDS))
+            else:
+                bounds = room
+            short = [bounds[0] - box_c[0], bounds[1] - box_c[1], box_c[2] - bounds[2], box_c[3] - bounds[3]]
             sides = [side for side, by in zip(("left", "top", "right", "foot"), short) if by > SLACK]
             if sides:
                 problems.append("%s: %s is closer to its card's %s than the card's padding (%s px)" % (
@@ -374,6 +383,9 @@ def check(root, ui, name):
             sides.setdefault(side, []).append(child)
         for side, kids in sides.items():
             for a, b in zip(kids, kids[1:]):
+                if getattr(b, "odq_aligned", False):
+                    # Its room sets a baseline (words of two faces on one line), not a gap of the scale.
+                    continue
                 ra, rb = _raw(a, origin), _raw(b, origin)
                 gap = {"top": rb[1] - ra[3], "bottom": ra[1] - rb[3], "left": rb[0] - ra[2],
                        "right": ra[0] - rb[2]}[side]

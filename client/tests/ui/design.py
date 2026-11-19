@@ -12,6 +12,10 @@ cards are composed, the roles of its words, its buttons, and the page's own pict
 - background: no shard of the page's picture within SHARD_CLEAR of the content column under the page's heading, or of
   any card, anywhere down the page (the shards scroll with the cards: the page's own coordinates hold at every scroll
   position).
+- surfaces: each card's surface and silhouette by its role: a card that reports a state with its title on a header
+  strip, a result with its foot's corner cut too, About a step deeper without the light along its top, the page's head
+  (the hero) a step nearer with a brighter light and deeper cuts, every other card the deck with its top-right corner
+  cut, the calm reading surface of settings.
 
 shots.py runs it on every screen and state it shows, at every size and in both languages; setup_shots.py on the
 installer's pages; the dialogs' part on every dialog it opens. It reads the widgets' places and fonts from Tk, never
@@ -49,6 +53,15 @@ CENTRE_SLACK = 0.5
 SLACK = 1
 # A slider's least length (logical pixels): a volume's (0 to 100), and a range of few steps' (an equaliser's band).
 SLIDER_LEAST, BAND_LEAST = 200, 150
+# The cards that report a state, by their titles' words (the words' keys): each a status panel, its title and its
+# state on a header strip of theme.STRIP_HEAD across the card.
+STATUS_PANELS = ("play.ready", "help.checks", "play.last", "play.records", "test.title")
+# Of those, the results: their foot's corner cut too, as deep as the top one (the diagonal pair a game's panels have).
+RESULTS = ("play.last", "play.records")
+# A quiet card, by its title: theme.QUIET, a step deeper than the deck, and no light along its top.
+QUIET_CARDS = ("about.legal",)
+# A card's cut corner (logical pixels), and the page's head's two: its top one and its foot's.
+CUT, HERO_CUTS = 16, (24, 12)
 
 
 # ----------------------------------------------------------------------------------------------------- the widgets
@@ -288,12 +301,16 @@ def _edge(label):
 def _lines(root, name):
     """On a card's line, words beside words stand on one baseline (their first lines), and a lamp beside words on their
     first line's middle, within a pixel: a step's name and what it found, a value by its name, a state's lamp by its
-    words. Measured card by card, between labels whose first lines share the card's height."""
+    words, a status panel's light by its title on its strip. Measured card by card, between labels whose first lines
+    share the card's height."""
     problems = []
     for card in [w for w in _all(root) if isinstance(w, widgets.Card) and _mapped(w)]:
         texts, lamps = [], []
-        for w in _all(card.body):
+        for w in _all(card):
             if not isinstance(w, tk.Label) or not _mapped(w):
+                continue
+            if w.winfo_manager() == "place":
+                # A picture laid over a corner (a cut), never one that leads a line.
                 continue
             if any(_is_control(a) for a in _ancestors(w, card)):
                 # Part of a control (a password's Show inside its field): the control's own, measured with it.
@@ -343,9 +360,19 @@ def _size_of(widget):
     return None
 
 
+def _figure(widget):
+    """Whether a label's words are a figure (the game's wide face: a result's length, a score): figures have a role of
+    their own, as large as a result asks, and head nothing."""
+    try:
+        return isinstance(widget, tk.Label) and "Wide" in _font(widget).actual("family") and \
+            any(ch.isdigit() for ch in str(widget.cget("text")))
+    except tk.TclError:
+        return False
+
+
 def _largest_under(widget):
-    """The largest font size (points) of any words under `widget`, itself counted."""
-    sizes = [s for s in (_size_of(w) for w in _all(widget) if _mapped(w)) if s is not None]
+    """The largest font size (points) of any words under `widget`, itself counted, figures aside (_figure)."""
+    sizes = [s for s in (_size_of(w) for w in _all(widget) if _mapped(w) and not _figure(w)) if s is not None]
     return max(sizes) if sizes else None
 
 
@@ -566,6 +593,88 @@ def background(root, ui, name):
 
 # ---------------------------------------------------------------------------------------------------------- all
 
+# ------------------------------------------------------------------------------------------------ the cards' forms
+
+def corner(card, foot=False):
+    """The side (pixels) of the picture over a card's cut corner, the top-right one (or its foot's, the bottom-left),
+    or 0 for a square corner: read from the picture laid over that corner of the card."""
+    width, height = card.winfo_width(), card.winfo_height()
+    for child in card.winfo_children():
+        if not (isinstance(child, tk.Label) and str(child.cget("image")) and child.winfo_manager() == "place"):
+            continue
+        x, y, w, h = child.winfo_x(), child.winfo_y(), child.winfo_width(), child.winfo_height()
+        if foot and x <= 0 and abs(y + h - height) <= SLACK:
+            return w
+        if not foot and y <= 0 and abs(x + w - width) <= SLACK:
+            return w
+    return 0
+
+
+def top_light(card):
+    """The colour of the row of light along a card's top edge (laid over it, across the card), or None."""
+    for child in card.winfo_children():
+        if isinstance(child, tk.Frame) and child.winfo_manager() == "place" and child.winfo_y() <= 0 \
+                and child.winfo_width() >= card.winfo_width() - SLACK:
+            return str(child.cget("bg")).lower()
+    return None
+
+
+def strip(card):
+    """A card's header strip: the frame holding its title when it stands across the card over its body (not in it),
+    or None."""
+    title = _title(card)
+    if title is None or title.master.master is not card:
+        return None
+    return title.master
+
+
+def hero(card, ui):
+    """What keeps `card` from being the page's head as the hero (DESIGN.md): words, or "" when it is one."""
+    surface, light = str(card.cget("bg")).lower(), top_light(card)
+    cuts = (corner(card), corner(card, foot=True))
+    if surface != theme.PANEL_HI.lower() or light != theme.RIM_HI.lower() or \
+            cuts != tuple(ui.px(n) for n in HERO_CUTS):
+        return "its surface %s, the light along its top %s, its cuts %d and %d px" % ((surface, light) + cuts)
+    return ""
+
+
+def surfaces(root, ui, name):
+    """Each card's surface and silhouette by its role, read from the card as it stands."""
+    problems = []
+    roles = {ui.words(key): key for key in STATUS_PANELS + QUIET_CARDS}
+    deck, quiet = theme.PANEL.lower(), theme.QUIET.lower()
+    for area in _page_areas(root):
+        for index, card in enumerate(_cards(area)):
+            title = _title(card)
+            words = str(title.cget("text")) if title is not None else ""
+            key = roles.get(words)
+            surface, light, head = str(card.cget("bg")).lower(), top_light(card), strip(card)
+            said = _said(card)
+            if key in STATUS_PANELS:
+                # Its title and its state on a strip a step deeper than the deck, across the card's width.
+                inner = card.winfo_width() - 2 * int(card.cget("highlightthickness"))
+                if head is None or str(head.cget("bg")).lower() != theme.STRIP_HEAD.lower() or \
+                        head.winfo_width() < inner - SLACK:
+                    problems.append("%s: the card %s reports a state without its header strip" % (name, said))
+            elif head is not None:
+                problems.append("%s: the card %s has a header strip and reports no state" % (name, said))
+            if key in RESULTS and corner(card, foot=True) != corner(card):
+                problems.append("%s: the card %s is a result without its foot's corner cut (%d px, its top's %d)" % (
+                    name, said, corner(card, foot=True), corner(card)))
+            if key in QUIET_CARDS:
+                if surface != quiet or light is not None:
+                    problems.append("%s: the card %s is not quiet: its surface %s, the light along its top %s" % (
+                        name, said, surface, light))
+            elif index == 0 and surface != deck:
+                # A surface of its own at a page's head: the hero's, and the hero's whole form with it.
+                if hero(card, ui):
+                    problems.append("%s: the page's head card is not the hero: %s" % (name, hero(card, ui)))
+            elif surface != deck or light != theme.RIM.lower() or corner(card) != ui.px(CUT):
+                problems.append("%s: the card %s is not on the deck: its surface %s, the light along its top %s, its "
+                                "cut %d px" % (name, said, surface, light, corner(card)))
+    return problems
+
+
 def check(root, ui, name):
     """Every measure above on the screen as it shows now."""
     root.update_idletasks()
@@ -574,4 +683,5 @@ def check(root, ui, name):
     problems.extend(text(root, ui, name))
     problems.extend(buttons(root, ui, name))
     problems.extend(background(root, ui, name))
+    problems.extend(surfaces(root, ui, name))
     return sorted(set(problems))

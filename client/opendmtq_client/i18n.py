@@ -224,8 +224,10 @@ TEXT = {
     "ago.mo": ("{n} mo ago", "{n}개월 전"),
     "play.last": ("Last game", "지난 플레이"),
     "play.last.none": ("No game yet.", "아직 플레이 기록이 없습니다."),
-    "play.last.ok": ("{time} of play, closed normally.", "{time} 플레이한 뒤 게임을 닫았습니다."),
-    "play.last.crash": ("{time} of play, then the game closed by itself.", "{time} 플레이한 뒤 게임이 예기치 않게 종료되었습니다."),
+    "play.last.unit.min": ("min", "분"),
+    "play.last.unit.s": ("s", "초"),
+    "play.last.end.ok": ("Closed normally.", "정상적으로 닫았습니다."),
+    "play.last.end.crash": ("The game closed by itself.", "게임이 예기치 않게 종료되었습니다."),
     "play.last.failed": ("The game could not start. Its log says why.", "게임을 시작하지 못했습니다. 로그에 이유가 있습니다."),
 
     # ----------------------------------------------------------------------------------- ready-check lines

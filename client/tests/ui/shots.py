@@ -560,6 +560,11 @@ def play_cards_check(app, name, problems):
     across = [card for card in (head,) + tuple(cards[3:]) if abs(card.winfo_width() - column) > 1]
     if across:
         problems.append("%s: %s not across the page" % (name, ", ".join(repr(card_title(c)) for c in across)))
+    # The head is the page's hero, whatever it says (a server or none, signed in or not): a step nearer than the deck,
+    # a brighter light along its top, its top corner cut deeper and its foot's cut too (design.hero).
+    why = design.hero(head, app.ui)
+    if why:
+        problems.append("%s: PLAY's head card is not the page's hero: %s" % (name, why))
     if app.state.server() is not None:
         # The head's first words: the server's name (or its address, when it has no name), in the head's face.
         first = next((x for x in widgets_of(head.body) if isinstance(x, tk.Label) and x.winfo_ismapped()

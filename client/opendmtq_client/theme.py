@@ -32,6 +32,14 @@ SEAM = "#2a3038"        # the line along the menu column's right edge, where the
 # on the page, it does not float over it.
 HAIRLINE = "#282c32"
 RIM = "#393d42"
+# The page's head card, the hero (pages._server_card): a step nearer than the deck (--deck-top), its edge's light
+# brighter (white at 20 %), as a raised glass plate catches more of it.
+RIM_HI = "#4a4f55"
+# A status panel's header strip (the ready check, the last game, My records, the connection test): a step deeper than the
+# deck, under the edge's light, where the panel's title and its state stand.
+STRIP_HEAD = "#14181d"
+# A quiet card's surface (About): a step deeper than the deck, without the edge's brighter top row, as a page's foot.
+QUIET = "#161a1f"
 
 # Text.
 TEXT = "#eef2f6"        # body text (--chalk)
@@ -98,6 +106,10 @@ class Fonts:
         self.display_big = tkfont.Font(root, family=DISPLAY, size=17)                # PLAY
         # The page's most important fact, a step over a card's title: the server PLAY plays on, its name (24 px).
         self.head = tkfont.Font(root, family=TEXT_FONT, size=18, weight="bold")
+        # Figures as the game sets its results, in the wide face: the last game's length (26.7 px), a record's score
+        # (14.7 px). The wide face sets digits and Latin letters only; their units are in Pretendard.
+        self.figure = tkfont.Font(root, family=DISPLAY, size=20)
+        self.score = tkfont.Font(root, family=DISPLAY, size=11)
         self.card_title = tkfont.Font(root, family=TEXT_FONT, size=13, weight="bold")  # a card's title (17 px)
         self.body = tkfont.Font(root, family=TEXT_FONT, size=10)                     # text
         self.body_bold = tkfont.Font(root, family=TEXT_BOLD, size=10)                # labels and buttons
