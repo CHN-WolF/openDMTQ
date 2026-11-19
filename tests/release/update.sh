@@ -1,12 +1,16 @@
 #!/bin/bash
 # An installed PC client of the last release updating itself to this release's files, under Wine, from a stand-in for
 # GitHub's releases (tests/release/github_stub.py) that holds both releases' files as they are published:
-#   1. Velopack's GitHub source, as the installed launchers make it (client/opendmtq_client/updates.py: GithubSource with
-#      the repository's address), reads the releases' list, the update feed of each release and the package the newest
-#      feed names, and Update.exe puts the new version in. The stand-in answers on GitHub Enterprise's /api/v3, which the
-#      same source asks of a host that is not github.com: github.com itself takes TLS the test cannot stand in for.
-#   2. The last release's own launcher, OpenDMTQ-cmd.exe --update --yes, from the new release's files as one folder
-#      (Velopack's HTTP source, which reads the same two names): it downloads, restarts, and the new launcher runs.
+#   1. Velopack's GitHub source, as launchers before 0.11.0 make it (their client/opendmtq_client/updates.py:
+#      GithubSource with the repository's address), reads the releases' list, the update feed of each release and the
+#      package the newest feed names, and Update.exe puts the new version in. The stand-in answers on GitHub
+#      Enterprise's /api/v3, which the same source asks of a host that is not github.com: github.com itself takes TLS
+#      the test cannot stand in for.
+#   2. The last release's own launcher, OpenDMTQ-cmd.exe --update --yes, its update address from the variable it reads
+#      first, as that launcher reads it: from 0.11.0 on the project's repository, as the installed launchers have it
+#      written in (the latest tag by /releases/latest, then that release's feed, its signed checksums and the package,
+#      under the tag: client/opendmtq_client/updates.py); before 0.11.0 the new release's files as one folder
+#      (Velopack's HTTP source, which reads the same two names). It downloads, restarts, and the new launcher runs.
 #   3. This release's servers: the tools' fetch of the runtime for newer phones and of the installer, from the latest
 #      tag by their new names (tools/opendmtq_tools/runtime.py, windows_client.py).
 #
@@ -14,6 +18,9 @@
 #
 # OLD_RELEASE_DIR holds the last release's files (its OpenDMTQ-Setup.exe, releases.win.json and package), NEW_RELEASE_DIR
 # this release's as .github/release_assets.py lays them out. Everything runs on a Docker network with no way out.
+# RUNTIME_VERSION is the version the new release's runtime says (its bundle.json), by default the release's tag
+# (v1.2.3, the start of what a build at the tag writes): a rehearsal from a commit with no tag gives the one its build
+# wrote (.github/release.sh --dry-run).
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OLD=$(realpath -m "${1:?usage: update.sh OLD_RELEASE_DIR NEW_RELEASE_DIR OUT_DIR}")
@@ -47,6 +54,17 @@ PY
 )
 [ -n "$OLD_VERSION" ] && [ -n "$NEW_VERSION" ] || { echo "no versions in $OLD and $NEW" >&2; exit 1; }
 echo "from $OLD_VERSION to $NEW_VERSION, the package as $PACKAGE"
+# Where the last release's launcher looks for updates when told by the variable: the project's repository from 0.11.0
+# on (a launcher before it took the variable as a folder of Velopack's, the trailing slash keeping the folder in the
+# address Velopack joins the file names to).
+if python3 -c 'import sys; sys.exit(tuple(map(int, sys.argv[1].split("-")[0].split("."))) < (0, 11, 0))' "$OLD_VERSION"
+then
+  LAUNCHER_SOURCE=http://$STUB_IP/kanggu12/openDMTQ
+else
+  LAUNCHER_SOURCE=http://$STUB_IP/feed/
+fi
+# The runtime a server has to end up with: the one the new release carries, by the version its build wrote.
+RUNTIME_VERSION=${RUNTIME_VERSION:-v$NEW_VERSION}
 # The release's name for it, in lower case (.github/release_assets.py): vpk's own name has the id's capitals.
 [ "$PACKAGE" = "$(printf '%s' "$PACKAGE" | tr '[:upper:]' '[:lower:]')" ] && pass "the new feed names its package in lower case" \
   || fail "the new feed names its package with capitals ($PACKAGE)"
@@ -67,7 +85,7 @@ trap cleanup EXIT
 # The Wine side, run once for each way: install the old release silently, then the update named by $1.
 wine_run() {
   docker run --rm --network "$NET" -v "$OUT:/out" -v "$OLD:/old:ro" -e WINEDEBUG=-all -e WAY="$1" -e NEW_VERSION="$NEW_VERSION" \
-    -e STUB_IP="$STUB_IP" \
+    -e STUB_IP="$STUB_IP" -e LAUNCHER_SOURCE="$LAUNCHER_SOURCE" \
     --entrypoint bash "$WINE_IMAGE" -c '
   set -u
   Xvfb :99 -screen 0 1280x800x24 -nolisten tcp >/dev/null 2>&1 &
@@ -98,9 +116,9 @@ print("handed to Update.exe")
 PY
       wine "C:\python\python.exe" "Z:\tmp\update.py" "C:\users\root\AppData\Local" > /out/$WAY-update.log 2>&1 ;;
     launcher)
-      # The 0.10.0 launcher itself, its update address from the variable it reads first (a folder: the trailing slash
-      # keeps the folder in the address Velopack joins the file names to).
-      OPENDMTQ_UPDATE_SOURCE=http://$STUB_IP/feed/ wine "$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe" --update --yes \
+      # The last release'"'"'s launcher itself, its update address from the variable it reads first, in the form that
+      # launcher reads (LAUNCHER_SOURCE above).
+      OPENDMTQ_UPDATE_SOURCE=$LAUNCHER_SOURCE wine "$LOCAL/OpenDMTQ.Client/current/OpenDMTQ-cmd.exe" --update --yes \
         > /out/$WAY-update.log 2>&1 ;;
   esac
   wait_for 180 "$NEW_VERSION" && echo "updated $(installed)" || echo "not updated: $(installed)"
@@ -155,8 +173,8 @@ print('runtime', runtime.version_in_place(os.path.join(apk, 'arm32')))
 print('installer', windows_client.find(apk))
 " > "$OUT/servers.log" 2>&1
 cat "$OUT/servers.log"
-grep -q "^runtime v$NEW_VERSION" "$OUT/servers.log" && pass "a server takes the runtime from the latest release" \
-  || fail "a server did not take the runtime"
+grep -q "^runtime $RUNTIME_VERSION" "$OUT/servers.log" && pass "a server takes the runtime from the latest release" \
+  || fail "a server did not take the runtime ($RUNTIME_VERSION)"
 grep -q "^installer (.*OpenDMTQ-Setup.exe', '$NEW_VERSION')" "$OUT/servers.log" \
   && pass "a server takes the installer from the latest release, with its version" || fail "a server did not take the installer"
 sed 's/^/  servers asked: /' "$OUT/requests.log"

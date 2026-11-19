@@ -257,8 +257,12 @@ host_debian() {
   env DISTRO=debian:12 ARM32_BUNDLE="$OUT/arm32" ${APKS[@]+"${APKS[@]}"} tests/host/run.sh
 }
 step debian host_debian
+# The last release's launchers updating to these files, and servers taking the runtime the release carries: by the
+# version its build wrote (the tag's, v1.2.3-<its hash>; a rehearsal's from its commit, which has no tag).
 update() {
-  tests/release/update.sh "$OUT/previous-installed" "$D/release" "$OUT/update"
+  local runtime
+  runtime=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$OUT/arm32/bundle.json")
+  RUNTIME_VERSION=$runtime tests/release/update.sh "$OUT/previous-installed" "$D/release" "$OUT/update"
   quiet_programs "$OUT/update"
 }
 if [ "${#SIGN[@]}" -eq 0 ]; then
