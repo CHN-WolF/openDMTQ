@@ -1438,6 +1438,14 @@ def test_check(app, site, out, tag, problems):
         name = tag + "_play-server-down"
         shot(app.root, out, name)
         measure(app, name, problems)
+        # The server card says the server does not answer, and its Sign in, which cannot reach it, is not the screen's
+        # lime main action (main said only "Not signed in yet." beside a lime Sign in).
+        server_card = card_titled(app, w("play.server"))
+        said = [x.cget("text") for x in widgets_of(server_card) if isinstance(x, tk.Label)] if server_card else []
+        lime = [x.words for x in widgets_of(server_card) if isinstance(x, widgets.Button)
+                and x.look == widgets.Button.LOOKS["primary"]] if server_card else []
+        if w("play.server_down") not in said or lime:
+            problems.append("%s: the server card says %r with %r lime" % (name, said, lime))
         # The ready check's Server row leads to the test.
         link = [x for x in widgets_of(app.body.inner) if isinstance(x, tk.Label) and x.cget("text").startswith(
             w("check.server.test"))]

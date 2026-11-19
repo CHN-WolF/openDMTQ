@@ -342,7 +342,8 @@ class WindowThread(Folder):
 
         # The server is not asked here (actions.reach): whether it answers is not what this test is about.
         app = types.SimpleNamespace(state=state, checks=None, checks_asked=0, post=tasks.append, status_sticky=True,
-                                    guide=None, check_box=None, _paint_play=lambda: None, _reach=lambda force: None)
+                                    guide=None, check_box=None, _paint_play=lambda: None, _reach=lambda force: None,
+                                    page="play", page_follow=None)
         for name in ("refresh_checks", "_checked", "_say_state"):
             setattr(app, name, getattr(launcher.LauncherApp, name).__get__(app))
 

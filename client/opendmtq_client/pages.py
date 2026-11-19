@@ -249,8 +249,15 @@ STACK_BELOW = 760
 # ---------------------------------------------------------------------------------------------- PLAY
 
 
+def server_silent(app):
+    """True when the last ready check that came back found the server PLAY plays on not answering (app.shown_checks:
+    it stays while the next check is made, so that the server card does not change back and forth meanwhile)."""
+    return any(c.key == "server" and not c.ok and not c.blocks for c in (app.shown_checks or ()))
+
+
 def _server_card(app, parent):
-    """Where PLAY plays: the server, its address, and the account signed in there."""
+    """Where PLAY plays: the server, its address, and the account signed in there; or, while the server does not
+    answer, that it does not (a sign-in cannot reach it then: Sign in stays plain, never the screen's lime action)."""
     ui, w = app.ui, app.words
     card = _card(parent, ui, w("play.server"))
     server = app.state.server()
@@ -261,8 +268,11 @@ def _server_card(app, parent):
                                                                                          expand=True)
         main_button(app, line, w("play.connect"), lambda: app.nav_go("online")).pack(side="right")
         return
-    signed = app.state.signed_in(server)
-    if not signed:
+    signed, silent = app.state.signed_in(server), server_silent(app)
+    if not signed and silent:
+        # The way to the sign-in all the same, plain while the server cannot take one.
+        widgets.Button(line, ui, w("online.signin"), lambda: app.nav_go("online")).pack(side="right", anchor="n")
+    elif not signed:
         main_button(app, line, w("online.signin"), lambda: app.nav_go("online")).pack(side="right", anchor="n")
     else:
         # The player's page on the site in the PC's browser, signed in already by a one-time link the server makes for
@@ -278,9 +288,13 @@ def _server_card(app, parent):
         # A server with no name of its own calls itself by its address: said once, in the name's place.
         widgets.label(words, ui, server["url"], font=ui.fonts.body_bold, wrap_margin=0).pack(fill="x")
     widgets.divider(card.body, ui)
-    account = (w("play.signed", account=server["account"]) if signed else
-               w("play.not_signed", account=server["account"]) if server.get("account") else w("play.no_account"))
-    state = widgets.check_line(card.body, ui, "ok" if signed else "change", account)
+    if silent:
+        # What stands in the way first: the server does not answer (the ready check's Server row leads to the test).
+        state = widgets.check_line(card.body, ui, "change", w("play.server_down"))
+    else:
+        account = (w("play.signed", account=server["account"]) if signed else
+                   w("play.not_signed", account=server["account"]) if server.get("account") else w("play.no_account"))
+        state = widgets.check_line(card.body, ui, "ok" if signed else "change", account)
     state.pack(fill="x")
 
 
@@ -318,11 +332,12 @@ def build_play(app, parent):
 
 
 def _server_key(app):
-    """What the PLAY page's server card shows: the server, its name, its sign-in."""
+    """What the PLAY page's server card shows: the server, its name, its sign-in, whether it answers."""
     server = app.state.server()
     if server is None:
         return None
-    return (server["url"], server["name"], st.has_own_name(server), app.state.signed_in(server), server.get("account"))
+    return (server["url"], server["name"], st.has_own_name(server), app.state.signed_in(server), server.get("account"),
+            server_silent(app))
 
 
 # How many of each of the records' lists PLAY shows: the rest is on the player's page on the site.

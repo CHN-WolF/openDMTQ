@@ -166,6 +166,7 @@ TEXT = {
     "play.not_signed": ("{account}: your sign-in ended. Sign in again to get the server's updates.",
                         "{account}: 로그인이 만료되었습니다. 서버의 업데이트를 받으려면 다시 로그인하세요."),
     "play.no_account": ("Not signed in yet.", "아직 로그인하지 않았습니다."),
+    "play.server_down": ("The server does not answer.", "서버가 응답하지 않습니다."),
     "play.ready": ("Ready check", "준비 점검"),
     "play.will_get": ("PLAY downloads it", "PLAY를 누르면 받음"),
     "play.how": ("How to play", "플레이 방법"),

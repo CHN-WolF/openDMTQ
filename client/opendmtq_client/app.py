@@ -952,6 +952,9 @@ class LauncherApp:
         # The PLAY page, the Help page and the guide's last step each show the check when they are on screen.
         from opendmtq_client import pages
         pages.refresh_checks(self)
+        if self.guide is None and self.page == "play" and self.page_follow is not None:
+            # PLAY's server card says whether the server answers: made again when that changed, the rest as it was.
+            self.page_follow()
         if self.guide is not None:
             # The guide's last step: its PLAY follows the check.
             self.guide.checks_changed()
