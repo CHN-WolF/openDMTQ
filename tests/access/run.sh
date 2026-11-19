@@ -10,7 +10,8 @@
 # (host/opendmtq_host/apache.py) in the same Apache: loopback alone, and never with such a header.
 # Needs Docker and Python 3; nothing of the game's own.
 #
-# Usage: tests/access/run.sh      (NAME_PREFIX, TAG and SUBNET keep a run's containers, image and network apart)
+# Usage: tests/access/run.sh      (NAME_PREFIX, TAG and SUBNET keep a run's containers, image and network apart;
+#                                  NO_BUILD=1 uses the image already tagged opendmtq-server:TAG)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -31,7 +32,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-docker build -q -t "opendmtq-server:$TAG" "$ROOT/server" >/dev/null
+if [ -z "${NO_BUILD:-}" ]; then
+  docker build -q -t "opendmtq-server:$TAG" "$ROOT/server" >/dev/null
+fi
 # A network of the run's own (a given subnet keeps it off another's); its gateway is where Docker Engine passes a visit
 # to localhost from.
 docker network create ${SUBNET:+--subnet "$SUBNET"} "$NET" >/dev/null

@@ -5,7 +5,8 @@
 # (./opendmtq import --songs <folder with your game files>).
 #
 # KEEP=1 leaves the stack up after the test and prints how to remove it. BROWSER=1 also plays a real
-# H.264 recording in headless Chromium (pulls ffmpeg and Chromium images).
+# H.264 recording in headless Chromium (pulls ffmpeg and Chromium images). NO_BUILD=1 uses the images already tagged
+# opendmtq-*:TAG (tests/qa.sh builds them once for every step).
 # Usage: tests/live/run.sh
 set -euo pipefail
 
@@ -32,8 +33,10 @@ if [ -z "${KEEP:-}" ]; then
   trap cleanup EXIT
 fi
 
-docker build -q -t "opendmtq-server:$TAG" "$ROOT/server" >/dev/null
-docker build -q -t "opendmtq-tools:$TAG" "$ROOT/tools" >/dev/null
+if [ -z "${NO_BUILD:-}" ]; then
+  docker build -q -t "opendmtq-server:$TAG" "$ROOT/server" >/dev/null
+  docker build -q -t "opendmtq-tools:$TAG" "$ROOT/tools" >/dev/null
+fi
 
 mkdir -p "$DATA/state" "$DATA/apk/out" "$DATA/custom" "$DATA/backups"
 chmod -R a+rwX "$DATA"
@@ -515,7 +518,7 @@ if [ -n "${BROWSER:-}" ]; then
   chmod a+rwx "$SHOTS"
   docker run --rm --network host --cpus 2 --memory 2g -v "$ROOT/tests/live:/usr/src/app/x:ro" -v "$SHOTS:/shots" \
     --entrypoint node zenika/alpine-chrome:with-puppeteer x/browser.js "$SITE_PORT" "$ADMIN_PORT" "$(sed -n 's/^RECORDING //p' "$OUT")"
-  "$ROOT/tests/live/sound/run.sh" "$SITE_PORT" "$(sed -n 's/^RECORDING //p' "$OUT")" "$DATA/ts"
+  NAME_PREFIX=$NAME_PREFIX "$ROOT/tests/live/sound/run.sh" "$SITE_PORT" "$(sed -n 's/^RECORDING //p' "$OUT")" "$DATA/ts"
 fi
 
 # Switching off removed the stream from disk (all the HTTP answers above could say that without).

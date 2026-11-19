@@ -3,7 +3,8 @@
 # this working tree, makes the stand-in game files of the pages' tests (tests/ui/make_content.php), starts the server on
 # loopback with an empty database, runs the checks, and removes everything again. Needs nothing but Docker and Python 3.
 #
-# Usage: tests/game/protocol.sh        (PORT, default 18701; KEEP=1 leaves the server up)
+# Usage: tests/game/protocol.sh        (PORT, default 18701; KEEP=1 leaves the server up; NO_BUILD=1 uses the image
+#                                       already tagged opendmtq-server:TAG)
 # Also runs tests/game/lock.php, tests/game/names.php, tests/game/keys.php, tests/game/state.php, tests/game/trust.php,
 # tests/game/moved.php and tests/game/signin.php on the same database, and fails on any PHP warning in the server's log.
 set -euo pipefail
@@ -25,7 +26,9 @@ if [ -z "${KEEP:-}" ]; then
   trap cleanup EXIT
 fi
 
-docker build -q -t "opendmtq-server:$TAG" "$ROOT/server" >/dev/null
+if [ -z "${NO_BUILD:-}" ]; then
+  docker build -q -t "opendmtq-server:$TAG" "$ROOT/server" >/dev/null
+fi
 mkdir -p "$DATA/content" "$DATA/state" "$DATA/custom" "$DATA/apk"
 chmod -R a+rwX "$DATA"
 docker run --rm -u 33:33 -v "$DATA/content:/content" -v "$ROOT/tests/ui:/ui:ro" --entrypoint php "opendmtq-server:$TAG" /ui/make_content.php /content >/dev/null
