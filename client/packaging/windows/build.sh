@@ -25,6 +25,20 @@ set -euo pipefail
 OUT=$(realpath -m "${1:?usage: build.sh OUT_DIR}")
 REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 HERE="$REPO/client/packaging/windows"
+# No Windows program stays runnable in OUT once the build ends, however it ends: WSL hands a file that starts as Windows'
+# programs do (MZ) to Windows when it is run, and the containers write theirs executable. Each such file under OUT loses
+# its executable bits; nothing else is touched. Nothing here changes the build's exit status.
+windows_programs_not_runnable() {
+  local f
+  # Only files with an executable bit: each read for its first two bytes.
+  find "$OUT" -type f -perm /111 -print0 2>/dev/null | while IFS= read -r -d '' f; do
+    if [ "$(head -c 2 "$f" 2>/dev/null)" = MZ ]; then
+      chmod a-x "$f" 2>/dev/null || true
+    fi
+  done || true
+  return 0
+}
+trap windows_programs_not_runnable EXIT
 # The project's one version: the chart's, as the release's checks read it.
 VERSION=$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([0-9A-Za-z.+-]*\)"\{0,1\}[[:space:]]*$/\1/p' "$REPO/deploy/helm/opendmtq/Chart.yaml" | head -n 1)
 [ -n "$VERSION" ] || { echo "no version in deploy/helm/opendmtq/Chart.yaml" >&2; exit 1; }
