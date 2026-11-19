@@ -42,6 +42,7 @@ PORTS_PER_JOB = 3
 
 # ------------------------------------------------------------------------------------------------- the expressions
 
+# The expression language's words: a quoted string, a number, an operator, or a name with its dots (needs.x.outputs.y).
 TOKEN = re.compile(r"\s*(?:(?P<str>'(?:[^']|'')*')|(?P<num>-?\d+(?:\.\d+)?)|(?P<op>==|!=|&&|\|\||<=|>=|[!<>(),\[\]])"
                    r"|(?P<name>[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_*][A-Za-z0-9_-]*)*))")
 
@@ -51,6 +52,7 @@ class Expression:
     always, success, failure, cancelled, startsWith, endsWith, contains, format and hashFiles."""
 
     def __init__(self, text, context, functions):
+        # The words of the expression, in order, then read by recursive descent below.
         self.tokens, at = [], 0
         while at < len(text):
             if text[at:].strip() == "":
@@ -64,6 +66,7 @@ class Expression:
         self.at, self.context, self.functions = 0, context, functions
 
     def value(self):
+        # The whole expression, and nothing left over after it.
         result = self.either()
         if self.at != len(self.tokens):
             raise ValueError(f"left over in the expression: {self.tokens[self.at:]}")
@@ -141,6 +144,7 @@ class Expression:
 
 
 def truthy(value):
+    # GitHub's falsy values: null, false, 0 and the empty string.
     return value not in (None, False, 0, "", 0.0)
 
 
@@ -204,6 +208,7 @@ class Instance:
         self.result, self.outputs, self.number = None, {}, 0
 
     def windows(self):
+        # A job for a Windows runner: GitHub's own, which no container here stands in for.
         return str(self.spec.get("runs-on", "")).startswith("windows")
 
 
@@ -231,20 +236,29 @@ def expand(jobs):
 
 
 def needs_of(spec):
+    # needs: one job's name, or a list of them.
     needs = spec.get("needs") or []
     return [needs] if isinstance(needs, str) else list(needs)
 
 
 class Run:
+    """One run of CI's jobs on a commit: its folder, the ports its jobs share out, what GitHub would tell them."""
+
     def __init__(self, args):
         self.args = args
+        # The commit checked out, as CI runs a pushed commit (not the working tree's changes).
         self.sha = git("rev-parse", "HEAD")
         self.short = self.sha[:7]
+        # Each job's log and folder, and the artifacts one job hands another, under the commit's own folder.
         self.folder = os.path.join(ROOT, "_work", "ci", self.short)
         self.artifacts = os.path.join(self.folder, "artifacts")
+        # actions/cache's folders, kept from one run to the next as GitHub keeps them.
         self.cache = os.path.join(ROOT, "_work", "ci", "cache")
+        # The jobs run on threads of their own: what they share goes through this lock.
         self.lock = threading.Lock()
+        # The jobs' user: GitHub's runner's when this runs as root, else whoever runs it (a non-root user either way).
         self.uid, self.gid = (RUNNER_UID, RUNNER_UID) if os.geteuid() == 0 else (os.getuid(), os.getgid())
+        # The ports in blocks of three, one block for each job while it runs.
         first, last = (int(p) for p in args.ports.split("-"))
         self.blocks = [first + i * PORTS_PER_JOB for i in range((last - first + 1) // PORTS_PER_JOB)]
         if not self.blocks:
@@ -253,10 +267,12 @@ class Run:
         self.counter = 0
         # What the commit changes, for the changes job: since where main is on GitHub, unless told otherwise.
         self.before = "" if args.all else (git("merge-base", "HEAD", args.base, check=False) or "")
+        # The branch and the repository as GitHub would name them, from this checkout.
         branch = git("symbolic-ref", "--short", "-q", "HEAD", check=False) or "main"
         origin = git("remote", "get-url", "origin", check=False) or ""
         match = re.search(r"[:/]([^/:]+)/([^/]+?)(?:\.git)?$", origin)
         self.repository = f"{match.group(1)}/{match.group(2)}" if match else "local/openDMTQ"
+        # The github context of a push to this branch, as the workflow's expressions read it.
         self.github = {
             "workflow": "ci", "ref": f"refs/heads/{branch}", "ref_name": branch, "ref_type": "branch", "sha": self.sha,
             "event_name": "push", "event": {"before": self.before}, "repository": self.repository,
@@ -265,6 +281,7 @@ class Run:
         }
 
     def say(self, text):
+        # One line at a time on the screen, whichever job's thread says it.
         with self.lock:
             print(text, flush=True)
 
@@ -274,17 +291,20 @@ class Run:
             return self.free.pop(0) if self.free else None
 
     def give_ports(self, block):
+        # The block back, for the next job to start.
         with self.lock:
             self.free.append(block)
             self.free.sort()
 
     def number(self):
+        # Each job's number in the run: its folder's, its log's and its names'.
         with self.lock:
             self.counter += 1
             return self.counter
 
 
 def git(*args, check=True, cwd=ROOT):
+    # Its output; with check, a failure ends the run with git's words.
     result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
     if check and result.returncode:
         sys.exit(f"git {' '.join(args)}: {result.stderr.strip()}")
@@ -292,6 +312,7 @@ def git(*args, check=True, cwd=ROOT):
 
 
 def docker(*args, check=True, **kw):
+    # Its result; with check, a failure raises with Docker's words (the job then fails and says why).
     result = subprocess.run(["docker", *args], capture_output=True, text=True, **kw)
     if check and result.returncode:
         raise RuntimeError(f"docker {' '.join(args[:3])}...: {result.stderr.strip()[-400:]}")
@@ -303,20 +324,25 @@ class Job:
 
     def __init__(self, run, inst):
         self.run, self.inst, self.block = run, inst, None
+        # The steps' outputs by id, what they added to GITHUB_ENV, the caches to save at the end, and whether one failed.
         self.steps, self.env_added, self.saves, self.failed = {}, {}, [], False
+        # Until place(): enough to read the job's condition.
         self.prefix, self.dir, self.work, self.temp = run.args.prefix, "", ROOT, ""
 
     def place(self, block):
         """The job's number, names, folders and ports, once it is to run."""
         self.block = block
         self.inst.number = self.run.number()
+        # Every container, network and image tag of the job begins with this (odqci3-uitest-site...).
         self.prefix = f"{self.run.args.prefix}{self.inst.number}"
+        # The job's name as a folder's: ui (empty full) as ui-empty-full.
         safe = re.sub(r"[^A-Za-z0-9]+", "-", self.inst.name).strip("-")
         self.dir = os.path.join(self.run.folder, f"{self.inst.number:02d}-{safe}")
         self.work = os.path.join(self.dir, "work")
         self.temp = os.path.join(self.dir, "temp")
         self.home = os.path.join(self.dir, "home")
         self.log = os.path.join(self.run.folder, f"{self.inst.number:02d}-{safe}.log")
+        # The container standing in for GitHub's runner.
         self.container = f"{self.prefix}-runner"
 
     # -------------------------------------------------------------- contexts
@@ -329,12 +355,15 @@ class Job:
                 "CHAT_PORT": str(b + 2), "PORT": str(b), "SMOKE_PORT": str(b), "TMPDIR": self.temp}
 
     def context(self, step_env=None):
+        """The contexts the workflow's expressions read, as GitHub gives them to this job's step."""
+        # The workflow's env, the job's, what earlier steps added, the step's own, then this job's own names and ports.
         env = {}
         env.update({k: shown(v) for k, v in (self.run.workflow.get("env") or {}).items()})
         env.update({k: shown(v) for k, v in (self.inst.spec.get("env") or {}).items()})
         env.update(self.env_added)
         env.update(step_env or {})
         env.update(self.own())
+        # The jobs this one needs, with their results and outputs (a matrix's last instance speaks for it).
         needs = {j.job: {"result": j.result, "outputs": j.outputs} for j in self.run.instances
                  if j.job in needs_of(self.inst.spec) and j.result is not None}
         return {"github": self.run.github, "env": env, "matrix": self.inst.matrix, "needs": needs,
@@ -343,6 +372,7 @@ class Job:
                 "inputs": {}, "vars": {}}
 
     def functions(self):
+        """The expressions' functions, the step's status ones by whether a step before it failed."""
         failed = self.failed
         return {
             "always": lambda: True, "success": lambda: not failed, "failure": lambda: failed,
@@ -365,18 +395,23 @@ class Job:
         return digest.hexdigest()
 
     def value(self, text, step_env=None):
+        # A string of the workflow with its expressions filled in for this step.
         return substitute(text, self.context(step_env), self.functions())
 
     # -------------------------------------------------------------- the machine
     def write(self, text):
+        # The job's log, step after step.
         with open(self.log, "a", encoding="utf-8") as f:
             f.write(text)
 
     def prepare(self):
         """The job's folders, a fresh clone of the commit as its checkout would make it, and its runner."""
+        # The workspace (GITHUB_WORKSPACE), the runner's temporary folder (RUNNER_TEMP, and TMPDIR: a folder a step makes
+        # with mktemp is mounted into its containers by the same path) and the user's home.
         os.makedirs(self.dir)
         for folder in (self.work, self.temp, self.home):
             os.makedirs(folder)
+        # How deep the job's checkout fetches: one commit by default, everything with fetch-depth: 0.
         checkout = next((s for s in self.inst.spec.get("steps", []) if str(s.get("uses", "")).startswith("actions/checkout")), {})
         depth = int((checkout.get("with") or {}).get("fetch-depth", 1))
         git("init", "-q", cwd=self.work)
@@ -387,8 +422,10 @@ class Job:
         else:
             git("fetch", "-q", "--no-tags", f"--depth={depth}", source, self.run.sha, cwd=self.work)
         git("checkout", "-q", "--detach", self.run.sha, cwd=self.work)
+        # The job's folder its user's, as the runner's workspace is the runner's.
         if os.geteuid() == 0:
             subprocess.run(["chown", "-R", f"{self.run.uid}:{self.run.gid}", self.dir], check=True)
+        # The user may use Docker as on GitHub: by the socket's group.
         socket_group = str(os.stat("/var/run/docker.sock").st_gid)
         # The runner: this computer's network and Docker, the job's folder at the same path as here (a container it
         # starts mounts its files by this computer's paths), its own user.
@@ -402,12 +439,14 @@ class Job:
 
     def shell(self, script, env, timeout):
         """A script in the runner as the job's user, with bash -e as GitHub runs a step: (exit status, output)."""
+        # The step's script in a file the job's user reads, as the runner writes each run block to a file.
         path = os.path.join(self.temp, f"step-{len(self.steps)}-{time.time_ns()}.sh")
         with open(path, "w", encoding="utf-8") as f:
             f.write(script)
         os.chmod(path, 0o755)
         if os.geteuid() == 0:
             os.chown(path, self.run.uid, self.run.gid)
+        # As the job's user, in the workspace, with the step's environment: bash -e, GitHub's own shell for a run block.
         cmd = ["docker", "exec", "-u", f"{self.run.uid}:{self.run.gid}", "-w", self.work]
         for k, v in env.items():
             cmd += ["-e", f"{k}={v}"]
@@ -433,10 +472,16 @@ class Job:
         """One step: (outcome, seconds); its outputs into self.steps when it has an id."""
         name = self.value(step.get("name") or step.get("uses") or f"step {n}")
         step_env = {k: self.value(shown(v)) for k, v in (step.get("env") or {}).items()}
-        if not condition(step.get("if", "success()"), self.context(step_env), self.functions()):
+        # As GitHub reads a step's if: only after the steps before it passed, unless it asks for always() or failure().
+        wanted = str(step.get("if", "success()"))
+        if not re.search(r"\b(always|success|failure|cancelled)\(\)", wanted):
+            wanted = f"success() && ({wanted.strip().removeprefix('${{').removesuffix('}}')})"
+        if not condition(wanted, self.context(step_env), self.functions()):
             return name, "skipped", 0.0, ""
         began = time.time()
+        # What is left of the job's minutes.
         left = max(1, deadline - time.time())
+        # The files a step writes its outputs, environment, summary and path into, empty and its user's.
         files = {"GITHUB_OUTPUT": os.path.join(self.temp, f"output-{n}"), "GITHUB_ENV": os.path.join(self.temp, f"env-{n}"),
                  "GITHUB_STEP_SUMMARY": os.path.join(self.temp, f"summary-{n}"), "GITHUB_PATH": os.path.join(self.temp, f"path-{n}")}
         for f in files.values():
@@ -444,12 +489,14 @@ class Job:
             if os.geteuid() == 0:
                 os.chown(f, self.run.uid, self.run.gid)
         env = dict(self.context(step_env)["env"], **self.defaults(files))
+        # A run block, with its expressions filled in; else the action it uses.
         if "run" in step:
             if step.get("shell") not in (None, "bash"):
                 return name, "skipped", 0.0, f"(shell {step.get('shell')}: not on Linux)\n"
             code, out = self.shell(self.value(step["run"], step_env), env, left)
         else:
             code, out = self.action(step, step_env, env, left)
+        # What the step said for the steps after it: its outputs (steps.<id>.outputs) and their environment.
         outputs = {}
         with open(files["GITHUB_OUTPUT"], encoding="utf-8") as f:
             for line in f:
@@ -469,12 +516,14 @@ class Job:
     def action(self, step, step_env, env, left):
         """The actions the workflow uses, done as they do it on GitHub, in this job's runner."""
         uses = str(step["uses"])
+        # Its with: inputs, their expressions filled in; the action by its name, whatever its version.
         given = {k: self.value(shown(v), step_env) for k, v in (step.get("with") or {}).items()}
         action = uses.split("@")[0]
         if action in ("actions/checkout", "docker/setup-buildx-action", "docker/setup-qemu-action", "actions/setup-python"):
             # The clone is there; buildx and Python are in the runner.
             return 0, f"({action}: as prepared)\n"
         if action == "azure/setup-helm":
+            # The runner's Helm, which must be the version the workflow asks for.
             want = given.get("version", "")
             code, out = self.shell("helm version --short", env, left)
             return (0 if want and want in out else 1), out + (f"(the runner's Helm is not {want})\n" if want not in out else "")
@@ -650,21 +699,47 @@ def main():
     jobs = run.workflow["jobs"]
     names = wanted_jobs(jobs, args.jobs)
     run.instances = expand({j: jobs[j] for j in names})
-    os.makedirs(run.artifacts, exist_ok=True)
-    os.makedirs(run.cache, exist_ok=True)
     # The runner's image, made again only when its file changed (Docker's cache).
     built = subprocess.run(["docker", "build", "-q", "-t", RUNNER_IMAGE, "-f", os.path.join(ROOT, ".github", "ci-runner.Dockerfile"),
                             os.path.join(ROOT, ".github")], capture_output=True, text=True)
     if built.returncode:
         sys.exit("the runner's image did not build:\n" + built.stderr[-2000:])
+    # The commit's folder afresh: an earlier run's logs and artifacts would mix with this one's (what its jobs' containers
+    # left as their own users goes through a container).
+    if os.path.isdir(run.folder):
+        shutil.rmtree(run.folder, ignore_errors=True)
+        if os.path.isdir(run.folder):
+            docker("run", "--rm", "-v", f"{os.path.dirname(run.folder)}:/p", "--entrypoint", "rm", RUNNER_IMAGE, "-rf",
+                   f"/p/{os.path.basename(run.folder)}", check=False)
+    os.makedirs(run.artifacts, exist_ok=True)
+    os.makedirs(run.cache, exist_ok=True)
     run.say(f"ci_local: {len(run.instances)} jobs of ci.yml at {run.short}, changes since {run.before[:7] or '(everything runs)'}; "
             f"logs in {run.folder}")
     began = time.time()
+    # The jobs still to start, in the workflow's order, and those running with their port blocks.
     pending = list(run.instances)
     running = {}
+    try:
+        schedule(run, pending, running)
+    except KeyboardInterrupt:
+        # Stopped: the jobs' runners and what their steps started go (their threads then end on their own).
+        left = docker("ps", "-aq", "--filter", f"name=^{args.prefix}", check=False).stdout.split()
+        if left:
+            docker("rm", "-f", *left, check=False)
+        sys.exit("ci_local: stopped")
+    failed = [i.name for i in run.instances if i.result == "failure"]
+    run.say(f"ci_local: {len(run.instances) - len(failed)} of {len(run.instances)} jobs passed or were skipped in "
+            f"{time.time() - began:.0f} s{': failed ' + ', '.join(failed) if failed else ''}")
+    return 1 if failed else 0
+
+
+def schedule(run, pending, running):
+    """Each job once the jobs it needs have ended, --jobs of them at once, each with a block of ports."""
+    args = run.args
     with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
         while pending or running:
             for inst in list(pending):
+                # Not before every instance of every job it needs has ended.
                 needs = [j for j in run.instances if j.job in needs_of(inst.spec)]
                 if any(j.result is None for j in needs):
                     continue
@@ -684,6 +759,7 @@ def main():
                     inst.result = "skipped"
                     run.say(f"SKIP {inst.name}: {spec_if}")
                     continue
+                # Its ports, or back to the front of the queue until a running job gives some back.
                 block = run.take_ports()
                 if block is None:
                     pending.insert(0, inst)
@@ -692,15 +768,12 @@ def main():
                 running[inst] = (pool.submit(job.go), block)
                 if len(running) >= args.parallel:
                     break
+            # The jobs that ended give their ports back.
             for inst, (future, block) in list(running.items()):
                 if future.done():
                     del running[inst]
                     run.give_ports(block)
             time.sleep(0.5)
-    failed = [i.name for i in run.instances if i.result == "failure"]
-    run.say(f"ci_local: {len(run.instances) - len(failed)} of {len(run.instances)} jobs passed or were skipped in "
-            f"{time.time() - began:.0f} s{': failed ' + ', '.join(failed) if failed else ''}")
-    return 1 if failed else 0
 
 
 if __name__ == "__main__":
