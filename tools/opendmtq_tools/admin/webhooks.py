@@ -893,8 +893,9 @@ def look(con, state, now):
     for p in plays:
         if p["pattern_id"] is not None and p["user_id"] is not None:
             touched.setdefault(int(p["pattern_id"]), set()).add(int(p["user_id"]))
-    # The song list only when a chart was played: a look with nothing new reads no file.
-    charts, by_id = (site.chart_map(), site.songs_by_id()) if touched else ({}, {})
+    # The song list only when a chart was played, read once: a look with nothing new reads no file.
+    songs = site.song_list() if touched else []
+    charts, by_id = (site.chart_map(songs), site.songs_by_id(songs)) if touched else ({}, {})
     for pattern, players in touched.items():
         current = con.execute(TOP_OF, (core.CHECK_UDID, pattern)).fetchone()
         known = con.execute("SELECT user_id, score, judgement FROM WebhookTop WHERE pattern_id = ?", (pattern,)).fetchone()
@@ -1035,6 +1036,12 @@ def write(con, state, events, new, tops, now):
         raise
 
 
+def unchanged(state, new):
+    """True when a look's new state says nothing the kept one does not: the same as it but for when the look was and the
+    number the next write gives it."""
+    return {k: v for k, v in new.items() if k not in ("at", "rev")} == {k: v for k, v in state.items() if k not in ("at", "rev")}
+
+
 def detect(now=None):
     """One look at what happened, queued for the webhooks that take it. With no webhook, nothing is followed. The first look
     (or the first after the loop forgot, at a restore) takes the present as its start. Returns how many messages it
@@ -1066,6 +1073,10 @@ def detect(now=None):
         finally:
             con.execute("COMMIT")
         events += look_live(con, new, now)
+        # Nothing happened since the look that wrote last (no play, nobody on air or off it, the notice as it was): nothing
+        # to keep, and no write every few seconds on a server where nothing goes on. The next look reads on from the same.
+        if not events and not tops and unchanged(state, new):
+            return 0
         return write(con, state, events, new, tops, now)
     finally:
         con.close()
@@ -1134,7 +1145,9 @@ def deliver(now=None, me=None):
     con = connect()
     sent, per_chat = 0, {}
     try:
-        if not has_table(con):
+        # No message at all, waiting, being sent or ended within the day the table keeps one: nothing to send or tidy, and
+        # no write lock taken every few seconds for it.
+        if not has_table(con) or not con.execute("SELECT 1 FROM WebhookMessage LIMIT 1").fetchone():
             return 0
         for _ in range(SEND_AT_ONCE):
             at = time.time() if now is None else now

@@ -131,15 +131,16 @@ def song_list():
     return song_pages.served_song_list()
 
 
-def songs_by_id():
-    """Songs by their id."""
-    return {int(s["song_id"]): s for s in song_list() if "song_id" in s}
+def songs_by_id(songs=None):
+    """Songs by their id; of songs (song_list()'s, read once by the caller) when given."""
+    return {int(s["song_id"]): s for s in (song_list() if songs is None else songs) if "song_id" in s}
 
 
-def chart_map():
-    """pattern id -> (song id, line, difficulty, signature), from the list the server serves."""
+def chart_map(songs=None):
+    """pattern id -> (song id, line, difficulty, signature), from the list the server serves (songs, when the caller read
+    it already)."""
     return {int(p["pattern_id"]): (int(s["song_id"]), int(p["line"]), int(p["difficulty"]), int(p["signature"]))
-            for s in song_list() for p in s.get("song_patterns", [])}
+            for s in (song_list() if songs is None else songs) for p in s.get("song_patterns", [])}
 
 
 def chart_info(pattern, charts=None, by_id=None):
@@ -484,7 +485,9 @@ def live_now(con):
     except sqlite3.OperationalError:
         # A database from before the live view: nobody is on air.
         return []
-    charts, by_id = chart_map(), songs_by_id()
+    # The song list read once, and only for a player on air in a song: a look with nobody in one (the webhooks' loop, every
+    # few seconds) reads no file.
+    charts = by_id = None
     out = []
     for r in rows:
         guid = int(r["guid"])
@@ -492,6 +495,9 @@ def live_now(con):
             continue
         song = chart = None
         if r["playing"] and time.time() - int(r["play_at"] or 0) < SONG_MAX:
+            if charts is None:
+                songs = song_list()
+                charts, by_id = chart_map(songs), songs_by_id(songs)
             info = chart_info(r["pattern_id"] or 0, charts, by_id)
             song, chart = info["title"], info["chart_name"]
         try:
