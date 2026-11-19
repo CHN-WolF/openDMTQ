@@ -47,7 +47,7 @@ function odq_member_by(string $column, $value): ?array
     if (!in_array($column, ['guid', 'puid', 'code'], true)) {
         return null;
     }
-    $q = @odq_db()->prepare("SELECT * FROM Member WHERE $column = :v ORDER BY rowid LIMIT 1");
+    $q = @odq_db()->prepare(odq_member_sql($column));
     if (!$q) {
         return null;
     }
@@ -56,6 +56,16 @@ function odq_member_by(string $column, $value): ?array
     $r = @$q->execute();
     $row = $r ? $r->fetchArray(SQLITE3_ASSOC) : false;
     return $row ?: null;
+}
+
+/*
+ * The statement odq_member_by() runs for $column (guid, puid or code; :v the value). By the player id and by the platform
+ * account it reads the players' indexes (Member_guid, Member_puid; setup-db.php), whose order after the value is the rowid's:
+ * the first row without a sort, never a look through every player. tests/game/protocol.sh checks the plan SQLite makes of it.
+ */
+function odq_member_sql(string $column): string
+{
+    return "SELECT * FROM Member WHERE $column = :v ORDER BY rowid LIMIT 1";
 }
 
 /*

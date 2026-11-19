@@ -185,6 +185,12 @@ $db->exec('CREATE INDEX IF NOT EXISTS PlayLog_clears ON PlayLog (user_id, patter
 $db->exec('CREATE INDEX IF NOT EXISTS Play_held ON Play (user_id, pattern_id, score, grade, isAllCombo, isPerfectPlay)');
 $db->exec('CREATE INDEX IF NOT EXISTS Member_id ON Member (id)');
 $db->exec('CREATE INDEX IF NOT EXISTS Member_udid ON Member (udid)');
+// A player by their player id or their platform account (src/db.php odq_member_by(): the game's sign-in, every call of a
+// player's that asks for a ban, getUserAsset, a save's check that the player has an account): from these, not a look
+// through every player, which took 20 to 35 microseconds a look at 1,000 players and grows with them. The same statements
+// as SCHEMA in the admin pages (backups.py), which a restored database gets.
+$db->exec('CREATE INDEX IF NOT EXISTS Member_guid ON Member (guid)');
+$db->exec('CREATE INDEX IF NOT EXISTS Member_puid ON Member (puid)');
 // The home page's newest records: the few newest rows with is_record from an index of those rows alone. Without it the
 // page read the log back from its newest play until it had found them, all of it on a server whose plays were seldom
 // records (2.4 s a page on a million plays, against 0.06).

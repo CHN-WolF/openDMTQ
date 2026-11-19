@@ -131,6 +131,27 @@ else
   echo "$plan" | sed 's/^/  /'
   failed=1
 fi
+# A player looked up by their player id or their platform account (the sign-in, every call of a player's that asks for a
+# ban, getUserAsset) reads the players' indexes (Member_guid, Member_puid; setup-db.php), their first row in order without a
+# sort, never every player (20 to 35 microseconds a look at 1,000 players, growing with them). The plans of the statement
+# the server runs (odq_member_sql()).
+# shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.
+plan=$(docker exec "$NAME" php -r '
+  require "/opt/opendmtq/game/src/db.php";
+  foreach (["guid", "puid"] as $column) {
+      $r = odq_db()->query("EXPLAIN QUERY PLAN " . odq_member_sql($column));
+      while ($r && ($row = $r->fetchArray(SQLITE3_ASSOC))) {
+          echo $column, ": ", $row["detail"], "\n";
+      }
+  }' 2>&1) || true
+if grep -qx 'guid: SEARCH Member USING INDEX Member_guid (guid=?)' <<<"$plan" \
+  && grep -qx 'puid: SEARCH Member USING INDEX Member_puid (puid=?)' <<<"$plan" && ! grep -q 'TEMP B-TREE\|SCAN' <<<"$plan"; then
+  echo "PASS a player is looked up by their player id and by their account from the players' indexes"
+else
+  echo "FAIL a player's lookup reads more of the players than an index:"
+  echo "$plan" | sed 's/^/  /'
+  failed=1
+fi
 # The home page's newest records come from the index of the record rows alone (PlayLog_records), in its order: never the
 # whole log read back from its newest play (2.4 s a page on a million plays that were seldom records).
 # shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.

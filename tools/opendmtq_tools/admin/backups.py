@@ -130,6 +130,8 @@ CREATE INDEX IF NOT EXISTS Play_board ON Play (user_id, pattern_id, score);
 DROP INDEX IF EXISTS Play_user;
 CREATE INDEX IF NOT EXISTS Member_id ON Member (id);
 CREATE INDEX IF NOT EXISTS Member_udid ON Member (udid);
+CREATE INDEX IF NOT EXISTS Member_guid ON Member (guid);
+CREATE INDEX IF NOT EXISTS Member_puid ON Member (puid);
 """ + auth.ACCOUNT_TABLE + ";\n" + ACHIEVEMENT_TABLE + ";\n" + BOARD_STAMP + "".join(sql + ";\n" for sql in GAME_TABLES)
 
 
