@@ -4,8 +4,8 @@
 # loopback with an empty database, runs the checks, and removes everything again. Needs nothing but Docker and Python 3.
 #
 # Usage: tests/game/protocol.sh        (PORT, default 18701; KEEP=1 leaves the server up)
-# Also runs tests/game/lock.php, tests/game/names.php, tests/game/keys.php, tests/game/state.php and tests/game/moved.php on
-# the same database, and fails on any PHP warning in the server's log.
+# Also runs tests/game/lock.php, tests/game/names.php, tests/game/keys.php, tests/game/state.php, tests/game/trust.php and
+# tests/game/moved.php on the same database, and fails on any PHP warning in the server's log.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -80,6 +80,9 @@ docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/test
 # a save and a chart's cost do to them, unlimited currency, and a ban in the game, on the site and in the PC client, inside
 # the running server, on its database and at its own address, with the catalog written above.
 docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/state.php" || failed=1
+# What a call may change of a player's game state, and whose game may make it (tests/game/trust.php): a ban whatever form the
+# id takes, unlimited currency and a pack of MAX POINT, items equipped, inside the running server, with the same catalog.
+docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/trust.php" || failed=1
 # A server moved to another address: each start notes the move, and the download page says players need the new app
 # (tests/game/moved.php).
 docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/moved.php" || failed=1

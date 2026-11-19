@@ -248,8 +248,9 @@ const OPENDMTQ_PLAYER_CALLS = [
 ];
 
 /*
- * The player a call is made for, as a guid (0 for none): the first parameter of a player's call, and for the game's own
- * login (user.loginV2) the account its access token names.
+ * The player a call is made for, as a guid (0 for none): the first parameter of a player's call, read as the handlers read
+ * it (odq_intval(): the leading digits of a text), and for the game's own login (user.loginV2) the account its access token
+ * names.
  */
 function odq_call_player(string $method, array $params): int
 {
@@ -262,8 +263,9 @@ function odq_call_player(string $method, array $params): int
     if (!in_array($method, OPENDMTQ_PLAYER_CALLS, true)) {
         return 0;
     }
-    $guid = $params[0] ?? null;
-    return is_numeric($guid) ? (int)$guid : 0;
+    // The handlers take "9302x" or " 9302" for player 9302 (shop.php, game.php: odq_intval()), so the ban does too: an id
+    // with anything after its digits is the same player here as in the call it reaches.
+    return odq_intval($params[0] ?? null);
 }
 
 /*
