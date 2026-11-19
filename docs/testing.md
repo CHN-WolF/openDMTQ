@@ -248,6 +248,8 @@ included, and publishes nothing; `gh workflow run release.yml` rehearses the gat
   `cli/tests/test_repo.py` fails when the file or the text is gone, and when a unit test file of the tools, the command
   line or the PC client is in no row at all.
 - A new page goes in the lists at the top of `tests/ui/audit.js`, in each state where it looks different.
+- A new stage of `tests/ui/run.sh` goes into one of the `ui` job's parts in `.github/workflows/ci.yml`, in its order:
+  `cli/tests/test_ci.py` fails while a stage is in no part, or in two.
 - Something a person found on a page that the checker did not: first a planted case in `defects.html` and the check in
   `layout.js`, then the fix.
 
