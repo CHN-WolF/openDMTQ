@@ -382,7 +382,7 @@ class StatusLine(Folder):
                                     status_action=None, status_transient=False, status_sticky=False,
                                     update_found=None, _paint_status=lambda: None)
         for name in ("set_status", "user_acted", "_say_state", "ready", "busy_now", "_game_open", "server_answers",
-                     "update_on_offer", "update_now"):
+                     "signed_in_now", "update_on_offer", "update_now"):
             setattr(app, name, getattr(launcher.LauncherApp, name).__get__(app))
         # The line's words as the window draws them (a property of the window's class).
         app.text = lambda: launcher.LauncherApp.status_text.fget(app)
@@ -457,6 +457,29 @@ class StatusLine(Folder):
         # A span of time inside the words is said in the new language too.
         app.set_status(i18n.Said("status.ended", time=i18n.span(130)), "ok", sticky=True)
         self.assertEqual(app.text(), i18n.Words("ko")("status.ended", time=i18n.Words("ko")("common.minutes", m=2)))
+
+    def test_a_sign_in_that_ended_is_said_while_play_can_go(self):
+        # Ready with the app this PC has, the sign-in gone (the ready check's Sign-in row a yellow ring): the line says
+        # what that row says, in the warning's tone (main said "Ready to play." under a yellow row and a yellow card).
+        from opendmtq_client import actions
+        state = st.LauncherState()
+        state.add_server("http://stand.in", "Stand-in")
+        checks = [actions.Check("server", True, "Stand-in"), actions.Check("account", False, "player1", page="online"),
+                  actions.Check("app", True, "2026-11-09")]
+        # An account signed in before: its sign-in ended.
+        state.server()["account"] = "player1"
+        app = self.window(state, checks)
+        app._say_state()
+        self.assertEqual((app.status_message.key, app.status_tone), ("status.signin_ended", "warn"))
+        self.assertEqual(app.text(), "Your sign-in ended. PLAY starts the app on this PC.")
+        # None yet: said as the PLAY page's card says it.
+        state.server()["account"] = None
+        app._say_state()
+        self.assertEqual(app.text(), "Not signed in yet. PLAY starts the app on this PC.")
+        # Signed in again: ready.
+        app.checks = [checks[0], actions.Check("account", True, "player1"), checks[2]]
+        app._say_state()
+        self.assertEqual(app.status_message.key, "status.ready")
 
     def test_a_server_that_does_not_answer_is_said_while_play_can_go(self):
         # Ready with the app this PC has, the server not answering: the line says so, in the warning's tone.

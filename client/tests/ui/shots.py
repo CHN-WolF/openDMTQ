@@ -1248,6 +1248,10 @@ def variants_check(app, site, out, tag, problems):
         measure(app, "%s_%s-signed-out" % (tag, page), problems)
         if page == "play":
             play_fits(app, "%s_play-signed-out" % tag, tag, problems)
+            # The status line says what the ready check's yellow Sign-in row says (main: "Ready to play.").
+            if app.status_text != w("status.signin_ended") or app.status_tone != "warn":
+                problems.append("%s_play-signed-out: the status line says %r beside a sign-in that ended" % (
+                    tag, app.status_text))
     # A game that closed by itself.
     app.state.last_session = {"seconds": 754, "exit_code": 3221225477, "crashed": True}
     app.set_status(w("status.crashed"), "bad", action=(w("status.open_log"), app.open_player_log))

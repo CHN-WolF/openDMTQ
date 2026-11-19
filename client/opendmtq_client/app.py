@@ -271,6 +271,11 @@ class LauncherApp:
         elif not self.server_answers():
             # Ready all the same: PLAY starts the app this PC has, which may be older than the server's.
             self.set_status(i18n.Said("status.server_down"), "warn")
+        elif not self.signed_in_now():
+            # Ready all the same, without the sign-in the ready check's yellow Sign-in row says: PLAY starts the app this
+            # PC has (a sign-in that ended, or none yet, as the PLAY page's server card says it).
+            ended = bool(self.state.server().get("account"))
+            self.set_status(i18n.Said("status.signin_ended" if ended else "status.not_signed"), "warn")
         elif self.update_found is not None:
             # Ready, with a newer launcher on offer: said with its update, as the Launcher page's button does it. PLAY
             # lit at the foot says that it is ready.
@@ -939,6 +944,10 @@ class LauncherApp:
     def server_answers(self):
         """False when the last ready check found the server PLAY plays on not answering."""
         return not any(c.key == "server" and not c.ok and not c.blocks for c in (self.checks or ()))
+
+    def signed_in_now(self):
+        """False when the last ready check found no sign-in to the server PLAY plays on (its Sign-in row a yellow ring)."""
+        return not any(c.key == "account" and not c.ok for c in (self.checks or ()))
 
     def _checked(self, checks, asked):
         if asked != self.checks_asked:
