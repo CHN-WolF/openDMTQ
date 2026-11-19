@@ -1989,6 +1989,34 @@ async function gameFlows(contexts) {
   }
 }
 
+// The repair's answer, pressed from its card on a laptop's screen (the page comes back there): every step it took said,
+// each one in sight and none laid over another (they were bands on one spot under the bar, the last alone readable)
+// (ADM-198). It takes the song list afresh from the stand-in files, as the admin flows' hidden song does: run.sh writes
+// the stand-in catalog again before MY PAGE.
+async function repairSaid(contexts) {
+  const page = await contexts.signed.newPage();
+  await page.setViewport({ width: 1280, height: 900 });
+  await page.goto(`${A}/server`, { waitUntil: 'domcontentloaded' });
+  await page.$eval('#repair button', b => b.scrollIntoView({ block: 'center' }));
+  await settle(page, () => page.click('#repair button'));
+  // Its words, under the bar where the page came back further down, or at the page's top after a longer repair followed
+  // on the page: five steps at least.
+  await page.waitForFunction(() => document.querySelectorAll('.flash[data-said]').length >= 5, { timeout: 30000 }).catch(() => {});
+  await pause(300);
+  const lines = await page.$$eval('.flash[data-said]', els => els.map(e => {
+    const r = e.getBoundingClientRect();
+    return { text: e.textContent.trim().slice(0, 50), top: Math.round(r.top), bottom: Math.round(r.bottom) };
+  }));
+  const apart = lines.every((l, i) => i === 0 || l.top >= lines[i - 1].bottom - 1);
+  const inView = lines.every(l => l.top >= 0 && l.bottom <= 900);
+  // Read in the language the flows left the pages in: each step's name starts its line in either.
+  check('the repair says every step it took, each in sight and none over another',
+    lines.length >= 5 && apart && inView && lines.some(l => /^(Folders|폴더):/.test(l.text)) && lines.some(l => /^(Database|데이터베이스):/.test(l.text)),
+    JSON.stringify(lines));
+  await page.screenshot({ path: path.join(OUT, 'shots', 'flows-repair-said-1280.jpg'), type: 'jpeg', quality: 80 });
+  await page.close();
+}
+
 async function adminFlows(contexts) {
   // A wrong password says so.
   const login = await contexts.anon.newPage();
@@ -2797,6 +2825,7 @@ async function myPage(contexts) {
     await gameFlows(contexts);
     await adminFlows(contexts);
     await webhookFlows(contexts);
+    await repairSaid(contexts);
   } else if (stage === 'mine') {
     await myPage(contexts);
   } else if (stage === 'patterns') {

@@ -910,17 +910,31 @@ for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => lo
 
 // The server's words on what was just done, as a band under the bar when the page changed in place or came back further
 // down (where the words at the page's top are out of sight): part of the bar, across it, over the page for a few seconds
-// with nothing under it moving; its words where the page's text starts. A press takes it away (its cross says so), and it
-// goes by itself, a good one sooner.
+// with nothing under it moving; its words where the page's text starts. Several at once (a repair's steps, a restore's
+// lines) stand one under another in one place under the bar, each in its own colour: each laid over the last, only the
+// last could be read. A press takes them away (each one's cross says so), and they go together by themselves, sooner
+// when all went well, later the more there are to read.
 function band(said) {
   const words = document.createElement('span');
   words.className = 'wrap';
   words.append(...said.childNodes);
   said.append(words);
   said.classList.add('float');
-  said.addEventListener('click', () => said.remove());
-  document.querySelector('.bar').append(said);
-  setTimeout(() => said.remove(), said.classList.contains('ok') ? 5000 : 15000);
+  // The one place under the bar for the messages of one answer.
+  const bar = document.querySelector('.bar');
+  let stack = bar.querySelector(':scope > .said-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.className = 'said-stack';
+    stack.addEventListener('click', () => stack.remove());
+    bar.append(stack);
+  }
+  stack.append(said);
+  // Five seconds for one good message, fifteen when one went wrong, and two more for each further line to read.
+  const lines = stack.querySelectorAll('.flash.float');
+  const wait = ([...lines].every(m => m.classList.contains('ok')) ? 5000 : 15000) + 2000 * (lines.length - 1);
+  clearTimeout(stack.leaving);
+  stack.leaving = setTimeout(() => stack.remove(), wait);
 }
 
 // A switch or a small change (a form marked data-inplace) changes the page where it is: sent in the background, the page as

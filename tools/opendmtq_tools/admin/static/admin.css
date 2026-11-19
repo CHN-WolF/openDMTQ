@@ -55,7 +55,9 @@ body[data-section="admin"] { --gap: 14px; }
    under the bar, part of it, across its width, over the page for a few seconds with nothing under it moving. Its surface is
    the message's own, opaque; its words start where the page's text does, and its cross at the end says a press takes it
    away. */
-.bar .flash.float { position: absolute; z-index: 1; left: 0; right: 0; top: 100%; margin: 0; padding: 11px 0; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 26px -12px rgba(0, 0, 0, 0.8); }
+.bar .said-stack { position: absolute; z-index: 1; left: 0; right: 0; top: 100%; box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.8); }
+/* Each message of the place, one under another in it, its top edge lit as the bar's glass. */
+.bar .flash.float { margin: 0; padding: 11px 0; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
 .bar .flash.float > .wrap { display: block; position: relative; padding-right: 58px; }
 .bar .flash.float > .wrap::after { content: "\00d7"; position: absolute; right: 24px; top: 50%; margin-top: -0.65em; font-size: var(--t-xl); line-height: 1.3; }
 /* While a band shows, the bar has its surface even at the page's top, so that the band reads as a part of it and what passes
