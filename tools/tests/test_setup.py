@@ -351,8 +351,11 @@ class FilesOnThisPcTest(unittest.TestCase):
                              (inst.path("home/Downloads/DMTQ/game data"), "game", inst.path("home/Downloads/DMTQ/songs")))
             inst.sign_in()
             page = inst.page(BASE + "/setup?step=files")
-            self.assertIn("Client data folder: " + inst.path("home/Downloads/DMTQ/game data"), page)
-            self.assertIn("Song data folder: " + inst.path("home/Downloads/DMTQ/songs"), page)
+            # Each named in the page's own words and face, its path in the paths' face as a file's name is (ADM-190).
+            self.assertIn('<span class="setup-tree">Client data folder: <span class="setup-file">'
+                          + inst.path("home/Downloads/DMTQ/game data") + "</span></span>", page)
+            self.assertIn('<span class="setup-tree">Song data folder: <span class="setup-file">'
+                          + inst.path("home/Downloads/DMTQ/songs") + "</span></span>", page)
             self.assertIn("The song data", page)
             # In the picker, the songs' folder says what it holds.
             self.assertIn("This folder holds the song data.", inst.page(BASE + "/setup?step=files&dir="
@@ -397,6 +400,18 @@ class FilesOnThisPcTest(unittest.TestCase):
             self.assertEqual(said("home/Downloads/gone.apk"), {"ok": False, "text": "Not there any more"})
             with mock.patch.object(setup.importer, "archive_paths", lambda path, say=True: []):
                 self.assertIn("Cannot be read", said("home/Downloads/broken.zip")["text"])
+
+    def test_client_data_without_song_data_is_said_as_what_the_folder_holds(self):
+        # What the folder holds, nothing of what the game will have: the server may have songs already, which the step's
+        # counts above it show (ADM-190).
+        with HostInstall() as inst:
+            # The client data with the songs' folder beside it, holding none of them.
+            www = inst.path("home/Downloads/nosongs/www")
+            os.makedirs(os.path.join(www, "patch", "phone_new"))
+            os.makedirs(os.path.join(www, "DMQ"))
+            inst.sign_in()
+            said = inst.client.get(BASE + "/setup/what", query_string={"path": www}).get_json()
+            self.assertEqual(said, {"ok": True, "text": "Client data alone: no song data"})
 
     def test_a_client_changed_for_another_server_is_said_with_its_server(self):
         with HostInstall() as inst:

@@ -64,9 +64,10 @@
           {# Each file it holds, with what it is. #}
           <ul class="setup-files">
             {% for n in f.apks + f.archives + f.iphone %}<li><span class="setup-file">{{ n }}</span>{% if f.parts[n] %} <span class="meta-inline">{{ t('setup.parts', n=f.parts[n]) }}</span>{% endif %} {{ what(f.path ~ sep ~ n) }}</li>{% endfor %}
-            {# The game's files folder, by what it holds; the songs alone beside it, which the import takes too. #}
-            {% if f.tree %}<li><span class="setup-file">{{ t({'game': 'setup.found_tree_game', 'songs': 'setup.found_tree_songs'}.get(f.tree_kind, 'setup.found_tree'), path=f.tree) }}</span> {{ what(f.tree) }}</li>{% endif %}
-            {% if f.songs_tree %}<li><span class="setup-file">{{ t('setup.found_tree_songs', path=f.songs_tree) }}</span> {{ what(f.songs_tree) }}</li>{% endif %}
+            {# The game's files folder, by what it holds; the songs alone beside it, which the import takes too. Its label in
+               the page's own words and face, the path in the paths' face as the files above have it. #}
+            {% if f.tree %}{% set tree_path %}<span class="setup-file">{{ f.tree }}</span>{% endset %}<li><span class="setup-tree">{{ t({'game': 'setup.found_tree_game', 'songs': 'setup.found_tree_songs'}.get(f.tree_kind, 'setup.found_tree'), path=tree_path) }}</span> {{ what(f.tree) }}</li>{% endif %}
+            {% if f.songs_tree %}{% set songs_path %}<span class="setup-file">{{ f.songs_tree }}</span>{% endset %}<li><span class="setup-tree">{{ t('setup.found_tree_songs', path=songs_path) }}</span> {{ what(f.songs_tree) }}</li>{% endif %}
           </ul>
         </div>
         {{ import_form(f.path, t('setup.import'), f.tree or f.archives) }}

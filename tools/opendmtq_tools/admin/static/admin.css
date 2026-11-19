@@ -814,6 +814,8 @@ table.sortable :is(th.r, th.rank)[data-sort]::after { position: absolute; margin
 .setup-list .folder a:hover { color: #fff; }
 .setup-list .file { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .setup-file { min-width: 0; color: #fff; font: 600 var(--t-sm)/1.4 var(--mono); overflow-wrap: anywhere; }
+/* A found folder's line: what it is in the page's own words and face, with its path (.setup-file) in the paths' face. */
+.setup-tree { min-width: 0; color: #fff; font: 600 var(--t-sm)/1.4 var(--text-face); overflow-wrap: anywhere; }
 .setup-file-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; flex: 1 1 260px; }
 /* The address, the state of the app, and what to do on the phone next to the code to scan. */
 .setup-address { margin: 12px 0 4px; }
