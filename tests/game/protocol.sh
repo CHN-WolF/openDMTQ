@@ -288,6 +288,23 @@ else
   echo "FAIL a request that read the list before a new one took its place made the index from the old one: $raced"
   failed=1
 fi
+# The song a phone downloads first (game.getFirstResourceSongList, in the batch after every sign-in) comes from the song
+# list's index too, never from decoding the list: the lowest id on offer, a hidden one left out; and with the list's bytes
+# made blanks behind the index (the same file, size and time, so the same index), the next request still names it.
+# shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.
+first=$(docker exec "$NAME" sh -c '
+  d=$(mktemp -d) && mkdir -p "$d/custom" "$d/run" && export OPENDMTQ_CUSTOM="$d/custom" OPENDMTQ_RUN="$d/run"
+  ask="require \"/opt/opendmtq/game/src/rpc.php\"; echo json_encode(odq_game_first_resource_songs([]));"
+  echo "[{\"song_id\":9,\"name\":\"nine\",\"song_patterns\":[]},{\"song_id\":3,\"name\":\"three\",\"song_patterns\":[]},{\"song_id\":1,\"name\":\"one\",\"hidden_yn\":\"Y\",\"song_patterns\":[]}]" > "$d/custom/songList.json"
+  php -r "$ask"; echo -n " "
+  php -r "\$f = getenv(\"OPENDMTQ_CUSTOM\") . \"/songList.json\"; \$t = filemtime(\$f); \$h = fopen(\$f, \"r+\"); fwrite(\$h, str_repeat(\" \", filesize(\$f))); fclose(\$h); touch(\$f, \$t);"
+  php -r "$ask"; rm -rf "$d"' 2>&1) || true
+if [ "$first" = '{"first_resource_songs":[{"song_id":3,"name":"three"}]} {"first_resource_songs":[{"song_id":3,"name":"three"}]}' ]; then
+  echo "PASS the first song a phone downloads comes from the song list's index, without decoding the list"
+else
+  echo "FAIL the first song a phone downloads is not the index's: $first"
+  failed=1
+fi
 # A month's board worked out once is kept with the rankings' change number and served again while the number stays; any
 # change of the log, the bests or the players raises it (the triggers of setup-db.php, whoever writes), and the next look
 # works the board out again. On the server's own database and run folder.

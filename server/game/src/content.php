@@ -39,7 +39,8 @@ function odq_songs_from(string $raw): array
 /*
  * What most requests need of the song list without decoding its 200 KB each time: every chart's line and difficulty
  * ('kinds': pattern id => [line, signature]), the charts of each line ('lines': line => [pattern ids]) and of each song's
- * line ('songs': song id => line => [pattern ids]), each in the list's order, and the highest song id ('max'). Worked out
+ * line ('songs': song id => line => [pattern ids]), each in the list's order, the highest song id ('max'), and the song a
+ * phone downloads first ('first': [song id, name], or null; odq_first_song(), asked in the batch after every sign-in). Worked out
  * from the list once and kept as a PHP file in the run folder, named after the list file's identity (its inode, size
  * and time: the tools put a whole new file in its place, so a changed list is another file), which PHP's opcache keeps
  * compiled: a save or a ranking then reads it in microseconds where decoding the list took one to three milliseconds.
@@ -59,9 +60,10 @@ function odq_song_index(): array
     $stat = $list ? @fstat($list) : false;
     $file = $stat ? odq_run_dir() . '/songs/index-' . $stat['ino'] . '-' . $stat['size'] . '-' . $stat['mtime'] . '.php' : null;
     if ($file !== null && is_file($file)) {
-        // The file this very code wrote (below): an array of whole numbers, nothing else.
+        // The file this very code wrote (below): an array of whole numbers and the first song's name, nothing else. One
+        // kept before the first song was in it is made again.
         $kept = @include $file;
-        if (is_array($kept) && isset($kept['kinds'], $kept['lines'], $kept['songs'], $kept['max'])) {
+        if (is_array($kept) && isset($kept['kinds'], $kept['lines'], $kept['songs'], $kept['max']) && array_key_exists('first', $kept)) {
             fclose($list);
             return $index = $kept;
         }
@@ -71,10 +73,15 @@ function odq_song_index(): array
     if ($list) {
         fclose($list);
     }
-    $index = ['kinds' => [], 'lines' => [], 'songs' => [], 'max' => 0];
+    $index = ['kinds' => [], 'lines' => [], 'songs' => [], 'max' => 0, 'first' => null];
     foreach ($songs as $song) {
         $id = (int)($song['song_id'] ?? 0);
         $index['max'] = max($index['max'], $id);
+        // The song a phone downloads first: the lowest id on offer, the earliest in the list of two with one id. Hidden
+        // songs are not offered, so not downloaded either.
+        if ($id > 0 && ($song['hidden_yn'] ?? 'N') !== 'Y' && ($index['first'] === null || $id < $index['first'][0])) {
+            $index['first'] = [$id, (string)($song['name'] ?? '')];
+        }
         foreach ($song['song_patterns'] ?? [] as $pattern) {
             $chart = (int)($pattern['pattern_id'] ?? 0);
             $line = (int)($pattern['line'] ?? 0);
@@ -130,20 +137,12 @@ function odq_catalog(): array
 
 /*
  * The song a phone downloads on its very first start, before the player picks any: the first song of the
- * list (the game's own first song, id 1, when the list has it). None on a server without songs.
+ * list (the game's own first song, id 1, when the list has it), as ['song_id', 'name']. None on a server without songs.
+ * From the song list's index (odq_song_index()): the batch after every sign-in asks, and decoding the list for it took a
+ * millisecond of that batch's four.
  */
 function odq_first_song(): ?array
 {
-    $first = null;
-    foreach (odq_songs() as $song) {
-        $id = (int)($song['song_id'] ?? 0);
-        // Hidden songs are not offered, so not downloaded either.
-        if ($id <= 0 || ($song['hidden_yn'] ?? 'N') === 'Y') {
-            continue;
-        }
-        if ($first === null || $id < (int)$first['song_id']) {
-            $first = $song;
-        }
-    }
-    return $first;
+    $first = odq_song_index()['first'];
+    return $first === null ? null : ['song_id' => $first[0], 'name' => $first[1]];
 }
