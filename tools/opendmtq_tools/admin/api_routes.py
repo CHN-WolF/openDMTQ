@@ -266,8 +266,9 @@ SHAPES = {
         Field("source", "string", "Where the builder took them from.", nullable=True,
               enum=["beside the code", "data/apk", "the release"]),
         Field("kept_at", "string", "When the builder put them there (YYYY-MM-DDTHH:MM:SS).", nullable=True),
-        Field("refused", "[string]", "A release's file the builder refused because it is not the one the OpenDMTQ "
-              "project signed (the installer, or these updates), each said in a sentence.")]),
+        Field("refused", "[string]", "What the builder refused of a release, the installer or these updates, each said "
+              "in a sentence: a file the OpenDMTQ project did not sign, or any other refusal with the builder's own words "
+              "after what it was of. A fetch that only failed is not among them: what was handed out stays.")]),
     "UpdateFile": Shape("One file of the PC client's updates.", [
         Field("file", "string", "Its name, as the release has it and /updates/ hands it out."),
         Field("size", "integer", "Its size (bytes)."),
@@ -878,7 +879,7 @@ ROUTES = [
                                                  "length.")]),
     # What the site hands the launchers that play here (client_updates.py, apps.pc_updates).
     Route("GET", "/app/windows/updates", "read", "app_windows_updates", "App", "The PC client's updates the site hands out "
-          "to the launchers that play on this server, and what the builder refused for its signature.",
+          "to the launchers that play on this server, and what the builder refused.",
           "Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks "
           "there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.", answer="PcClientUpdates"),
     Route("POST", "/app/play-here", "write", "app_play_here", "App", "Installs the PC client on the server PC and opens it, as the "

@@ -417,7 +417,7 @@ The App page: the app on offer, its builds, the way players get it.
 |:---|:---:|:---|
 | [`GET /app`](#get-app) | read | The app players get: its build, whether it is right for this server, a build running now. |
 | [`GET /app/windows`](#get-appwindows) | read | The installer for Windows as the site hands it to computers, set up for this server (its address on the installer's end). |
-| [`GET /app/windows/updates`](#get-appwindowsupdates) | read | The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. |
+| [`GET /app/windows/updates`](#get-appwindowsupdates) | read | The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused. |
 | [`POST /app/play-here`](#post-appplay-here) | write | Installs the PC client on the server PC and opens it, as the App page's Play on this PC does. |
 | [`GET /app/icon`](#get-appicon) | read | The launcher icon of the app on offer, as the builder kept it. |
 | [`GET /builds`](#get-builds) | read | Every build of the app, newest first. |
@@ -449,7 +449,7 @@ Refusals:
 
 #### `GET /app/windows/updates`
 
-The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused for its signature. Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.
+The PC client's updates the site hands out to the launchers that play on this server, and what the builder refused. Those of the installer's version, at `/updates/<file>` on the server's one port, with no sign-in: a launcher asks there before GitHub's releases and takes nothing the OpenDMTQ project did not sign.
 
 Answer: `200` with [PcClientUpdates](#pcclientupdates).
 
@@ -2475,7 +2475,7 @@ The PC client's updates the site hands to the launchers that play on this server
 - `signed_by` (string, or null): The public key (hex) whose signature the checksums carry.
 - `source` (string, or null): Where the builder took them from. One of `beside the code`, `data/apk`, `the release`.
 - `kept_at` (string, or null): When the builder put them there (YYYY-MM-DDTHH:MM:SS).
-- `refused` (list of string): A release's file the builder refused because it is not the one the OpenDMTQ project signed (the installer, or these updates), each said in a sentence.
+- `refused` (list of string): What the builder refused of a release, the installer or these updates, each said in a sentence: a file the OpenDMTQ project did not sign, or any other refusal with the builder's own words after what it was of. A fetch that only failed is not among them: what was handed out stays.
 
 #### UpdateFile
 
