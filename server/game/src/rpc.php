@@ -19,6 +19,7 @@ require_once __DIR__ . '/ranking.php';
 require_once __DIR__ . '/achievement.php';
 require_once __DIR__ . '/live.php';
 require_once __DIR__ . '/player.php';
+require_once __DIR__ . '/signin.php';
 
 /*
  * Every method this server answers, by its name in lower case (the game sends them in camel case; the name is
@@ -93,29 +94,17 @@ function odq_method_key($method): string
 const ODQ_MAX_CALLS = 64;
 
 /*
- * The game signs each request: an Fp header with md5(secret key + body), the key being the one the login reply
- * gave it. It is checked for what cannot be undone by a look at the rankings: saving a play and the shop. That
- * stops anything that merely posts to the address, not someone who has read the app and knows the key, and it
- * leaves health checks and other reads open. One such call makes the whole batch need the signature.
+ * The game signs each request: an Fp header with md5(secret key + body), the key being the one its login reply gave it,
+ * a key of that sign-in's own (signin.php). It is checked for what spends or earns a player's currency or cannot be undone
+ * by a look at the rankings: a chart's start, saving a play and the shop, each taken only signed with the key of a sign-in
+ * of the player it names. That stops anything that merely posts to the address and anyone without that player's sign-in,
+ * and it leaves health checks and other reads open. One such call makes the whole batch need the signature.
  */
 function odq_signature_ok(string $body, $calls): bool
 {
-    if (!is_array($calls)) {
-        return true;
-    }
-    $sensitive = false;
-    foreach ($calls as $call) {
-        $method = is_array($call) && isset($call['method']) ? odq_method_key($call['method']) : '';
-        if (strpos($method, 'game.saveplayresult') === 0 || strpos($method, 'shop.') === 0) {
-            $sensitive = true;
-        }
-    }
-    if (!$sensitive) {
-        return true;
-    }
     // Header names arrive in any case; PHP gives them as HTTP_FP.
     $given = isset($_SERVER['HTTP_FP']) ? strtolower((string)$_SERVER['HTTP_FP']) : '';
-    return hash_equals(md5(OPENDMTQ_SECRET_KEY . $body), $given);
+    return odq_signed_by_own_game($body, $calls, $given);
 }
 
 /* The reply for a method this server does not have; the message only shows in the phone's log, next to the code. */

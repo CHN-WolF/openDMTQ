@@ -58,11 +58,22 @@ def request(opener, url, data=None, headers=None, method=None):
 plain = urllib.request.build_opener(NoRedirect)
 
 
+# The key each player's game login gave, by player: the game signs every request after its login with it, and a save or a
+# shop call is taken only signed with the key of that player's own sign-in.
+KEYS = {}
+
+
+def key_of(params):
+    """The key the game of the player a call names (its first parameter) signs with: empty before a login, as the game's."""
+    first = params[0] if isinstance(params, list) and params else None
+    return KEYS.get(first, "") if isinstance(first, int) else ""
+
+
 def call(method, params):
     """One game RPC, as the game sends it."""
     body = json.dumps([{"id": 1, "method": method, "params": params}]).encode()
     # Signed as the game signs: the key is what its login reply gives it.
-    fp = hashlib.md5(b"DMQGLBlive1" + body).hexdigest()
+    fp = hashlib.md5(key_of(params).encode() + body).hexdigest()
     status, _, reply = request(plain, SITE + "/DMQ/rpc", body, {"Content-Type": "application/json", "Fp": fp})
     assert status == 200, f"{method}: HTTP {status}"
     return json.loads(reply)[0]["result"]
@@ -96,7 +107,10 @@ def new_player(udid):
     """A player, through the game's own requests: their guid."""
     login = urllib.parse.urlencode({"udid": udid}).encode()
     token_reply = json.loads(request(plain, SITE + "/api/accounts/v3/global/login_dmq", login)[2])
-    return int(call("user.loginV2", [token_reply["value"]["access_token"], " ", "", "1.3.5", "ANDROID", "KR"])["guid"])
+    reply = call("user.loginV2", [token_reply["value"]["access_token"], " ", "", "1.3.5", "ANDROID", "KR"])
+    # The key this sign-in signs with, from now on.
+    KEYS[int(reply["guid"])] = reply["SECRET_KEY"]
+    return int(reply["guid"])
 
 
 guid = new_player(UDID)
@@ -885,7 +899,7 @@ def rpc_reply(method, params, signed=True):
     body = json.dumps([{"id": 1, "method": method, "params": params}]).encode()
     headers = {"Content-Type": "application/json"}
     if signed:
-        headers["Fp"] = hashlib.md5(b"DMQGLBlive1" + body).hexdigest()
+        headers["Fp"] = hashlib.md5(key_of(params).encode() + body).hexdigest()
     status, _, reply = request(plain, SITE + "/DMQ/rpc", body, headers)
     replies = json.loads(reply) if status == 200 else []
     return status, replies[0] if replies else None
@@ -1095,7 +1109,8 @@ check("maintenance off again: told again", state().get("toast_kind") == "maint_o
 last_udid = f"live-smoke3-{random.randrange(10**9):09d}"
 last_guid = new_player(last_udid)
 switch("live-on", last_guid)
-print("HARNESS", last_udid, json.loads(request(plain, f"{SITE}/live/state?ids={last_udid}")[2])["token"], last_guid)
+# With the key that player's game signs with, for run.sh's saves.
+print("HARNESS", last_udid, json.loads(request(plain, f"{SITE}/live/state?ids={last_udid}")[2])["token"], last_guid, KEYS[last_guid])
 
 print(f"{failures} failure(s)")
 sys.exit(1 if failures else 0)

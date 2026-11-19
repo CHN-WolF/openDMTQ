@@ -3,7 +3,7 @@
  * A player's game state as the game server keeps it and tells the game (src/player.php): tests/game/protocol.sh runs this
  * inside the throwaway server, after the contract, with the stand-in catalog it wrote (custom/catalog.json). The admin pages
  * write the same tables (tools/opendmtq_tools/admin/game.py); here they are written as those pages write them, and what the
- * game is told is read through its own calls, signed as the game signs them:
+ * game is told is read through its own calls, each player signed in as the game signs in and signing as the game signs:
  *
  *   - a player the server has kept nothing of has what a new player starts with (999,999 of each, level 99);
  *   - a kept state is what getUserAsset tells (the level worked out of the experience, Q as text);
@@ -43,16 +43,26 @@ foreach ([9201 => 'Gina', 9202 => 'Hal', 9203 => 'Ike', 9204 => 'Jun'] as $id =>
     $db->exec("INSERT INTO Member (id, nickname, guid, puid, udid, code) VALUES ($id, '$name', '$id', '$id', 'protocol-state-$id', 'statecode$id')");
 }
 
-/* The calls of one request as the game sends them, signed: [HTTP status, the replies ({result, error, id}) in order]. */
+// The key each player's game login gave, by player: the game signs every request after its login with it.
+$KEYS = [];
+
+/*
+ * The calls of one request as the game sends them, signed with the key the game login gave the player the first call names
+ * (an empty one for a player not signed in, as the game signs before its login): [HTTP status, the replies ({result, error,
+ * id}) in order].
+ */
 function batch(string $base, array $calls): array
 {
+    global $KEYS;
     $list = [];
     foreach ($calls as $i => [$method, $params]) {
         $list[] = ['id' => $i, 'method' => $method, 'params' => $params];
     }
     $body = json_encode($list);
+    $first = $calls[0][1][0] ?? null;
+    $key = is_int($first) ? ($KEYS[$first] ?? '') : '';
     $context = stream_context_create(['http' => ['method' => 'POST', 'content' => $body, 'ignore_errors' => true, 'timeout' => 15,
-        'header' => "Content-Type: application/json\r\nFp: " . md5(OPENDMTQ_SECRET_KEY . $body) . "\r\n"]]);
+        'header' => "Content-Type: application/json\r\nFp: " . md5($key . $body) . "\r\n"]]);
     $raw = @file_get_contents("$base/DMQ/rpc", false, $context);
     $status = isset($http_response_header[0]) ? (int)(explode(' ', $http_response_header[0])[1] ?? 0) : 0;
     return [$status, json_decode((string)$raw, true) ?: []];
@@ -83,12 +93,32 @@ function items(string $base, int $guid): array
     return array_map(fn($i) => $i['item_id'], call($base, 'shop.getOwnItemList', [$guid])['result'] ?? []);
 }
 
-/* A play saved as the result screen sends it: 100 notes at 100 % on $chart. The save's result, or null. */
+/* The access token the platform's login hands a phone of device id $udid, as the game's SDK asks for it at each start. */
+function platform_token(string $base, string $udid): string
+{
+    $context = stream_context_create(['http' => ['method' => 'POST', 'content' => "app_id=576&udid=$udid&device_cd=ANDROID",
+        'ignore_errors' => true, 'timeout' => 15, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n"]]);
+    return (string)(json_decode((string)@file_get_contents("$base/api/accounts/v3/global/login_dmq", false, $context), true)['value']['access_token'] ?? '');
+}
+
+/* A phone's sign-in as the game makes it, the platform's login then the game's: the key it then signs with is kept. */
+function sign_in(string $base, string $udid): void
+{
+    global $KEYS;
+    $login = call($base, 'user.loginV2', [platform_token($base, $udid), ' ', '', '1.3.4', 'ANDROID', 'KR'])['result'] ?? [];
+    $KEYS[(int)($login['guid'] ?? 0)] = (string)($login['SECRET_KEY'] ?? '');
+}
+
+/*
+ * A play as the game makes one: START (getPreviewPlayInfo, which gives the play's token), then the save as the result screen
+ * sends it, with that token: 100 notes at 100 % on $chart. The save's result, or null.
+ */
 function save(string $base, int $guid, int $chart): ?array
 {
+    $token = call($base, 'game.getPreviewPlayInfo', [$guid, $chart])['result']['game_token'] ?? '';
     $stat = array_fill(0, 13, 0);
     $stat[12] = 100;
-    return call($base, 'game.savePlayResult', [$guid, $chart, $stat, 100, 0, [0, 0, 0], [0, 0, 0], 't'])['result'] ?? null;
+    return call($base, 'game.savePlayResult', [$guid, $chart, $stat, 100, 0, [0, 0, 0], [0, 0, 0], $token])['result'] ?? null;
 }
 
 /* A player's state as the admin pages keep it (game.py write_state): MAX, Q, experience, their own unlimited switch. */
@@ -124,6 +154,11 @@ function post(string $url, array $fields): array
     $raw = @file_get_contents($url, false, $context);
     $status = isset($http_response_header[0]) ? (int)(explode(' ', $http_response_header[0])[1] ?? 0) : 0;
     return [$status, (string)$raw, $http_response_header ?? []];
+}
+
+// Each player signs in as the game does, before any call of theirs.
+foreach ([9201, 9202, 9203, 9204] as $id) {
+    sign_in($base, "protocol-state-$id");
 }
 
 // ------------------------------------------------------------------ GAME-85: what a new player starts with
@@ -235,8 +270,8 @@ check('GAME-94 the level and MAX POINT achievements follow what the player has: 
 
 // ------------------------------------------------------------------ GAME-92: a ban, in the game
 
-// Hal's account by the platform's login, as the game signs in: a token naming his puid.
-$token = "9202|576|IPHONE|KR|" . str_repeat('a', 40) . '|' . time() . '000';
+// Hal's account by the platform's login, as the game signs in: the token it hands his phone, naming his puid.
+$token = platform_token($base, 'protocol-state-9202');
 $db->exec("INSERT INTO PlayerBan (guid, reason, since, until, by) VALUES (9202, 'Made-up scores', " . time() . ', ' . (time() + 86400) . ", 'admin')");
 $id_before = (int)$db->querySingle('SELECT COALESCE(MAX(toast_id), 0) FROM LiveSwitch WHERE guid = 9202');
 $login = call($base, 'user.loginV2', [$token, ' ', '', '1.3.4', 'ANDROID', 'KR']);

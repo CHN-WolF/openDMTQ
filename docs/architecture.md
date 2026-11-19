@@ -158,9 +158,16 @@ What the replies rely on, as the client behaves:
 - **Text.** Every reply is UTF-8. A player's name that is not (another program can have written one into an older
   server's database) goes out with U+FFFD in place of each bad byte rather than emptying the reply, and the next start
   stores it as UTF-8.
-- **The signature.** The game signs every request: an `Fp` header with MD5 of the key its login reply gave and the body.
-  A batch with a save or a shop call needs it (`403` otherwise). That stops anything that merely posts to the address.
-  Someone who has read the app can still sign requests.
+- **The signature and the sign-in** (`src/signin.php`). The game signs every request: an `Fp` header with MD5 of the key
+  its login reply gave and the body (before its login, of the body alone). Each sign-in has a key of its own: the platform
+  login notes the access token it hands out (`SignIn`, its SHA-256), the game's login (`user.loginV2`) takes only such a
+  token, for the account it names, and gives a random key, the same at a second login with that token (the game logs in
+  twice at its start); another token is refused with `SVC.05401`, a code the client does not know (its own popup, whose
+  CLOSE ends the game; the next start signs in anew). A batch with a chart's start (`game.getPreviewPlayInfo`, which
+  takes the chart's price), a save or a shop call that names a player is taken only signed with the key of a sign-in of
+  that player (`403` otherwise); such a call that names nobody runs as any call. The game also sends the key and an API
+  token in headers named with an underscore (`SECRET_KEY`, `API_TOKEN`), which nothing reads: a proxy drops such headers.
+  An account keeps its newest eight sign-ins (a phone signs in at every start).
 - **Size.** A request holds at most 64 calls (the game's largest batch, right after its login, has 14) and a body of at
   most 2 MB, as the Helm chart's router lets through: a larger one is refused whole (`413`) before any call runs.
 - **Saving a play.** The score, the accuracy and the grade are worked out from the counts of each judgement, as the
@@ -168,7 +175,9 @@ What the replies rely on, as the client behaves:
   not take answers `SVC.05099`. Scores are kept within what the client reads (32-bit) and accuracies within 100 %. A
   result no play gives (a count of notes below 0, above 10,000 or not a whole number, no notes at all, a player id
   without an account, a chart no song of the server has) answers `SVC.05008` and is not stored. A hidden song's charts
-  are the server's: a play finished while the owner hid its song is kept.
+  are the server's: a play finished while the owner hid its song is kept. A save earns once, for the play its sign-in
+  started last: `getPreviewPlayInfo` gives each play a random `game_token`, which the save sends back as its last
+  parameter; a save of no play started, or of one paid for already (the same save again), is kept and earns nothing.
 - **The keyboard's mark.** The PC client's player adds the header `X-OpenDMTQ-Keys: 1` to a save when a lane key was
   pressed during that song, and nothing otherwise; a phone never sends it. Such a play is marked: `keys` is 1 on its
   `PlayLog` row, and on the player's `Play` row when the play sets the best score there. A new best by touch sets it back
@@ -182,8 +191,8 @@ What the replies rely on, as the client behaves:
   the items a player has beyond or short of what everyone has, in `PlayerItem` (the ones equipped stay in `Member`'s
   slots). The level is worked out of the experience with the client's own table, so that the top bar's gauge (the
   share of the way from the level's start to the next one's) is always right. A player the server has kept nothing of
-  has what a new player starts with (`GameSetting`: 999,999 of each and level 99 until the owner sets others). A saved
-  play adds 150 MAX POINT and 10 experience; `getPreviewPlayInfo` takes a chart's price as its play starts (MAX POINT,
+  has what a new player starts with (`GameSetting`: 999,999 of each and level 99 until the owner sets others). A play
+  started and saved adds 150 MAX POINT and 10 experience, once; `getPreviewPlayInfo` takes a chart's price as its play starts (MAX POINT,
   or Q for a chart priced in it); the shop takes a product's price from the client's own tables (`catalog.json`'s
   `products`), keeps the item and notes the purchase in `PlayerPurchase`: a MAX POINT price through
   `shop.buyFreeProduct` (the client's call for its free currency), a Q price through `shop.buyProductByQPoint`, the
@@ -457,6 +466,7 @@ erDiagram
   Member ||--o{ PlayerUnlock : "products a level unlock opened"
   Member ||--o{ PlayerPurchase : "purchases"
   Member ||--o| PlayerBan : "a ban"
+  Member ||--o{ SignIn : "the game's sign-ins, by puid"
   Webhook ||--o{ WebhookMessage : "its queued messages"
   Member {
     INTEGER id "no key: the game's own table"
@@ -571,6 +581,16 @@ erDiagram
     TEXT name PK "unlimited, start_mpoint, start_qpoint, start_level"
     TEXT value
   }
+  SignIn {
+    TEXT access PK "SHA-256 of the access token the platform login handed out"
+    TEXT puid "the account"
+    INTEGER at "when the platform login made it"
+    TEXT key "the key the game's login gave, which its game signs with"
+    INTEGER guid "the player"
+    TEXT play_token "the play its game started last, until a save pays for it"
+    INTEGER play_pattern
+    INTEGER play_at
+  }
   Webhook {
     INTEGER id PK
     TEXT url "the chat's address, a secret"
@@ -615,6 +635,7 @@ erDiagram
 | `ApiToken` | The API's tokens, made on the admin pages: a hash of each, and the admin it belongs to |
 | `PlayerState`, `PlayerItem`, `PlayerUnlock`, `PlayerPurchase`, `PlayerBan` | Each player's game state beyond their scores: the currencies, the experience, their own unlimited switch, the items given, taken and bought, what a level unlock opened, a year of purchases, a ban |
 | `GameSetting` | The server's game settings: unlimited currency for everyone, and what a new player starts with |
+| `SignIn` | The game's sign-ins, each account's newest eight: the SHA-256 of the access token the platform login handed out, the key the game's login gave for it, the player, and the play that game started last |
 | `Webhook`, `WebhookMessage`, `WebhookState`, `WebhookTop` | The Notices page's Discord and Slack webhooks, the queue of their messages, and what the sending loop knew at its last look (each chart's #1 among it) |
 
 `Member` and `Play` keep the names and types of the tables earlier DMTQ servers used, so their databases open
@@ -681,9 +702,15 @@ hand.
   updates on the server before it uses or hands out any, and each update in the PC client before anything goes into the
   program's folder. A file that does not check out is refused, in words on the admin pages or the launcher, and what was
   there stays.
-- The game's own protocol has no real authentication: the platform login trusts the phone's device id, and the game
-  login the player id in its token. Anyone who reaches the port can make accounts and act as any player. `./opendmtq
-  expose` puts the server on the internet ([internet.md](internet.md)).
+- The game's own protocol carries one thing per device, its device id, which the platform login trusts: whoever has a
+  phone's device id signs in as its player, and anyone who reaches the port can make accounts. What follows a sign-in is
+  that game's own ([the signature and the sign-in](#the-game-server)): the game's login takes only an access token the
+  platform login handed out, its key is the sign-in's own, a chart's start, a save or a purchase is taken only signed with
+  the key of a sign-in of the player it names, and a save earns once for the play its sign-in started. What the server
+  cannot tell apart: a player's own game from a program that has their device id or reads their game's requests (the game
+  speaks plain HTTP, and the login's reply carries the key), and a play their game made from a result made up and sent
+  with their key; what anyone may read (rankings, a player's assets, a song list) stays open. `./opendmtq expose` puts the
+  server on the internet ([internet.md](internet.md)).
 - The signing key's password is random per install and kept next to the key in `data/` (never tracked). keytool reads
   it from its environment, and the signer from a Java argument file only the server's user can read: neither has it on
   its command line, which every user of the machine can see.

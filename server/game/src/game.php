@@ -14,6 +14,7 @@ require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/util.php';
 require_once __DIR__ . '/achievement.php';
 require_once __DIR__ . '/player.php';
+require_once __DIR__ . '/signin.php';
 
 /*
  * A call's result and error, for the replies that are not a plain result: an error (result null, error with its
@@ -233,14 +234,16 @@ function odq_game_pattern_url(array $p)
 /*
  * game.getPreviewPlayInfo [guid, patternId]: what a play starts with, asked when the player presses START: the
  * equipped items' effects (fever plus, gauge refill and anti break at their highest level for everyone) and a
- * token for the play, which the result sends back and nothing checks.
+ * token for the play, which the play's save sends back: the save earns for the play its sign-in started last, once
+ * (signin.php). Taken only from the player's own game, signed with their sign-in's key (rpc.php).
  */
 function odq_game_preview_play(array $p)
 {
+    $guid = odq_intval($p[0] ?? null);
+    $pattern = odq_intval($p[1] ?? null);
     // A chart that costs MAX POINT (game.getPatternUsePointData, which the song's page shows by its button) is paid for as
     // its play starts, as the game asks for the player's balance right after this to show it.
-    odq_pay_for_chart(odq_intval($p[0] ?? null), odq_intval($p[1] ?? null));
-    $now = time();
+    odq_pay_for_chart($guid, $pattern);
     return [
         'note_count' => 3,
         'slot_item_effect' => [
@@ -257,8 +260,8 @@ function odq_game_preview_play(array $p)
             'in_game_item3' => ['item_type' => 'AB', 'item_level' => 10, 'product_id' => 70010,
                                 'item_effects' => [['item_id' => 70010, 'effect_type' => 'A', 'effect_point' => 12, 'effect_count' => 10, 'effect_special' => 'JUDGEMENT_MAX100']]],
         ],
-        // 36 hex characters, like the official server's tokens: one per second is enough for a token nobody checks.
-        'game_token' => md5((string)$now) . substr(md5((string)($now + 1)), -4),
+        // 36 hex characters, like the official server's tokens: the play's own, kept with its sign-in until its save.
+        'game_token' => odq_play_start($guid, $pattern),
         'freepass' => false,
     ];
 }
@@ -414,7 +417,8 @@ function odq_save_failed(): OdqReply
  * server did; the best of each per chart is kept (Play), every play is logged (PlayLog), and the reply names the
  * achievements the play earned. A play the request marks as made with the keyboard (odq_save_by_keys()) is marked on
  * its log row, and on the best row when it sets the best score; a new best by touch clears the mark again. The reply
- * is the same either way.
+ * is the same either way. MAX POINT and experience are earned once for the play the save's sign-in started (its
+ * gameToken, signin.php): a save of no play started, or of one paid for already, is kept and earns nothing.
  */
 function odq_game_save_play(array $p)
 {
@@ -530,7 +534,10 @@ function odq_game_save_play(array $p)
     if ($stored) {
         try {
             $before = odq_player_state($guid, $db);
-            $after = odq_state_add($db, $guid, OPENDMTQ_PLAY_MPOINT, 0, OPENDMTQ_PLAY_EXP);
+            // Earned once for the play this sign-in started (its token, the save's last parameter: signin.php); a save of
+            // no play started, or of one paid for already, is kept as a play and earns nothing.
+            $after = odq_play_take($db, $guid, $pattern, $p[7] ?? null)
+                ? odq_state_add($db, $guid, OPENDMTQ_PLAY_MPOINT, 0, OPENDMTQ_PLAY_EXP) : $before;
             $earned = [$before, $after];
         } catch (Throwable $e) {
             // The play is not kept without what it earned: the client offers to retry, which sends the same result again.

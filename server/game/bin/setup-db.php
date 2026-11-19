@@ -259,6 +259,15 @@ foreach (['CREATE TABLE IF NOT EXISTS PlayerState (guid INTEGER PRIMARY KEY, mpo
 }
 // A year of purchases is kept, as of plays.
 $db->exec('DELETE FROM PlayerPurchase WHERE at < ' . (time() - 365 * 86400));
+// The game's sign-ins (src/signin.php): the access token each platform login handed out, as its SHA-256, and the key the
+// game's login gave for it, which then tells a player's own game by its signature. The platform login makes the table too,
+// where a database restored from before it lacks it.
+require_once __DIR__ . '/../src/signin.php';
+if (!odq_sign_in_table($db)) {
+    // Without it no game signs in: the server does not start, and says why.
+    fwrite(STDERR, "opendmtq: cannot add the game's sign-ins to the database: " . $db->lastErrorMsg() . "\n");
+    exit(1);
+}
 // The accounts of the site, made on the Accounts page of the admin pages and checked by the site's sign-in:
 // every page of it is behind that. The same statement as ACCOUNT_TABLE there (which also adds guid).
 $db->exec("CREATE TABLE IF NOT EXISTS SiteUser (name TEXT PRIMARY KEY COLLATE NOCASE, pass TEXT NOT NULL,

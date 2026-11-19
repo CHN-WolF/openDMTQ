@@ -119,7 +119,7 @@ echo "PASS a 300000-line recording closes and the cleanup goes on"
 
 # The cap on one recording's length, an hour (1800 segments of two seconds), with the stream's own count moved to it:
 # the next video starts a new recording. (With the cap a day long, as before, it would not.)
-read -r _ IDS TOKEN GUID < <(grep '^HARNESS ' "$OUT")
+read -r _ IDS TOKEN GUID KEY < <(grep '^HARNESS ' "$OUT")
 UPLOAD="http://127.0.0.1:$SITE_PORT/live/upload?ids=$IDS&dur=2000"
 BODY=$DATA/seg.ts
 head -c 3760 /dev/zero | tr '\0' G > "$BODY"
@@ -139,10 +139,21 @@ if [ "$(docker exec "$SITE" php -r '$d = new SQLite3("/data/dmtq.db3"); echo $d-
 fi
 echo "PASS the database runs in write-ahead mode"
 
-# One game RPC, signed as the game signs it: its reply.
+# One game RPC, signed as the game signs it, with the key the game login gave its player (the harness's player, or the key
+# given third): its reply.
 rpc() {
   local body="[{\"id\":1,\"method\":\"$1\",\"params\":$2}]"
-  curl -s -H "Content-Type: application/json" -H "Fp: $(printf 'DMQGLBlive1%s' "$body" | md5sum | cut -d' ' -f1)" --data "$body" "http://127.0.0.1:$SITE_PORT/DMQ/rpc"
+  curl -s -H "Content-Type: application/json" -H "Fp: $(printf '%s%s' "${3:-$KEY}" "$body" | md5sum | cut -d' ' -f1)" --data "$body" "http://127.0.0.1:$SITE_PORT/DMQ/rpc"
+}
+# A phone's sign-in as the game makes it: the platform's login with its device id, then the game's own login, signed with
+# the empty key the game has before it: the key the game signs with from then on.
+sign_in() {
+  local token body
+  token=$(curl -s --data "app_id=576&udid=$1&device_cd=ANDROID" "http://127.0.0.1:$SITE_PORT/api/accounts/v3/global/login_dmq" \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"]["access_token"])')
+  body="[{\"id\":1,\"method\":\"user.loginV2\",\"params\":[\"$token\",\" \",\"\",\"1.3.4\",\"ANDROID\",\"KR\"]}]"
+  curl -s -H "Content-Type: application/json" -H "Fp: $(printf '%s' "$body" | md5sum | cut -d' ' -f1)" --data "$body" \
+    "http://127.0.0.1:$SITE_PORT/DMQ/rpc" | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["result"]["SECRET_KEY"])'
 }
 # A save of a play of 500 notes, all at 100 %, by player $1 on chart $2, as the result screen sends it.
 save_of() {
@@ -172,7 +183,7 @@ fi
 # A save while something holds the database longer than a save waits: the phone must hear it failed,
 # where it used to be told it was saved with nothing stored. Then the retry goes through.
 save_body=$(save_of "$GUID" "$HELD")
-save_fp=$(printf 'DMQGLBlive1%s' "$save_body" | md5sum | cut -d' ' -f1)
+save_fp=$(printf '%s%s' "$KEY" "$save_body" | md5sum | cut -d' ' -f1)
 docker exec "$SITE" php -r '$d = new SQLite3("/data/dmtq.db3"); $d->exec("BEGIN IMMEDIATE"); touch("/tmp/held"); sleep(9); $d->exec("ROLLBACK");' &
 holder=$!
 for _ in $(seq 1 50); do docker exec "$SITE" test -e /tmp/held && break; sleep 0.1; done
@@ -195,7 +206,7 @@ echo "PASS a save the database cannot take says so, stores nothing, and its retr
 # takes no bound value: the chart goes in as a number.)
 docker exec "$SITE" php -r '$d = new SQLite3("/data/dmtq.db3"); $d->exec("CREATE TRIGGER smoke_refuse BEFORE INSERT ON Play WHEN NEW.pattern_id = " . (int)$argv[1] . " BEGIN SELECT RAISE(ABORT, \"refused\"); END");' "$REFUSED"
 save_body2=$(save_of "$GUID" "$REFUSED")
-save_fp2=$(printf 'DMQGLBlive1%s' "$save_body2" | md5sum | cut -d' ' -f1)
+save_fp2=$(printf '%s%s' "$KEY" "$save_body2" | md5sum | cut -d' ' -f1)
 reply=$(curl -s -H "Fp: $save_fp2" --data-binary "$save_body2" "http://127.0.0.1:$SITE_PORT/DMQ/rpc")
 docker exec "$SITE" php -r '$d = new SQLite3("/data/dmtq.db3"); $d->exec("DROP TRIGGER smoke_refuse");'
 logged=$(db_value "SELECT COUNT(*) FROM PlayLog WHERE pattern_id = ? AND user_id = ?" "$REFUSED" "$GUID")
@@ -231,7 +242,7 @@ echo "PASS a player's two rows on one chart are merged at start, the best of eac
 docker exec "$SITE" php -r '
   $d = new SQLite3("/data/dmtq.db3");
   $start = gmmktime(0, 0, 0, (int)gmdate("n"), 1, (int)gmdate("Y"));
-  $d->exec("INSERT INTO Member (id, nickname, guid, udid) VALUES (4242, \"LastMonth\", \"4242\", \"live-smoke-last-month\")");
+  $d->exec("INSERT INTO Member (id, nickname, guid, puid, udid) VALUES (4242, \"LastMonth\", \"4242\", \"4242\", \"live-smoke-last-month\")");
   $q = $d->prepare("INSERT INTO Play (pattern_id, user_id, score, grade, isAllCombo, isPerfectPlay, judgement)
     VALUES (:last, 4242, 999999, \"S\", \"N\", \"N\", 1000), (:this, 4242, 5, \"F\", \"N\", \"N\", 100)");
   $q->bindValue(":last", (int)$argv[1], SQLITE3_INTEGER); $q->bindValue(":this", (int)$argv[2], SQLITE3_INTEGER); $q->execute();
@@ -251,7 +262,8 @@ echo "PASS the in-game ranking counts this month's plays only; the player's own 
 # with the stored date, and a save of theirs does not name it as new.
 docker exec "$SITE" php -r '$d = new SQLite3("/data/dmtq.db3"); $d->exec("INSERT INTO AchievementDate (user_id, achievement_id, earned_at) VALUES (4242, 23, 1700000000)");'
 kept=$(rpc game.getOwnAchievementList '[4242]' | python3 -c 'import json, sys; print([a["reg_date"] for a in json.load(sys.stdin)[0]["result"]["own_achievements"] if a["achievement_id"] == 23])')
-again=$(rpc game.savePlayResult "[4242, $FOUR_LINE, [0,0,0,0,0,0,0,0,0,0,0,0,500], 500, 0, [0,0,0], [0,0,0], \"smoke\"]" | python3 -c 'import json, sys; print(sorted(a["achievement_id"] for a in json.load(sys.stdin)[0]["result"]["new_achievements"]))')
+# The player's save, from their own game: signed in as the game signs in, with the key that gives.
+again=$(rpc game.savePlayResult "[4242, $FOUR_LINE, [0,0,0,0,0,0,0,0,0,0,0,0,500], 500, 0, [0,0,0], [0,0,0], \"smoke\"]" "$(sign_in live-smoke-last-month)" | python3 -c 'import json, sys; print(sorted(a["achievement_id"] for a in json.load(sys.stdin)[0]["result"]["new_achievements"]))')
 # 1700000000 in the test server's zone (TZ=Asia/Seoul, above): 2023-11-15 07:13:20. The save earns ALL COMBO and
 # PERFECT PLAY, the first for this player, and only those (its chart's line, 4LINE, has no clear of its own).
 if [ "$kept" != "['20231115071320']" ] || [ "$again" != "[13, 14]" ]; then

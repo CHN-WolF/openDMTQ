@@ -9,8 +9,7 @@
  * Usage: php tests/game/names.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
 
-// The server's own code: the image's, or a host install's (OPENDMTQ_APP names its server/ folder). Its start step, and the
-// key the game signs its requests with.
+// The server's own code: the image's, or a host install's (OPENDMTQ_APP names its server/ folder), and its start step.
 $app = getenv('OPENDMTQ_APP') ?: '/opt/opendmtq';
 $setup = "$app/game/bin/setup-db.php";
 require_once "$app/game/src/config.php";
@@ -56,11 +55,31 @@ foreach ($names as $id => $name) {
 $db->close();
 
 /*
+ * A phone's sign-in as the game makes it at its start, the platform's login with its device id then the game's own login:
+ * the key the game signs its requests with from then on.
+ */
+function sign_in(string $base, string $udid): string
+{
+    $form = stream_context_create(['http' => ['method' => 'POST', 'content' => "app_id=576&udid=$udid&device_cd=ANDROID",
+        'ignore_errors' => true, 'timeout' => 15, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n"]]);
+    $token = json_decode((string)@file_get_contents("$base/api/accounts/v3/global/login_dmq", false, $form), true)['value']['access_token'] ?? '';
+    // The game's login, signed with the empty key the game has before it.
+    $body = json_encode([['id' => 1, 'method' => 'user.loginV2', 'params' => [$token, ' ', '', '1.3.4', 'ANDROID', 'KR']]]);
+    $login = stream_context_create(['http' => ['method' => 'POST', 'content' => $body, 'ignore_errors' => true, 'timeout' => 15,
+        'header' => "Content-Type: application/json\r\nFp: " . md5($body) . "\r\n"]]);
+    return (string)(json_decode((string)@file_get_contents("$base/DMQ/rpc", false, $login), true)[0]['result']['SECRET_KEY'] ?? '');
+}
+
+// The broken name's phone signs in, as the game does before its start batch.
+$key = sign_in($base, 'protocol-name-' . BROKEN);
+
+/*
  * The start batch of the player with the broken name, as a phone sends it after its login, signed as the game signs it
- * (its shop calls need that): [HTTP status, the body, the body as JSON or null].
+ * with the key its login gave (its shop calls need that): [HTTP status, the body, the body as JSON or null].
  */
 function start_batch(string $base): array
 {
+    global $key;
     $g = BROKEN;
     $calls = [['game.getLineTopRankWithLevel', [0, 1, 20, [$g]]], ['game.getAchievementCount', []], ['board.getNoticeList', ['US', 0, 4]],
         ['user.getConnectUuid', [$g, 'ANDROID']], ['memo.getMemoList', [$g, 0, 50]], ['game.getUserAsset', [$g]], ['game.getOwnSongList', [$g]],
@@ -73,7 +92,7 @@ function start_batch(string $base): array
     $body = json_encode($list);
     // The answer whatever its status (ignore_errors), and its status line.
     $context = stream_context_create(['http' => ['method' => 'POST', 'content' => $body, 'ignore_errors' => true, 'timeout' => 15,
-        'header' => "Content-Type: application/json\r\nFp: " . md5(OPENDMTQ_SECRET_KEY . $body) . "\r\n"]]);
+        'header' => "Content-Type: application/json\r\nFp: " . md5($key . $body) . "\r\n"]]);
     $answer = (string)@file_get_contents("$base/DMQ/rpc", false, $context);
     // PHP puts the answer's header lines here, its status line first.
     $status = preg_match('#^HTTP/\S+ (\d+)#', $http_response_header[0] ?? '', $m) ? (int)$m[1] : 0;

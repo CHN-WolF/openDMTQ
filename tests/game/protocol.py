@@ -17,8 +17,12 @@ import urllib.parse
 import urllib.request
 
 BASE = sys.argv[1].rstrip("/")
-# The key the login reply gives the client, which then signs every request with it.
-KEY = "DMQGLBlive1"
+# The key the official server's login gave every player, which the game signed with before each sign-in had its own: no
+# request signed with it is taken.
+OLD_KEY = "DMQGLBlive1"
+# The key each player's game login gave, by player: the game signs every request after its login with it (before it, with
+# an empty key), and a request with a save or a shop call is taken only signed with the key of that player's own sign-in.
+KEYS = {}
 # The device id of the server's own check account (./opendmtq check logs in with it): never a player in a ranking.
 CHECK_UDID = "opendmtq-check"
 failures = 0
@@ -74,19 +78,30 @@ def post(path, body, headers=None):
     return status, got, data
 
 
-def rpc(calls, signed=True):
-    """A batch of calls as the game sends it: a JSON list, signed with the key. Returns (status, decoded reply)."""
+def player_of(calls):
+    """The signed-in player the calls are made for: the first call that names one (its first parameter, as the game's
+    calls do), or None. The game signs a whole request with its one key, whatever its first call is."""
+    for _, params in calls:
+        first = params[0] if isinstance(params, list) and params else None
+        if isinstance(first, int) and not isinstance(first, bool) and first in KEYS:
+            return first
+    return None
+
+
+def rpc(calls, signed=True, key=None):
+    """A batch of calls as the game sends it: a JSON list, signed with the key the game login gave the player the first call
+    names (an empty one for a player not signed in, as the game signs before its login). Returns (status, decoded reply)."""
     body = json.dumps([{"id": i, "method": m, "params": p} for i, (m, p) in enumerate(calls)]).encode()
     headers = {"Content-Type": "application/json"}
     if signed:
-        headers["Fp"] = hashlib.md5(KEY.encode() + body).hexdigest()
+        headers["Fp"] = hashlib.md5((KEYS.get(player_of(calls), "") if key is None else key).encode() + body).hexdigest()
     status, _, data = post("/DMQ/rpc", body, headers)
     return status, json.loads(data) if data else None
 
 
-def one(method, params, signed=True):
+def one(method, params, signed=True, key=None):
     """One call's result and error."""
-    status, reply = rpc([(method, params)], signed)
+    status, reply = rpc([(method, params)], signed, key)
     return reply[0]["result"], reply[0]["error"]
 
 
@@ -98,6 +113,8 @@ def phone(udid, name):
     token = json.loads(body)["value"]["access_token"]
     result, _ = one("user.loginV2", [token, " ", "", "1.3.4", "ANDROID", "KR"])
     guid = int(result["guid"])
+    # The key this sign-in signs with, from now on.
+    KEYS[guid] = result["SECRET_KEY"]
     one("user.setNickname", [guid, name])
     return guid
 
@@ -143,8 +160,14 @@ check("another phone gets another account", other["value"]["access_token"].split
 
 result, error = one("user.loginV2", [token, " ", "", "1.3.4", "ANDROID", "KR"], signed=False)
 guid = result["guid"]
-check("user.loginV2 gives the client its player id as text and the signing key",
-      error is None and isinstance(guid, str) and guid == puid and result["SECRET_KEY"] == KEY, json.dumps(result)[:160])
+check("user.loginV2 gives the client its player id as text and a signing key of this sign-in's own",
+      error is None and isinstance(guid, str) and guid == puid and len(result["SECRET_KEY"]) == 32
+      and result["SECRET_KEY"] != OLD_KEY, json.dumps(result)[:160])
+KEYS[int(guid)] = result["SECRET_KEY"]
+# The game logs in twice at its start with the same token, the second time signed with the key the first gave.
+again, _ = one("user.loginV2", [token, " ", "", "1.3.4", "ANDROID", "KR"])
+check("a second login with the same token gives the same key", again["SECRET_KEY"] == KEYS[int(guid)] and again["guid"] == guid,
+      json.dumps(again)[:160])
 
 # The batch a phone sends right after its login: every list present, and the ones the client turns into arrays of
 # entries never empty.
@@ -273,8 +296,8 @@ check("the check account is not in TOTAL, not even as the row it asks for", boar
 
 # Signed as the game signs them, but no play gives them: a count below 0 (negative breaks made an S at 100 %), a count
 # of 1e308 (a score of 0 with PERFECT PLAY), more notes of one judgement than a save may count, a count that is no whole
-# number, a player the server has no account for, a chart no song of this server has (it counted in the month's TOTAL).
-# Each is answered as handled, and nothing of it is kept.
+# number, a chart no song of this server has (it counted in the month's TOTAL). Each is answered as handled, and nothing
+# of it is kept. A player the server has no account for has no sign-in either: nobody's game signs their save.
 before = one("game.getOwnPatternScore", [int(guid)])[0]
 total = rows(one("game.getLineTopRankWithLevel", [0, 1, 20, []])[0]["ranks"])
 # A player id no account has: the accounts of this run are numbered from 1.
@@ -284,13 +307,15 @@ odd_saves = {
     "a count of 1e308": (int(guid), 2, notes(at100=1e308)),
     "a count of 10,001": (int(guid), 2, notes(at100=10001)),
     "a count that is no whole number": (int(guid), 2, notes(at100=50.5)),
-    "a player the server has no account for": (nobody, 2, notes(at100=100)),
     "a chart no song of this server has": (int(guid), max(listed) + 1, notes(at100=100)),
 }
 for what, (who, chart, stat) in odd_saves.items():
     result, error = save(who, chart, stat)
     check(f"a result with {what} is handled without a popup (SVC.05008)", result is None and (error or {}).get("code") == "SVC.05008",
           json.dumps([result, error])[:200])
+status, reply = rpc([("game.savePlayResult", [nobody, 2, notes(at100=100), 100, 0, [0, 0, 0], [0, 0, 0], "t"])])
+check("a result for a player the server has no account for is refused whole: no sign-in of theirs signed it",
+      status == 403 and reply == [], json.dumps([status, reply])[:200])
 check("none of them is kept: the player's best scores are as they were, and the id without an account has none",
       one("game.getOwnPatternScore", [int(guid)])[0] == before and one("game.getOwnPatternScore", [nobody])[0] == [])
 after = rows(one("game.getLineTopRankWithLevel", [0, 1, 20, []])[0]["ranks"])

@@ -80,8 +80,9 @@ FULL_SITE = os.environ.get("FULL_SITE", "").rstrip("/")
 FULL_FILL_CMD = os.environ.get("FULL_FILL_CMD", "")
 FULL_FREE_CMD = os.environ.get("FULL_FREE_CMD", "")
 FULL_CHECK_CMD = os.environ.get("FULL_CHECK_CMD", "")
-# The game's signing key: the same in every copy of the game, so any client can sign (docs/architecture.md).
-KEY = b"DMQGLBlive1"
+# The key each player's game login gave, by player: the game signs every request after its login with it (an empty one
+# before), and a save is taken only signed with the key of its player's own sign-in (docs/architecture.md).
+KEYS = {}
 
 
 class Conn:
@@ -126,8 +127,10 @@ def rpc(conn, method, params):
     """(HTTP status, the call's reply or None, seconds taken) of one signed game call over `conn`."""
     # One call in a batch, as the game sends its calls.
     body = json.dumps([{"id": 1, "method": method, "params": params}]).encode()
-    # Signed as the game signs every request.
-    headers = {"Content-Type": "application/json", "Fp": hashlib.md5(KEY + body).hexdigest()}
+    # Signed as the game signs every request: with the key of the player the call names first.
+    first = params[0] if isinstance(params, list) and params else None
+    key = KEYS.get(first, b"") if isinstance(first, int) else b""
+    headers = {"Content-Type": "application/json", "Fp": hashlib.md5(key + body).hexdigest()}
     # Timed from sending to the whole reply read.
     t0 = time.perf_counter()
     status, raw = conn.post("/DMQ/rpc", body, headers)
@@ -144,8 +147,9 @@ def new_player(udid, base=None):
     _, raw = conn.post("/api/accounts/v3/global/login_dmq", urllib.parse.urlencode({"udid": udid}).encode(),
                        {"Content-Type": "application/x-www-form-urlencoded"})
     token = json.loads(raw)["value"]["access_token"]
-    # The game login, which gives the player's guid.
+    # The game login, which gives the player's guid and the key their game signs with from then on.
     _, reply, _ = rpc(conn, "user.loginV2", [token, " ", "", "1.3.5", "ANDROID", "KR"])
+    KEYS[int(reply["result"]["guid"])] = reply["result"]["SECRET_KEY"].encode()
     return int(reply["result"]["guid"])
 
 

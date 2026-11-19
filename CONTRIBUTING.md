@@ -128,8 +128,9 @@ A request from the game reaches `game/index.php`, which hands the batch to `src/
    `docs/test-cases.md` (the CLI tests fail until the row is there).
 
 A method the server does not know gets the error SVC.05008, which the client handles without a popup. A batch with a
-`shop.` method or `game.saveplayresult` must carry the game's signature (the `Fp` header), or the whole batch is
-refused with 403: `protocol.py` signs its requests the way the client does.
+`shop.` method, `game.getpreviewplayinfo` or `game.saveplayresult` for a player must carry that player's game's signature
+(the `Fp` header, made with the key the player's own sign-in got), or the whole batch is refused with 403: `protocol.py`
+signs in and signs its requests the way the client does.
 
 ## Changing the pages
 

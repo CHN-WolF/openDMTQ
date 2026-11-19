@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/signin.php';
 
 /* The SDK's plain success. */
 const OPENDMTQ_API_OK = ['value' => true, 'result_code' => '000', 'result_msg' => 'API_OK'];
@@ -40,7 +41,8 @@ function odq_raw_form(string $body): array
  * POST /api/accounts/v3/global/login_dmq (the Android SDK) and /accounts/v3/global/login_dmq (the old iOS SDK and
  * ./opendmtq check): the platform login. The phone's device id (udid) is its account: a new one gets a new
  * account, in one transaction so that two phones starting together never share one. The reply's access token
- * carries the account's puid, which the game's own login (user.loginV2) then reads.
+ * carries the account's puid, which the game's own login (user.loginV2) then reads; it is noted with the account in the
+ * same transaction (signin.php), and the game's login takes no token the platform login did not hand out.
  *
  * $old: the /accounts path, whose transfer codes and reply text differ slightly, as they always have.
  */
@@ -49,6 +51,13 @@ function odq_platform_login(string $body, bool $old): void
     $udid = odq_text(odq_raw_form($body)['udid'] ?? '');
     $db = odq_db();
     $puid = null;
+    // The token's random part and the time, in milliseconds as the SDK reads them: made first, so that the token is noted
+    // with the account in one transaction (signin.php), which the game's login then takes.
+    $random = '';
+    for ($i = 0; $i < 40; $i++) {
+        $random .= '0123456789abcdef'[random_int(0, 15)];
+    }
+    $t = time() . '000';
     try {
         if (!@$db->exec('BEGIN IMMEDIATE')) {
             throw new RuntimeException($db->lastErrorMsg());
@@ -72,23 +81,19 @@ function odq_platform_login(string $body, bool $old): void
             }
             $puid = (string)$id;
         }
+        // The token this login hands out, noted with the account: the game's login takes no other (signin.php).
+        $token = "$puid|576|IPHONE|KR|$random|$t";
+        odq_sign_in_note($db, $puid, $token);
         if (!@$db->exec('COMMIT')) {
             throw new RuntimeException($db->lastErrorMsg());
         }
     } catch (Throwable $e) {
-        // Never a token for an account that was not saved: the SDK tries again a moment later.
+        // Never a token for an account that was not saved, nor one that was not noted: the SDK tries again a moment later.
         @$db->exec('ROLLBACK');
         error_log('opendmtq: platform login: ' . $e->getMessage());
         odq_send(503, 'application/json', '{"result_code":"503","result_msg":"SERVER_BUSY"}', ['Retry-After: 1']);
         return;
     }
-    // The token's random part and the times, in milliseconds as the SDK reads them.
-    $random = '';
-    for ($i = 0; $i < 40; $i++) {
-        $random .= '0123456789abcdef'[random_int(0, 15)];
-    }
-    $t = time() . '000';
-    $token = "$puid|576|IPHONE|KR|$random|$t";
     if ($old) {
         // The old SDK's reply, on one line, as the official server sent it.
         $reply = '{"value":{"access_token":"' . $token . '","member":{"crt_dt":' . $t . ',"upd_dt":' . $t . ',"status_cd":"OK","member_id":' . $puid

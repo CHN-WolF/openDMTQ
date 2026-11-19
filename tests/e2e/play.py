@@ -19,12 +19,19 @@ PLAYS = int(sys.argv[3]) if len(sys.argv) > 3 else 12
 NAMES = ["Sena", "Minho", "Yuna", "Doyun", "Hana", "Jiwoo", "Taeyang", "Somin", "Riku", "Lena"]
 
 
+# The key each player's game login gave, by player: the game signs every request after its login with it (an empty one
+# before), and a save is taken only signed with the key of its player's own sign-in.
+KEYS = {}
+
+
 def post(path, data=None, rpc=None):
     """One request; RPC bodies are JSON lists like the game sends."""
     if rpc is not None:
         body = json.dumps([rpc]).encode()
-        # Signed as the game signs: the server wants it for saving a play.
-        headers = {"Content-Type": "application/json", "Fp": hashlib.md5(b"DMQGLBlive1" + body).hexdigest()}
+        # Signed as the game signs: the server wants it for saving a play, with the key of the player the call names.
+        first = rpc["params"][0] if rpc["params"] else None
+        key = KEYS.get(first, "") if isinstance(first, int) else ""
+        headers = {"Content-Type": "application/json", "Fp": hashlib.md5(key.encode() + body).hexdigest()}
     else:
         body, headers = urllib.parse.urlencode(data).encode(), {}
     with urllib.request.urlopen(urllib.request.Request(BASE + path, body, headers), timeout=10) as r:
@@ -55,7 +62,10 @@ patterns = [p for p in range(1, 120)]
 for i in range(PLAYERS):
     udid = f"e2e-player-{i}"
     token = post("/api/accounts/v3/global/login_dmq", {"udid": udid})["value"]["access_token"]
-    guid = int(call("user.loginV2", [token, " ", "", "1.3.5", "ANDROID", "KR"])["guid"])
+    login = call("user.loginV2", [token, " ", "", "1.3.5", "ANDROID", "KR"])
+    guid = int(login["guid"])
+    # The key this sign-in signs with, from now on.
+    KEYS[guid] = login["SECRET_KEY"]
     call("user.setNickname", [guid, NAMES[i % len(NAMES)]])
     skill = random.uniform(0.6, 0.98)
     for pid in random.sample(patterns, PLAYS):

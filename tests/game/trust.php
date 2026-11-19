@@ -9,7 +9,11 @@
  *   - a banned player's call is refused whatever form its id takes ("9402x", " 9402", 9402.0), nothing bought;
  *   - unlimited currency: a pack of MAX POINT bought with Q gives nothing, as it takes nothing;
  *   - game.setSlotItem equips the player's own items only: one nobody gave them, one the owner took, one no catalog has
- *     leave their slot empty.
+ *     leave their slot empty;
+ *   - the game's login takes only an access token the platform's login handed out, and gives each sign-in a key of its own;
+ *   - a chart's start, which takes its price, and a save are taken only signed with the key of that very player's sign-in:
+ *     not unsigned, not with the key every player once had, not with another player's;
+ *   - a save earns MAX POINT and experience once for the play its sign-in started, and nothing without one.
  *
  * Usage: php tests/game/trust.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
@@ -33,7 +37,7 @@ $db = new SQLite3($path);
 // The server is running on the same database: wait for its writers rather than fail.
 $db->busyTimeout(5000);
 // Players no other check uses, each with an account as the platform's login makes one, by a device id of its own.
-foreach ([9401 => 'Ana', 9402 => 'Ben', 9403 => 'Cy', 9404 => 'Dee'] as $id => $name) {
+foreach ([9401 => 'Ana', 9402 => 'Ben', 9403 => 'Cy', 9404 => 'Dee', 9405 => 'Fin', 9406 => 'Gus', 9407 => 'Hob'] as $id => $name) {
     $db->exec("INSERT INTO Member (id, nickname, guid, puid, udid, code) VALUES ($id, '$name', '$id', '$id', 'trust-$id', 'trustcode$id')");
 }
 
@@ -96,7 +100,7 @@ function kept(SQLite3 $db, int $guid): string
 
 // The players' sign-ins, before any ban: each one's own key.
 $keys = [];
-foreach ([9401, 9402, 9403, 9404] as $guid) {
+foreach ([9401, 9402, 9403, 9404, 9405, 9406, 9407] as $guid) {
     [$got, $key] = sign_in($base, "trust-$guid");
     $keys[$guid] = $key;
     check("a player signs in as the game does, and the login gives the game a key to sign with ($guid)", $got === $guid && $key !== '',
@@ -152,5 +156,98 @@ check('GAME-102 an item the owner took, one no catalog has and one nobody gave l
 $equipped = call($base, $keys[9404], 'game.getUserAsset', [9404])['result'] ?? [];
 check('GAME-102 the game is told the slots as they were kept', array_key_exists('slot_item1', $equipped) && array_key_exists('slot_item3', $equipped)
     && [$equipped['slot_item1'], $equipped['slot_item3'], $equipped['slot_item4'] ?? 'x'] === [null, null, 100001], json_encode($equipped));
+
+// ------------------------------------------------------------------ GAME-103: the game's login, and each sign-in's own key
+
+check('GAME-103 each sign-in gets a key of its own, none of them the key every player was once given',
+    count(array_unique($keys)) === count($keys) && !in_array(OPENDMTQ_SECRET_KEY, $keys, true) && strlen($keys[9405]) === 32, json_encode($keys));
+// A token the platform's login never handed out: Fin's puid with a random part of somebody's choosing.
+$made_up = '9405|576|IPHONE|KR|' . str_repeat('0', 40) . '|' . time() . '000';
+$refused = call($base, '', 'user.loginV2', [$made_up, ' ', '', '1.3.4', 'ANDROID', 'KR']);
+check("GAME-103 the game's login refuses an access token the platform's login did not hand out, with a code the game does not know",
+    ($refused['error']['code'] ?? null) === 'SVC.05401' && ($refused['result'] ?? null) === null, json_encode($refused));
+// Another account's real token with Fin's puid put in front: no token of Fin's either.
+[, $raw] = post("$base/api/accounts/v3/global/login_dmq", 'app_id=576&udid=trust-9406&device_cd=ANDROID', ['Content-Type: application/x-www-form-urlencoded']);
+$gus_token = (string)(json_decode($raw, true)['value']['access_token'] ?? '');
+$swapped = call($base, '', 'user.loginV2', ['9405' . substr($gus_token, strpos($gus_token, '|')), ' ', '', '1.3.4', 'ANDROID', 'KR']);
+check("GAME-103 nor another account's token with this account's id put in it",
+    ($swapped['error']['code'] ?? null) === 'SVC.05401', json_encode($swapped));
+// The game logs in twice at its start with the same token: the same key both times.
+$again = call($base, '', 'user.loginV2', [$gus_token, ' ', '', '1.3.4', 'ANDROID', 'KR'])['result'] ?? [];
+$twice = call($base, $again['SECRET_KEY'] ?? '', 'user.loginV2', [$gus_token, ' ', '', '1.3.4', 'ANDROID', 'KR'])['result'] ?? [];
+check('GAME-103 a second login with the same token gives the same key, signed with it as the game signs the second',
+    ($again['SECRET_KEY'] ?? '') !== '' && ($again['SECRET_KEY'] ?? '') === ($twice['SECRET_KEY'] ?? null), json_encode([$again, $twice]));
+$keys[9406] = (string)($again['SECRET_KEY'] ?? '');
+
+// ------------------------------------------------------------------ GAME-104: a chart's start is the player's own game's
+
+// Chart 61 costs 350 MAX POINT (the stand-in catalog). Fin holds 1,000.
+keep($db, 9405, 1000, 1000, 644);
+$start = json_encode([['id' => 0, 'method' => 'game.getPreviewPlayInfo', 'params' => [9405, 61]]]);
+$tries = [
+    'unsigned' => [],
+    'signed with the key every player was once given' => ['Fp: ' . md5(OPENDMTQ_SECRET_KEY . $start)],
+    "signed with another player's own key" => ['Fp: ' . md5($keys[9406] . $start)],
+];
+foreach ($tries as $how => $fp) {
+    // Three times each, as anyone who reaches the address could.
+    $statuses = [];
+    for ($i = 0; $i < 3; $i++) {
+        [$statuses[]] = post("$base/DMQ/rpc", $start, array_merge(['Content-Type: application/json'], $fp));
+    }
+    check("GAME-104 a chart's start for another player's id, $how, is refused whole and takes nothing",
+        $statuses === [403, 403, 403] && kept($db, 9405) === '1000/1000', json_encode($statuses) . ' ' . kept($db, 9405));
+}
+$own = call($base, $keys[9405], 'game.getPreviewPlayInfo', [9405, 61]);
+$token = (string)($own['result']['game_token'] ?? '');
+check("GAME-104 the player's own game starts it: the price taken once, and a token of the play's own",
+    kept($db, 9405) === '650/1000' && strlen($token) === 36 && ctype_xdigit($token), kept($db, 9405) . ' ' . json_encode($own['error'] ?? null));
+
+// ------------------------------------------------------------------ GAME-105: a save earns once, for the play started
+
+/* A save as the result screen sends it, by $guid on $chart with the play's token: 100 notes at 100 %. [status, its reply]. */
+function save_with(string $base, string $key, int $guid, int $chart, string $token): array
+{
+    [$status, $r] = batch($base, $key, [['game.savePlayResult', [$guid, $chart, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100], 100, 0, [0, 0, 0], [0, 0, 0], $token]]]);
+    return [$status, $r[0] ?? null];
+}
+// The play started above, saved by Fin's own game: NEW RECORD, 150 MAX POINT and 10 experience, the price paid once.
+[$status, $saved] = save_with($base, $keys[9405], 9405, 61, $token);
+check('GAME-105 the play started, saved: a new record, 150 MAX POINT and 10 experience, the price paid once',
+    $status === 200 && ($saved['result']['is_new_record'] ?? null) === true && ($saved['result']['mpoint'] ?? null) === 150
+    && ($saved['result']['exp'] ?? null) === 10 && kept($db, 9405) === '800/1000', json_encode([$status, $saved]) . ' ' . kept($db, 9405));
+// The same save again (a retry, or a copy of it): kept as a play, nothing earned.
+[$status, $again] = save_with($base, $keys[9405], 9405, 61, $token);
+check('GAME-105 the same save again is kept as a play and earns nothing', $status === 200 && ($again['result']['is_success'] ?? null) === true
+    && ($again['result']['mpoint'] ?? null) === 0 && ($again['result']['exp'] ?? null) === 0 && kept($db, 9405) === '800/1000',
+    json_encode($again) . ' ' . kept($db, 9405));
+// A save of no play started (as the finding's made-up saves were): kept, nothing earned; 64 of them in one request too.
+$many = [];
+for ($i = 0; $i < 64; $i++) {
+    $many[] = ['game.savePlayResult', [9405, 55, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100], 100, 0, [0, 0, 0], [0, 0, 0], 'x']];
+}
+[$status, $r] = batch($base, $keys[9405], $many);
+check('GAME-105 64 saves of no play started, in one request, earn nothing', $status === 200 && count($r) === 64
+    && kept($db, 9405) === '800/1000' && (int)$db->querySingle('SELECT exp FROM PlayerState WHERE guid = 9405') === 654,
+    "$status " . count($r) . ' ' . kept($db, 9405));
+// Two starts, then the first one's save: a sign-in starts one play at a time, the last; its save earns once.
+$first = (string)(call($base, $keys[9405], 'game.getPreviewPlayInfo', [9405, 55])['result']['game_token'] ?? '');
+$second = (string)(call($base, $keys[9405], 'game.getPreviewPlayInfo', [9405, 55])['result']['game_token'] ?? '');
+[, $old] = save_with($base, $keys[9405], 9405, 55, $first);
+[, $new] = save_with($base, $keys[9405], 9405, 55, $second);
+check("GAME-105 of two starts only the last one's save earns, once", $first !== $second && ($old['result']['mpoint'] ?? null) === 0
+    && ($new['result']['mpoint'] ?? null) === 150 && kept($db, 9405) === '950/1000', json_encode([$old['result']['mpoint'] ?? null, $new['result']['mpoint'] ?? null]) . ' ' . kept($db, 9405));
+// Another player's game, naming Fin: refused whole, whatever its token.
+$third = (string)(call($base, $keys[9405], 'game.getPreviewPlayInfo', [9405, 55])['result']['game_token'] ?? '');
+[$status] = save_with($base, $keys[9406], 9405, 55, $third);
+check("GAME-105 a save for another player, signed with one's own key, is refused whole", $status === 403 && kept($db, 9405) === '950/1000',
+    "$status " . kept($db, 9405));
+// A player the owner deleted while their game was in: the save is theirs, and handled without a popup as before.
+$hob_token = (string)(call($base, $keys[9407], 'game.getPreviewPlayInfo', [9407, 55])['result']['game_token'] ?? '');
+$db->exec("DELETE FROM Member WHERE guid = '9407'");
+[$status, $gone] = save_with($base, $keys[9407], 9407, 55, $hob_token);
+check('GAME-105 the save of a player deleted while their game was in is handled without a popup (SVC.05008) and kept nowhere',
+    $status === 200 && ($gone['error']['code'] ?? null) === 'SVC.05008' && (int)$db->querySingle('SELECT COUNT(*) FROM Play WHERE user_id = 9407') === 0,
+    json_encode([$status, $gone]));
 
 exit($failures ? 1 : 0);

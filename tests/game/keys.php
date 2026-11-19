@@ -11,8 +11,7 @@
  * Usage: php tests/game/keys.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
 
-// The server's own code: the image's, or a host install's (OPENDMTQ_APP names its server/ folder). Its start step, and the
-// key the game signs its requests with.
+// The server's own code: the image's, or a host install's (OPENDMTQ_APP names its server/ folder), and its start step.
 $app = getenv('OPENDMTQ_APP') ?: '/opt/opendmtq';
 $setup = "$app/game/bin/setup-db.php";
 require_once "$app/game/src/config.php";
@@ -37,15 +36,21 @@ $db->busyTimeout(5000);
 $db->exec("INSERT INTO Member (id, nickname, guid, puid, udid, code) VALUES (" . KEYS_PLAYER . ", 'Kay', '" . KEYS_PLAYER
     . "', '" . KEYS_PLAYER . "', 'protocol-keys', 'keyscode01')");
 
+// The key each player's game login gave, by player: the game signs every request after its login with it.
+$KEYS = [];
+
 /*
- * One call of the game's RPC, signed as the game signs it: [HTTP status, the call's reply ({result, error, id}) or null when
- * it answered none]. $keys: the X-OpenDMTQ-Keys header's value, or null for none.
+ * One call of the game's RPC, signed as the game signs it, with the key the game login gave the player it names (an empty
+ * one before a login): [HTTP status, the call's reply ({result, error, id}) or null when it answered none]. $keys: the
+ * X-OpenDMTQ-Keys header's value, or null for none.
  */
 function rpc(string $base, string $method, array $params, ?string $keys = null): array
 {
+    global $KEYS;
     // One call in a list, as the game sends its batches, signed over the body alone.
     $body = json_encode([['id' => 1, 'method' => $method, 'params' => $params]]);
-    $headers = "Content-Type: application/json\r\nFp: " . md5(OPENDMTQ_SECRET_KEY . $body) . "\r\n";
+    $key = is_int($params[0] ?? null) ? ($KEYS[$params[0]] ?? '') : '';
+    $headers = "Content-Type: application/json\r\nFp: " . md5($key . $body) . "\r\n";
     // The PC client's header, when this request had one.
     if ($keys !== null) {
         $headers .= "X-OpenDMTQ-Keys: $keys\r\n";
@@ -60,6 +65,20 @@ function rpc(string $base, string $method, array $params, ?string $keys = null):
     $reply = json_decode((string)$raw, true);
     return [$status, $reply[0] ?? null];
 }
+
+/* A phone's sign-in as the game makes it, the platform's login with its device id then the game's: its key is kept. */
+function sign_in(string $base, string $udid): void
+{
+    global $KEYS;
+    $form = stream_context_create(['http' => ['method' => 'POST', 'content' => "app_id=576&udid=$udid&device_cd=ANDROID",
+        'ignore_errors' => true, 'timeout' => 15, 'header' => "Content-Type: application/x-www-form-urlencoded\r\n"]]);
+    $token = json_decode((string)@file_get_contents("$base/api/accounts/v3/global/login_dmq", false, $form), true)['value']['access_token'] ?? '';
+    [, $login] = rpc($base, 'user.loginV2', [$token, ' ', '', '1.3.4', 'ANDROID', 'KR']);
+    $KEYS[(int)($login['result']['guid'] ?? 0)] = (string)($login['result']['SECRET_KEY'] ?? '');
+}
+
+// The player signs in as the game does, before any call of theirs.
+sign_in($base, 'protocol-keys');
 
 /*
  * A play saved as the result screen sends it, signed as the game signs it: $notes notes at 100 % and $breaks breaks, on
@@ -152,6 +171,8 @@ check('every play is logged with its own mark', $all === '1,0,0,0,0,1,0,0', (str
 // Their accounts, as the game's login makes them: a save for an id without one is refused.
 foreach ([$keyed => 'Kei', $touched => 'Tou'] as $guid => $name) {
     $db->exec("INSERT INTO Member (id, nickname, guid, puid, udid, code) VALUES ($guid, '$name', '$guid', '$guid', 'protocol-keys-$guid', 'keys$guid')");
+    // Each signs in as the game does.
+    sign_in($base, "protocol-keys-$guid");
 }
 // 100 notes at 100 %, each with the ALL COMBO and PERFECT PLAY bonuses: 65,000.
 [$status_k, $by_keys] = rpc($base, 'game.savePlayResult', [$keyed, $song6, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100], 100, 0, [0, 0, 0], [0, 0, 0], 't'], '1');

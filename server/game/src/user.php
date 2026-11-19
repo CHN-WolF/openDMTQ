@@ -7,23 +7,31 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/game.php';
+require_once __DIR__ . '/signin.php';
 
 /*
  * user.loginV2 [accessToken, nickName, profileImg, version, os, area]: the game's own login, right after the
  * platform login (platform.php) gave the client an access token "<puid>|576|<device>|<server>|<token>|<time>".
- * The token's puid names the account; an unknown one gets a new account here. The reply gives the client its
- * player id (guid) and the key it signs its requests with.
+ * Only a token the platform login handed out for that account is taken (signin.php); the game's code it does not know
+ * (SVC.05401) answers any other, which opens its own popup, whose CLOSE ends the game: the next start signs in anew.
+ * The token's puid names the account; an unknown one gets a new account here. The reply gives the client its player id
+ * (guid) and the key it signs its requests with, a key of this sign-in's own.
  */
 function odq_user_login(array $p)
 {
     // The token's six parts; missing ones read as null.
-    $parts = explode('|', odq_text($p[0] ?? null));
+    $access = odq_text($p[0] ?? null);
+    $parts = explode('|', $access);
     $puid = $parts[0];
     $token = $parts[4] ?? null;
     $time = $parts[5] ?? null;
+    if ($puid === '' || !odq_sign_in_known($access, $puid)) {
+        return odq_error('SVC.05401', 'OpenDMTQ: this server did not hand out this sign-in');
+    }
     $member = odq_member_by('puid', $puid);
     $guid = $member ? (string)$member['guid'] : '';
-    // An account the platform login did not make (an old token, a test): made now, with the puid as its guid.
+    // No account for the token's puid (the owner deleted the player after the platform login): made now, with the puid as
+    // its guid.
     if ($guid === '' || $guid === '0') {
         $db = odq_db();
         $id = (int)$db->querySingle('SELECT MAX(id) + 1 FROM Member') ?: 1;
@@ -35,10 +43,18 @@ function odq_user_login(array $p)
         @$q->execute();
         $guid = $puid;
     }
+    // The key this sign-in signs with, kept with it (signin.php): the signature then tells this player's game.
+    $key = odq_sign_in_key($access, odq_intval($guid));
+    if ($key === null) {
+        // The database did not take it: the code the client offers to retry, as for a save it did not take.
+        error_log('opendmtq: loginV2: ' . odq_db()->lastErrorMsg());
+        return odq_error('SVC.05099', 'OpenDMTQ: the sign-in could not be kept; try again');
+    }
     return [
-        // Made from the token, as the official server made it; nothing checks it later.
+        // Made from the token, as the official server made it; the game sends it back in a header nothing reads (proxies
+        // drop a header named with an underscore): the signature's key tells a sign-in.
         'API_TOKEN' => strtoupper(substr(md5((string)$token) . md5((string)$time), -58)),
-        'SECRET_KEY' => OPENDMTQ_SECRET_KEY,
+        'SECRET_KEY' => $key,
         'SECRET_VER' => '1',
         // Text here, a number everywhere else: the shape the client reads.
         'guid' => $guid,

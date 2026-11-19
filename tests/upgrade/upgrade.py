@@ -27,8 +27,9 @@ import urllib.parse
 import urllib.request
 
 MODE, SITE, ADMIN, ADMIN_PASSWORD, NOTES = sys.argv[1], sys.argv[2].rstrip("/"), sys.argv[3].rstrip("/"), sys.argv[4], sys.argv[5]
-# The key the login reply gives the client, which then signs every request with it.
-KEY = b"DMQGLBlive1"
+# The key each player's game login gave, by player: the game signs every request after its login with it (an empty one
+# before), and a release that gives each sign-in a key of its own takes a save only signed with its player's.
+KEYS = {}
 # The API's place beside the admin pages.
 API = "/opendmtq/api/v1"
 # The site account the owner makes before the upgrade, and the name of the API token.
@@ -84,7 +85,9 @@ def call(method, params, headers=None):
     """One request of the game, signed as the game signs: its result. An error is a failure of the test itself. headers: more
     of them, as the PC client's player adds X-OpenDMTQ-Keys to a save made with the keyboard."""
     body = json.dumps([{"id": 1, "method": method, "params": params}]).encode()
-    fp = hashlib.md5(KEY + body).hexdigest()
+    # The key of the player the call names first, as that player's game signs.
+    first = params[0] if isinstance(params, list) and params else None
+    fp = hashlib.md5((KEYS.get(first, "") if isinstance(first, int) else "").encode() + body).hexdigest()
     status, _, reply = request(plain, SITE + "/DMQ/rpc", body, {"Content-Type": "application/json", "Fp": fp, **(headers or {})})
     assert status == 200, f"{method}: HTTP {status}"
     answer = json.loads(reply)[0]
@@ -96,7 +99,10 @@ def phone(udid):
     """A phone's start: the platform login by its device id, then the game's. (the player's number, the account's id)."""
     fields = urllib.parse.urlencode({"app_id": "576", "udid": udid, "device_cd": "ANDROID"}).encode()
     token = json.loads(request(plain, SITE + "/api/accounts/v3/global/login_dmq", fields)[2])["value"]["access_token"]
-    guid = int(call("user.loginV2", [token, " ", "", "1.3.4", "ANDROID", "KR"])["guid"])
+    login = call("user.loginV2", [token, " ", "", "1.3.4", "ANDROID", "KR"])
+    guid = int(login["guid"])
+    # The key this sign-in signs with, from now on.
+    KEYS[guid] = login["SECRET_KEY"]
     return guid, token.split("|")[0]
 
 

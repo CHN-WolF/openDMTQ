@@ -6,8 +6,8 @@
  * set the variables).
  */
 
-// The key the game signs its requests with: the login reply hands it to the client (user.loginV2), which
-// then sends md5(key + body) in an Fp header. Any value works as long as the server checks the one it gave.
+// The key the official server's login handed every player, which the game signed its requests with until each sign-in got
+// a key of its own (src/signin.php): no request signed with it is taken now.
 const OPENDMTQ_SECRET_KEY = 'DMQGLBlive1';
 // The client patch folder version phones download from when the content has none of its own.
 const OPENDMTQ_PATCH_ID = '1.003.005';
