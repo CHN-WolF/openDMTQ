@@ -509,9 +509,40 @@ class AppPageTest(unittest.TestCase):
                           'signed, so the server did not take it.</p>', page)
             self.assertIn('<p class="flash bad" role="status">opendmtq-0.8.2-sha256sums.txt is not signed by the OpenDMTQ project, '
                           'so the server took nothing of that release.</p>', page)
-            # A fetch that only failed (no internet) is no refusal: nothing said of it here.
+            # Every other refusal the tools note, of either part: said with the tools' own sentence after what it was of
+            # (ADM-175; main said nothing of these), the sentence as the tools word it, in both languages.
+            from markupsafe import escape
+            from opendmtq_tools import client_updates, signing
+            made = {}
+            # The sentences the tools' own code words them with, as the reviewer's probe made them.
+            for fn in (lambda: signing.read_sums("garbage"),
+                       lambda: signing.read_sums("%s  a\n%s  a\n" % ("0" * 64, "0" * 64)),
+                       lambda: signing.check_file({}, "opendmtq.client-0.11.0-delta.nupkg", "/dev/null"),
+                       lambda: client_updates._entries({"Assets": []}, "0.11.0"),
+                       lambda: client_updates._entries({"Assets": [{"Version": "0.11.0", "PackageId": "OpenDMTQ.Client",
+                                                                    "Type": "Full", "FileName": "x.nupkg", "Size": 1}]}, "0.11.0")):
+                with self.assertRaises(signing.Unsigned) as e:
+                    fn()
+                # As the page writes a value: escaped as HTML.
+                made[str(e.exception)] = str(escape(str(e.exception)))
+            self.assertEqual(len(made), 5)
+            for sentence, shown in made.items():
+                inst.write("apk/client-updates-error.txt", sentence + "\n")
+                inst.write("apk/client-windows-error.txt", sentence + "\n")
+                page = self.page(inst)
+                self.assertIn(f'<p class="flash bad" role="status">The server did not take the PC client\'s updates: {shown}.</p>', page)
+                self.assertIn(f'<p class="flash bad" role="status">The server did not take the installer for Windows: {shown}.</p>', page)
+            inst.client.set_cookie("opendmtq_lang", "ko")
+            page = self.page(inst)
+            self.assertIn(f"서버가 PC 클라이언트 업데이트를 받지 않았습니다: {shown}.", page)
+            self.assertIn(f"서버가 Windows용 설치 파일을 받지 않았습니다: {shown}.", page)
+            inst.client.set_cookie("opendmtq_lang", "en")
+            # A fetch that only failed (no internet) is no refusal: what was handed out stays, and nothing is said of it.
+            os.remove(inst.path("apk/client-updates-error.txt"))
             inst.write("apk/client-windows-error.txt", "could not ask https://github.com for the latest release\n")
             self.assertNotIn("could not ask", self.page(inst))
+            inst.write("apk/client-windows-error.txt", "could not fetch https://github.com/x: HTTP Error 502: Bad Gateway\n")
+            self.assertNotIn("could not fetch", self.page(inst))
 
     def test_the_installer_for_windows_shows_when_the_builder_kept_one(self):
         with Install() as inst:

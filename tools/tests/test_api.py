@@ -514,6 +514,12 @@ def CASES():
         inst.write("apk/client-updates-error.txt", "opendmtq.client-0.8.1-full.nupkg is not the file the release signed\n")
         return []
 
+    def with_other_refusals(inst):
+        # Refused for another reason, the updates and the installer (signing.py's words for them).
+        inst.write("apk/client-updates-error.txt", "the checksums file names a twice\n")
+        inst.write("apk/client-windows-error.txt", "the checksums file names no file\n")
+        return []
+
     def with_windows_half_copied(inst):
         # windows.json says another size than the file has: a copy cut off, which is not handed out.
         return with_windows(inst, size=4)
@@ -581,6 +587,11 @@ def CASES():
         C("app_windows_updates", "GET", "/app/windows/updates", 200, setup=with_refused_updates,
           check=lambda t, inst, r: t.assertEqual(r.get_json()["refused"], [
               "opendmtq.client-0.8.1-full.nupkg is not the file the OpenDMTQ release signed, so the server did not take it."])),
+        # Every refusal, with the tools' sentence after what it was of (ADM-175; main gave none of these).
+        C("app_windows_updates", "GET", "/app/windows/updates", 200, setup=with_other_refusals,
+          check=lambda t, inst, r: t.assertEqual(r.get_json()["refused"], [
+              "The server did not take the PC client's updates: the checksums file names a twice.",
+              "The server did not take the installer for Windows: the checksums file names no file."])),
         C("app_windows_updates", "GET", "/app/windows/updates", 401, "no_token", token=None),
         C("app_icon", "GET", "/app/icon", 200),
         C("app_icon", "GET", "/app/icon", 404, "not_found", setup=no_icon),

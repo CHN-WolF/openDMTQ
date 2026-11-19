@@ -319,13 +319,23 @@ REFUSALS = (
 )
 
 
-def refusal(sentence):
+# What the tools note when a release's file could not be had at all (no way to the release's site, or an answer that was
+# no file): no refusal of the file. What the site handed out stays, and the App page's own lines say what it hands out.
+NOT_REACHED = re.compile(r"^could not (ask|fetch) ")
+
+
+def refusal(sentence, general=None):
     """A release's file the tools refused for its signature, by the English sentence they noted (REFUSALS), in the page
-    language as HTML; None for any other sentence."""
+    language as HTML; any other refusal in the words of `general` (a key of strings.py that takes {why}), with the tools'
+    own sentence; None for no sentence, for a fetch that only failed (NOT_REACHED), and for another sentence without
+    `general`."""
+    text = (sentence or "").strip()
     for pattern, key in REFUSALS:
-        found = pattern.match((sentence or "").strip())
+        found = pattern.match(text)
         if found:
             return t(key, **found.groupdict())
+    if general and text and not NOT_REACHED.match(text):
+        return t(general, why=text)
     return None
 
 

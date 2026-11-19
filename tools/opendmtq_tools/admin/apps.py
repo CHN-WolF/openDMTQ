@@ -297,16 +297,16 @@ def app_download(name):
 
 
 def pc_updates():
-    """The PC client's updates the site hands out (client_updates.py's updates.json, or None), and what the tools refused
-    for its signature, the installer or those updates, each in the page's words (core.refusal): the App page's lines,
-    and GET /app/windows/updates."""
-    notes = [client_updates.failure(core.APK)]
+    """The PC client's updates the site hands out (client_updates.py's updates.json, or None), and what the tools refused,
+    of those updates or of the installer, each in the page's words (core.refusal): a refusal for the signature in words of
+    its own, any other with the tools' sentence after what it was of. The App page's lines, and GET /app/windows/updates."""
+    notes = [(client_updates.failure(core.APK), "release.updates_refused")]
     try:
         with open(os.path.join(core.APK, windows_client.FAILED), encoding="utf-8") as f:
-            notes.append(f.read().strip())
+            notes.append((f.read().strip(), "release.installer_refused"))
     except OSError:
         pass
-    refused = [said for said in (core.refusal(note) for note in notes) if said is not None]
+    refused = [said for said in (core.refusal(note, general) for note, general in notes) if said is not None]
     return client_updates.kept(os.path.join(core.APK, "out")), refused
 
 

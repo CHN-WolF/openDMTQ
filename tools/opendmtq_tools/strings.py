@@ -801,6 +801,8 @@ STRINGS = {
         "release.unsigned_file": "{file} is not the file the OpenDMTQ release signed, so the server did not take it.",
         "release.unsigned_sums": "{file} is not signed by the OpenDMTQ project, so the server took nothing of that release.",
         "release.no_sums": "The release {v} has no signed checksums, so the server took nothing of it.",
+        "release.updates_refused": "The server did not take the PC client's updates: {why}.",
+        "release.installer_refused": "The server did not take the installer for Windows: {why}.",
         # Play on this PC (admin/this_pc.py): the PC client on the server PC itself, for a visit from it alone.
         "here.title": "The PC client on this PC",
         "here.lead": "Installs the PC client on this PC, set up for this server, and opens it with your ID ({id}) filled in to sign in.",
@@ -2061,6 +2063,8 @@ STRINGS = {
         "release.unsigned_file": "{file} 파일은 OpenDMTQ 릴리스가 서명한 파일이 아니어서 서버가 받지 않았습니다.",
         "release.unsigned_sums": "{file} 파일은 OpenDMTQ 프로젝트가 서명한 것이 아니어서 서버가 그 릴리스의 파일을 받지 않았습니다.",
         "release.no_sums": "{v} 릴리스에는 서명한 체크섬이 없어 서버가 그 릴리스의 파일을 받지 않았습니다.",
+        "release.updates_refused": "서버가 PC 클라이언트 업데이트를 받지 않았습니다: {why}.",
+        "release.installer_refused": "서버가 Windows용 설치 파일을 받지 않았습니다: {why}.",
         "here.title": "이 PC의 PC 클라이언트",
         "here.lead": "이 서버에 맞춘 PC 클라이언트를 이 PC에 설치하고, 로그인할 아이디({id})를 채운 채로 엽니다.",
         "here.lead_installed": "이 PC에 설치된 OpenDMTQ {v} 버전을 이 서버에 맞춰, 로그인할 아이디({id})를 채운 채로 엽니다.",
