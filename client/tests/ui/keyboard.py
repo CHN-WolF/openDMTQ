@@ -109,9 +109,10 @@ def main():
     from opendmtq_client.app import LauncherApp
     problems = []
     app = LauncherApp(state)
-    # The smallest window: the most pages scroll there.
+    # The smallest window: the most pages scroll there. It holds the keyboard, as on Windows (shots.take_keyboard).
     app.root.geometry("960x640+0+0")
     shots.settle(app)
+    shots.take_keyboard(app)
     w = app.words
 
     # ---- Tab's order on the Online page: the menu, then the page's controls, then PLAY at the foot.

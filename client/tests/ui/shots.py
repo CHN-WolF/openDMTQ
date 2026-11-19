@@ -1647,6 +1647,23 @@ def unnamed_check(app, out, tag, problems):
         app.state.save()
 
 
+def take_keyboard(app):
+    """The window holds the keyboard, as Windows gives it to a window it opens. On the virtual screen, with no window
+    manager, the keyboard goes to whatever lies under the pointer, which sits at the screen's middle (960, 600): just past
+    a window 960 wide at the screen's corner, whose keys then went nowhere."""
+    app.root.update()
+    app.root.focus_force()
+    app.root.update()
+
+
+def window_size_check(app, tag, w, h, problems):
+    """The window is as large as the run asked for (--size), in the screen's pixels."""
+    app.root.update()
+    got = (app.root.winfo_width(), app.root.winfo_height())
+    if got != (w, h):
+        problems.append("%s: the window is %dx%d, not the %dx%d asked for" % (tag, got[0], got[1], w, h))
+
+
 def dialogs_check(app, out, tag, problems):
     """The launcher's questions, opened from their pages, answered by key and by click, at a resize too."""
     from opendmtq_client import dialogs
@@ -1676,6 +1693,9 @@ def dialogs_check(app, out, tag, problems):
     if answer is not False or len(app.state.servers) != 2:
         problems.append("%s: Enter on the forget dialog forgot the server (answer %r)" % (tag, answer))
 
+    # The run's own window size, which the resize below leaves for a moment.
+    size = (app.root.winfo_width(), app.root.winfo_height())
+
     def resized(dialog):
         app.root.geometry("960x640")
         wait_out(app.root, 0.6)
@@ -1687,6 +1707,13 @@ def dialogs_check(app, out, tag, problems):
                             lambda d: click_button(d, 1), problems, extra=resized)
     if answer is not True or len(app.state.servers) != 1:
         problems.append("%s: clicking Forget did not forget the server (answer %r)" % (tag, answer))
+    # Back at the run's own size: the dialogs after this are drawn and shot at the size their names say (they were drawn
+    # at 960x640 under the run's name).
+    app.root.geometry("%dx%d" % size)
+    settle(app)
+    if (app.root.winfo_width(), app.root.winfo_height()) != size:
+        problems.append("%s: after the resize the window stayed %dx%d, not %dx%d: the dialogs after it are shot at another"
+                        " size" % (tag, app.root.winfo_width(), app.root.winfo_height(), size[0], size[1]))
     # Start over asks first; Esc keeps everything.
     app.go("help")
     settle(app)
@@ -2165,6 +2192,7 @@ def main():
     s.save()
     app = LauncherApp(s)
     app.root.geometry("%dx%d+0+0" % (w, h))
+    take_keyboard(app)
     import traceback
 
     def callback_error(kind, value, tb):
@@ -2175,6 +2203,9 @@ def main():
     guide = guide_check(app, site, args.out, tag, problems)
     guide.finish(play=False)
     settle(app)
+    # The window at the size asked, on a screen at this run's scaling: a screen that reads another number of dots to the
+    # inch scales the launcher, and the smallest window then is no longer the smallest the launcher allows.
+    window_size_check(app, tag, w, h, problems)
     pages_check(app, args.out, tag, problems)
     # PLAY's records and My page on the site, signed in after the guide; Help's Save a report.
     records_check(app, site, args.out, tag, problems)
