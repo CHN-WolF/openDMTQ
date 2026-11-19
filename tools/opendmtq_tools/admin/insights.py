@@ -80,24 +80,27 @@ def top_songs(con, chart_names, days=30, limit=6, now=None):
     return counts.most_common(limit)
 
 
-def player_activity(con, days=14, now=None):
-    """Per player: when they last played, plays in the last 30 days, and one count per day of the last days, oldest first."""
+def player_activity(con, days=14, now=None, only=None):
+    """Per player: when they last played, plays in the last 30 days, and one count per day of the last days, oldest first.
+    only: one player's alone (a guid), read through the play log's index of each player's plays (PlayLog_board)."""
     now = now or time.time()
     today = _local_day(now)
     out = collections.defaultdict(lambda: {"last": None, "recent": 0, "days": [0] * days})
+    # One player's plays, or everyone's.
+    who, whose = (" AND user_id = ?", (only,)) if only is not None else ("", ())
     try:
-        for guid, n in con.execute("SELECT user_id, COUNT(*) FROM PlayLog WHERE played_at > ? GROUP BY user_id", (now - 30 * DAY,)):
+        for guid, n in con.execute(f"SELECT user_id, COUNT(*) FROM PlayLog WHERE played_at > ?{who} GROUP BY user_id", (now - 30 * DAY,) + whose):
             out[guid]["recent"] = n
         # By the day on this server's clock, counted by the database. One day more than asked for: a day reaches back
         # further than that many times 24 hours from now, up to a whole day.
         for guid, day, n in con.execute(
-                "SELECT user_id, date(played_at, 'unixepoch', 'localtime'), COUNT(*) FROM PlayLog WHERE played_at > ? GROUP BY 1, 2",
-                (now - (days + 1) * DAY,)):
+                f"SELECT user_id, date(played_at, 'unixepoch', 'localtime'), COUNT(*) FROM PlayLog WHERE played_at > ?{who} GROUP BY 1, 2",
+                (now - (days + 1) * DAY,) + whose):
             back = (today - datetime.date.fromisoformat(day)).days
             # (A play dated after today: a clock that was wrong then. It counts for the plays, not for a day here.)
             if 0 <= back < days:
                 out[guid]["days"][days - 1 - back] = n
-        for guid, at in con.execute("SELECT user_id, MAX(played_at) FROM PlayLog GROUP BY user_id"):
+        for guid, at in con.execute(f"SELECT user_id, MAX(played_at) FROM PlayLog{' WHERE user_id = ?' if only is not None else ''} GROUP BY user_id", whose):
             out[guid]["last"] = at
     except sqlite3.OperationalError:
         pass

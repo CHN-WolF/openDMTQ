@@ -733,8 +733,8 @@ def server_uninstall(args):
 # ------------------------------------------------------------------------------ players
 
 def player_views(only=None):
-    """The players as the Players page lists them (only: one number's)."""
-    rows, live, seen, activity, phones = players.player_rows()
+    """The players as the Players page lists them (only: one number's, worked out for that player alone)."""
+    rows, live, seen, activity, phones = players.player_rows(only=only)
     # Broadcasts off for the server: a switch that is on is held for then (the Players page's "held").
     held = not recordings.live_settings()["on"]
     out = []

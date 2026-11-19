@@ -1,5 +1,6 @@
-"""Tests for the work the admin pages do for one request (admin/core.py, players.py): the page's language worked out once a
-request, and the Players page's day cells made once for each run of counts.
+"""Tests for the work the admin pages do for one request (admin/core.py, players.py, insights.py, game.py, api.py): the page's
+language worked out once a request, the Players page's day cells made once for each run of counts, and a player's own page
+and the API's answers about one player worked out for that player alone, the same as the whole list's row for them.
 
 Flask is installed in the tools image only; outside it these tests are skipped (CI runs them there)."""
 
@@ -15,7 +16,7 @@ if HAVE_FLASK:
     import werkzeug.datastructures
 
     from opendmtq_tools import admin
-    from opendmtq_tools.admin import charts, players
+    from opendmtq_tools.admin import api, charts, players
 
 
 def players_with_plays(path, count, plays_of=lambda guid: 0):
@@ -115,3 +116,52 @@ class DayCellsTest(unittest.TestCase):
                         tips = [admin.core.tp("players.day_tip", day=(today - datetime.timedelta(days=len(counts) - 1 - i)).strftime("%m-%d"), n=n)
                                 for i, n in enumerate(counts)]
                         self.assertEqual(str(cells(counts)), str(charts.days(counts, 7, tips, admin.core.tp("players.days_label"))), (lang, counts))
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class OnePlayerTest(unittest.TestCase):
+    """A player's own page and the API's answers about one player read that player's figures alone, and say the same as
+    the whole list says of them."""
+
+    def test_the_players_page_of_one_player_works_out_no_one_else(self):
+        with Install() as inst:
+            players_with_plays(admin.core.DB, 30, lambda g: g % 5)
+            inst.sign_in()
+            asked = []
+            real_activity = admin.insights.player_activity
+
+            def activity(con, *args, **kwargs):
+                asked.append(kwargs.get("only"))
+                return real_activity(con, *args, **kwargs)
+
+            def everyone(con):
+                raise AssertionError("every player's devices read for one player's page")
+
+            with mock.patch.object(players, "players_seen", everyone), mock.patch.object(admin.insights, "player_activity", activity):
+                r = inst.client.get("/opendmtq/admin/players/7")
+                page = r.get_data(as_text=True)
+                self.assertEqual(r.status_code, 200)
+                self.assertIn("Player7", page)
+                # The API's game state of one player and its row of the list, the same way.
+                self.assertEqual(api.game_view(7)["player"], 7)
+                self.assertEqual(api.one_player(7)["id"], 7)
+            self.assertTrue(asked and all(only == 7 for only in asked), asked)
+
+    def test_one_players_row_is_the_lists_row_for_them(self):
+        with Install() as inst:
+            players_with_plays(admin.core.DB, 12, lambda g: (g * 3) % 7)
+            inst.sign_in()
+            with admin.app.test_request_context("/opendmtq/api/players"):
+                everyone = {v["id"]: v for v in api.player_views()}
+                # Played or not, two phones, broadcasting: each one's answer alone is its row of the whole list.
+                for guid in everyone:
+                    self.assertEqual(api.one_player(guid), everyone[guid], guid)
+                rows, live, seen, activity, phones = players.player_rows()
+                for guid in (1, 2, 3, 6):
+                    one = players.player_rows(only=guid)
+                    self.assertEqual([tuple(r) for r in one[0]], [tuple(r) for r in rows if r["id"] == guid])
+                    self.assertEqual(one[2], {guid: seen[guid]})
+                    self.assertEqual(one[3][guid], activity[guid])
+                    self.assertEqual(one[4], {guid: phones[guid]})
+                # A number nobody has: no row, as the list has none.
+                self.assertEqual(players.player_rows(only=99)[0], [])

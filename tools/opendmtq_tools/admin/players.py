@@ -47,9 +47,12 @@ def seen_token(udids):
     return hashlib.sha256("\n".join(str(u) for u in udids).encode("utf-8", "replace")).hexdigest()[:16]
 
 
-def player_rows():
+def player_rows(only=None):
     """The Players page's list: (rows of id, nickname, charts, total; who is switched on {guid: streaming now}; who each
-    number belongs to {guid: seen token}; how each has been playing; phones per player)."""
+    number belongs to {guid: seen token}; how each has been playing; phones per player). only: one player number's row
+    and figures alone, the same as the whole list's for them (the player's page, the API's answer about one player),
+    without working out everyone's."""
+    one = only is not None
     with db() as con:
         # The player number is the guid (the Profile links and the actions use it). Scores are
         # summed capped, so rows saved before the server capped them cannot overflow the sum.
@@ -57,13 +60,21 @@ def player_rows():
             f"""SELECT m.guid AS id, COALESCE(m.nickname, '') AS nickname, COUNT(p.pattern_id) AS charts,
                        COALESCE(SUM(MIN(MAX(p.score, 0), 2147483647)), 0) AS total
                   FROM ({core.PLAYER_ROWS}) m LEFT JOIN Play p ON p.user_id = m.guid
-                 GROUP BY m.guid ORDER BY m.guid""", (core.CHECK_UDID,)).fetchall()
+                 {"WHERE m.guid = ?" if one else ""} GROUP BY m.guid ORDER BY m.guid""",
+            (core.CHECK_UDID, only) if one else (core.CHECK_UDID,)).fetchall()
         # Who is switched on, and whose video is coming in now.
         live = recordings.live_rows(con)
-        seen = players_seen(con)
+        if one:
+            # The one player's token, as players_seen() makes everyone's.
+            token = player_seen(con, only)
+            seen = {only: token} if token is not None else {}
+        else:
+            seen = players_seen(con)
         # How each has been playing, for the list's last played column and its small line.
-        activity = insights.player_activity(con)
-        phones = dict(con.execute("SELECT CAST(guid AS INTEGER), COUNT(*) FROM Member WHERE udid IS NOT ? AND guid IS NOT NULL GROUP BY CAST(guid AS INTEGER)", (core.CHECK_UDID,)).fetchall())
+        activity = insights.player_activity(con, only=only)
+        phones = dict(con.execute("SELECT CAST(guid AS INTEGER), COUNT(*) FROM Member WHERE udid IS NOT ? AND guid IS NOT NULL"
+                                  + (" AND CAST(guid AS INTEGER) = ?" if one else "") + " GROUP BY CAST(guid AS INTEGER)",
+                                  (core.CHECK_UDID, only) if one else (core.CHECK_UDID,)).fetchall())
     return rows, live, seen, activity, phones
 
 

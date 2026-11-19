@@ -510,7 +510,7 @@ def save_settings(unlimited=None, start_mpoint=None, start_qpoint=None, start_le
 def player_view(pid):
     """Everything the player's page shows of a player: their row of the Players page, their game state, items, ban,
     purchases and changes; 404 for a number nobody has."""
-    found = [p for p in players.player_rows()[0] if p["id"] == pid]
+    found = players.player_rows(only=pid)[0]
     if not found:
         raise Refused(404, "player_not_found", t("players.gone", id=pid))
     with db() as con:
