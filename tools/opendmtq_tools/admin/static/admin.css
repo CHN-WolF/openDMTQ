@@ -36,6 +36,12 @@ body[data-section="admin"] { --gap: 14px; }
      alone at the end (three to a row left one alone on a fourth row). */
   .bar .nav.pages > a:nth-child(4n+1):nth-last-child(2), .bar .nav.pages > a:nth-child(4n+2):nth-last-child(1) { grid-column: span 2; }
   body[data-section="admin"] { padding-bottom: env(safe-area-inset-bottom); }
+  /* The bar goes away with the page here, so what was just done is said at the foot of the screen, over the page until it
+     goes (a press takes it away): under the bar it stood at the page's own foot, out of sight. Over the page's sticky
+     parts too (a list's actions at the foot, a table's head), its shadow cast upward. */
+  .bar:has(.nav.pages) .said-stack { position: fixed; z-index: 6; top: auto; bottom: 0; box-shadow: 0 -12px 26px -12px rgba(0, 0, 0, 0.8); }
+  /* The last message clear of a phone's home bar, as the page's own foot is. */
+  .bar:has(.nav.pages) .said-stack > .flash.float:last-child { padding-bottom: calc(11px + env(safe-area-inset-bottom)); }
 }
 
 /* A message about what just happened. */

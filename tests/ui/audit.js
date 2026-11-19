@@ -2018,6 +2018,25 @@ async function repairSaid(contexts) {
     JSON.stringify(lines));
   await page.screenshot({ path: path.join(OUT, 'shots', 'flows-repair-said-1280.jpg'), type: 'jpeg', quality: 80 });
   await page.close();
+  // On a phone held upright the bar goes away with the page, so the steps stand at the foot of the screen, each in sight
+  // one under another, the last on the screen's edge (under the bar they stood at the page's own foot, out of sight).
+  const phone = await contexts.signed.newPage();
+  await phone.setViewport({ width: 360, height: 780, isMobile: true, hasTouch: true });
+  await phone.goto(`${A}/server`, { waitUntil: 'domcontentloaded' });
+  await phone.$eval('#repair button', b => b.scrollIntoView({ block: 'center' }));
+  await settle(phone, () => phone.click('#repair button'));
+  await phone.waitForFunction(() => document.querySelectorAll('.flash[data-said]').length >= 5, { timeout: 30000 }).catch(() => {});
+  await pause(300);
+  const held = await phone.$$eval('.flash[data-said]', els => els.map(e => {
+    const r = e.getBoundingClientRect();
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
+  }));
+  const stacked = held.every((l, i) => i === 0 || l.top >= held[i - 1].bottom - 1);
+  const atFoot = held.length > 0 && Math.abs(held[held.length - 1].bottom - 780) <= 2;
+  check('on a phone held upright the repair says every step at the foot of the screen, each in sight',
+    held.length >= 5 && stacked && atFoot && held.every(l => l.top >= 0 && l.bottom <= 780), JSON.stringify(held));
+  await phone.screenshot({ path: path.join(OUT, 'shots', 'flows-repair-said-360.jpg'), type: 'jpeg', quality: 80 });
+  await phone.close();
 }
 
 async function adminFlows(contexts) {
