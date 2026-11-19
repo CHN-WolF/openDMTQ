@@ -25,6 +25,7 @@ import hashlib
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -686,6 +687,8 @@ def main():
     parser.add_argument("--ports", default="18901-18960")
     parser.add_argument("--keep", action="store_true")
     args = parser.parse_args()
+    # Stopped by a signal as by Ctrl+C: the jobs' runners and what their steps started go all the same.
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     if git("status", "--porcelain"):
         print("ci_local: the tree has changes that are not committed; CI runs the commit, and so does this", file=sys.stderr)
     # PyYAML here only, so that the rest (the expressions, the jobs' instances) imports without it (cli/tests/test_ci.py).
