@@ -9,7 +9,10 @@ import http.server
 import json
 import multiprocessing
 import os
+import socket
 import sqlite3
+import ssl
+import tempfile
 import threading
 import time
 import unittest
@@ -18,7 +21,7 @@ from unittest import mock
 from tests.test_admin import HAVE_FLASK, HOST, Install, member_rows, old_game_database, page_token
 
 if HAVE_FLASK:
-    from opendmtq_tools import admin
+    from opendmtq_tools import admin, tls
     from opendmtq_tools.admin import webhooks
 
 # The zero-width space that breaks a mention.
@@ -27,10 +30,11 @@ ZW = "​"
 
 class Chat:
     """A stand-in chat on the loopback: takes every POST, keeps its body, and answers as told (answers: a list of
-    (status, body, headers) to give in turn, the last one again and again; delay: seconds before each answer)."""
+    (status, body, headers) to give in turn, the last one again and again; delay: seconds before each answer). tls: its
+    certificate and key, for a chat over HTTPS (it notes the name each visitor told it, sni)."""
 
-    def __init__(self, answers=((204, b"", {}),), delay=0.0):
-        self.answers, self.delay, self.got = list(answers), delay, []
+    def __init__(self, answers=((204, b"", {}),), delay=0.0, tls=None):
+        self.answers, self.delay, self.got, self.sni = list(answers), delay, [], []
         self._lock = threading.Lock()
         chat = self
 
@@ -38,7 +42,8 @@ class Chat:
             def do_POST(self):
                 body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 with chat._lock:
-                    chat.got.append({"path": self.path, "body": json.loads(body or b"{}"), "agent": self.headers.get("User-Agent", "")})
+                    chat.got.append({"path": self.path, "body": json.loads(body or b"{}"), "agent": self.headers.get("User-Agent", ""),
+                                     "host": self.headers.get("Host", "")})
                     status, text, headers = chat.answers[0] if len(chat.answers) == 1 else chat.answers.pop(0)
                 time.sleep(chat.delay)
                 self.send_response(status)
@@ -57,7 +62,15 @@ class Chat:
                 pass
 
         self.server = Quiet(("127.0.0.1", 0), Handler)
-        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        self.port = self.server.server_address[1]
+        self.url = f"http://127.0.0.1:{self.port}"
+        if tls:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(*tls)
+            # The name the visitor asked for, as it told it.
+            context.sni_callback = lambda sock, name, ctx: chat.sni.append(name)
+            self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
+            self.url = f"https://127.0.0.1:{self.port}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def close(self):
@@ -796,6 +809,48 @@ class SendingTest(unittest.TestCase):
             url = closed.url
             closed.close()
             self.assertEqual(webhooks.post(url + "/x", {}, timeout=2)["code"], "unreachable")
+
+    def test_a_name_is_looked_up_once_and_the_message_goes_where_it_led(self):
+        # DNS rebinding: a name that leads elsewhere when the guard looks at it and to the server itself when the message
+        # would go. The message goes where the guard looked, the name looked up once, and nothing reaches the server's own
+        # port (ADM-173; main looked the name up again to connect, and the loopback's listener took the message).
+        with Server() as inst:
+            real, lookups = socket.getaddrinfo, []
+
+            def rebinding(host, *args, **kwargs):
+                if host == "chat.rebind.test":
+                    lookups.append(host)
+                    # First an address of nobody's (TEST-NET-1), then the server's own loopback, where the chat listens.
+                    return real("192.0.2.1" if len(lookups) == 1 else "127.0.0.1", *args, **kwargs)
+                return real(host, *args, **kwargs)
+
+            with mock.patch.object(webhooks, "LOOPBACK_OK", False), mock.patch.object(webhooks.socket, "getaddrinfo", rebinding):
+                result = webhooks.post(f"http://chat.rebind.test:{inst.chat.port}/x", {"a": 1}, timeout=1)
+            self.assertEqual(lookups, ["chat.rebind.test"])
+            self.assertFalse(result["ok"])
+            self.assertEqual(inst.chat.got, [])
+
+    def test_over_https_the_chat_is_told_its_name_and_its_certificate_checked(self):
+        # The connection goes to the address looked at, and the chat's server is told the name (SNI), which its
+        # certificate is checked against: a certificate of another name is refused there too (ADM-173).
+        with Server(), tempfile.TemporaryDirectory() as d:
+            # A certificate for chat.example, as the server's own HTTPS makes one (its authority trusted below alone).
+            with mock.patch("builtins.print"):
+                tls.ensure(d, "chat.example")
+            chat = Chat(tls=(os.path.join(d, "serve", "server.crt"), os.path.join(d, "serve", "server.key")))
+            real = socket.getaddrinfo
+            to_loopback = lambda host, *args, **kwargs: real("127.0.0.1" if host.endswith(".example") else host, *args, **kwargs)
+            try:
+                with mock.patch.object(webhooks, "_TLS", ssl.create_default_context(cafile=os.path.join(d, "ca.crt"))), \
+                        mock.patch.object(webhooks.socket, "getaddrinfo", to_loopback):
+                    took = webhooks.post(f"https://chat.example:{chat.port}/x", {"a": 1})
+                    other = webhooks.post(f"https://elsewhere.example:{chat.port}/x", {"a": 1})
+            finally:
+                chat.close()
+            self.assertTrue(took["ok"], took)
+            self.assertEqual([g["host"] for g in chat.got], [f"chat.example:{chat.port}"])
+            self.assertEqual(chat.sni[:1], ["chat.example"])
+            self.assertEqual((other["ok"], other["code"]), (False, "unreachable"))
 
     def test_a_redirect_is_not_followed(self):
         with Server() as inst:

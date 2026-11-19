@@ -16,6 +16,7 @@ added (the server has no language of its own), and can be changed."""
 
 import calendar
 import datetime
+import functools
 import http.client
 import ipaddress
 import json
@@ -24,6 +25,7 @@ import re
 import secrets
 import socket
 import sqlite3
+import ssl
 import threading
 import time
 import urllib.error
@@ -539,30 +541,102 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-# Requests without following redirects; the system's proxy settings as urllib reads them.
+# Requests without following redirects; the system's proxy settings as urllib reads them (for a chat reached through a
+# proxy the system names: the proxy connects, by the name).
 _opener = urllib.request.build_opener(_NoRedirect)
+
+# HTTPS as urllib checks it by default: the system's authorities, and the certificate against the address's host name.
+_TLS = ssl.create_default_context()
+
+
+def _connect(found, timeout):
+    """A connection to the first of `found` (getaddrinfo's answers, each with its port) that takes one: where the name led
+    when post() looked at it, and nowhere else."""
+    last = None
+    for family, kind, proto, _, address in found:
+        sock = socket.socket(family, kind, proto)
+        try:
+            # A time limit as urllib passes one (in seconds); its default object leaves the socket's own.
+            if isinstance(timeout, (int, float)):
+                sock.settimeout(timeout)
+            sock.connect(address)
+            return sock
+        except OSError as e:
+            # The next address the name gave, if there is one.
+            sock.close()
+            last = e
+    raise last or OSError("the name gave no address")
+
+
+class _PinnedHTTP(http.client.HTTPConnection):
+    """A connection to the addresses post() checked, the name not looked up again: a second answer could lead to the server
+    itself (DNS rebinding). The name stays the request's Host."""
+
+    def __init__(self, host, found=(), **kwargs):
+        super().__init__(host, **kwargs)
+        # getaddrinfo's answers for the address's host and port.
+        self.found = found
+
+    def connect(self):
+        self.sock = _connect(self.found, self.timeout)
+
+
+class _PinnedHTTPS(_PinnedHTTP):
+    """The same over HTTPS: the chat's server told the name (SNI), and its certificate checked against the name."""
+
+    default_port = http.client.HTTPS_PORT
+
+    def connect(self):
+        self.sock = _TLS.wrap_socket(_connect(self.found, self.timeout), server_hostname=self.host)
+
+
+class _PinnedHTTPHandler(urllib.request.HTTPHandler):
+    """urllib's plain HTTP, its connection to the checked addresses."""
+
+    def __init__(self, found):
+        super().__init__()
+        self.found = found
+
+    def http_open(self, req):
+        return self.do_open(functools.partial(_PinnedHTTP, found=self.found), req)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    """urllib's HTTPS, its connection to the checked addresses."""
+
+    def __init__(self, found):
+        super().__init__(context=_TLS)
+        self.found = found
+
+    def https_open(self, req):
+        return self.do_open(functools.partial(_PinnedHTTPS, found=self.found), req)
 
 
 def post(url, body, timeout=TIMEOUT):
     """Sends one body to a chat. {"ok", "status", "code", "retry_after"}: whether it took it, the HTTP status (None without an
     answer), the kind of failure (FAIL_WORDS) and, when the chat asked to wait, for how many seconds."""
-    # Where the name leads now: not to the server itself or its network link (a name can lead anywhere, and change).
+    # Where the name leads now: not to the server itself or its network link (a name can lead anywhere, and change). Looked
+    # up once: the connection goes where this look found (_PinnedHTTP).
     parts = urllib.parse.urlsplit(url)
-    if not LOOPBACK_OK:
-        try:
-            found = socket.getaddrinfo(parts.hostname or "", parts.port or (443 if parts.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
-        except (OSError, UnicodeError) as e:
-            app.logger.warning("webhook: %s: %s", masked(url), e)
-            return {"ok": False, "status": None, "code": "unreachable", "retry_after": None}
-        if any(own_address(str(info[4][0])) for info in found):
-            return {"ok": False, "status": None, "code": "local", "retry_after": None}
+    try:
+        found = socket.getaddrinfo(parts.hostname or "", parts.port or (443 if parts.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+    except (OSError, UnicodeError) as e:
+        app.logger.warning("webhook: %s: %s", masked(url), e)
+        return {"ok": False, "status": None, "code": "unreachable", "retry_after": None}
+    if not LOOPBACK_OK and any(own_address(str(info[4][0])) for info in found):
+        return {"ok": False, "status": None, "code": "local", "retry_after": None}
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST", headers={
         "Content-Type": "application/json; charset=utf-8",
         # A name of its own: some chats refuse urllib's.
         "User-Agent": f"OpenDMTQ/{os.environ.get('OPENDMTQ_VERSION') or 'server'} (webhook)"})
+    # Through a proxy the system names for this address (the environment's, as urllib reads it), the proxy connects, by the
+    # name; otherwise this process does, to the addresses looked at above.
+    proxied = bool(urllib.request.getproxies().get(parts.scheme)) and not urllib.request.proxy_bypass(parts.hostname or "")
+    opener = _opener if proxied else urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}),
+                                                                 _PinnedHTTPHandler(found), _PinnedHTTPSHandler(found))
     try:
-        with _opener.open(req, timeout=timeout) as answer:
+        with opener.open(req, timeout=timeout) as answer:
             status = answer.status
             if 200 <= status < 300:
                 return {"ok": True, "status": status, "code": None, "retry_after": None}
