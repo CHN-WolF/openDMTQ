@@ -190,7 +190,8 @@ What the replies rely on, as the client behaves:
   currency the product's whichever call it comes by. The client asks for the balance and the items in the same request
   and shows them. Unlimited currency (the player's own switch or the server's) tells the game 99,999,999 of each and
   takes nothing, the purchase kept as usual; a pack of MAX POINT then gives nothing either, so the player's own balance
-  stays as it was. Every song from 1 to the highest id is owned, and every item of the
+  stays as it was. `game.setSlotItem` equips only the player's own items, and leaves the slot of any other id empty
+  (null in its reply). Every song from 1 to the highest id is owned, and every item of the
   client's tables but the note items and the partners a coupon gave (`NOT_OWNED` in `tools/opendmtq_tools/songs.py`;
   the shop sells the notes); no quests, no coupons (every code is invalid, in the client's own popup), no terms popup.
 - **A ban** (`PlayerBan`, with a reason and an end). The client shows only words of its own for a refused sign-in: a

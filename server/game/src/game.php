@@ -582,19 +582,30 @@ function odq_game_save_fail_log(array $p)
 /*
  * game.setSlotItem [guid, slotItem1, slotItem2, slotItem3, slotItem4]: the partner, skin and note items the player
  * equips. Stored on every row of the player (a transfer code can give a player two); an empty slot is stored as
- * NULL. The reply gives the four values back as they were sent.
+ * NULL. Only the player's own items are equipped (player.php's odq_owned_items(): what everyone has but those taken from
+ * them, and what they bought or were given); any other id leaves its slot empty, as the game's own lists never offer it.
+ * The reply gives the four values back as they were kept: as sent, and null for one that was not the player's.
  */
 function odq_game_set_slots(array $p)
 {
+    // The player's items by number, looked up once for the four slots.
+    $owned = array_flip(odq_owned_items(odq_intval($p[0] ?? null)));
+    $kept = [];
+    for ($n = 1; $n <= 4; $n++) {
+        $value = $p[$n] ?? null;
+        // 0, "0", "", false and null all mean an empty slot, kept as sent; an item is kept when it is one of the player's,
+        // by its number (the game sends numbers), and an empty slot otherwise.
+        $kept[$n] = !$value ? $value : (is_numeric($value) && isset($owned[(int)$value]) ? $value : null);
+    }
     $q = @odq_db()->prepare('UPDATE Member SET slot_item1 = :s1, slot_item2 = :s2, slot_item3 = :s3, slot_item4 = :s4 WHERE guid = :g');
     if ($q) {
         for ($n = 1; $n <= 4; $n++) {
-            $value = $p[$n] ?? null;
-            // 0, "0", "", false and null all mean an empty slot.
+            $value = $kept[$n];
+            // An empty slot, or an item that was not the player's, as NULL.
             $q->bindValue(":s$n", $value ?: null, $value ? odq_sqlite_type($value) : SQLITE3_NULL);
         }
         $q->bindValue(':g', $p[0] ?? null, odq_sqlite_type($p[0] ?? null));
         @$q->execute();
     }
-    return ['slot_item1' => $p[1] ?? null, 'slot_item2' => $p[2] ?? null, 'slot_item3' => $p[3] ?? null, 'slot_item4' => $p[4] ?? null];
+    return ['slot_item1' => $kept[1], 'slot_item2' => $kept[2], 'slot_item3' => $kept[3], 'slot_item4' => $kept[4]];
 }

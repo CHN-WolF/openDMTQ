@@ -7,7 +7,9 @@
  * the key that login gave it:
  *
  *   - a banned player's call is refused whatever form its id takes ("9402x", " 9402", 9402.0), nothing bought;
- *   - unlimited currency: a pack of MAX POINT bought with Q gives nothing, as it takes nothing.
+ *   - unlimited currency: a pack of MAX POINT bought with Q gives nothing, as it takes nothing;
+ *   - game.setSlotItem equips the player's own items only: one nobody gave them, one the owner took, one no catalog has
+ *     leave their slot empty.
  *
  * Usage: php tests/game/trust.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
@@ -132,5 +134,23 @@ check('GAME-101 unlimited off again: the game is told the balance the player had
 // Without unlimited the pack is paid for and gives its amount, as before.
 call($base, $keys[9403], 'shop.buyProductByQPoint', [9403, 50001, 0]);
 check('GAME-101 without unlimited the pack takes its 10 Q and gives its 2,500 MAX POINT', kept($db, 9403) === '3500/990', kept($db, 9403));
+
+// ------------------------------------------------------------------ GAME-102: equipping the player's own items only
+
+// 30001 and 100001 everyone has (the catalog's items); 90001 the owner gave Dee; 30002 the owner took from Dee; 90002 nobody
+// has at first; 123456 no catalog has.
+$db->exec("INSERT INTO PlayerItem (guid, item_id, owned, how, at) VALUES (9404, 90001, 1, 'given', " . time() . "), (9404, 30002, 0, 'taken', " . time() . ")");
+$slots = fn() => $db->querySingle("SELECT coalesce(slot_item1, 'null') || ',' || coalesce(slot_item2, 'null') || ',' || coalesce(slot_item3, 'null') || ',' || coalesce(slot_item4, 'null') FROM Member WHERE guid = '9404'");
+$set = call($base, $keys[9404], 'game.setSlotItem', [9404, 30001, 0, 90001, 100001]);
+check("GAME-102 the player's own items are equipped as sent: one everyone has, one given, an empty slot",
+    $slots() === '30001,null,90001,100001' && ($set['result'] ?? null) === ['slot_item1' => 30001, 'slot_item2' => 0, 'slot_item3' => 90001, 'slot_item4' => 100001],
+    $slots() . ' ' . json_encode($set));
+$set = call($base, $keys[9404], 'game.setSlotItem', [9404, 30002, 123456, 90002, '100001']);
+check('GAME-102 an item the owner took, one no catalog has and one nobody gave leave their slots empty, said so in the reply',
+    $slots() === 'null,null,null,100001' && ($set['result'] ?? null) === ['slot_item1' => null, 'slot_item2' => null, 'slot_item3' => null, 'slot_item4' => '100001'],
+    $slots() . ' ' . json_encode($set));
+$equipped = call($base, $keys[9404], 'game.getUserAsset', [9404])['result'] ?? [];
+check('GAME-102 the game is told the slots as they were kept', array_key_exists('slot_item1', $equipped) && array_key_exists('slot_item3', $equipped)
+    && [$equipped['slot_item1'], $equipped['slot_item3'], $equipped['slot_item4'] ?? 'x'] === [null, null, 100001], json_encode($equipped));
 
 exit($failures ? 1 : 0);
