@@ -142,8 +142,9 @@ Requirements:
   game, the players' site, the admin pages and the API. The Service listens on the port in `publicHost` (8791 when it
   names none) unless `router.service.port` says otherwise. An install from before 0.11.0 whose `publicHost` names no
   port was on port 80: its upgrade moves it to 8791, with the app built again for `<publicHost>:8791` (phones install it
-  over the old one, as the site's download page says); point the address phones use at the Service's new port, or set
-  `router.service.port` to keep the Service where it was and name its port in `publicHost`.
+  over the old one, as the site's download page says), also from a values file of then that names `router.service.port:
+  80` (its default then: beside a `publicHost` without a port it is not used, and the notes say so); point the address
+  phones use at the Service's new port, or name port 80 in `publicHost` to keep the Service where it was.
 
 The claim `opendmtq-data` below, made and filled from the computer where `./opendmtq import [--songs] <folder>` made
 `data/`: a pod that runs as the chart's pods do (uid 33) holds the claim while `content/` and `apk/base/` go in, then
@@ -246,7 +247,7 @@ The main ones; see `values.yaml` for all.
 | `data.existingClaim` / `data.hostPath` | (one required) | Game files volume. |
 | `router.replicas` | 2 | |
 | `router.service.type` | LoadBalancer | Or NodePort (`router.service.nodePort`). |
-| `router.service.port` | (empty) | The server's one port. Empty: the port in `publicHost`, the one the phones' app calls (8791 when it names none). |
+| `router.service.port` | (empty) | The server's one port. Empty: the port in `publicHost`, the one the phones' app calls (8791 when it names none). 80 beside a `publicHost` without a port, the default before 0.11.0, is taken for empty. |
 | `assets.replicas` | 2 | Or `assets.autoscaling.enabled=true`. |
 | `api.failoverSeconds` | 20 | How long the api waits on an unreachable node. |
 | `litestream.enabled` | true | Off means the database is lost when the api pod is replaced. |

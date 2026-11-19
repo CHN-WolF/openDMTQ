@@ -117,13 +117,25 @@ at its upgrade, its app built again for the new address).
 
 {{/*
 The router Service's port, the server's one port: router.service.port when set; else the port in publicHost (8791 when
-it names none), the one the phones' app calls. Worked out from the values alone, so helm template, an upgrade and a
-GitOps tool all agree.
+it names none), the one the phones' app calls. router.service.port 80 beside a publicHost that names no port is a values
+file from before 0.11.0, whose default that was (opendmtq.oldPort80): the Service moves to 8791 with the app, as every
+install of then does, instead of staying on 80 while the app calls 8791. Port 80 named in publicHost stays. Worked out
+from the values alone, so helm template, an upgrade and a GitOps tool all agree.
 */}}
 {{- define "opendmtq.routerPort" -}}
-{{- if .Values.router.service.port -}}
+{{- if and .Values.router.service.port (not (include "opendmtq.oldPort80" .)) -}}
 {{- .Values.router.service.port -}}
 {{- else -}}
 {{- trimPrefix ":" (regexFind ":[0-9]+$" (include "opendmtq.publicHost" .)) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+"yes" when the values say router.service.port 80 and a publicHost without a port, as a values file from before 0.11.0
+has them (80 was its default, and the address then had no port on 80); empty otherwise.
+*/}}
+{{- define "opendmtq.oldPort80" -}}
+{{- if and (eq (toString .Values.router.service.port) "80") (not (regexMatch ":[0-9]+$" (toString .Values.publicHost))) -}}
+yes
 {{- end -}}
 {{- end -}}

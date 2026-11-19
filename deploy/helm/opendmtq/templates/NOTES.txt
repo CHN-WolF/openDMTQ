@@ -2,6 +2,10 @@ OpenDMTQ {{ .Chart.AppVersion }} is starting in namespace {{ .Release.Namespace 
 
 Phones on the same network reach it at:  http://{{ include "opendmtq.publicHost" . }}/
 That address must be where the "{{ include "opendmtq.fullname" . }}" Service answers on port {{ include "opendmtq.routerPort" . }}.
+{{- if include "opendmtq.oldPort80" . }}
+The server's one port is {{ include "opendmtq.routerPort" . }}: router.service.port 80 beside a publicHost without a port, as values
+from before 0.11.0 have them, is not used. Phones with the app for port 80 install it again from the address above.
+{{- end }}
 
 The builder job makes the app for that address; follow it with:
   kubectl -n {{ .Release.Namespace }} logs -f job/{{ include "opendmtq.fullname" . }}-builder

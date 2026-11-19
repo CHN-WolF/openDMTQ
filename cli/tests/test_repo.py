@@ -705,6 +705,29 @@ class HelmPortTest(unittest.TestCase):
         self.assertEqual(self.service_port("publicHost=game.example.com:8790"), 8790)
         self.assertEqual(self.service_port("publicHost=192.168.1.10:8791", "router.service.port=9000"), 9000)
 
+    def test_port_80_of_values_from_before_0_11_is_no_port_of_its_own(self):
+        # A values file from before 0.11.0 names router.service.port 80 (its default) beside a publicHost without a port:
+        # the Service moves to 8791 with the app and every URL, not left on 80 while they call 8791 (DEP-90; main put the
+        # Service on 80 and the app on 8791). Port 80 named in publicHost stays, and so does another public port.
+        self.assertEqual(self.service_port("publicHost=192.168.1.10", "router.service.port=80"), 8791)
+        out = self.rendered("publicHost=192.168.1.10", "router.service.port=80", "builder.enabled=true")
+        self.assertEqual(set(re.findall(r"name: PUBLIC_HOST, value: \"?([^\"}\s]+)", out)), {"192.168.1.10:8791"})
+        self.assertEqual(self.service_port("publicHost=192.168.1.10:80", "router.service.port=80"), 80)
+        self.assertEqual(self.service_port("publicHost=192.168.1.10:80"), 80)
+        self.assertEqual(self.service_port("publicHost=game.example.com:8443", "router.service.port=80"), 80)
+        # The same from a values file as that version's chart wrote its defaults (port: 80 under router.service).
+        with tempfile.TemporaryDirectory() as d:
+            old = os.path.join(d, "values.yaml")
+            with open(old, "w", encoding="utf-8") as f:
+                f.write("router:\n  replicas: 2\n  service:\n    type: LoadBalancer\n    port: 80\n    nodePort: null\n")
+            chart = os.path.join(ROOT, "deploy", "helm", "opendmtq")
+            done = subprocess.run(["helm", "template", "t", chart, "-f", os.path.join(ROOT, "deploy", "kind", "values.yaml"), "-f", old,
+                                   "--set", "publicHost=game.example.com"], capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn('PUBLIC_HOST, value: "game.example.com:8791"', done.stdout)
+        self.assertRegex(done.stdout, r"(?m)^ +port: 8791$")
+        self.assertNotRegex(done.stdout, r"(?m)^ +port: 80$")
+
     def test_a_public_host_without_a_port_is_on_8791_everywhere(self):
         # Every container is given the address with its port (the builder makes the app for it), and nothing names 80.
         out = self.rendered("publicHost=192.168.1.10", "builder.enabled=true")

@@ -69,7 +69,8 @@ router:
     # LoadBalancer on bare metal needs MetalLB, k3s servicelb or similar.
     type: LoadBalancer
     # The server's one port: the game, the players' site, the admin pages (/opendmtq/admin) and the API. Empty: the port
-    # in publicHost, the one the phones' app calls (8791 when it names none).
+    # in publicHost, the one the phones' app calls (8791 when it names none). 80 is kept with a publicHost that names
+    # port 80; beside one that names no port (the default before 0.11.0) it is taken for empty.
     port: null
     nodePort: null
     loadBalancerIP: ""
