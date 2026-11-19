@@ -34,6 +34,10 @@ import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("spacing", os.path.join(os.path.dirname(__file__), "spacing.py"))
 spacing = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(spacing)
+# The launcher's design measures (tests/ui/design.py), the installer's pages measured by them as the launcher's are.
+_spec = importlib.util.spec_from_file_location("design", os.path.join(os.path.dirname(__file__), "design.py"))
+design = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(design)
 _spec = importlib.util.spec_from_file_location("flicker", os.path.join(os.path.dirname(__file__), "flicker.py"))
 flicker = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(flicker)
@@ -104,6 +108,8 @@ def measure(window, name, problems):
     # The launcher's own measure of boxes and room (tests/ui/spacing.py): nothing touching, words inside their card's
     # padding, the gaps on the spacing scale.
     problems.extend(spacing.check(root, window.ui, name))
+    # The design's measures: the words in their roles, the buttons by theirs, no shard at the page's card.
+    problems.extend(design.check(root, window.ui, name))
     # The header the installer draws instead of Windows' title bar.
     problems.extend(header_problems(window, name))
 
@@ -211,6 +217,8 @@ def stopped_window(args, tag, problems):
     settle(root, 1.0)
     shot(root, args.out, name)
     problems.extend(spacing.check_dialog(dialog, name))
+    # Its buttons as the launcher's dialogs' and pages' are.
+    problems.extend(design.check_dialog(dialog, name))
     canvas, start = dialog.canvas, (root.winfo_rootx(), root.winfo_rooty())
 
     def drag(x, y, dx, dy):

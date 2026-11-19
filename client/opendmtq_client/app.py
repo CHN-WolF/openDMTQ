@@ -193,7 +193,7 @@ class LauncherApp:
         # The status: its lamp in its tone's colour and its words, a link under them when there is something to open
         # (the player's log after a crash); then PLAY under it all.
         from PIL import ImageTk
-        self._status_lamps = {tone: art.lamp(colour, self.scale, bg=theme.STRIP) for tone, colour in
+        self._status_lamps = {tone: art.lamp(colour, self.scale, bg=theme.STRIP, lead=False) for tone, colour in
                               (("normal", theme.FAINT), ("ok", theme.OK), ("warn", theme.WARN), ("bad", theme.BAD))}
         self._status_images = {tone: ImageTk.PhotoImage(p, master=self.root) for tone, p in self._status_lamps.items()}
         status = tk.Frame(foot, bg=theme.STRIP)

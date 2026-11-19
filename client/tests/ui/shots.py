@@ -30,6 +30,11 @@ import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("spacing", os.path.join(os.path.dirname(__file__), "spacing.py"))
 spacing = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(spacing)
+# The page's design (tests/ui/design.py): its cards' composition, its words' roles, its buttons, its picture round the
+# cards.
+_spec = importlib.util.spec_from_file_location("design", os.path.join(os.path.dirname(__file__), "design.py"))
+design = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(design)
 
 # What the launcher logs in this run, line by line (its file handler is set up by main(), which the run skips).
 LOGGED = []
@@ -89,6 +94,9 @@ def measure(app, name, problems, root=None):
         problems.extend(spacing.check(root, app.ui, name))
         # The page's own picture between and round the cards, never a slab of the field's flat colour over it.
         field_check(app, name, problems, root)
+        # The design (tests/ui/design.py): no plain list of boxes nor a box for one control, the words in their roles,
+        # the buttons by theirs, no shard of the picture at the column or a card.
+        problems.extend(design.check(root, app.ui, name))
 
 
 # Of the page's field (between and round the cards, under the page's title), how much may differ from the picture the
@@ -284,7 +292,8 @@ def entries(app):
 
 def dialog_problems(dialog, name):
     """A dialog's own layout check (dialogs.Dialog.layout_problems) and its room (spacing.check_dialog)."""
-    return ["%s: %s" % (name, p) for p in dialog.layout_problems()] + spacing.check_dialog(dialog, name)
+    return (["%s: %s" % (name, p) for p in dialog.layout_problems()] + spacing.check_dialog(dialog, name)
+            + design.check_dialog(dialog, name))
 
 
 def through_dialog(app, out, name, press, answer, problems, extra=None, seconds=10.0):
@@ -524,24 +533,54 @@ def page_cards(area):
     return sorted(cards, key=lambda card: card.winfo_rooty())
 
 
+def play_head(app):
+    """PLAY's head card: the first card down the page (it has no title: the server's name heads it)."""
+    cards = page_cards(app.body)
+    return cards[0] if cards else None
+
+
 def play_cards_check(app, name, problems):
-    """The PLAY page's cards one under another, each as tall as what it holds (none stretched to fill the page, where
-    the ready check stood as tall as its column beside How to play and Last game): the server's first, then the ready
-    check, the last game, and My records when signed in. No card that only says how to play (the owner's rule: a page
-    shows what to do now and the state; usage is in the docs)."""
+    """The PLAY page as its design composes it (DESIGN.md of the 0.11.1 design pass): its head card first, across the
+    page, with no title of its own, the server's name heading it in the head's face (the page's largest words); then the
+    ready check and the last game side by side and one height, the ready check the wider, where the page has two
+    columns, one under another and each as tall as what it holds where it has one; then My records across the page
+    when signed in. No card that only says how to play (the owner's rule: a page shows what to do now and the state;
+    usage is in the docs): main had its cards one under another, a plain list (and How to play before that)."""
+    import tkinter as tk
     w = app.words
     app.root.update()
     cards = page_cards(app.body)
     titles = [card_title(card) for card in cards]
-    if titles not in ([w("play.server"), w("play.ready"), w("play.last")],
-                      [w("play.server"), w("play.ready"), w("play.last"), w("play.records")]):
+    if titles not in ([None, w("play.ready"), w("play.last")], [None, w("play.ready"), w("play.last"),
+                                                                w("play.records")]):
         problems.append("%s: PLAY's cards are %r" % (name, titles))
-    for card in cards:
-        if card.winfo_height() > card.winfo_reqheight() + 1:
-            problems.append("%s: the %r card is stretched %d px past what it holds" % (
-                name, card_title(card), card.winfo_height() - card.winfo_reqheight()))
-    if len({card.winfo_rootx() for card in cards}) > 1:
-        problems.append("%s: PLAY's cards stand side by side" % name)
+        return
+    column = app.body.inner.winfo_width()
+    head, ready, last = cards[:3]
+    across = [card for card in (head,) + tuple(cards[3:]) if abs(card.winfo_width() - column) > 1]
+    if across:
+        problems.append("%s: %s not across the page" % (name, ", ".join(repr(card_title(c)) for c in across)))
+    if app.state.server() is not None:
+        # The head's first words: the server's name (or its address, when it has no name), in the head's face.
+        first = next((x for x in widgets_of(head.body) if isinstance(x, tk.Label) and x.winfo_ismapped()
+                      and str(x.cget("text")).strip()), None)
+        if first is None or str(first.cget("font")) != str(app.fonts.head):
+            problems.append("%s: the head card's first words %r are not in the head's face" % (
+                name, first.cget("text") if first is not None else None))
+    if column >= app.ui.px(design.TWO_COLUMNS):
+        if abs(ready.winfo_rooty() - last.winfo_rooty()) > 1 or abs(ready.winfo_height() - last.winfo_height()) > 1:
+            problems.append("%s: the ready check (y %d, %d tall) and the last game (y %d, %d tall) are not side by side "
+                            "at one height" % (name, ready.winfo_rooty(), ready.winfo_height(), last.winfo_rooty(),
+                                               last.winfo_height()))
+        if not (ready.winfo_rootx() < last.winfo_rootx() and ready.winfo_width() > last.winfo_width()):
+            problems.append("%s: the ready check is not the wider card, left of the last game" % name)
+    else:
+        if len({card.winfo_rootx() for card in cards}) > 1:
+            problems.append("%s: PLAY's cards stand side by side in a window of one column" % name)
+        for card in cards:
+            if card.winfo_height() > card.winfo_reqheight() + 1:
+                problems.append("%s: the %r card is stretched %d px past what it holds" % (
+                    name, card_title(card), card.winfo_height() - card.winfo_reqheight()))
 
 
 # The cards each page that has only these shows, in their order: what the page does and shows, none that only tells how
@@ -560,10 +599,11 @@ def cards_check(app, page, name, problems):
 
 
 def sound_last_check(app, out, tag, problems):
-    """The Sound page's Last game card, under the output's choices: "No game yet." before the first game; after one, the
-    player's result (last-game-sound.txt beside the settings file, as the player writes it) as one row, its lamp lime
-    with no gaps and a ring with some, said again when a game ends while the page is on show; in view at the page's
-    foot, measured as every screen is."""
+    """The Sound page's last game's sound, the Output card's last block under its own heading, after the output's
+    choices: "No game yet." before the first game; after one, the player's result (last-game-sound.txt beside the
+    settings file, as the player writes it) as one row, its lamp lime with no gaps and a ring with some, said again when
+    a game ends while the page is on show; in view as a person scrolls to it, measured as every screen is."""
+    import tkinter as tk
     from opendmtq_client import i18n
     from tests.base import SOUND_RESULT
     w = app.words
@@ -576,21 +616,29 @@ def sound_last_check(app, out, tag, problems):
     settle(app, 6, until=lambda: app.devices is not None)
     settle(app)
     title = w("sound.last") if "sound.last" in i18n.TEXT else "Last game" if w.language == "en" else "지난 플레이"
-    card = card_titled(app, title)
-    if card is None:
-        problems.append("%s_sound: no Last game card on the Sound page" % tag)
+
+    def block():
+        """What its heading heads: the frame round the heading, and the rows under it."""
+        heading = next((x for x in widgets_of(app.body.inner) if isinstance(x, tk.Label) and x.winfo_ismapped()
+                        and x.cget("text") == title), None)
+        return heading.master if heading is not None else None
+
+    found = block()
+    if found is None:
+        problems.append("%s_sound: no last game's sound on the Sound page" % tag)
         return
     output = card_titled(app, w("sound.output"))
-    if output is not None and card.winfo_rooty() < output.winfo_rooty() + output.winfo_height():
-        problems.append("%s_sound: the Last game card is not under the Output card" % tag)
+    if output is None or not str(found).startswith(str(output) + "."):
+        problems.append("%s_sound: the last game's sound is not in the Output card" % tag)
 
     def said():
-        """The words under the card's title (its head is in its body too), in order."""
-        return [x.cget("text") for child in card.body.winfo_children() if child is not card.head
+        """The words under its heading, in order."""
+        return [x.cget("text") for child in found.winfo_children() if not (isinstance(child, tk.Label)
+                                                                           and child.cget("text") == title)
                 for x in widgets_of(child) if x.winfo_class() == "Label" and x.cget("text")]
 
     if said() != [w("sound.last.none")]:
-        problems.append("%s_sound: before a game the Last game card says %r" % (tag, said()))
+        problems.append("%s_sound: before a game the last game's sound says %r" % (tag, said()))
     # The row's words in each language: how the device was had, then the gaps.
     row = "Shared, 10 ms period, 18 ms out" if w.language == "en" else "공유, 주기 10 ms, 출력 지연 18 ms"
     cases = (("none", None, None),
@@ -604,17 +652,17 @@ def sound_last_check(app, out, tag, problems):
                 f.write(text)
             app.follow_page("play", "sound", "help", "online")
             settle(app, 1)
-            card = card_titled(app, w("sound.last"))
-            if card is None:
-                problems.append("%s_sound_last_%s: the Last game card went" % (tag, kind))
+            found = block()
+            if found is None:
+                problems.append("%s_sound_last_%s: the last game's sound went" % (tag, kind))
                 return
             if sorted(said()) != sorted(want):
-                problems.append("%s_sound_last_%s: the card says %r, not %r" % (tag, kind, said(), want))
-            lamps = [x for x in widgets_of(card.body) if getattr(x, "odq_picture", None) is not None]
+                problems.append("%s_sound_last_%s: it says %r, not %r" % (tag, kind, said(), want))
+            lamps = [x for x in widgets_of(found) if getattr(x, "odq_picture", None) is not None]
             if len(lamps) != 1:
-                problems.append("%s_sound_last_%s: %d lamps on the card's row (want 1)" % (tag, kind, len(lamps)))
-        # In view at the page's foot, as a person scrolls to it.
-        app.body.show_widget(card)
+                problems.append("%s_sound_last_%s: %d lamps on its row (want 1)" % (tag, kind, len(lamps)))
+        # In view, as a person scrolls to it.
+        app.body.show_widget(found)
         settle(app, 0.5)
         name = "%s_sound_last_%s" % (tag, kind)
         shot(app.root, out, name)
@@ -1176,7 +1224,12 @@ def keys_check(app, out, tag, problems):
     try:
         app.go("controls")
         settle(app)
-        measure(app, tag + "_controls-long with wider names", problems)
+        # The names' face alone made larger to draw its words wider: the sizes between faces are no longer the launcher's,
+        # so a heading in another face measured against them says nothing here (design.py's headings, measured on every
+        # other screen).
+        found = []
+        measure(app, tag + "_controls-long with wider names", found)
+        problems.extend(p for p in found if "is smaller than the words under it" not in p)
         keys_fit(app, tag + "_controls-long with wider names", problems)
     finally:
         bold.configure(size=size)
@@ -1488,7 +1541,7 @@ def test_check(app, site, out, tag, problems):
         measure(app, name, problems)
         # The server card says the server does not answer, and its Sign in, which cannot reach it, is not the screen's
         # lime main action (main said only "Not signed in yet." beside a lime Sign in).
-        server_card = card_titled(app, w("play.server"))
+        server_card = play_head(app)
         said = [x.cget("text") for x in widgets_of(server_card) if isinstance(x, tk.Label)] if server_card else []
         lime = [x.words for x in widgets_of(server_card) if isinstance(x, widgets.Button)
                 and x.look == widgets.Button.LOOKS["primary"]] if server_card else []

@@ -378,8 +378,15 @@ class ScrollArea(tk.Frame):
     behind on the canvas, art.backdrop), the page's title and a line under it (set_heading), and the page's content in
     a column between margins (`inner`), all scrolling together with the mouse wheel."""
 
-    # The margins either side of the column, the room above the title and under the content (logical pixels).
-    MARGIN, TOP, BOTTOM, GAP = 32, 20, 28, 18
+    # The margins either side of the column, the room above the title and under the content, and between the heading
+    # and the content (logical pixels, on the spacing scale).
+    MARGIN, TOP, BOTTOM, GAP = 32, 20, 20, 20
+    # The content column's greatest width (logical pixels): a wider window leaves the room right of it, where the
+    # page's shards stand, rather than stretching rows past what a person reads at a glance.
+    COLUMN_MAX = 1080
+    # The room the shards keep from the content column (logical pixels): they stand in the margin right of it
+    # (art.shard_mask), clear of every card and of the heading's words.
+    SHARD_CLEAR = 16
 
     def __init__(self, parent, ui, bg=theme.BG, offset=0, light=None, on_moved=None):
         super().__init__(parent, bg=bg)
@@ -509,8 +516,17 @@ class ScrollArea(tk.Frame):
         self._paint_field()
 
     def _column(self, width):
-        """The column's width in an area `width` wide: between the margins, less the scroll bar's room."""
-        return width - 2 * self.ui.px(self.MARGIN) - self.bar_room
+        """The column's width in an area `width` wide: between the margins, less the scroll bar's room, and never wider
+        than COLUMN_MAX."""
+        return min(width - 2 * self.ui.px(self.MARGIN) - self.bar_room, self.ui.px(self.COLUMN_MAX))
+
+    def shard_room(self):
+        """Where the page's shards may stand (art.shard_mask): right of this x, in the page's own pixels, SHARD_CLEAR past
+        the content column, down the whole page and in its head alike. Nothing of a card or of the heading's words is
+        ever there, whatever the page holds, so the room follows the window's width alone (the picture is drawn again
+        for a new width anyway, never for another page)."""
+        px = self.ui.px
+        return px(self.MARGIN) + max(1, self._column(max(1, self.canvas.winfo_width()))) + px(self.SHARD_CLEAR)
 
     def _on_resize(self, event):
         px = self.ui.px
@@ -636,7 +652,8 @@ class ScrollArea(tk.Frame):
         step = self.ui.px(BACKDROP_ROOM)
         height = (height + step - 1) // step * step
         self._backdrop_size = (width, height)
-        picture = art.backdrop(width, height, self.ui.scale, offset=self.offset, top=self.light)
+        # The shards in the margin right of the content column (shard_room), which follows the width alone.
+        picture = art.backdrop(width, height, self.ui.scale, offset=self.offset, top=self.light, room=self.shard_room())
         # The picture shown until now, kept until every canvas of the field shows the new one: Tk empties an image the
         # moment Python forgets it, and a canvas still showing it would be drawn empty.
         before = getattr(self, "_backdrop_image", None)
@@ -1137,7 +1154,7 @@ def divider(parent, ui, bg=theme.DIVIDER, pady=12):
 def lamp(parent, ui, colour, bg=theme.PANEL, hollow=False):
     """A state's small light (art.lamp), as a label; `hollow` draws it as a ring."""
     from PIL import ImageTk
-    picture = art.lamp(colour, ui.scale, bg=bg, hollow=hollow)
+    picture = art.lamp(colour, ui.scale, bg=bg, hollow=hollow, lead=False)
     image = ImageTk.PhotoImage(picture, master=parent)
     light = tk.Label(parent, image=image, bg=bg, bd=0)
     # Kept on the label: Tk drops a picture the moment Python forgets it. A dialog draws the window from it.
@@ -1212,7 +1229,9 @@ class Button(tk.Canvas):
         # pictures a button, a third of HELP's making at 150 %).
         self.face_size, self.faces, self.images = (width, height), {}, {}
         self.face = self.create_image(0, 0, anchor="nw")
-        self.parts = [self.create_text(px(18), height // 2, text=text, font=fonts.body_bold, anchor="w")]
+        # On the face's middle by the ink of its capitals (or its Hangul), not by Tk's line box (words_top).
+        self.parts = [self.create_text(px(18), words_top(fonts.body_bold, text, self, height / 2.0), text=text,
+                                       font=fonts.body_bold, anchor="nw")]
         self._paint(self.state if self.enabled else "disabled")
 
     def _face(self, key):
@@ -1395,7 +1414,9 @@ class Segmented(tk.Frame):
         for i, ((x0, w), (_key, text)) in enumerate(zip(self.boxes, self.options)):
             # Its face comes with the row's first look (set, below).
             self.items.append(self.canvas.create_image(x0, 0, anchor="nw"))
-            self.words.append(self.canvas.create_text(x0 + w // 2, px(self.HEIGHT) // 2, text=text, font=ui.fonts.tab))
+            # On the tab's middle by the ink of its capitals (or its Hangul), as a button's words are (words_top).
+            self.words.append(self.canvas.create_text(x0 + w // 2, words_top(ui.fonts.tab, text, self, px(self.HEIGHT) / 2.0),
+                                                      text=text, font=ui.fonts.tab, anchor="n"))
             for item in (self.items[-1], self.words[-1]):
                 self.canvas.tag_bind(item, "<Button-1>", lambda e, k=self.keys[i]: self.set(k, notify=True))
                 self.canvas.tag_bind(item, "<Enter>", lambda e, i=i: self._hover(i))
@@ -1465,6 +1486,9 @@ class Segmented(tk.Frame):
 
 # The characters a slider's number takes at least: an equaliser's band's "-12 dB".
 SLIDER_NUMBER = 6
+# A slider that takes its row's room (fill): its track at least this long, and at most this (logical pixels). Long
+# enough to set a value finely by the mouse, never a line across a wide card.
+SLIDER_LEAST, SLIDER_MOST = 200, 360
 
 
 class Slider(tk.Frame):
@@ -1474,12 +1498,18 @@ class Slider(tk.Frame):
     range that goes below zero (an equaliser's band) is lit from its zero, marked on the track. `say(value)` is the
     number's words ("+3 dB"); `step` what an arrow key moves it by."""
 
-    def __init__(self, parent, ui, value, command, bg=None, width=320, least=0, most=100, step=5, say=str):
+    def __init__(self, parent, ui, value, command, bg=None, width=320, least=0, most=100, step=5, say=str, fill=False,
+                 shortest=None):
         bg = bg or parent.cget("bg")
         super().__init__(parent, bg=bg)
         self.ui, self.command, self.value, self.bg = ui, command, int(value), bg
         self.least, self.most, self.step, self.say = least, most, step, say
-        self.w, self.h = ui.px(width), ui.px(26)
+        # `fill`: as long as the room its place gives it (setting_row grids it across its control column), between
+        # SLIDER_LEAST (or `shortest`, for a range of few steps: an equaliser's band) and SLIDER_MOST; it starts at the
+        # least, so that it never asks a card for more than it has.
+        self.fill, self.shortest = fill, ui.px(shortest or SLIDER_LEAST)
+        self.odq_fill = fill
+        self.w, self.h = (self.shortest if fill else ui.px(width)), ui.px(26)
         self.colour = theme.OK
         self.knob_size = ui.px(18)
         # The knob's picture, drawn once (art keeps it for every slider), for the canvas and for a dialog's picture.
@@ -1509,6 +1539,20 @@ class Slider(tk.Frame):
         # and the knob where they are, put together only when one asks (_picture).
         self.canvas.odq_picture = self._picture
         self._draw()
+        if fill:
+            # Its own width as its place lays it out: the track takes what the number and its gap leave.
+            self.bind("<Configure>", self._fit, add="+")
+
+    def _fit(self, event):
+        """The track as long as the slider's width leaves it (a fill slider), between SLIDER_LEAST and SLIDER_MOST; drawn
+        again only when that changed (the window made wider or narrower)."""
+        px = self.ui.px
+        room = event.width - self.number.winfo_reqwidth() - px(10) - 2 * self.inset
+        track = max(self.shortest, min(px(SLIDER_MOST), room))
+        if track != self.w:
+            self.w = track
+            self.canvas.configure(width=self.w)
+            self._draw()
 
     def _fraction(self, value):
         """Where a value lies along the range, from 0 to 1."""
@@ -1578,12 +1622,17 @@ class Select(ttk.Combobox):
     pointer or the keyboard lit. Each choice's words start with the same spaces in the closed box (list_pad), and the
     list draws its words where the box's start. The choices are told apart by their place, never by their words."""
 
-    def __init__(self, parent, ui, options, value, command, width=24):
+    def __init__(self, parent, ui, options, value, command, width=24, most=None):
         self.options, self.ui = list(options), ui
         pad, _ = list_pad(ui)
         super().__init__(parent, values=[pad + t for _, t in self.options], state="readonly", width=width,
                          style="Dark.TCombobox", font=ui.fonts.body)
         self.command = command
+        # `most`: as wide as its row leaves it, from `width` characters up to `most` (a sound device's long name in a
+        # wide card, the least in a narrow one), set when the row is laid out (_fit_room).
+        self.least, self.most = width, most
+        if most:
+            parent.bind("<Configure>", lambda e: self._fit_room(), add="+")
         # The list while it is open, else None.
         self.droplist = None
         self.set_value(value)
@@ -1594,6 +1643,20 @@ class Select(ttk.Combobox):
             self.bind(key, lambda e: self.open() or "break")
         # The arrow up and down while closed step nothing (Tk's would choose without saying so).
         self.bind("<Up>", lambda e: "break")
+
+    def _fit_room(self):
+        """The box as wide as its row leaves it right of where it starts, in whole characters between its least and its
+        most (Tk sizes a drop-down by characters of its font): set again only when that changed."""
+        if not self.winfo_exists() or not self.winfo_ismapped():
+            return
+        # Its row's width right of where the box starts in it.
+        room = self.master.winfo_width() - self.winfo_x()
+        # The box's own edge and arrow, and one character's width, as Tk measures a box of `width` characters.
+        each = max(1, self.ui.fonts.body.measure("0"))
+        edge = self.winfo_reqwidth() - int(self.cget("width")) * each
+        chars = max(self.least, min(self.most, (room - edge) // each))
+        if chars != int(self.cget("width")):
+            self.configure(width=chars)
 
     def open(self):
         """Open the list under the box (over it when the display has no room under it), the chosen row lit."""
@@ -1898,12 +1961,51 @@ def unbind_one(widget, sequence, command):
         pass
 
 
+# The words' own font files by Tk's family and weight, to measure where the eye finds their middle (words_top).
+FACE_FILES = {("Pretendard", "normal"): "Pretendard-Regular.ttf", ("Pretendard", "bold"): "Pretendard-Bold.ttf",
+              ("Pretendard SemiBold", "normal"): "Pretendard-SemiBold.ttf",
+              ("Pretendard SemiBold", "bold"): "Pretendard-SemiBold.ttf"}
+# Hangul syllables' ink, over and under the baseline as shares of the em, by face and syllables (measured once each).
+_HANGUL_INK = {}
+
+
+def words_top(font, words, widget, middle):
+    """The top at which Tk sets one line of `words` in `font` (a canvas text item anchored at its top) so that the eye
+    finds their middle on `middle` (pixels of `widget`'s screen): the middle of the capitals' height for words with
+    Latin letters or figures (Pretendard's cap height, theme.TEXT_CAP), of the syllables' ink for Hangul alone. A line
+    box centred there (Tk's own centring) stands its capitals half a pixel low at 200 %: a button's words then sit
+    under its middle (client/tests/ui/design.py measures it)."""
+    import os
+    size = float(font.actual("size"))
+    # The em in pixels on this screen: a size in points, or in pixels when negative.
+    em = size * widget.winfo_fpixels("1p") if size > 0 else -size
+    hangul = "".join(ch for ch in words if "가" <= ch <= "힣")
+    if hangul and not any(ch.isascii() and ch.isalnum() for ch in words):
+        actual = font.actual()
+        key = (actual["family"], actual["weight"], hangul)
+        if key not in _HANGUL_INK:
+            from PIL import ImageFont
+            path = os.path.join(theme.FONT_DIR, FACE_FILES.get((actual["family"], actual["weight"]),
+                                                               "Pretendard-Regular.ttf"))
+            # Measured large, as shares of the em: the same at any size, to a thousandth of it (a pixel's 0.03 at
+            # 200 %), so that the whole pixel the words are set on is the nearest to their middle.
+            box = ImageFont.truetype(path, 1000).getbbox(hangul, anchor="ls")
+            _HANGUL_INK[key] = (-box[1] / 1000.0, box[3] / 1000.0)
+        over, under = _HANGUL_INK[key]
+        lift = em * (over - under) / 2.0
+    else:
+        lift = em * theme.TEXT_CAP / 2.0
+    # The baseline the eye's middle asks for, less the font's ascent as Tk lays the line out from its top.
+    return int(round(middle + lift - font.metrics("ascent")))
+
+
 # The opened list's surface: opaque, a step lighter than a card, and the light along its top edge.
 LIST_BG, LIST_TOP = "#20262d", "#3a434d"
 
 
-# The room between a setting's name and its control, in logical pixels.
-LABEL_GAP = 18
+# The room between the widest setting name of a page and the controls' column, in logical pixels (a step of the spacing
+# scale: the names' column is the widest name and this).
+LABEL_GAP = 16
 
 
 def name_width(ui, names):
@@ -1928,7 +2030,10 @@ def setting_row(parent, ui, title, control_factory, hint=None, bg=None):
     # Every control's visible left edge on one line: a switch, a row of tabs and a slider keep room for the keyboard's
     # ring (and the switch the room round its pill) before what shows, so the others are set in by as much.
     align = max(1, ui.px(2)) + art.TOGGLE_HALO
-    control.grid(row=0, column=1, sticky="w", padx=(max(0, align - getattr(control, "odq_inset", 0)), 0))
+    # A control that takes its column's room (a slider, a device's drop-down) is laid across it; any other is as wide as
+    # it is.
+    control.grid(row=0, column=1, sticky="we" if getattr(control, "odq_fill", False) else "w",
+                 padx=(max(0, align - getattr(control, "odq_inset", 0)), 0))
     hint_label = None
     if hint:
         hint_label = label(row, ui, hint, font=ui.fonts.small, fg=theme.MUTED, bg=bg, wrap_margin=4)
@@ -2001,6 +2106,9 @@ class Card(tk.Frame):
             self.head = tk.Frame(self.body, bg=theme.PANEL)
             self.head.pack(fill="x", pady=(0, ui.px(12)))
             tk.Label(self.head, text=title, font=ui.fonts.card_title, fg=theme.TEXT, bg=theme.PANEL).pack(side="left")
+            # The title's line as tall as a button whether one stands at its right end or not: every card's title on one
+            # line with its neighbour's in a row of cards, and what follows it at one depth in every card.
+            tk.Frame(self.head, bg=theme.PANEL, width=1, height=ui.px(Button.HEIGHT)).pack(side="right")
         # The cut: a small picture over the square corner (over the edge's corner too), the page beyond it, the
         # hairline along the cut.
         self.cut = ui.px(self.CUT)
@@ -2068,13 +2176,18 @@ class Card(tk.Frame):
         self._paint_corner(beyond)
 
 
+# The room either side of the faint line between two rows of a card's settings (logical pixels): a row's room, on the
+# spacing scale.
+ROW_GAP = 12
+
+
 class RowList(tk.Frame):
     """A card's rows, each in a slot of its own with the card's faint line before it, that come and go in place: a choice
     that brings a row (the counter's corner, the upscaler) shows its slot, and one that takes it hides it, the rows
     before and after it as they were. Nothing else of the page is made again, so the window never shows a page half
     drawn (client/tests/ui/flicker.py)."""
 
-    def __init__(self, parent, ui, pady=12):
+    def __init__(self, parent, ui, pady=ROW_GAP):
         super().__init__(parent, bg=parent.cget("bg"))
         self.ui, self.pady = ui, pady
         # The slots in their order, and which of them show.
@@ -2135,14 +2248,15 @@ class RowList(tk.Frame):
             first = False
 
 
-def check_line(parent, ui, state, text, action_text=None, action=None, bg=theme.PANEL, value=None):
+def check_line(parent, ui, state, text, action_text=None, action=None, bg=theme.PANEL, value=None, column=None):
     """A ready-check row as the site's state rows: a small lamp (a lime dot fine, a yellow ring will change, a red dot a
-    problem), the words, and at the right end the value or the way to fix it."""
+    problem), the words, and the value or the way to fix it. With `column` (the widest name of the rows it stands
+    among, in pixels: check_names), the words keep a names column and the value or the way to fix it stands after it,
+    by its name, as a setting's control does; without, at the row's right end."""
     row = tk.Frame(parent, bg=bg)
     colour = {"ok": theme.OK, "change": theme.WARN, "bad": theme.BAD}[state]
     # What will change is a ring, so that it is told from what is fine by its shape too, not by its colour alone.
     light = lamp(row, ui, colour, bg=bg, hollow=state == "change")
-    light.pack(side="left", anchor="n", pady=(ui.px(1), 0))
     beside = [light]
     # The lamp's middle, from the row's top: the words' first line and what stands at the right end have their line's
     # middle there, so that they stand on one line whether the words wrap or not (pack centred the words alone, which
@@ -2156,6 +2270,34 @@ def check_line(parent, ui, state, text, action_text=None, action=None, bg=theme.
                    for option in ("borderwidth", "pady", "highlightthickness"))
         return max(0, round(middle - font.metrics("linespace") / 2.0 - edge))
 
+    if column:
+        # In a grid: the lamp, the words in the names column (the lamp's gap before them, the column's own room after
+        # them), then the value or the way to fix it, which takes the rest of the row and wraps there.
+        light.grid(row=0, column=0, sticky="n", pady=(ui.px(1), 0))
+        words = tk.Label(row, text=text, font=ui.fonts.body, fg=theme.TEXT, bg=bg, anchor="w", justify="left")
+        if action_text and action:
+            what = link(row, ui, action_text, action, bg=bg)
+            font = ui.fonts.body_bold
+        elif value:
+            # Wrapped in the room right of the names column: the lamp and the words are counted as they stand beside it,
+            # the column's own room past the words on top.
+            what = label(row, ui, value, fg=theme.MUTED, bg=bg, beside=(light, words),
+                         wrap_margin=max(0, column - words.winfo_reqwidth()) / max(1.0, ui.scale))
+            font = ui.fonts.body
+        else:
+            what, font = None, None
+        if what is None:
+            # Nothing after the words (a game that is open): they take the whole row.
+            words.grid(row=0, column=1, columnspan=2, sticky="nw", padx=(ui.px(6), 0),
+                       pady=(at_middle(words, ui.fonts.body), 0))
+        else:
+            words.grid(row=0, column=1, sticky="nw", padx=(ui.px(6), 0), pady=(at_middle(words, ui.fonts.body), 0))
+            what.grid(row=0, column=2, sticky="nw", pady=(at_middle(what, font), 0))
+        # The names column: the lamp's gap and the widest name with its room after it; the value's column the rest.
+        row.columnconfigure(1, minsize=ui.px(6) + column)
+        row.columnconfigure(2, weight=1)
+        return row
+    light.pack(side="left", anchor="n", pady=(ui.px(1), 0))
     if action_text and action:
         # The way to fix it, reached by the mouse or the keyboard.
         fix = link(row, ui, action_text, action, bg=bg)
@@ -2168,6 +2310,12 @@ def check_line(parent, ui, state, text, action_text=None, action=None, bg=theme.
     words = label(row, ui, text, fg=theme.TEXT, bg=bg, wrap_margin=24, beside=beside)
     words.pack(side="left", fill="x", anchor="n", padx=(ui.px(6), 0), pady=(at_middle(words, ui.fonts.body), 0))
     return row
+
+
+def check_names(ui, names):
+    """The names column of state rows (check_line's `column`) for `names`: the widest of them in the words' face, and
+    the column's room after it (the spacing scale's 16, as a setting's names column keeps)."""
+    return max(ui.fonts.body.measure(name) for name in names) + ui.px(LABEL_GAP)
 
 
 # Text selected in a field: the launcher's own colours, as a drop-down's chosen row has them, never Windows' blue.
@@ -2307,10 +2455,12 @@ class Said(tk.Frame):
         bg = bg or parent.cget("bg")
         super().__init__(parent, bg=bg)
         self.ui, self.bg = ui, bg
+        self.font = font or ui.fonts.small
         self.lamp = tk.Label(self, bg=bg, bd=0)
-        self.words = label(self, ui, "", font=font or ui.fonts.small, fg=theme.MUTED, bg=bg, wrap_margin=0,
-                           beside=(self.lamp,))
-        self.words.pack(side="right", fill="x", expand=True)
+        self.words = label(self, ui, "", font=self.font, fg=theme.MUTED, bg=bg, wrap_margin=0, beside=(self.lamp,))
+        # At the line's top: its first line on the lamp's middle while there is a lamp (set), however many lines it
+        # wraps to.
+        self.words.pack(side="right", fill="x", expand=True, anchor="n")
         self._pictures = {}
         self.tone = None
 
@@ -2321,15 +2471,19 @@ class Said(tk.Frame):
         self.tone = tone
         if tone in self.TONES:
             if tone not in self._pictures:
-                picture = art.lamp(self.TONES[tone], self.ui.scale, bg=self.bg)
+                picture = art.lamp(self.TONES[tone], self.ui.scale, bg=self.bg, lead=False)
                 self._pictures[tone] = (picture, ImageTk.PhotoImage(picture, master=self))
             picture, image = self._pictures[tone]
             self.lamp.configure(image=image)
             self.lamp.odq_picture = picture
             if not self.lamp.winfo_manager():
-                self.lamp.pack(side="left", anchor="n", padx=(0, self.ui.px(6)), pady=(self.ui.px(2), 0))
+                self.lamp.pack(side="left", anchor="n", padx=(0, self.ui.px(6)), pady=(self.ui.px(1), 0))
+                # The words' first line on the lamp's middle, as a ready-check row's (check_line).
+                middle = self.ui.px(1) + picture.height / 2.0
+                self.words.pack_configure(pady=(max(0, int(round(middle - self.font.metrics("linespace") / 2.0))), 0))
         elif self.lamp.winfo_manager():
             self.lamp.pack_forget()
+            self.words.pack_configure(pady=0)
         colour = theme.MUTED if tone is None else (theme.BAD if tone == "bad" else theme.TEXT)
         self.words.configure(text=text, fg=colour)
 

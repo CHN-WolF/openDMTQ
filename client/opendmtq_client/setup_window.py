@@ -159,6 +159,8 @@ class SetupWindow:
         self.page_area = PageArea(right, ui, offset=self.header.tall, light=px(PAGE_LIGHT),
                                   on_moved=self.header.moved)
         self.page_area.pack(side="top", fill="both", expand=True)
+        # The header's picture is the page's first rows: its shards in the same room right of the page's column.
+        self.header.room = self.page_area.shard_room
         # Tab goes as the window reads its work: the page, the strip's buttons, then the window's own minimise and close
         # (Tk follows the order of making: the strip, made first so that it holds the foot, and the header, made before
         # the page so that it holds the top, are raised after the page in that order).
@@ -257,7 +259,8 @@ class SetupWindow:
             button.destroy()
         px = self.ui.px
         for i, button in enumerate(buttons):
-            button.pack(side="left", padx=(px(10) if i else 0, 0))
+            # The buttons' gap, as on the launcher's pages and dialogs (8, the spacing scale's).
+            button.pack(side="left", padx=(px(8) if i else 0, 0))
         self.shown_buttons = list(buttons)
 
     def say(self, text, colour=theme.MUTED):
@@ -320,6 +323,8 @@ class Header(tk.Canvas):
         self.tall = px(TITLE_TOP) + latin.height + px(TITLE_FOOT)
         super().__init__(parent, height=self.tall, bg=theme.BG, highlightthickness=0, bd=0, takefocus=0)
         self.ui, self.light = ui, light
+        # Where the page's shards stand (widgets.ScrollArea.shard_room of the page under it), set once the page is made.
+        self.room = None
         # The page's title, whether the page has moved from its top, and the title's picture drawn for a room.
         self.title, self.moved_off, self._titles = "", False, {}
         # Where the title is on the header (for the tests' measures).
@@ -369,8 +374,10 @@ class Header(tk.Canvas):
             seam = max(1, px(1))
             ImageDraw.Draw(picture).rectangle([0, height - seam, width - 1, height - 1], fill=art._rgb(theme.SEAM))
         else:
-            # The page's own picture, its first rows: the page area under it draws the rest (its offset).
-            picture = art.backdrop(width, height, self.ui.scale, offset=0, top=self.light)
+            # The page's own picture, its first rows: the page area under it draws the rest (its offset), its shards
+            # in the same room.
+            picture = art.backdrop(width, height, self.ui.scale, offset=0, top=self.light,
+                                   room=self.room() if self.room is not None else None)
         places = self.places(width)
         self.title_box = self.title_picture = None
         if self.title:
@@ -465,12 +472,13 @@ class WindowButton(tk.Canvas):
 
 class Steps(tk.Canvas):
     """The column's steps of what the installer does (READY, INSTALL, DONE), one under another, as the launcher's guide
-    sets its steps: each number large and leaning with its name beside it; the step on show on a raised slab with a
-    lime rule, its number lime and its name white; the steps taken with their numbers lime; the ones to come grey."""
+    sets its steps: each number large and leaning with its name beside it; the step on show on a raised slab, its
+    number lime and its name white (no stripe along the slab: the launcher's menu has none, the slab and the lime
+    number say it); the steps taken with their numbers lime; the ones to come grey."""
 
-    # A step's height and the gap between two, the room before its number, the number's column, the slab's cut corner
-    # and its rule (logical pixels).
-    STEP_H, GAP, PAD, NUMBER_W, CUT, RULE = 46, 4, 14, 32, 10, 3
+    # A step's height and the gap between two, the room before its number, the number's column and the slab's cut
+    # corner (logical pixels).
+    STEP_H, GAP, PAD, NUMBER_W, CUT = 46, 4, 14, 32, 10
 
     def __init__(self, parent, ui):
         super().__init__(parent, height=1, bg=theme.STRIP, highlightthickness=0, bd=0, takefocus=0)
@@ -504,7 +512,6 @@ class Steps(tk.Canvas):
                 cut = px(self.CUT)
                 draw.polygon([(left, top), (right - cut, top), (right - 1, top + cut), (right - 1, bottom - 1),
                               (left, bottom - 1)], fill=art._rgb(theme.PANEL))
-                draw.rectangle([left, top, left + px(self.RULE) - 1, bottom - 1], fill=art._rgb(theme.OK))
             colour = theme.OK if (done or now) else theme.STEP_TO_COME
             numeral = art.numeral(str(i + 1), colour, self.ui.scale, size=24, bg=None)
             nx, ny = left + px(self.PAD), (top + bottom - numeral.height) // 2
@@ -523,7 +530,8 @@ class Steps(tk.Canvas):
 
 class Options(tk.Frame):
     """A list of choices of which one is chosen, on a card: each a row with its name and a line under it, a ring before
-    it, the chosen one on a raised slab with a lime rule and its ring lit. A click chooses a row; the keyboard reaches
+    it, the chosen one on a raised slab with its ring lit (a lime dot: no stripe along it, as the launcher's lists have
+    none). A click chooses a row; the keyboard reaches
     the list with Tab (a cyan ring round it), the arrow keys move the choice, Enter does what the page's main button
     does (`on_enter`). `options` are [(value, name, line)]; on_change(value) runs on each new choice."""
 
@@ -538,7 +546,7 @@ class Options(tk.Frame):
         px = ui.px
         # Its own lamps: a lime dot for the choice, a grey ring for the others.
         self._lamps = {on: ImageTk.PhotoImage(art.lamp(theme.OK if on else theme.FAINT, ui.scale, bg=theme.PANEL_HI if on
-                                                       else theme.PANEL, hollow=not on), master=self)
+                                                       else theme.PANEL, hollow=not on, lead=False), master=self)
                        for on in (True, False)}
         self.rows = {}
         for i, (key, name, line) in enumerate(options):
@@ -547,7 +555,11 @@ class Options(tk.Frame):
             rule = tk.Frame(row, bg=theme.PANEL, width=px(self.RULE))
             rule.pack(side="left", fill="y")
             lamp = tk.Label(row, image=self._lamps[False], bg=theme.PANEL, bd=0)
-            lamp.pack(side="left", anchor="n", padx=(px(self.PAD), px(10)), pady=(px(13), 0))
+            # On the middle of the choice's name, the first line of the words beside it (their room above, then half
+            # the name's line), as a ready-check row's lamp stands on its words.
+            middle = px(10) + ui.fonts.body_bold.metrics("linespace") / 2.0
+            lamp.pack(side="left", anchor="n", padx=(px(self.PAD), px(10)),
+                      pady=(max(0, int(round(middle - lamp.winfo_reqheight() / 2.0))), 0))
             words = tk.Frame(row, bg=theme.PANEL)
             words.pack(side="left", fill="x", expand=True, pady=px(10), padx=(0, px(self.PAD)))
             title = tk.Label(words, text=name, font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL, anchor="w")
@@ -573,7 +585,8 @@ class Options(tk.Frame):
             for name in ("row", "words", "title", "line"):
                 parts[name].configure(bg=fill)
             parts["lamp"].configure(bg=fill, image=self._lamps[on])
-            parts["rule"].configure(bg=theme.OK if on else fill)
+            # The rule's room keeps the rows' words where they were; it shows the row's own colour.
+            parts["rule"].configure(bg=fill)
 
     def choose(self, value):
         """Choose a row (a click, an arrow key), and say so."""
@@ -618,7 +631,8 @@ class Progress(tk.Frame):
         self.bar.bind("<Configure>", lambda e: self._draw_bar())
         # The steps under the bar, the card's gap between them (on the launcher's spacing scale).
         tk.Frame(self, bg=bg, height=px(16)).pack(fill="x")
-        self._lamps = {state: ImageTk.PhotoImage(art.lamp(colour, ui.scale, bg=bg, hollow=hollow), master=self)
+        self._lamps = {state: ImageTk.PhotoImage(art.lamp(colour, ui.scale, bg=bg, hollow=hollow, lead=False),
+                                                 master=self)
                        for state, colour, hollow in (("done", theme.OK, False), ("now", theme.OK, True),
                                                      ("later", theme.FAINT, True))}
         self.rows = []

@@ -185,6 +185,12 @@ FACETS = ((0.75, ((1440, 60), (1330, 0), (1440, 0))),
           (0.72, ((0, 250), (112, 470), (0, 425))),
           (0.30, ((0, 425), (112, 470), (176, 900), (0, 900))),
           (0.16, ((1400, 480), (1440, 670), (1440, 900), (1344, 900))))
+# The launcher's own page keeps its shards out of the cards' way (shard_mask with a room): the site's right-hand ones,
+# from the page's right edge into the margin right of the content column, never further in, so that none ends in a gap
+# between cards or touches a card's edge or its cut corner. How far in from the right edge they reach on the site (CSS
+# pixels of its 1440 box): the widest point of them.
+RIGHT_REACH = 150
+RIGHT_FACETS = tuple(facet for facet in FACETS if min(x for x, _y in facet[1]) >= 1440 - RIGHT_REACH)
 
 
 def _mix(a, b, k):
@@ -214,13 +220,15 @@ def _half_plane(box, normal, limit):
 # step), instead of drawing the shards again, which takes a good part of a second at 200 %. A few only: at 200 % one is
 # about 13 MB, and the window draws from two (the header's width and the page area's).
 TOPS_KEPT = 4
-# Key (width, scale, accent, reach of the light) -> the picture of the page's first rows, the newest last.
+# Key (width, scale, accent, reach of the light, the shards' room) -> the picture of the page's first rows, the newest
+# last.
 _tops = collections.OrderedDict()
 
 
-def backdrop(width, height, scale=1.0, accent=theme.OK, offset=0, top=None):
+def backdrop(width, height, scale=1.0, accent=theme.OK, offset=0, top=None, room=None):
     """The page behind the cards, as the site's: its field with the faint perforated metal all over, two pale panes and
-    the accent's light at the top (body::before), and the green shards at the left and right edges (.facets).
+    the accent's light at the top (body::before), and the green shards at the left and right edges (.facets); with a
+    `room` (an x on the page), the shards stand right of it only (shard_mask).
 
     The picture is the part of the page from `offset` down, `height` tall: the header draws the page's top and the
     page area the rest, and they meet without a seam. `top` is how far down the page the panes and the light reach
@@ -237,7 +245,7 @@ def backdrop(width, height, scale=1.0, accent=theme.OK, offset=0, top=None):
     if offset >= reach:
         # All of it under the top: the field and its dots, which cost little to draw.
         return _field(width, height, scale, offset)
-    whole = _top(width, scale, accent, top_h, reach)
+    whole = _top(width, scale, accent, top_h, reach, room)
     if offset + height <= reach:
         # All of it in the top: its rows, as a picture of its own (the caller may draw on it).
         return whole.crop((0, offset, width, offset + height))
@@ -248,13 +256,13 @@ def backdrop(width, height, scale=1.0, accent=theme.OK, offset=0, top=None):
     return img
 
 
-def _top(width, scale, accent, top_h, reach):
+def _top(width, scale, accent, top_h, reach, room=None):
     """The page's first `reach` rows drawn whole, kept for the next picture of the same width and look."""
-    key = (width, scale, accent, top_h)
+    key = (width, scale, accent, top_h, room)
     # Taken out and put back last: the one used longest ago goes first.
     found = _tops.pop(key, None)
     if found is None:
-        found = _whole(width, reach, scale, accent, 0, top_h)
+        found = _whole(width, reach, scale, accent, 0, top_h, room)
     _tops[key] = found
     while len(_tops) > TOPS_KEPT:
         # The oldest goes, so the kept pictures never hold more than a few widths' worth.
@@ -282,9 +290,52 @@ def _field(width, height, scale, offset):
     return img
 
 
-def _whole(width, height, scale, accent, offset, top_h):
+def shard_mask(width, height, scale=1.0, offset=0, room=None):
+    """How much of the shards' light lies on each pixel of the page's picture from `offset` down, `height` tall (an L
+    picture, 0 none, 255 whole): 900 CSS pixels tall from the page's top, fading out downwards. Without a `room`, the
+    site's shards at both edges, stretched to the page's width (.facets). With one (an x on the page: the content column
+    and its clear room end there, widgets.ScrollArea.shard_room), the right-hand ones alone, standing right of it: as
+    the site has them while the margin is as wide, else fitted into it (the same height, narrower), so that no shard
+    reaches under a card or between two."""
+    span = int(900 * scale)
+    mask = Image.new("L", (width, height), 0)
+    if offset >= span:
+        return mask
+    if room is None:
+        # The site's: every shard, its x a share of the page's width.
+        facets = FACETS
+        place = lambda x: x / 1440.0 * width  # noqa: E731
+    else:
+        # The right-hand ones, their distance from the right edge at the site's scale while the margin has room for
+        # it, less where it has not; none where the margin has no room at all.
+        facets = RIGHT_FACETS
+        margin = width - room
+        if margin <= 0:
+            return mask
+        k_x = min(width / 1440.0, margin / float(RIGHT_REACH))
+        place = lambda x: width - (1440 - x) * k_x  # noqa: E731
+    # Drawn twice as large and scaled down, smooth along their edges.
+    k = 2
+    big = Image.new("L", (width * k, span * k), 0)
+    for opacity, points in facets:
+        layer = Image.new("L", big.size, 0)
+        ImageDraw.Draw(layer).polygon([(place(x) * k, y / 900.0 * span * k) for x, y in points],
+                                      fill=int(255 * opacity))
+        big = Image.composite(layer, big, layer)
+    big = big.resize((width, span), Image.LANCZOS)
+    down = Image.linear_gradient("L").resize((1, span)).point(lambda v: 255 - v)
+    big = Image.composite(big, Image.new("L", big.size, 0), down.resize((width, span)))
+    if room is not None:
+        # The smoothing of their inner tips spreads a pixel further in: nothing of them left of the room.
+        big.paste(0, (0, 0, max(0, int(room)), span))
+    mask.paste(big.crop((0, offset, width, min(span, offset + height))), (0, 0))
+    return mask
+
+
+def _whole(width, height, scale, accent, offset, top_h, room=None):
     """The page's picture from `offset` down, every layer drawn for every row: the field, the lit top while `offset`
-    is above `top_h`, the shards in the first 900 CSS pixels. backdrop() keeps its top; the tests compare the two."""
+    is above `top_h`, the shards in the first 900 CSS pixels (shard_mask). backdrop() keeps its top; the tests compare
+    the two."""
     img = _field(width, height, scale, offset)
     # The top: full to 45 % of its reach, then fading; drawn whole, the part in this picture kept.
     if offset < top_h:
@@ -320,23 +371,15 @@ def _whole(width, height, scale, accent, offset, top_h):
         region.paste(band.crop((0, rows[0], width, rows[1])), (0, 0), light.crop((0, rows[0], width, rows[1])))
         region.paste(_rgb(accent), (0, 0), sheet.crop((0, rows[0], width, rows[1])))
         img.paste(region, (0, 0))
-    # The shards, 900 px tall from the page's top: drawn twice as large and scaled down, smooth along their edges.
+    # The shards, 900 px tall from the page's top (shard_mask), in the accent lit at their top and darker at their
+    # foot.
     span = int(900 * scale)
     if offset < span:
-        k = 2
-        mask = Image.new("L", (width * k, span * k), 0)
-        for opacity, points in FACETS:
-            layer = Image.new("L", mask.size, 0)
-            ImageDraw.Draw(layer).polygon([(x / 1440.0 * width * k, y / 900.0 * span * k) for x, y in points],
-                                          fill=int(255 * opacity))
-            mask = Image.composite(layer, mask, layer)
-        mask = mask.resize((width, span), Image.LANCZOS)
-        down = Image.linear_gradient("L").resize((1, span)).point(lambda v: 255 - v)
-        mask = Image.composite(mask, Image.new("L", mask.size, 0), down.resize((width, span)))
-        colour = _vertical((width, span), ((0.0, _mix(accent, "#ffffff", 0.12)), (1.0, _mix(accent, "#000000", 0.30))))
         rows = (offset, min(span, offset + height))
+        mask = shard_mask(width, rows[1] - rows[0], scale, offset, room)
+        colour = _vertical((width, span), ((0.0, _mix(accent, "#ffffff", 0.12)), (1.0, _mix(accent, "#000000", 0.30))))
         part = img.crop((0, 0, width, rows[1] - rows[0]))
-        part.paste(colour.crop((0, rows[0], width, rows[1])), (0, 0), mask.crop((0, rows[0], width, rows[1])))
+        part.paste(colour.crop((0, rows[0], width, rows[1])), (0, 0), mask)
         img.paste(part, (0, 0))
     return img
 
@@ -397,11 +440,13 @@ def numeral(text, colour, scale=1.0, size=34, bg=theme.BG):
     return img.resize((max(1, width // k), max(1, height // k)), Image.LANCZOS)
 
 
-def lamp(colour, scale=1.0, bg=None, hollow=False):
+def lamp(colour, scale=1.0, bg=None, hollow=False, lead=True):
     """A state's small light, as the site's (.state i): a 7 px dot of its colour, plain (a glow round it said nothing
     the colour does not). On `bg` when given (an opaque picture), else on nothing. `hollow`: a ring, for what will
     change rather than what is fine or wrong, so that the shape says it as well as the colour. The picture keeps the
-    room the glow had, so that the words beside a lamp stand where they stood."""
+    room the glow had round the dot, for the words beside it; without `lead`, none before it: a lamp that starts a line
+    has its dot on the line's left edge, where the words over and under it start (a dialog's lamp, placed by its middle,
+    keeps it)."""
     d = 7 * scale
     reach = 7 * scale
     size = int(math.ceil(d + 2 * reach))
@@ -416,6 +461,9 @@ def lamp(colour, scale=1.0, bg=None, hollow=False):
     dot = dot.resize((size, size), Image.LANCZOS)
     img = Image.new("RGBA", (size, size), _rgb(bg) + (255,) if bg else (0, 0, 0, 0))
     img.paste(_rgb(colour) + (255,), (0, 0), dot)
+    if not lead:
+        # The room before the dot taken off: the dot's smoothed edge starts the picture.
+        img = img.crop((int(math.floor(c / k - d / 2.0)), 0, size, size))
     return img
 
 

@@ -18,7 +18,7 @@ import tkinter as tk
 
 from PIL import ImageTk
 
-from opendmtq_client import art, safety, snapshot, theme
+from opendmtq_client import art, safety, snapshot, theme, widgets
 
 log = logging.getLogger("opendmtq_client")
 
@@ -36,9 +36,9 @@ WIDTH = 480         # the card, when the window has room
 MARGIN = 24         # the least room between the card and the window's edge
 PAD = 28            # inside the card (the site's 24 px, and a little more for a card on its own)
 CUT = 16            # the cut corner
-BUTTON = 40         # a button's height
-BUTTON_MIN = 110    # a button's least width
-GAP = 10            # between two buttons
+BUTTON = 36         # a button's height: the pages' buttons' (widgets.Button.HEIGHT), the same role
+SIDE = 18           # the room either side of a button's words, as the pages' buttons keep it
+GAP = 8             # between two buttons, as on the pages
 RISE = 14           # how far the panel rises as it appears
 FRAMES = 8          # the rise, one frame every 16 ms
 
@@ -143,19 +143,24 @@ class Dialog:
             track = (px(PAD), y + px(3), panel_w - px(PAD), y + px(9))
             y += px(12) + px(PAD) - px(6)
             return {"panel": (panel_w, y), "lamp": (px(PAD) + px(4), lamp_y), "message": message,
-                    "detail": detail, "buttons": [], "button_w": 0, "track": track}
+                    "detail": detail, "buttons": [], "track": track}
         count = len(self.buttons)
-        widest = max([fonts.dialog_button.measure(b[0]) for b in self.buttons] or [0])
-        button_w = max(px(BUTTON_MIN), widest + px(40))
+        # Each button as wide as its words and the same room either side of them, as every button of the pages.
+        widths = [fonts.dialog_button.measure(b[0]) + 2 * px(SIDE) for b in self.buttons]
         room = panel_w - 2 * px(PAD)
-        button_w = min(button_w, (room - (count - 1) * px(GAP)) // max(1, count))
-        row_w = count * button_w + (count - 1) * px(GAP)
+        if sum(widths) + (count - 1) * px(GAP) > room:
+            # Too many words for the card's width (a narrow window): each the same share of the room.
+            widths = [(room - (count - 1) * px(GAP)) // max(1, count)] * count
+        row_w = sum(widths) + (count - 1) * px(GAP)
         # At the card's foot on the right, the main one last, as the site's forms end.
         start = panel_w - px(PAD) - row_w
-        buttons = [(start + i * (button_w + px(GAP)), y) for i in range(count)]
+        buttons, x = [], start
+        for width in widths:
+            buttons.append((x, y, width))
+            x += width + px(GAP)
         y += px(BUTTON) + px(PAD) - px(4)
         return {"panel": (panel_w, y), "lamp": (px(PAD) + px(4), lamp_y), "message": message,
-                "detail": detail, "buttons": buttons, "button_w": button_w}
+                "detail": detail, "buttons": buttons}
 
     def _draw(self, rise=False):
         """Draw the whole dialog for the canvas's present size (again after the window is resized)."""
@@ -185,20 +190,22 @@ class Dialog:
         # The buttons: one picture for each look, drawn over the card's own pixels.
         margin = max(5, int(round(6 * scale)))
         self._images, self._items, self._boxes = [], [], []
-        for i, ((words, _value, look), (bx, by)) in enumerate(zip(self.buttons, lay["buttons"])):
-            under = panel.crop((bx - margin, by - margin, bx + lay["button_w"] + margin, by + px(BUTTON) + margin))
+        for i, ((words, _value, look), (bx, by, bw)) in enumerate(zip(self.buttons, lay["buttons"])):
+            under = panel.crop((bx - margin, by - margin, bx + bw + margin, by + px(BUTTON) + margin))
             images = {(state, ring): ImageTk.PhotoImage(
                 art.button_face(under.size, margin, look, state, ring, scale, under=under), master=c)
                 for state in ("normal", "hover", "pressed") for ring in (False, True)}
             tag = "button%d" % i
             picture = c.create_image(bx - margin, by - margin, image=images[("normal", False)], anchor="nw",
                                      tags=("card", tag))
-            c.create_text(bx + lay["button_w"] // 2, by + px(BUTTON) // 2, text=words,
+            # On the button's middle by the ink of its capitals (or its Hangul), as the pages' buttons' words are.
+            c.create_text(bx + bw // 2, by + widgets.words_top(self.ui.fonts.dialog_button, words, c, px(BUTTON) / 2.0),
+                          anchor="n", text=words,
                           font=self.ui.fonts.dialog_button, fill=art.BUTTON_LOOKS[look]["text"],
                           tags=("card", tag, "words"))
             self._images.append(images)
             self._items.append(picture)
-            self._boxes.append((bx, by, bx + lay["button_w"], by + px(BUTTON)))
+            self._boxes.append((bx, by, bx + bw, by + px(BUTTON)))
             for event, handler in (("<Enter>", self._enter), ("<Leave>", self._leave),
                                    ("<ButtonPress-1>", self._press), ("<ButtonRelease-1>", self._release)):
                 c.tag_bind(tag, event, lambda e, i=i, h=handler: h(i, e))

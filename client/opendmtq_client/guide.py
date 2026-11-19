@@ -214,20 +214,22 @@ class Guide:
 
     def _power(self, parent):
         app, ui, w = self.app, self.app.ui, self.app.words
-        # The language on a card of its own, its row's name saying what it is.
-        card = pages._card(parent, ui, None)
+        # One card: the language as a setting's row, then where the app comes from and what is needed, each under its
+        # sub-heading, a faint line between the three.
+        card = pages._card(parent, ui, None, last=True)
         widgets.setting_row(card.body, ui, w("about.language"),
                             lambda p: widgets.Segmented(p, ui, pages.language_options(app),
                                                         app.state.picked_language or "system", self._language)).pack(
             fill="x")
-        # Where the app comes from: a plain card, a fact to know, nothing to beware of.
-        card = pages._card(parent, ui, w("guide.power.notice.title"))
-        widgets.label(card.body, ui, w("guide.power.notice"), wrap_margin=0).pack(fill="x")
-        card = pages._card(parent, ui, w("guide.power.need"), last=True)
-        for i, key in enumerate(("guide.power.need.1", "guide.power.need.2")):
-            if i:
-                widgets.divider(card.body, ui, pady=pages.CHECK_GAP)
-            widgets.label(card.body, ui, w(key), wrap_margin=0).pack(fill="x")
+        for title, lines in (("guide.power.notice.title", ("guide.power.notice",)),
+                             ("guide.power.need", ("guide.power.need.1", "guide.power.need.2"))):
+            widgets.divider(card.body, ui, pady=widgets.ROW_GAP)
+            # A fact to know, nothing to beware of: its sub-heading in the labels' face, its lines under it.
+            tk.Label(card.body, text=w(title), font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL).pack(
+                anchor="w", pady=(0, ui.px(pages.FORM_LABEL_GAP)))
+            for i, key in enumerate(lines):
+                widgets.label(card.body, ui, w(key), fg=theme.MUTED, wrap_margin=0).pack(
+                    fill="x", pady=(ui.px(4) if i else 0, 0))
 
     def _language(self, language):
         """Switching language rebuilds the guide in the other language, on the same step ("system": Windows')."""
@@ -275,12 +277,13 @@ class Guide:
     # -------------------------------------------------------------------------- 5 SOUND CHECK
 
     def _sound(self, parent):
-        app, px = self.app, self.app.ui.px
-        # The same rows as the Sound and Screen pages, the ones a first start needs: the volume first, in view without
-        # scrolling in the smallest window, the picture's rows under it.
-        sound = pages.sound_rows(app, parent, full=False)
-        tk.Frame(parent, bg=theme.BG, height=px(pages.CARD_GAP)).pack(fill="x")
-        screen = pages.screen_rows(app, parent, full=False)
+        app = self.app
+        # The same rows as the Sound and Screen pages, the ones a first start needs: the volumes and the frames side by
+        # side, one height (one under another in a narrow window, the volumes first, in view without scrolling in the
+        # smallest window), the display's mode under them across the step.
+        left, right = pages._columns(parent, app.ui, weights=(1, 1))
+        sound = pages.sound_rows(app, left, full=False, fill=True)
+        screen = pages.screen_rows(app, parent, full=False, frames_in=right)
         # What the player's in-game menu writes back shows here as on the pages (app.took_back).
         app.page_follow = lambda: (sound(), screen())
 

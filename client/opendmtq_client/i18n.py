@@ -10,7 +10,6 @@ from opendmtq_client.errors import Worded
 
 TEXT = {
     # ---------------------------------------------------------------------------------------------- frame
-    "app.tagline": ("Open-source TECHNIKA Q project", "오픈소스 TECHNIKA Q 프로젝트"),
     "bottom.play": ("PLAY", "PLAY"),
     "bottom.playing": ("PLAYING", "PLAYING"),
     "status.ready": ("Ready to play.", "플레이할 준비가 됐습니다."),
@@ -194,7 +193,6 @@ TEXT = {
     "common.seconds": ("{s} s", "{s}초"),
 
     # --------------------------------------------------------------------------------------------- play
-    "play.on": ("On {name}", "{name}에서 플레이"),
     "play.no_server": ("No server yet. Connect to the OpenDMTQ server you play on.",
                        "아직 서버가 없습니다. 플레이할 OpenDMTQ 서버에 연결하세요."),
     "play.server": ("Server", "서버"),

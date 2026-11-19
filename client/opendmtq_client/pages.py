@@ -26,10 +26,10 @@ TITLES = {"play": "PLAY", "screen": "SCREEN", "sound": "SOUND", "controls": "CON
 
 
 def heading(app, page):
-    """A page's title and the line under it: PLAY's says where it plays, the others what the page is for."""
+    """A page's title and the line under it, what the page is for. PLAY has its title alone: its head card, right under
+    it, is the line (the server it plays on, large, and the sign-in), where a line naming the server said it twice."""
     if page == "play":
-        server = app.state.server()
-        return TITLES[page], (app.words("play.on", name=server["name"]) if server else app.words("app.tagline"))
+        return TITLES[page], ""
     return TITLES[page], app.words(page + ".sub")
 
 
@@ -42,10 +42,14 @@ def main_button(app, parent, text, command):
     return button
 
 
-def _card(parent, ui, title, last=False):
-    """A card with its title, stacked under the ones before it with the site's gap between cards."""
+def _card(parent, ui, title, last=False, fill=False):
+    """A card with its title, stacked under the ones before it with the site's gap between cards. `fill`: as tall as
+    its place (a card in a row of two, drawn as tall as the other)."""
     card = widgets.Card(parent, ui, title)
-    card.pack(fill="x", pady=(0, 0 if last else ui.px(CARD_GAP)))
+    if fill:
+        card.pack(fill="both", expand=True, pady=(0, 0 if last else ui.px(CARD_GAP)))
+    else:
+        card.pack(fill="x", pady=(0, 0 if last else ui.px(CARD_GAP)))
     return card
 
 
@@ -53,14 +57,15 @@ def _card(parent, ui, title, last=False):
 CARD_GAP = 16
 
 
-def _holder(parent):
+def _holder(parent, bg=None):
     """The frame a card of Sections is made in: no colour of its own, as its card covers it whole. A frame in the
     field's colour was put on the screen a moment before its card and painted flat over the page's picture until the
     card came (a dark slab where the connection test's card was about to show); with none, the screen paints nothing
     for it and the page shows under it until its card does. Told apart by what it holds (widgets.ScrollArea's field,
-    widgets.Card's cut)."""
-    holder = tk.Frame(parent, bg="")
-    holder.odq_holder = True
+    widgets.Card's cut). `bg`: a row's holder inside a card, in the card's own colour (rows are made with their
+    parent's)."""
+    holder = tk.Frame(parent, bg=bg or "")
+    holder.odq_holder = bg is None
     return holder
 
 
@@ -70,8 +75,13 @@ class Sections:
     that came (a server connected, a sign-in, a download done, a game that ended) changes its own card, never the page
     drawn again (client/tests/ui/flicker.py)."""
 
-    def __init__(self, parent, ui, after=None, first_gap=0):
+    def __init__(self, parent, ui, after=None, first_gap=0, bg=None, lines=False):
         self.parent, self.ui, self.after = parent, ui, after
+        # The holders' colour: none on the page's field (_holder), a card's own for rows made again inside a card.
+        self.bg = bg
+        # `lines`: rows of one card, a faint line between two shown rows with a row's room either side of it (as a
+        # card's RowList has), instead of the cards' gap.
+        self.lines = lines
         # The gap above the first card on show (logical pixels): 0 where the cards start the page, a card's gap where
         # they come under something else of it (PLAY's records under its two columns).
         self.first_gap = first_gap
@@ -82,7 +92,7 @@ class Sections:
     def add(self, key, build, expand=False):
         """A card at the end, made now: `build(holder)` makes it in its holder, `key()` says what it shows. `expand`:
         the holder takes the height left to its column (the PLAY page's Last game)."""
-        holder = _holder(self.parent)
+        holder = _holder(self.parent, self.bg)
         item = {"holder": holder, "key": key, "build": build, "made": object(), "gap": None, "expand": expand}
         self.items.append(item)
         self._make(item)
@@ -99,10 +109,11 @@ class Sections:
         for child in holder.winfo_children():
             child.destroy()
         item["build"](holder)
-        # The gap between two cards is the holders' (_gaps), not the cards' own: a card made last today may have
-        # another under it tomorrow.
-        for child in holder.pack_slaves():
-            child.pack_configure(pady=0)
+        if not self.lines:
+            # The gap between two cards is the holders' (_gaps), not the cards' own: a card made last today may have
+            # another under it tomorrow. (Rows keep their own room between them: a form's field rows.)
+            for child in holder.pack_slaves():
+                child.pack_configure(pady=0)
         # What it was made for, as the state is once it is made (a builder may start work that changes it).
         item["made"] = item["key"]()
         shown = bool(holder.winfo_children())
@@ -128,11 +139,12 @@ class Sections:
         """The new card for `item` made in a holder of its own laid over the old one (as wide as it, as tall as it asks),
         so that it is laid out and drawn while the old one is still under it. Returns (item, the new holder)."""
         old = item["holder"]
-        fresh = _holder(self.parent)
+        fresh = _holder(self.parent, self.bg)
         fresh.place(in_=old, x=0, y=0, relwidth=1.0)
         item["build"](fresh)
-        for child in fresh.pack_slaves():
-            child.pack_configure(pady=0)
+        if not self.lines:
+            for child in fresh.pack_slaves():
+                child.pack_configure(pady=0)
         return item, fresh
 
     def _put(self, made, laid=False):
@@ -156,13 +168,32 @@ class Sections:
         self._gaps()
 
     def _gaps(self):
-        """The cards' gap above each shown card but the first."""
+        """The cards' gap above each shown card but the first; for rows (lines), the faint line before each shown row
+        but the first, right before it, and none before a row that is not shown."""
         first = True
         for item in self.items:
             holder = item["holder"]
+            line = item.get("line")
             if not holder.winfo_manager():
+                if line is not None and line.winfo_exists() and line.winfo_manager():
+                    line.pack_forget()
                 continue
-            wanted = self.ui.px(self.first_gap) if first else self.ui.px(CARD_GAP)
+            if self.lines:
+                wanted = 0
+                if first:
+                    if line is not None and line.winfo_exists() and line.winfo_manager():
+                        line.pack_forget()
+                else:
+                    if line is None or not line.winfo_exists():
+                        line = item["line"] = tk.Frame(self.parent, bg=theme.DIVIDER, height=1)
+                    slaves = self.parent.pack_slaves()
+                    where = slaves.index(holder)
+                    if not line.winfo_manager() or where == 0 or slaves[where - 1] is not line:
+                        # Packed again only when it is not right before its row already (a row made anew over the old
+                        # one takes the old one's place, after its line).
+                        line.pack(fill="x", before=holder, pady=self.ui.px(widgets.ROW_GAP))
+            else:
+                wanted = self.ui.px(self.first_gap) if first else self.ui.px(CARD_GAP)
             if item["gap"] != wanted:
                 holder.pack_configure(pady=(wanted, 0))
                 item["gap"] = wanted
@@ -198,6 +229,8 @@ class Sections:
 # the upscaler) are made with their page, hidden while they do not apply, and counted as they are.
 ROWS_THAT_COME = {
     "help": ("help.player_log", "help.repair.row", "help.uninstall.row"),
+    # The server card's rows that come and go with the sign-in and the other servers.
+    "online": ("online.address", "online.account.signed", "online.id", "online.password", "online.app", "online.others"),
 }
 
 
@@ -264,60 +297,75 @@ def server_silent(app):
 
 
 def _server_card(app, parent):
-    """Where PLAY plays: the server, its address, and the account signed in there; or, while the server does not
-    answer, that it does not (a sign-in cannot reach it then: Sign in stays plain, never the screen's lime action)."""
-    ui, w = app.ui, app.words
-    card = _card(parent, ui, w("play.server"))
+    """PLAY's head: the server it plays on, its name large, under it its address and the sign-in with its lamp, and its
+    button at the right on the block's middle (Connect, Sign in, or the player's page on the site); while the server does
+    not answer, that it does (a sign-in cannot reach it then: Sign in stays plain, never the screen's lime action)."""
+    ui, w, px = app.ui, app.words, app.ui.px
+    # No title: the server's name is the card's heading, in the page's largest words under its title.
+    card = widgets.Card(parent, ui)
+    card.pack(fill="x")
     server = app.state.server()
     line = tk.Frame(card.body, bg=theme.PANEL)
     line.pack(fill="x")
     if server is None:
-        widgets.label(line, ui, w("play.no_server"), fg=theme.MUTED, wrap_margin=0).pack(side="left", fill="x",
-                                                                                         expand=True)
-        main_button(app, line, w("play.connect"), lambda: app.nav_go("online")).pack(side="right")
+        # No server yet: what to do, and Connect, the screen's main action.
+        button = main_button(app, line, w("play.connect"), lambda: app.nav_go("online"))
+        button.pack(side="right", padx=(px(16), 0))
+        widgets.label(line, ui, w("play.no_server"), wrap_margin=0).pack(side="left", fill="x", expand=True)
         return
     signed, silent = app.state.signed_in(server), server_silent(app)
     if not signed and silent:
         # The way to the sign-in all the same, plain while the server cannot take one.
-        widgets.Button(line, ui, w("online.signin"), lambda: app.nav_go("online")).pack(side="right", anchor="n")
+        button = widgets.Button(line, ui, w("online.signin"), lambda: app.nav_go("online"))
     elif not signed:
-        main_button(app, line, w("online.signin"), lambda: app.nav_go("online")).pack(side="right", anchor="n")
+        button = main_button(app, line, w("online.signin"), lambda: app.nav_go("online"))
     else:
         # The player's page on the site in the PC's browser, signed in already by a one-time link the server makes for
         # this sign-in (app.open_my_page): plain, as PLAY is the screen's main action.
-        widgets.Button(line, ui, w("play.mypage"), app.open_my_page).pack(side="right", anchor="n")
+        button = widgets.Button(line, ui, w("play.mypage"), app.open_my_page)
+    # At the block's right, on its middle (pack's own), the room of a gutter before it.
+    button.pack(side="right", padx=(px(16), 0))
     words = tk.Frame(line, bg=theme.PANEL)
     words.pack(side="left", fill="x", expand=True)
     if st.has_own_name(server):
-        # Its name, and its address under it.
-        widgets.label(words, ui, server["name"], font=ui.fonts.body_bold, wrap_margin=0).pack(fill="x")
-        widgets.label(words, ui, server["url"], font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0).pack(fill="x")
+        # Its name, large, and its address under it.
+        widgets.label(words, ui, server["name"], font=ui.fonts.head, wrap_margin=0).pack(fill="x")
+        widgets.label(words, ui, server["url"], font=ui.fonts.small, fg=theme.MUTED, wrap_margin=0).pack(
+            fill="x", pady=(px(2), 0))
     else:
         # A server with no name of its own calls itself by its address: said once, in the name's place.
-        widgets.label(words, ui, server["url"], font=ui.fonts.body_bold, wrap_margin=0).pack(fill="x")
-    widgets.divider(card.body, ui)
+        widgets.label(words, ui, server["url"], font=ui.fonts.head, wrap_margin=0).pack(fill="x")
     if silent:
         # What stands in the way first: the server does not answer (the ready check's Server row leads to the test).
-        state = widgets.check_line(card.body, ui, "change", w("play.server_down"))
+        state = widgets.check_line(words, ui, "change", w("play.server_down"))
     else:
         account = (w("play.signed", account=server["account"]) if signed else
                    w("play.not_signed", account=server["account"]) if server.get("account") else w("play.no_account"))
-        state = widgets.check_line(card.body, ui, "ok" if signed else "change", account)
-    state.pack(fill="x")
+        state = widgets.check_line(words, ui, "ok" if signed else "change", account)
+    # A list's step under the name and its address: the sign-in's state is a fact of its own.
+    state.pack(fill="x", pady=(px(8), 0))
 
 
 def build_play(app, parent):
-    ui, w = app.ui, app.words
-    # The page's cards one under another, each as tall as what it holds (none stretched to fill the page): the server and
-    # its sign-in, the ready check, how the last game went, and the signed-in player's records on the server (none while
-    # not signed in). Each is made again only when what it shows changed, in its own place (Sections).
-    cards = Sections(parent, ui)
-    cards.add(lambda: _server_key(app), lambda holder: _server_card(app, holder))
-    # The ready check is made once: its rows follow each check in place (refresh_checks).
-    cards.add(lambda: None, lambda holder: _ready_card(app, holder))
-    cards.add(lambda: repr(sorted((app.state.last_session or {}).items())), lambda holder: _last_card(app, holder))
-    cards.add(lambda: records_key(app), lambda holder: _records_card(app, holder))
-    app.page_follow = cards.refresh
+    ui = app.ui
+    # The page's head: the server it plays on and the sign-in there (Sections: made again only when what it shows
+    # changed, in its own place).
+    head = Sections(parent, ui)
+    head.add(lambda: _server_key(app), lambda holder: _server_card(app, holder))
+    # Then the ready check and how the last game went, side by side and one height (3:2, the ready check's rows the
+    # wider), one under another in a narrow window. The ready check is made once: its rows follow each check in place
+    # (refresh_checks).
+    left, right = _columns(parent, ui, weights=(3, 2), gap_above=CARD_GAP)
+    ready = Sections(left, ui)
+    ready.add(lambda: None, lambda holder: _ready_card(app, holder), expand=True)
+    last = Sections(right, ui)
+    last.add(lambda: repr(sorted((app.state.last_session or {}).items())), lambda holder: _last_card(app, holder),
+             expand=True)
+    # The signed-in player's records on the server under them, across the page (none while not signed in).
+    records = Sections(parent, ui, first_gap=CARD_GAP)
+    records.add(lambda: records_key(app), lambda holder: _records_card(app, holder))
+    # Each part made again in place when what it shows changed; the page's update follows all of them.
+    app.page_follow = lambda: any([part.refresh() for part in (head, ready, last, records)])
     # Made again each time the page shows: a sign-in can have ended, or an app come, since the last one. Until it
     # comes back, the box says it is being made.
     app.refresh_checks()
@@ -327,9 +375,9 @@ def build_play(app, parent):
 
 def _ready_card(app, holder):
     """PLAY's ready check: a row a check, filled in when the worker thread finishes it, with Check again at its title's
-    right end, as on Help."""
+    right end, as on Help; as tall as the last game beside it."""
     ui, w = app.ui, app.words
-    ready = _card(holder, ui, w("play.ready"))
+    ready = _card(holder, ui, w("play.ready"), fill=True)
     widgets.Button(ready.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
     app.check_box = tk.Frame(ready.body, bg=theme.PANEL)
     app.check_box.pack(fill="x")
@@ -448,11 +496,10 @@ def _record_row(app, parent, row, recent):
 
 
 def _last_card(app, holder):
-    """The PLAY page's Last game: how the last game went, and the player's log one press away after a crash."""
+    """The PLAY page's Last game: how the last game went, and the player's log one press away after a crash; as tall as
+    the ready check beside it, its words at its top."""
     ui, w = app.ui, app.words
-    last = widgets.Card(holder, ui, w("play.last"))
-    # As tall as what it says, under the ready check.
-    last.pack(fill="x")
+    last = _card(holder, ui, w("play.last"), fill=True)
     record = app.state.last_session or {}
     if record.get("crashed") or record.get("failed_start"):
         # The reason is in the player's log: one press away, on the card's own line at its title's right end (as Help
@@ -512,6 +559,10 @@ def refresh_checks(app):
     for child in box.winfo_children():
         child.destroy()
     box.odq_shown = shown
+    # The names' column of the rows: the widest name a row with a value or a way to fix it may have, in either language
+    # (a game that is open says it across the row), so that the values stand on one line by their names, whichever
+    # rows show.
+    column = widgets.check_names(ui, [words for key in CHECK_NAMES for words in i18n.TEXT["check." + key] if words])
     for i, (check, row) in enumerate(rows):
         if i:
             widgets.divider(box, ui, pady=CHECK_GAP)
@@ -527,12 +578,15 @@ def refresh_checks(app):
             # The page it names, as the menu would open it.
             action = lambda p=row["go"]: app.nav_go(p)
         widgets.check_line(box, ui, row["state"], w("check." + check.key), row["link"], action,
-                           value=row["value"]).pack(fill="x")
+                           value=row["value"], column=column).pack(fill="x")
 
 
 # The room either side of the faint line between two rows of a list in a card (the ready check, Help's lines, the
 # Controls page's lines), in logical pixels: on the launcher's spacing scale.
 CHECK_GAP = 8
+# The ready check's rows that carry a value or a way to fix it after their name (actions.ready_lines' keys): their names
+# make the rows' names column (the game being open says it alone, across its row).
+CHECK_NAMES = ("player", "server", "account", "app", "app_update")
 
 
 def check_row(check, w, on_play=False, in_guide=False, installed=False):
@@ -574,10 +628,11 @@ def check_row(check, w, on_play=False, in_guide=False, installed=False):
 # -------------------------------------------------------------------------------------------- Screen
 
 
-def screen_rows(app, parent, full=True):
+def screen_rows(app, parent, full=True, frames_in=None):
     """The Screen page's settings in their cards, which the guide's SOUND CHECK shows too (full=False: the ones a first
-    start needs). Every row is made once: a choice changes its own control, the hints that follow from it and the rows
-    it brings or takes (shown or hidden in place, widgets.RowList), never the page (client/tests/ui/flicker.py)."""
+    start needs; Frames in `frames_in`, beside the volumes, and Display under them across the step). Every row is made
+    once: a choice changes its own control, the hints that follow from it and the rows it brings or takes (shown or
+    hidden in place, widgets.RowList), never the page (client/tests/ui/flicker.py)."""
     ui, w, v = app.ui, app.words, app.state.values
     display = displays.main_display(app.root)
     found = displays.connected()
@@ -588,7 +643,15 @@ def screen_rows(app, parent, full=True):
         # The rows and hints that follow from it, in place.
         follow()
 
-    card = _card(parent, ui, w("screen.display"))
+    # The groups side by side where the page is wide, one height (one under another in a narrow window): on the page,
+    # Display and Quality, then Frames across the page under them; in the guide, Frames beside the volumes and Display
+    # across the step under them.
+    if full:
+        left, right = _columns(parent, ui, weights=(1, 1))
+        card = _card(left, ui, w("screen.display"), last=True, fill=True)
+    else:
+        card = widgets.Card(parent, ui, w("screen.display"))
+        card.pack(fill="x", pady=(ui.px(CARD_GAP), 0))
     shown = widgets.RowList(card.body, ui)
     shown.pack(fill="x")
     slot = shown.add()
@@ -617,7 +680,14 @@ def screen_rows(app, parent, full=True):
     # The frame limits: the display's own rate, every rate up to the fastest display's, and no limit (fps_options).
     # The main display's rate as it runs a game (game_rate), for the hints when the displays are not listed.
     hz = game_rate(display)
-    card = _card(parent, ui, w("screen.frames"), last=not full)
+    if full:
+        # Quality beside Display, made before Frames: Tab goes as the page reads, the pair, then the line under it.
+        quality = _card(right, ui, w("screen.picture"), last=True, fill=True)
+        card = widgets.Card(parent, ui, w("screen.frames"))
+        card.pack(fill="x", pady=(ui.px(CARD_GAP), 0))
+    else:
+        quality = None
+        card = _card(frames_in, ui, w("screen.frames"), last=True, fill=True)
     frames = widgets.RowList(card.body, ui)
     frames.pack(fill="x")
     rows["vsync"] = widgets.setting_row(
@@ -642,8 +712,7 @@ def screen_rows(app, parent, full=True):
                                                  lambda corner: setter("fps_position", corner), width=22),
                         w("screen.counter.position.hint")).pack(fill="x")
     if full:
-        card = _card(parent, ui, w("screen.picture"), last=True)
-        picture = widgets.RowList(card.body, ui)
+        picture = widgets.RowList(quality.body, ui)
         picture.pack(fill="x")
         options = [(scale, w("screen.scale.full") if scale == "100" else "%s%%" % scale) for scale in choices.RENDER_SCALE]
         widgets.setting_row(picture.add().body, ui, w("screen.scale"),
@@ -818,15 +887,19 @@ def decibels(w, n):
     return w("sound.db", sign="+" if n > 0 else "-" if n < 0 else "", n=abs(n))
 
 
-def last_sound_card(app, parent):
-    """The Sound page's Last game: how the last game's sound went as the player measured it, its gaps marked by the
-    row's lamp; "No game yet." before the first. Returns follow(), which says it again when the result changed (a game
-    that ended while the page is on show)."""
+def last_sound_block(app, parent):
+    """How the last game's sound went as the player measured it, the Output card's last block under its own heading:
+    its row's lamp marks the gaps; "No game yet." before the first. Returns follow(), which says it again when the result
+    changed (a game that ended while the page is on show)."""
     ui, w = app.ui, app.words
-    card = _card(parent, ui, w("sound.last"), last=True)
-    # The row's own frame under the card's title (the title is in the card's body too): made again alone.
-    box = tk.Frame(card.body, bg=theme.PANEL)
+    # Its heading, a list's sub-heading (the labels' face) over the row, as My records heads its lists.
+    block = tk.Frame(parent, bg=theme.PANEL)
+    tk.Label(block, text=w("sound.last"), font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL).pack(
+        anchor="w", pady=(0, ui.px(FORM_LABEL_GAP)))
+    # The row's own frame under its heading: made again alone.
+    box = tk.Frame(block, bg=theme.PANEL)
     box.pack(fill="x")
+    block.odq_box = box
     shown = {"result": object()}
 
     def follow():
@@ -847,24 +920,37 @@ def last_sound_card(app, parent):
         widgets.check_line(box, ui, state, words, value=gaps).pack(fill="x")
 
     follow()
-    return follow
+    return block, follow
 
 
-def sound_rows(app, parent, full=True):
+# The equaliser's three bands stand side by side while its card is at least this wide inside (logical pixels: three
+# sliders of BAND_LEAST with their numbers, and the gaps), one under another in a narrower window.
+BAND_LEAST = 150
+BANDS_ACROSS = 3 * (BAND_LEAST + 70) + 2 * CARD_GAP
+
+
+def sound_rows(app, parent, full=True, fill=False):
     """The Sound page's settings in their cards, which the guide's SOUND CHECK shows too (full=False: the volumes
-    alone). Made once: a choice changes its own control and the hints and controls that follow from it, in place (an
-    equaliser's preset moves its bands, a band moved makes it Custom); the devices, when the player lists them, take
-    the place of the line that waited for them. Returns follow(), which shows the settings as they are now (values the
-    player's in-game menu wrote back)."""
+    alone). On the page, Volume and Output side by side, one height (one under another in a narrow window), the
+    equaliser across the page under them: its preset, then its three bands side by side. Made once: a choice changes its
+    own control and the hints and controls that follow from it, in place (an equaliser's preset moves its bands, a band
+    moved makes it Custom); the devices, when the player lists them, take the place of the line that waited for them.
+    Returns follow(), which shows the settings as they are now (values the player's in-game menu wrote back)."""
     ui, w, v = app.ui, app.words, app.state.values
-    rows = {}
-    card = _card(parent, ui, w("sound.volume"), last=not full)
+    rows, bands = {}, {}
+    if full:
+        left, right = _columns(parent, ui, weights=(1, 1))
+        card = _card(left, ui, w("sound.volume"), last=True, fill=True)
+    else:
+        # The guide's: in its place beside the screen's Frames (`fill`: as tall as they are).
+        card = _card(parent, ui, w("sound.volume"), last=True, fill=fill)
     volumes = widgets.RowList(card.body, ui)
     volumes.pack(fill="x")
     for name, key in (("volume", "master"), ("music_volume", "music"), ("effects_volume", "effects")):
         rows[name] = widgets.setting_row(
             volumes.add().body, ui, w("sound.volume." + key),
-            lambda p, name=name: widgets.Slider(p, ui, v[name], lambda value, name=name: app.changed(name, value)),
+            lambda p, name=name: widgets.Slider(p, ui, v[name], lambda value, name=name: app.changed(name, value),
+                                                fill=True),
             w("sound.volume.%s.hint" % key))
         rows[name].pack(fill="x")
 
@@ -880,40 +966,15 @@ def sound_rows(app, parent, full=True):
             rows["eq"].control.set(values["eq"])
             rows["eq"].say(w("sound.eq.hint." + values["eq"]))
             for band in choices.EQ_BANDS:
-                rows[band].control.set(values[band])
+                bands[band].set(values[band])
             rows["mode"].say(w("sound.mode.hint." + values["audio_mode"]))
             rows["buffer"].say(w("sound.buffer.hint." + values["audio_buffer"]))
 
     if not full:
         return follow
 
-    # The equaliser: a preset, or the player's own three bands; a preset sets the bands, a band moved makes it Custom.
-    card = _card(parent, ui, w("sound.eq"))
-    eq = widgets.RowList(card.body, ui)
-    eq.pack(fill="x")
-
-    def preset(value):
-        app.changed("eq", value)
-        follow()
-
-    def band(name, value):
-        app.changed(name, value)
-        follow()
-
-    rows["eq"] = widgets.setting_row(
-        eq.add().body, ui, w("sound.eq.preset"),
-        lambda p: widgets.Segmented(p, ui, [(kind, w("sound.eq." + kind)) for kind in choices.EQ], v["eq"], preset),
-        w("sound.eq.hint." + v["eq"]))
-    rows["eq"].pack(fill="x")
-    least, most = choices.EQ_RANGE
-    for name, key in zip(choices.EQ_BANDS, ("low", "mid", "high")):
-        rows[name] = widgets.setting_row(
-            eq.add().body, ui, w("sound.eq." + key),
-            lambda p, name=name: widgets.Slider(p, ui, v[name], lambda value, name=name: band(name, value), least=least,
-                                                most=most, step=1, say=lambda n: decibels(w, n)))
-        rows[name].pack(fill="x")
-
-    card = _card(parent, ui, w("sound.output"))
+    # The output beside the volumes: the device, how the game has it, its buffer, and how the last game's sound went.
+    card = _card(right, ui, w("sound.output"), last=True, fill=True)
     output = widgets.RowList(card.body, ui)
     output.pack(fill="x")
     device_slot = output.add()
@@ -932,11 +993,12 @@ def sound_rows(app, parent, full=True):
         if values["audio_device"] != "default" and all(d["id"] != values["audio_device"] for d in app.devices):
             # A device chosen before that is not there now (unplugged): it stays chosen, and says so.
             options.append((values["audio_device"], w("sound.device.gone")))
+        # As wide as its row leaves it, a setting's 22 characters at least and a long device name's 34 at most.
         widgets.setting_row(device_slot.body, ui, w("sound.device"),
                             lambda p: widgets.Select(p, ui, options, values["audio_device"],
-                                                     lambda d: app.changed("audio_device", d), width=34),
+                                                     lambda d: app.changed("audio_device", d), width=22, most=34),
                             w("sound.device.hint" if app.devices else "sound.device.none")).pack(fill="x")
-        # The page's names' column counts the new row's name as it counted the one before.
+        # The page's names column counts the new row's name as it counted the one before.
         widgets.fit_names(parent, ui)
 
     device_row()
@@ -964,10 +1026,42 @@ def sound_rows(app, parent, full=True):
         w("sound.buffer.hint." + v["audio_buffer"]))
     rows["buffer"].pack(fill="x")
     # Under the output's choices, how the last game's sound went with them, as the player measured it.
-    follow_last = last_sound_card(app, parent)
+    last, follow_last = last_sound_block(app, output.add().body)
+    last.pack(fill="x")
+
+    # The equaliser under the pair, across the page: a preset, or the player's own three bands; a preset sets the bands,
+    # a band moved makes it Custom.
+    card = widgets.Card(parent, ui, w("sound.eq"))
+    card.pack(fill="x", pady=(ui.px(CARD_GAP), 0))
+    eq = widgets.RowList(card.body, ui)
+    eq.pack(fill="x")
+
+    def preset(value):
+        app.changed("eq", value)
+        follow()
+
+    def band(name, value):
+        app.changed(name, value)
+        follow()
+
+    rows["eq"] = widgets.setting_row(
+        eq.add().body, ui, w("sound.eq.preset"),
+        lambda p: widgets.Segmented(p, ui, [(kind, w("sound.eq." + kind)) for kind in choices.EQ], v["eq"], preset),
+        w("sound.eq.hint." + v["eq"]))
+    rows["eq"].pack(fill="x")
+    least, most = choices.EQ_RANGE
+    # The three bands side by side, each its name over its slider, as an equaliser's bands stand (one under another
+    # while the card is narrower than BANDS_ACROSS).
+    columns = _columns(eq.add().body, ui, weights=(1, 1, 1), bg=theme.PANEL, stack_below=BANDS_ACROSS)
+    for column, name, key in zip(columns, choices.EQ_BANDS, ("low", "mid", "high")):
+        tk.Label(column, text=w("sound.eq." + key), font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL).pack(
+            anchor="w", pady=(0, ui.px(FORM_LABEL_GAP)))
+        bands[name] = widgets.Slider(column, ui, v[name], lambda value, name=name: band(name, value), least=least,
+                                     most=most, step=1, say=lambda n: decibels(w, n), fill=True, shortest=BAND_LEAST)
+        bands[name].pack(fill="x")
 
     def follow_all():
-        """The settings' controls, then the Last game card, as they are now."""
+        """The settings' controls, then the last game's sound, as they are now."""
         follow()
         follow_last()
 
@@ -995,9 +1089,8 @@ def lanes_card(app, parent):
     ui, w = app.ui, app.words
     card = _card(parent, ui, w("controls.keys"), last=True)
     on = app.state.values["keyboard"] == "on"
-    # The title's line as tall as it is with Reset keys on it, whether that is there or not: the switch stays where it
-    # was, under the pointer that switched it.
-    tk.Frame(card.head, bg=theme.PANEL, width=1, height=ui.px(widgets.Button.HEIGHT)).pack(side="right")
+    # The title's line is as tall as a button whether Reset keys is on it or not (widgets.Card): the switch stays where
+    # it was, under the pointer that switched it.
     rows = widgets.RowList(card.body, ui)
 
     def switch(value):
@@ -1034,8 +1127,9 @@ class LaneKeys:
     COLUMN_GAP, ROW_GAP, NUMBER_GAP, BOX_GAP, LANE_GAP = 32, 16, 12, 6, 3
 
     def _flow(self):
-        """The modes' blocks side by side when the card holds them so, else one under another; laid out again only
-        when that changes (the card's width alone decides it, never what the blocks are given)."""
+        """The modes' blocks side by side when the card holds them so, in three equal columns across the card (each
+        block at its column's left edge), else one under another; laid out again only when that changes (the card's
+        width alone decides it, never what the blocks are given)."""
         if not self.table.winfo_exists():
             return
         px = self.ui.px
@@ -1044,18 +1138,32 @@ class LaneKeys:
         if room <= 1:
             # Not laid out yet: once it is, the card's <Configure> asks again.
             room = None
-        need = sum(block.winfo_reqwidth() for block in self.blocks) + px(self.COLUMN_GAP) * (len(self.blocks) - 1)
-        across = room is None or need <= room
-        if across == self.across:
+        widths = [block.winfo_reqwidth() for block in self.blocks]
+        gaps = px(self.COLUMN_GAP) * (len(self.blocks) - 1)
+        # Spread in equal columns when the widest block has its column's room; side by side from the left when only
+        # their own widths fit; else one under another (long keys in a narrow window).
+        if room is None or len(widths) * max(widths) + gaps <= room:
+            flow = "spread"
+        elif sum(widths) + gaps <= room:
+            flow = "across"
+        else:
+            flow = "down"
+        if flow == self.across:
             return
-        self.across = across
+        self.across = flow
+        for block in self.blocks:
+            block.grid_forget()
         for i, block in enumerate(self.blocks):
-            block.pack_forget()
-        for i, block in enumerate(self.blocks):
-            if across:
-                block.pack(side="left", anchor="n", padx=(px(self.COLUMN_GAP) if i else 0, 0))
+            if flow == "spread":
+                # A column each, as wide as the others: the modes spread over the card, never packed into its left part.
+                block.grid(row=0, column=i, sticky="nw")
+                self.table.columnconfigure(i, weight=1, uniform="modes")
+            elif flow == "across":
+                block.grid(row=0, column=i, sticky="nw", padx=(px(self.COLUMN_GAP) if i else 0, 0))
+                self.table.columnconfigure(i, weight=0, uniform="")
             else:
-                block.pack(side="top", anchor="w", pady=(px(self.ROW_GAP) if i else 0, 0))
+                block.grid(row=i, column=0, sticky="nw", pady=(px(self.ROW_GAP) if i else 0, 0))
+                self.table.columnconfigure(i, weight=0, uniform="")
 
     def show_reset(self, shown):
         """Reset keys at the card's title while the lanes show, gone while keyboard play is off."""
@@ -1104,8 +1212,9 @@ class LaneKeys:
         for name in choices.LANES:
             block = tk.Frame(table, bg=theme.PANEL)
             self.blocks.append(block)
-            # The mode's name, as the game's tabs name it, in the launcher's wide face for English names.
-            tk.Label(block, text=choices.mode(name), font=ui.fonts.step, fg=theme.MUTED, bg=theme.PANEL).grid(
+            # The mode's name, as the game's tabs name it, in the launcher's wide face for English names: the menu's
+            # size, never smaller than the keys it heads.
+            tk.Label(block, text=choices.mode(name), font=ui.fonts.nav, fg=theme.MUTED, bg=theme.PANEL).grid(
                 row=0, column=0, columnspan=2, sticky="w", pady=(0, px(6)))
             for lane, lane_keys in enumerate(choices.lanes_of(name, values[name])):
                 # The lane's number from the top, then its boxes.
@@ -1377,31 +1486,92 @@ def server_tone(app):
 ADDRESS_CHARS, ACCOUNT_CHARS = 38, 30
 
 
-def form_label(parent, ui, text, top=0):
-    """A field's name over it, in the names' face, as the setting rows name theirs."""
-    name = tk.Label(parent, text=text, font=ui.fonts.body_bold, fg=theme.TEXT, bg=parent.cget("bg"), anchor="w")
-    name.pack(anchor="w", pady=(ui.px(top), ui.px(FORM_LABEL_GAP)))
-    return name
+# The room between a list's sub-heading and its rows (logical pixels); between one field's row and the next in a form
+# (the sign-in's ID and password); above a form's button; between a field and its button beside it; between a row's
+# control and what it answers under it; and between a value and the action after it on its line (the account and Sign
+# out, the app's date and its button).
+FORM_LABEL_GAP, FORM_FIELD_GAP, FORM_BUTTON_GAP, FIELD_BUTTON_GAP, ANSWER_GAP, VALUE_ACTION_GAP = 6, 16, 16, 12, 8, 16
 
 
-# The room between a field's name and the field, between one field and the next name, and above a form's button
-# (logical pixels).
-FORM_LABEL_GAP, FORM_FIELD_GAP, FORM_BUTTON_GAP = 6, 16, 16
+def _surface(parent):
+    """The colour a row's frames and words take in `parent`: its own, or a card's deck in a holder that has none (the
+    rows a card makes again in place, Sections in lines: their holders show nothing of their own, so that the rows
+    before stay on the screen until the new ones are drawn over them)."""
+    return parent.cget("bg") or theme.PANEL
 
 
-def connect_panel(app, parent, rerender, forget=False):
-    """The server's card: its address over a field, Connect beside the field, and one line under them that says how it
-    stands (server_line: connecting, connected, or why not, with its lamp). With `forget`, the server in use can be
-    forgotten there too, at the card's title (the Online page; the guide only connects)."""
-    ui, w = app.ui, app.words
-    card = _card(parent, ui, w("online.server"))
-    parent, bg = card.body, theme.PANEL
-    server = app.state.server()
-    form_label(parent, ui, w("online.address"))
+def form_row(parent, ui, title, build, top=False):
+    """A row of a form (the Online page's server card, the guide's steps): the name in the page's names column, as a
+    setting's (widgets.fit_names), and `build(row)`'s control in the next column, on one line by their middles. What the
+    control answers (a field's error, how the connection stands, a note) goes under it in the control's column
+    (_answer), where a form's feedback belongs to its field."""
+    from opendmtq_client import i18n
+    bg = _surface(parent)
     row = tk.Frame(parent, bg=bg)
+    row.columnconfigure(1, weight=1)
+    # The name in each language the launcher speaks: the page's layout is the same in both, whichever is on show.
+    row.odq_names = i18n.every_language(title)
+    row.columnconfigure(0, minsize=widgets.name_width(ui, row.odq_names))
+    name = tk.Label(row, text=title, font=ui.fonts.body_bold, fg=theme.TEXT, bg=bg, anchor="w")
+    row.control = build(row)
+    row.control.grid(row=0, column=1, sticky="w")
+    if top:
+        # A control of several lines (the other servers, each a line as tall as its buttons): the name on the middle of
+        # its first line, where it is read from.
+        name.grid(row=0, column=0, sticky="nw", padx=(0, ui.px(widgets.LABEL_GAP)),
+                  pady=(max(0, int(round((ui.px(widgets.Button.HEIGHT) - ui.fonts.body_bold.metrics("linespace"))
+                                         / 2.0))), 0))
+    else:
+        # The name on the middle of the control's one line (a field's, a button's, words).
+        name.grid(row=0, column=0, sticky="w", padx=(0, ui.px(widgets.LABEL_GAP)))
+    # The rows under the control's line in its column, as they are said.
+    row.answers = 0
+    return row
+
+
+def _answer(row, ui, make, gap=ANSWER_GAP, fill=True):
+    """`make(cell)`'s widget under the row's control in the control's column, `gap` (logical pixels) under what is over
+    it: what the control answers, or the next thing it shows (a download's bar, its button). Made in a cell of its own
+    as wide as the column, so that words wrap to the column's width, never the row's (they would run past its edge).
+    `fill`: across the cell (words), else at its left as wide as it is (a bar, a button)."""
+    row.answers += 1
+    cell = tk.Frame(row, bg=_surface(row))
+    cell.grid(row=row.answers, column=1, sticky="we", pady=(ui.px(gap), 0))
+    widget = make(cell)
+    if fill:
+        widget.pack(fill="x")
+    else:
+        widget.pack(anchor="w")
+    return widget
+
+
+def _server_line(app, parent):
+    """The guide's steps' first line: the server they are about, by its name and address, in a card's own words."""
+    ui, w = app.ui, app.words
+    server = app.state.server()
+    if server is None:
+        return
+    widgets.label(parent, ui, w("online.signin.on", name=st.label(server)), font=ui.fonts.small, fg=theme.MUTED,
+                  wrap_margin=0).pack(fill="x", pady=(0, ui.px(FORM_FIELD_GAP)))
+
+
+def address_row(app, parent, rerender):
+    """The server's address: its field and Connect beside it, and one line under them that says how it stands
+    (server_line: connecting, connected, or why not, with its lamp). Returns the field's entry."""
+    ui, w = app.ui, app.words
+    server = app.state.server()
+    holder = {}
+
+    def control(row):
+        line = tk.Frame(row, bg=_surface(row))
+        field = widgets.Field(line, ui, width=ADDRESS_CHARS, placeholder=w("online.address.example"))
+        field.pack(side="left")
+        holder["field"], holder["line"] = field, line
+        return line
+
+    row = form_row(parent, ui, w("online.address"), control)
     row.pack(fill="x")
-    field = widgets.Field(row, ui, width=ADDRESS_CHARS, placeholder=w("online.address.example"))
-    field.pack(side="left")
+    field, line = holder["field"], holder["line"]
     address = field.entry
     in_use = server["url"] if server else ""
     # The field holds what the player typed until it connects or the server in use changes (app.address_draft): a
@@ -1417,8 +1587,7 @@ def connect_panel(app, parent, rerender, forget=False):
     # Each key the player types (a paste with Ctrl+V too) is in the field by the time the key comes up. A binding of the
     # field's own goes with the field, where a variable traced for it would outlive every page that drew one.
     address.bind("<KeyRelease>", remember, add="+")
-    answer = widgets.Said(parent, ui)
-    answer.pack(fill="x", pady=(ui.px(10), 0))
+    answer = _answer(row, ui, lambda cell: widgets.Said(cell, ui))
     text, _colour = server_line(app)
     tone = server_tone(app)
     answer.set(text, tone)
@@ -1461,37 +1630,32 @@ def connect_panel(app, parent, rerender, forget=False):
     address.bind("<KP_Enter>", lambda e: connect())
     # The page's main action is the next step: Connect while there is no server (then Sign in, then the app's download).
     if server:
-        connect_button = widgets.Button(row, ui, w("online.connect"), connect)
+        connect_button = widgets.Button(line, ui, w("online.connect"), connect)
     else:
-        connect_button = main_button(app, row, w("online.connect"), connect)
-    connect_button.pack(side="left", padx=(ui.px(10), 0))
-    if server and forget:
-        # At the card's title, apart from Connect: the next server this launcher knows becomes the one PLAY plays on.
-        widgets.Button(card.head, ui, w("online.forget"), lambda: forget_server(app, server, rerender),
-                       kind="danger").pack(side="right")
-        # Beside it, the connection test of this server: its card comes under this one (test_panel).
-        widgets.Button(card.head, ui, w("test.button"), app.test_connection).pack(side="right", padx=(0, ui.px(8)))
+        connect_button = main_button(app, line, w("online.connect"), connect)
+    connect_button.pack(side="left", padx=(ui.px(FIELD_BUTTON_GAP), 0))
     if not server:
         # Not connected yet: typing goes to the address, Enter connects.
         address.after_idle(address.focus_set)
     return address
 
 
-def signin_panel(app, parent, rerender):
-    """The sign-in on the current server: who is signed in and Sign out, or the form: the ID and the password, each
-    named over its field, the password shown on demand, Sign in under them; Enter in either field signs in. What is
-    wrong is said in place, under the field it is about (an empty one, a wrong password), or under the button."""
+def connect_panel(app, parent, rerender):
+    """The guide's SERVER step: the server's card, its address row alone."""
+    card = _card(parent, app.ui, app.words("online.server"), last=True)
+    return address_row(app, card.body, rerender)
+
+
+def signin_rows(app, parent, rerender):
+    """The sign-in on the current server, as rows: who is signed in and Sign out; or the form: the ID and the password,
+    each in its row, the password shown on demand, Sign in under them; Enter in either field signs in. What is wrong
+    is said in place, under the field it is about (an empty one, a wrong password), or under the button."""
     ui, w = app.ui, app.words
     server = app.state.server()
     if server is None:
         return
-    # The card's title says the state: signed in, or the sign-in to make.
-    card = _card(parent, ui, w("online.account.signed" if app.state.signed_in(server) else "online.account"))
-    parent, bg = card.body, theme.PANEL
+    bg = _surface(parent)
     if app.state.signed_in(server):
-        signed = tk.Frame(parent, bg=bg)
-        signed.pack(fill="x")
-        widgets.lamp(signed, ui, theme.OK, bg=bg).pack(side="left")
 
         def sign_out():
             if app.busy_now():
@@ -1504,25 +1668,36 @@ def signin_panel(app, parent, rerender):
             app.refresh_checks()
             rerender()
 
-        # Sign out right after the account it signs out of.
-        widgets.label(signed, ui, w("online.signed", account=server["account"]), bg=bg).pack(
-            side="left", padx=(ui.px(6), 0))
-        widgets.Button(signed, ui, w("online.signout"), sign_out).pack(side="left", padx=(ui.px(16), 0))
+        def control(row):
+            # The account with its lamp, then Sign out right after the account it signs out of.
+            line = tk.Frame(row, bg=bg)
+            widgets.lamp(line, ui, theme.OK, bg=bg).pack(side="left")
+            widgets.label(line, ui, w("online.signed", account=server["account"]), bg=bg).pack(
+                side="left", padx=(ui.px(6), 0))
+            widgets.Button(line, ui, w("online.signout"), sign_out).pack(side="left", padx=(ui.px(VALUE_ACTION_GAP), 0))
+            return line
+
+        form_row(parent, ui, w("online.account.signed"), control).pack(fill="x")
         return
-    if app.guide is not None:
-        # In the guide, where these go: the server's name and address, in the card's first line (the Online page has the
-        # server's own card right above).
-        widgets.label(parent, ui, w("online.signin.on", name=st.label(server)), font=ui.fonts.small, fg=theme.MUTED,
-                      wrap_margin=0).pack(fill="x", pady=(0, ui.px(FORM_FIELD_GAP)))
-    fields, said = {}, {}
+    fields, said, rows = {}, {}, {}
     for i, (key, secret) in enumerate((("online.id", False), ("online.password", True))):
-        form_label(parent, ui, w(key), top=FORM_FIELD_GAP if i else 0)
-        box = widgets.Field(parent, ui, width=ACCOUNT_CHARS, secret=secret,
-                            reveal=(w("online.password.show"), w("online.password.hide")) if secret else None)
-        box.pack(anchor="w")
-        # Under each field, what is wrong with it, in place (empty until there is something to say).
-        line = widgets.Said(parent, ui)
-        fields[key], said[key] = box, line
+        made = {}
+
+        def control(row, secret=secret, made=made):
+            made["box"] = widgets.Field(row, ui, width=ACCOUNT_CHARS, secret=secret,
+                                        reveal=(w("online.password.show"), w("online.password.hide")) if secret
+                                        else None)
+            return made["box"]
+
+        row = form_row(parent, ui, w(key), control)
+        row.pack(fill="x", pady=(ui.px(FORM_FIELD_GAP) if i else 0, 0))
+        # Under each field, what is wrong with it, in place (made now, shown once there is something to say), in a cell
+        # of the control's column, so that its words wrap to the column's width.
+        cell = tk.Frame(row, bg=bg)
+        line = widgets.Said(cell, ui)
+        line.pack(fill="x")
+        line.odq_cell = cell
+        fields[key], said[key], rows[key] = made["box"], line, row
     # The ID an installer brought (Play on this PC), else the account signed in before: only the password to type.
     known = server.get("fill") or server.get("account")
     if known:
@@ -1531,18 +1706,20 @@ def signin_panel(app, parent, rerender):
     def say(key, text):
         """What is wrong with one field under it (None: nothing), its edge in the error's colour while it is."""
         line = said[key]
+        cell = line.odq_cell
         if text:
             line.set(text, "bad")
-            if not line.winfo_manager():
-                line.pack(fill="x", pady=(ui.px(6), 0), after=fields[key])
-        elif line.winfo_manager():
-            line.pack_forget()
+            if not cell.winfo_manager():
+                cell.grid(row=1, column=1, sticky="we", pady=(ui.px(6), 0))
+        elif cell.winfo_manager():
+            cell.grid_remove()
         fields[key].set_error(bool(text))
 
-    buttons = tk.Frame(parent, bg=bg)
-    buttons.pack(fill="x", pady=(ui.px(FORM_BUTTON_GAP), 0))
-    message = widgets.Said(parent, ui)
-    message.pack(fill="x", pady=(ui.px(10), 0))
+    # Sign in under the fields, in their column, and the line under it that says how the sign-in stands.
+    end = form_row(parent, ui, "", lambda row: tk.Frame(row, bg=bg))
+    end.pack(fill="x", pady=(ui.px(FORM_BUTTON_GAP), 0))
+    buttons = end.control
+    message = _answer(end, ui, lambda cell: widgets.Said(cell, ui))
     message.set(w("online.signin.hint"))
 
     # One sign-in at a time: Enter pressed twice sends one request (the server counts every try).
@@ -1606,14 +1783,26 @@ def signin_panel(app, parent, rerender):
     main_button(app, buttons, w("online.signin"), sign_in).pack(side="left")
 
 
-def app_panel(app, parent, rerender):
-    """The server's app on this PC: what it has, what the server offers, and the download with its progress."""
+def signin_panel(app, parent, rerender):
+    """The guide's SIGN IN step: the sign-in's card, its title saying the state (signed in, or the sign-in to make),
+    the server it is on in its first line, then the sign-in's rows."""
     ui, w = app.ui, app.words
     server = app.state.server()
     if server is None:
         return
-    card = _card(parent, ui, w("online.app"))
-    parent, bg = card.body, theme.PANEL
+    card = _card(parent, ui, w("online.account.signed" if app.state.signed_in(server) else "online.account"), last=True)
+    _server_line(app, card.body)
+    signin_rows(app, card.body, rerender)
+
+
+def app_row(app, parent, rerender):
+    """The server's app on this PC, as a row: what it has (or that the server has a newer one), what the last look or
+    download said, and the download with its progress, or its button."""
+    ui, w = app.ui, app.words
+    server = app.state.server()
+    if server is None:
+        return
+    bg = _surface(parent)
     have = apps.local(server["url"])
     offered = server.get("app")
     newer = bool(have and offered and offered.get("sha256", "").lower() != have["sha256"])
@@ -1623,28 +1812,36 @@ def app_panel(app, parent, rerender):
         text, colour = w("online.app.newer", date=_date(offered)), theme.WARN
     else:
         text, colour = w("online.app.none"), theme.WARN
-    widgets.label(parent, ui, text, fg=colour, bg=bg, wrap_margin=0).pack(fill="x", pady=(0, ui.px(10)))
+    def control(r):
+        # What this PC has, and on the same line the way to get it or a newer one (below, once it is known).
+        line = tk.Frame(r, bg=bg)
+        widgets.label(line, ui, text, fg=colour, bg=bg).pack(side="left")
+        return line
+
+    row = form_row(parent, ui, w("online.app"), control)
+    row.pack(fill="x")
     if app.download is None and app.app_note and not newer:
         # The last look for a newer app found none: said here, where its button is.
-        widgets.label(parent, ui, w.say(app.app_note), font=ui.fonts.small, fg=theme.MUTED, bg=bg, wrap_margin=0).pack(
-            fill="x", pady=(0, ui.px(10)))
+        _answer(row, ui, lambda cell: widgets.label(cell, ui, w.say(app.app_note), font=ui.fonts.small, fg=theme.MUTED,
+                                                    bg=bg, wrap_margin=0), gap=4)
     if app.download is None and app.download_error:
         # What the last try said (a stop, a sign-in that ended, a line that broke), in the same colour as the status
         # line says it: the guide has no status line to say it.
         said, tone = app.download_error
-        widgets.label(parent, ui, w.say(said), font=ui.fonts.small, fg=theme.WARN if tone == "warn" else theme.BAD,
-                      bg=bg, wrap_margin=0).pack(fill="x", pady=(0, ui.px(10)))
+        _answer(row, ui, lambda cell: widgets.label(cell, ui, w.say(said), font=ui.fonts.small,
+                                                    fg=theme.WARN if tone == "warn" else theme.BAD, bg=bg, wrap_margin=0),
+                gap=4)
     if app.download is not None:
         # The download under way: its bar, kept moving by the app (app._download_moved), and Cancel.
-        bar = widgets.Progress(parent, ui, bg=bg)
-        bar.pack(anchor="w", pady=(0, ui.px(10)))
+        bar = _answer(row, ui, lambda cell: widgets.Progress(cell, ui, bg=bg), gap=FORM_BUTTON_GAP, fill=False)
         done, total = app.download["done"], app.download["total"]
         # The status line's words (app.download_words): how far it is, the server asked first, or stopping.
         bar.set(done / float(total) if total else None, w.say(app.download_words()))
         app.download_bar = bar
         stopping = app.download.get("stopping")
-        stop = widgets.Button(parent, ui, w("online.stopping") if stopping else w("common.cancel"), lambda: halt())
-        stop.pack(anchor="w")
+        stop = _answer(row, ui, lambda cell: widgets.Button(cell, ui, w("online.stopping") if stopping else
+                                                            w("common.cancel"), lambda: halt()),
+                       gap=FORM_BUTTON_GAP, fill=False)
         if stopping:
             stop.enable(False)
 
@@ -1655,18 +1852,28 @@ def app_panel(app, parent, rerender):
             stop.enable(False)
         return
     if not app.state.signed_in(server):
-        widgets.label(parent, ui, w("online.app.signin_newer" if have else "online.app.signin"), font=ui.fonts.small,
-                      fg=theme.MUTED, bg=bg, wrap_margin=0).pack(fill="x")
+        _answer(row, ui, lambda cell: widgets.label(cell, ui, w("online.app.signin_newer" if have else
+                                                                  "online.app.signin"),
+                                                    font=ui.fonts.small, fg=theme.MUTED, bg=bg, wrap_margin=0), gap=4)
         return
-    buttons = tk.Frame(parent, bg=bg)
-    buttons.pack(anchor="w")
     words = w("online.app.update") if newer else w("online.app.check") if have else w("online.app.get")
-    # Getting an app this PC lacks, or the newer one, is the page's main action; looking for a newer one is not.
+    # Getting an app this PC lacks, or the newer one, is the page's main action; looking for a newer one is not. On the
+    # line of what this PC has, after it, as Sign out stands after the account.
     if not have or newer:
-        get = main_button(app, buttons, words, lambda: _get(app, rerender))
+        get = main_button(app, row.control, words, lambda: _get(app, rerender))
     else:
-        get = widgets.Button(buttons, ui, words, lambda: _get(app, rerender))
-    get.pack(side="left")
+        get = widgets.Button(row.control, ui, words, lambda: _get(app, rerender))
+    get.pack(side="left", padx=(ui.px(VALUE_ACTION_GAP), 0))
+
+
+def app_panel(app, parent, rerender):
+    """The guide's DOWNLOAD step: the app's card, the server it comes from in its first line, then the app's row."""
+    ui, w = app.ui, app.words
+    if app.state.server() is None:
+        return
+    card = _card(parent, ui, w("online.app"), last=True)
+    _server_line(app, card.body)
+    app_row(app, card.body, rerender)
 
 
 def _date(details):
@@ -1714,7 +1921,7 @@ def test_panel(app, parent):
     # The lamps of each state, made once for the card's rows.
     pictures = {}
     for state, (colour, hollow) in TEST_LAMPS.items():
-        picture = art.lamp(colour, ui.scale, bg=theme.PANEL, hollow=hollow)
+        picture = art.lamp(colour, ui.scale, bg=theme.PANEL, hollow=hollow, lead=False)
         pictures[state] = (picture, ImageTk.PhotoImage(picture, master=card))
     shown["pictures"] = pictures
     verdict = widgets.Said(card.body, ui, font=ui.fonts.body)
@@ -1733,20 +1940,25 @@ def test_panel(app, parent):
         row.pack(fill="x")
         lamp = tk.Label(row, image=pictures["wait"][1], bg=theme.PANEL, bd=0)
         lamp.odq_picture = pictures["wait"][0]
-        lamp.pack(side="left", anchor="n", pady=(ui.px(3), 0))
+        lamp.pack(side="left", anchor="n", pady=(ui.px(1), 0))
+        # The lamp's middle, from the row's top: the name's line has its middle there, as a ready-check row's words do
+        # (widgets.check_line), and what it found and how long it took stand on the name's baseline.
+        middle = ui.px(1) + lamp.winfo_reqheight() / 2.0
+        name_top = max(0, int(round(middle - ui.fonts.body_bold.metrics("linespace") / 2.0)))
+        small_top = max(0, name_top + ui.fonts.body_bold.metrics("ascent") - ui.fonts.small.metrics("ascent"))
         # The step's name in the names' column: a frame as wide as the column, as tall as the name.
         holder = tk.Frame(row, bg=theme.PANEL, width=column)
-        holder.pack(side="left", anchor="n", padx=(ui.px(6), 0))
+        holder.pack(side="left", anchor="n", padx=(ui.px(6), 0), pady=(name_top, 0))
         name = tk.Label(holder, text=w("test." + key), font=ui.fonts.body_bold, fg=theme.TEXT, bg=theme.PANEL, anchor="w")
         name.pack(anchor="w")
         holder.configure(height=name.winfo_reqheight())
         holder.pack_propagate(False)
         took = tk.Label(row, text="", font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL)
-        took.pack(side="right", anchor="n", padx=(ui.px(12), 0), pady=(ui.px(2), 0))
+        took.pack(side="right", anchor="n", padx=(ui.px(12), 0), pady=(small_top, 0))
         # What it found, beside its name, wrapping in the room left of how long it took.
         found = widgets.label(row, ui, w("test.waiting"), font=ui.fonts.small, fg=theme.MUTED, bg=theme.PANEL,
                               wrap_margin=0, beside=(lamp, holder, took))
-        found.pack(side="left", fill="x", expand=True, pady=(ui.px(2), 0))
+        found.pack(side="left", fill="x", expand=True, anchor="n", pady=(small_top, 0))
         shown["rows"][key] = {"lamp": lamp, "name": name, "found": found, "took": took}
     # What ended before the card was made (the page drawn again meanwhile), and the verdict as it stands.
     for step in test["steps"].values():
@@ -1820,44 +2032,58 @@ def _test_verdict(app, test):
     shown["verdict"].set(app.words.say(said), tone)
 
 
-def known_servers(app, parent, rerender):
-    """The other servers this launcher knows: play on one of them instead, or forget one."""
+def others_row(app, parent, rerender):
+    """The other servers this launcher knows, as a row of the server's card: each by its name and address, with Play
+    here and Forget at the row's right end, a faint line between them."""
     ui, w = app.ui, app.words
     others = [s for s in app.state.servers if s["url"] != app.state.current]
     if not others:
         return
-    card = _card(parent, ui, w("online.others"), last=True)
-    for i, s in enumerate(others):
-        # One row a server, split by the card's faint lines.
-        if i:
-            widgets.divider(card.body, ui, pady=CHECK_GAP)
-        line = tk.Frame(card.body, bg=theme.PANEL)
-        line.pack(fill="x")
+    bg = _surface(parent)
 
-        def pick(url=s["url"]):
-            if app.busy_now():
-                app.set_status(i18n.Said("online.busy"), "warn")
-                return
-            # Another server to play on: what the line said about the one before (an installer's server, a failure)
-            # gives way to where PLAY stands on this one once the ready check below answers.
-            app.user_acted()
-            app.state.current = url
-            # The server in use changed: the address field shows it, whatever was typed there before.
-            app.address_draft = None
-            # What the last server's download said is not this one's.
-            app.download_error, app.app_note = None, None
-            app.state.save()
-            app.refresh_checks()
-            rerender()
+    def control(row):
+        box = tk.Frame(row, bg=bg)
+        for i, s in enumerate(others):
+            # One line a server, split by the card's faint lines.
+            if i:
+                widgets.divider(box, ui, pady=CHECK_GAP)
+            line = tk.Frame(box, bg=bg)
+            line.pack(fill="x")
 
-        forget_button = widgets.Button(line, ui, w("online.forget"), lambda s=s: forget_server(app, s, rerender),
-                                       kind="danger")
-        forget_button.pack(side="right")
-        pick_button = widgets.Button(line, ui, w("online.pick"), pick)
-        pick_button.pack(side="right", padx=(0, ui.px(8)))
-        # Its name and address, or its address once when it has no name of its own.
-        named = "%s  ·  %s" % (s["name"], s["url"]) if st.has_own_name(s) else s["url"]
-        widgets.label(line, ui, named, wrap_margin=12, beside=(forget_button, pick_button)).pack(side="left", fill="x")
+            def pick(url=s["url"]):
+                if app.busy_now():
+                    app.set_status(i18n.Said("online.busy"), "warn")
+                    return
+                # Another server to play on: what the line said about the one before (an installer's server, a
+                # failure) gives way to where PLAY stands on this one once the ready check below answers.
+                app.user_acted()
+                app.state.current = url
+                # The server in use changed: the address field shows it, whatever was typed there before.
+                app.address_draft = None
+                # What the last server's download said is not this one's.
+                app.download_error, app.app_note = None, None
+                app.state.save()
+                app.refresh_checks()
+                rerender()
+
+            # At the line's top, their middle the first line's of the words beside them.
+            forget_button = widgets.Button(line, ui, w("online.forget"), lambda s=s: forget_server(app, s, rerender),
+                                           kind="danger")
+            forget_button.pack(side="right", anchor="n")
+            pick_button = widgets.Button(line, ui, w("online.pick"), pick)
+            pick_button.pack(side="right", anchor="n", padx=(0, ui.px(8)))
+            # Its name and address, or its address once when it has no name of its own: its first line on the
+            # buttons' middle, a wrapped second under it.
+            named = "%s  ·  %s" % (s["name"], s["url"]) if st.has_own_name(s) else s["url"]
+            words = widgets.label(line, ui, named, wrap_margin=16, beside=(forget_button, pick_button))
+            words.pack(side="left", fill="x", anchor="n", pady=(max(0, int(round(
+                (ui.px(widgets.Button.HEIGHT) - ui.fonts.body.metrics("linespace")) / 2.0))), 0))
+        return box
+
+    row = form_row(parent, ui, w("online.others"), control, top=True)
+    # Across the control's column: the servers' buttons stand at its right end, one under another.
+    row.control.grid_configure(sticky="we")
+    row.pack(fill="x")
 
 
 def forget_server(app, server, rerender):
@@ -1915,20 +2141,54 @@ def online_keys(app):
 
 
 def build_online(app, parent):
-    """The Online page in cards (Sections): the server, the sign-in, the server's app, the other servers; an answer
-    changes its own card in place."""
-    sections = Sections(parent, app.ui)
-    # A change of the launcher's state redraws the cards it changed, while the page is on show.
-    again = lambda: app.page == "online" and app.guide is None and sections.refresh()  # noqa: E731
+    """The Online page: one card of the server's rows (its address, the sign-in, its app, the other servers this
+    launcher knows), then the connection test's card while a test is on show. Each row made again in place when what it
+    shows changed (an answer, a sign-in, a download), the card made again for another server."""
+    ui = app.ui
     server_key, signin_key, app_key, others_key = online_keys(app)
-    # The server's card is keyed by the server in use only: its line under the address follows each answer in place.
-    sections.add(lambda: (app.state.current,), lambda holder: connect_panel(app, holder, again, forget=True))
+    # The card's rows, made again with the card (_online_card sets it).
+    inner = {"rows": None}
+
+    def follow():
+        """The card (for another server) or its rows, then the test's card, made again where they changed; the rows'
+        names column fitted again to the rows on show."""
+        changed = cards.refresh()
+        rows = inner["rows"]
+        if rows is not None and rows.parent.winfo_exists():
+            changed = rows.refresh() or changed
+        if changed:
+            widgets.fit_names(parent, ui, rows_that_come("online"))
+        return changed
+
+    # A change of the launcher's state redraws what it changed, while the page is on show.
+    again = lambda: app.page == "online" and app.guide is None and follow()  # noqa: E731
+    cards = Sections(parent, ui)
+    # The server's card is keyed by the server in use only: its title's buttons are that server's; its rows follow.
+    cards.add(lambda: (app.state.current,), lambda holder: _online_card(app, holder, again, inner))
     # The connection test of the server in use, made once a test starts and filled in as its steps end (test_panel).
-    sections.add(lambda: test_key(app), lambda holder: test_panel(app, holder))
-    sections.add(signin_key, lambda holder: signin_panel(app, holder, again))
-    sections.add(app_key, lambda holder: app_panel(app, holder, again))
-    sections.add(others_key, lambda holder: known_servers(app, holder, again))
-    app.page_follow = sections.refresh
+    cards.add(lambda: test_key(app), lambda holder: test_panel(app, holder))
+    app.page_follow = follow
+
+
+def _online_card(app, holder, rerender, inner):
+    """The Online page's server card: Test connection and Forget at its title (with a server), then its rows, a faint
+    line between them, each made again in place by its own key (Sections in lines)."""
+    ui, w = app.ui, app.words
+    card = _card(holder, ui, w("online.server"), last=True)
+    server = app.state.server()
+    if server:
+        # At the card's title, apart from Connect: the next server this launcher knows becomes the one PLAY plays on.
+        widgets.Button(card.head, ui, w("online.forget"), lambda: forget_server(app, server, rerender),
+                       kind="danger").pack(side="right")
+        # Beside it, the connection test of this server: its card comes under this one (test_panel).
+        widgets.Button(card.head, ui, w("test.button"), app.test_connection).pack(side="right", padx=(0, ui.px(8)))
+    server_key, signin_key, app_key, others_key = online_keys(app)
+    rows = Sections(card.body, ui, lines=True)
+    rows.add(lambda: (app.state.current,), lambda h: address_row(app, h, rerender))
+    rows.add(signin_key, lambda h: signin_rows(app, h, rerender))
+    rows.add(app_key, lambda h: app_row(app, h, rerender))
+    rows.add(others_key, lambda h: others_row(app, h, rerender))
+    inner["rows"] = rows
 
 
 # ---------------------------------------------------------------------------------------------- Help
@@ -1943,21 +2203,33 @@ def _player_log(app):
 
 
 def build_help(app, parent):
-    ui, w = app.ui, app.words
+    ui = app.ui
     from opendmtq_client import installed
-    sections = Sections(parent, ui, after=lambda: widgets.fit_names(parent, ui, rows_that_come("help")))
-    # The ready check, its rows made again in place when they change (refresh_checks).
-    sections.add(lambda: None, lambda holder: _help_checks(app, holder))
-    # The tools, which follow the player's log (there once the game has run) and the install.
-    sections.add(lambda: (_player_log(app), installed.root()), lambda holder: _help_tools(app, holder))
-    sections.add(lambda: (installed.root(), bool(installed.root() and installed.updater(installed.root()))),
-                 lambda holder: _help_remove(app, holder))
-    app.page_follow = sections.refresh
+    # The ready check across the page, its rows made again in place when they change (refresh_checks).
+    checks = Sections(parent, ui)
+    checks.add(lambda: None, lambda holder: _help_checks(app, holder))
+    # Then the tools and resetting and removing side by side, one height (one under another in a narrow window). The
+    # tools follow the player's log (there once the game has run) and the install.
+    left, right = _columns(parent, ui, weights=(1, 1), gap_above=CARD_GAP)
+    tools = Sections(left, ui)
+    tools.add(lambda: (_player_log(app), installed.root()), lambda holder: _help_tools(app, holder), expand=True)
+    remove = Sections(right, ui)
+    remove.add(lambda: (installed.root(), bool(installed.root() and installed.updater(installed.root()))),
+               lambda holder: _help_remove(app, holder), expand=True)
+
+    def follow():
+        """Each card whose rows changed made again in place, and the page's names column fitted to its rows again."""
+        changed = any([part.refresh() for part in (checks, tools, remove)])
+        if changed:
+            widgets.fit_names(parent, ui, rows_that_come("help"))
+        return changed
+
+    app.page_follow = follow
 
 
 def _help_checks(app, parent):
     ui, w = app.ui, app.words
-    card = _card(parent, ui, w("help.checks"))
+    card = _card(parent, ui, w("help.checks"), last=True)
     # Check again at the title's right end: the server asked again too, whatever its last answer.
     widgets.Button(card.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
     app.check_box = tk.Frame(card.body, bg=theme.PANEL)
@@ -1968,7 +2240,7 @@ def _help_checks(app, parent):
 
 def _help_tools(app, parent):
     ui, w = app.ui, app.words
-    card = _card(parent, ui, w("help.tools"))
+    card = _card(parent, ui, w("help.tools"), last=True, fill=True)
     log_file, has_log = _player_log(app)
     if has_log:
         widgets.setting_row(card.body, ui, w("help.player_log"),
@@ -2000,7 +2272,7 @@ def _help_remove(app, parent):
     from opendmtq_client import installed
     root = installed.root()
     # From the least to the most: the game's data, the launcher's, the program.
-    card = _card(parent, ui, w("help.remove"), last=True)
+    card = _card(parent, ui, w("help.remove"), last=True, fill=True)
     widgets.setting_row(card.body, ui, w("help.clear.row"),
                         lambda p: widgets.Button(p, ui, w("help.clear.confirm"), lambda: maintenance.clear_game_data(app),
                                                  kind="danger"),
@@ -2029,25 +2301,26 @@ def language_options(app):
 
 def build_about(app, parent):
     ui, w = app.ui, app.words
+    # General, one group of rows: the language, the launcher's version with its updates, the first-start guide.
     card = _card(parent, ui, w("about.general"))
-    widgets.setting_row(card.body, ui, w("about.language"),
+    rows = widgets.RowList(card.body, ui)
+    rows.pack(fill="x")
+    widgets.setting_row(rows.add().body, ui, w("about.language"),
                         lambda p: widgets.Segmented(p, ui, language_options(app), app.state.picked_language or "system",
                                                     app.set_language)).pack(fill="x")
-    # The updates' card, made again in place when the look at the start finds a newer launcher; the cards after it as
+    # The updates' row, made again in place when the look at the start finds a newer launcher; the rows after it as
     # they were.
-    sections = Sections(parent, ui)
-    sections.add(lambda: app.update_found and app.update_found.version, lambda holder: _updates_card(app, holder))
+    sections = Sections(rows.add().body, ui)
+    sections.add(lambda: app.update_found and app.update_found.version, lambda holder: _updates_row(app, holder))
     app.page_follow = sections.refresh
-    # Its gap under it, as a card's own (the holder's card has none).
-    tk.Frame(parent, bg=theme.BG, height=ui.px(CARD_GAP)).pack(fill="x")
-    card = _card(parent, ui, w("about.guide"))
 
     def rerun():
         app.state.guide_done = False
         app.state.save()
         app.show()
 
-    widgets.Button(card.body, ui, w("about.guide.run"), rerun).pack(anchor="w")
+    widgets.setting_row(rows.add().body, ui, w("about.guide"),
+                        lambda p: widgets.Button(p, ui, w("about.guide.run"), rerun)).pack(fill="x")
     card = _card(parent, ui, w("about.legal"), last=True)
     for i, key in enumerate(("about.license", "about.notice")):
         if i:
@@ -2057,20 +2330,19 @@ def build_about(app, parent):
     widgets.label(card.body, ui, w("about.notice.2"), fg=theme.MUTED, wrap_margin=0).pack(fill="x", pady=(ui.px(4), 0))
 
 
-def _updates_card(app, parent):
-    """The About page's updates: the version, Check for updates, and the answer with Update to vX when one is on
-    offer."""
+def _updates_row(app, parent):
+    """General's updates row: the version and Check for updates in the row's control column, the answer under them
+    and Update to vX when one is on offer, in that column too, as a field's answer stands under it."""
     ui, w = app.ui, app.words
-    card = _card(parent, ui, w("about.updates"))
     # The version the header shows beside the logo too: the installed one, else the code's.
     version = updates.shown_version()
-    box = tk.Frame(card.body, bg=theme.PANEL)
-    box.pack(fill="x")
-    widgets.label(box, ui, w("about.version", v=version), font=ui.fonts.body_bold).pack(side="left")
-    # The answer and "Update to vX" under the version, taking room only once there is an answer.
-    result = tk.Frame(card.body, bg=theme.PANEL)
-    answer = widgets.label(result, ui, "", fg=theme.MUTED, wrap_margin=0)
-    slot = tk.Frame(result, bg=theme.PANEL)
+
+    def control(row):
+        box = tk.Frame(row, bg=theme.PANEL)
+        widgets.label(box, ui, w("about.version", v=version)).pack(side="left")
+        # A field's gap to its button: the version and its look for a newer one read as one thing.
+        widgets.Button(box, ui, w("about.check"), check).pack(side="left", padx=(ui.px(12), 0))
+        return box
 
     # One look at a time: a second press while it asks does nothing.
     checking = {"now": False}
@@ -2082,9 +2354,10 @@ def _updates_card(app, parent):
         for child in slot.winfo_children():
             child.destroy()
         answer.configure(text=w("about.checking"), fg=theme.MUTED)
-        if not answer.winfo_manager():
-            answer.pack(fill="x", pady=(ui.px(10), 0))
-            slot.pack(fill="x")
+        if not cell.winfo_manager():
+            # The answer and its Update under the version and its button, in the control's column, as a field's answer
+            # stands under it (form_row).
+            cell.grid(row=1, column=1, sticky="we", pady=(ui.px(ANSWER_GAP), 0))
 
         def work():
             # The window's own settings: the server PLAY plays on is asked first.
@@ -2092,6 +2365,16 @@ def _updates_card(app, parent):
             app.post(lambda: show(result))
 
         threading.Thread(target=work, daemon=True, name="updates").start()
+
+    row = widgets.setting_row(parent, ui, w("about.updates"), control, bg=theme.PANEL)
+    row.pack(fill="x")
+    # The answer and "Update to vX" under the version, in a cell of the control's column (its words wrap to the
+    # column's width), taking room only once there is an answer.
+    cell = tk.Frame(row, bg=theme.PANEL)
+    answer = widgets.label(cell, ui, "", fg=theme.MUTED, wrap_margin=0)
+    answer.pack(fill="x")
+    slot = tk.Frame(cell, bg=theme.PANEL)
+    slot.pack(fill="x")
 
     def show(result):
         checking["now"] = False
@@ -2113,7 +2396,7 @@ def _updates_card(app, parent):
         answer.configure(text=text, fg=theme.BAD if result.kind in ("failed", "refused") else theme.MUTED)
         if result.kind == "available":
             main_button(app, slot, w("about.update_now", v=result.version), lambda: update(result)).pack(
-                anchor="w", pady=(ui.px(10), 0))
+                anchor="w", pady=(ui.px(12), 0))
             if app.update_found is None or app.update_found.version != result.version:
                 # Found by this press: the status line says it too, as it says the one the start found.
                 app.update_on_offer(result)
@@ -2123,12 +2406,9 @@ def _updates_card(app, parent):
             # A game from this window or from the command line: the update replaces the player's files under it.
             answer.configure(text=w("about.update_busy"), fg=theme.WARN)
 
-    widgets.Button(box, ui, w("about.check"), check).pack(side="left", padx=(ui.px(16), 0))
-    result.pack(fill="x")
     if app.update_found is not None:
         # The look at the start found a newer launcher: its answer and its update are here without a press.
-        answer.pack(fill="x", pady=(ui.px(10), 0))
-        slot.pack(fill="x")
+        cell.grid(row=1, column=1, sticky="we", pady=(ui.px(ANSWER_GAP), 0))
         show(app.update_found)
 
 

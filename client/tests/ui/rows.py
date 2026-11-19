@@ -71,26 +71,28 @@ def main():
         middles = [top + height / 2.0 for top, height in zip(tops, heights)]
         if max(heights) - min(heights) > 1 or max(middles) - min(middles) > 1:
             problems.append("Online: a row's controls are %r tall with middles at %r" % (heights, middles))
-    # Each field starts where the words of its name over it start (the label packed just before it in its card).
+    # Each field in its row of the server card, its name in the names column beside it (DESIGN.md's form rows): every
+    # field starts on one line, the control column's, and stands on its name's middle.
     fields = [x for x in shots.widgets_of(app.body.inner) if isinstance(x, widgets.Field) and x.winfo_ismapped()]
     if len(fields) != 3:
         problems.append("Online: %d fields, not the address, the ID and the password" % len(fields))
+    starts = sorted({field.winfo_rootx() for field in fields})
+    if starts and starts[-1] - starts[0] > 1:
+        problems.append("Online: the fields start at %r, not on one line" % starts)
     for field in fields:
-        holder = field
-        while not isinstance(holder.master.master, widgets.Card):
-            holder = holder.master
-        stack = [x for x in holder.master.pack_slaves() if x.winfo_ismapped()]
-        before = stack[stack.index(holder) - 1] if stack.index(holder) else None
-        if not isinstance(before, tk.Label) or not before.cget("text"):
-            problems.append("Online: a field with no name over it")
+        row = field
+        while row is not None and not hasattr(row, "odq_names"):
+            row = row.master
+        names = [x for x in (row.grid_slaves(row=0, column=0) if row is not None else ())
+                 if isinstance(x, tk.Label) and x.cget("text")]
+        if not names:
+            problems.append("Online: a field with no name beside it")
             continue
-        # Where the label's words begin: past its own edge (border, padding, ring), as Tk draws them.
-        words = before
-        start = words.winfo_rootx() + sum(int(words.winfo_fpixels(str(words.cget(o))))
-                                          for o in ("borderwidth", "padx", "highlightthickness"))
-        if abs(field.winfo_rootx() - start) > 1:
-            problems.append("Online: a field starts at %d, its name %r at %d" % (field.winfo_rootx(),
-                                                                                words.cget("text"), start))
+        name = names[0]
+        middle = name.winfo_rooty() + name.winfo_height() / 2.0
+        if abs(middle - (field.winfo_rooty() + field.winfo_height() / 2.0)) > 1:
+            problems.append("Online: the field of %r stands off its name's middle (%.1f, %.1f)" % (
+                name.cget("text"), field.winfo_rooty() + field.winfo_height() / 2.0, middle))
 
     # ---- The settings' controls of the Screen page (below 100 %, with every row), of the Sound page and of Help's
     # tools: what shows of each starts on one line (a row name longer than the names' column would push its control
@@ -105,15 +107,19 @@ def main():
         shots.settle(app, 6, until=lambda: app.devices is not None)
         shots.settle(app)
         # The page as a person sees it: each control's first column of pixels that is not the card's own colour, on
-        # the line through its middle (the keyboard's ring is the card's colour while it is away).
+        # the line through its middle (the keyboard's ring is the card's colour while it is away). Measured card by card:
+        # the page's names column is one, so each card's controls start on one line (two cards side by side have two).
         from PIL import Image
         from opendmtq_client import art, theme
         card = art._rgb(theme.PANEL)
-        edges = []
+        edges = {}
         for widget in shots.widgets_of(app.body.inner):
             control = getattr(widget, "control", None)
             if control is None or not control.winfo_ismapped():
                 continue
+            holder = widget
+            while holder is not None and not isinstance(holder, widgets.Card):
+                holder = holder.master
             # In view first (a page taller than the window), then seen as it is now.
             app.body.show_widget(control)
             app.root.update()
@@ -128,20 +134,29 @@ def main():
                           if sum(abs(a - b) for a, b in zip(picture.getpixel((x, y)), card)) > 24), None)
                 if x is not None and (seen is None or x < seen):
                     seen = x
-            edges.append((seen, control.winfo_class()))
-        found = [e[0] for e in edges if e[0] is not None]
-        if len(found) < 3 or len(found) != len(edges) or max(found) - min(found) > 1:
-            problems.append("%s%s: the controls show from %r" % (page, said, sorted(set(edges))))
+            edges.setdefault(str(holder), []).append((seen, control.winfo_class()))
+        counted = sum(len(found) for found in edges.values())
+        if counted < 2:
+            problems.append("%s%s: %d controls of settings rows found" % (page, said, counted))
+        for found_in in edges.values():
+            found = [e[0] for e in found_in if e[0] is not None]
+            if len(found) != len(found_in) or (found and max(found) - min(found) > 1):
+                problems.append("%s%s: the controls show from %r" % (page, said, sorted(set(found_in))))
 
-    for page in ("screen", "sound", "help"):
+    for page in ("screen", "sound", "help", "about", "online"):
         controls_from_one_line(page, "")
-    # The Sound page's sliders' numbers end on one line: the volumes' and the equaliser's bands' (once 18 px apart).
+    # The Sound page's sliders' numbers end on one line in each card's column: the volumes', and each band's in its own
+    # column of the equaliser (once 18 px apart).
     app.nav_go("sound")
     shots.settle(app, 6, until=lambda: app.devices is not None)
-    ends = {x.number.winfo_rootx() + x.number.winfo_width() for x in shots.widgets_of(app.body.inner)
-            if isinstance(x, widgets.Slider) and x.winfo_ismapped()}
-    if len(ends) != 1:
-        problems.append("sound: the sliders' numbers end at %r" % sorted(ends))
+    ends = {}
+    for x in shots.widgets_of(app.body.inner):
+        if isinstance(x, widgets.Slider) and x.winfo_ismapped():
+            ends.setdefault((str(x.master.master), x.winfo_rootx()), set()).add(
+                x.number.winfo_rootx() + x.number.winfo_width())
+    for where, found in ends.items():
+        if len(found) != 1:
+            problems.append("sound: the sliders' numbers end at %r" % sorted(found))
     # The same with the names drawn wider, as Windows draws Pretendard (its Help's Servers and settings is 135 px where
     # Linux makes it about 128): a column fitted to the names still lines the controls up, where a width fixed for one
     # system's font let the widest name push its control out of the line (Start over 3 px right of the others).
@@ -149,7 +164,7 @@ def main():
     size = int(bold.cget("size"))
     bold.configure(size=size + 1)
     try:
-        for page in ("screen", "sound", "help"):
+        for page in ("screen", "sound", "help", "about", "online"):
             controls_from_one_line(page, " with wider names")
     finally:
         bold.configure(size=size)
@@ -166,7 +181,9 @@ def main():
         shots.settle(app)
         found = 0
         for frame in shots.widgets_of(app.body.inner):
-            slaves = [x for x in frame.pack_slaves() if x.winfo_ismapped()] if isinstance(frame, tk.Frame) else []
+            # Packed or gridded (a row with a names column grids its lamp, words and value).
+            slaves = [x for x in frame.pack_slaves() + frame.grid_slaves() if x.winfo_ismapped()] \
+                if isinstance(frame, tk.Frame) else []
             lamps = [x for x in slaves if hasattr(x, "odq_picture") and isinstance(x, tk.Label)]
             texts = [x for x in slaves if isinstance(x, tk.Label) and x not in lamps and x.cget("text")]
             if len(lamps) != 1 or not texts:
@@ -184,6 +201,8 @@ def main():
             problems.append("%s: no state rows found" % page)
 
     state_rows_on_one_line("play")
+    # Help's checks: their values in their column after the names, on the lamp's line too.
+    state_rows_on_one_line("help")
     for job in app.root.tk.splitlist(app.root.tk.call("after", "info")):
         app.root.after_cancel(job)
     app.root.destroy()

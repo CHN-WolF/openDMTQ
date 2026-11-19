@@ -110,6 +110,46 @@ class Glass(unittest.TestCase):
                 # The room the lamp takes is as it was, so the words beside it stand where they stood.
                 self.assertEqual(lamp.size, (int(math.ceil(21 * scale)),) * 2)
 
+    def test_a_lamp_that_starts_a_line_has_its_dot_on_the_lines_edge(self):
+        # A state's row starts with its lamp: the dot's smoothed edge in the picture's first column of pixels, where the
+        # words over and under the row start (the room before it left the dot 7 px in from them); the room after it and
+        # its height as a lamp's, so that the words beside it stand on its middle as before.
+        from opendmtq_client import art, theme
+        panel = tuple(int(theme.PANEL[i:i + 2], 16) for i in (1, 3, 5))
+        for scale in (1.0, 1.5, 2.0):
+            for hollow in (False, True):
+                whole = art.lamp(theme.OK, scale, bg=theme.PANEL, hollow=hollow)
+                lead = art.lamp(theme.OK, scale, bg=theme.PANEL, hollow=hollow, lead=False)
+                middle = lead.height // 2
+                # Its first column holds the dot's edge (no longer the card's colour on the dot's middle line).
+                first = lead.getpixel((0, middle))[:3]
+                self.assertGreater(max(abs(a - b) for a, b in zip(first, panel)), LEVEL, (scale, hollow, first))
+                # As tall as a lamp, narrower by the room before the dot alone.
+                self.assertEqual(lead.height, whole.height)
+                self.assertEqual(whole.width - lead.width, int(math.floor(whole.width / 2.0 - 3.5 * scale)),
+                                 (scale, hollow))
+
+    def test_the_pages_shards_stand_right_of_their_room(self):
+        # The launcher's page gives its shards a room: right of the content column and its clear room (ScrollArea's
+        # shard_room). Nothing of them left of it at any width or scale, every part of the page; and some of them in it
+        # (the window's own picture keeps its green), the site's own where the margin is wider than they are.
+        from PIL import ImageChops
+        from opendmtq_client import art
+        for scale in (1.0, 2.0):
+            px = lambda n: int(round(n * scale))  # noqa: E731
+            for width, room in ((px(932), px(904)), (px(712), px(684)), (px(1352), px(1128))):
+                for offset, height in ((0, px(760)), (px(300), px(700)), (px(950), px(100))):
+                    mask = art.shard_mask(width, height, scale, offset, room)
+                    self.assertIsNone(mask.crop((0, 0, room, height)).getbbox(), (scale, width, room, offset))
+                top = art.shard_mask(width, px(760), scale, 0, room)
+                self.assertIsNotNone(top.crop((room, 0, width, px(760))).getbbox(), (scale, width, room))
+            # Wide enough a margin: the site's right-hand shards as the site has them (the same mask, the room left).
+            width = px(1440)
+            fitted = art.shard_mask(width, px(900), scale, 0, px(1000))
+            site = art.shard_mask(width, px(900), scale, 0, None)
+            site.paste(0, (0, 0, px(1000), px(900)))
+            self.assertIsNone(ImageChops.difference(fitted, site).getbbox(), scale)
+
     def test_a_switch_that_is_on_has_no_ring_round_it(self):
         from opendmtq_client import art, theme
         on = art.toggle(True, 40, 22, bg=theme.PANEL)

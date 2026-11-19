@@ -96,6 +96,8 @@ class Fonts:
         self.nav_small = tkfont.Font(root, family=DISPLAY, size=9)
         self.step = tkfont.Font(root, family=DISPLAY, size=9)                        # the guide's step names
         self.display_big = tkfont.Font(root, family=DISPLAY, size=17)                # PLAY
+        # The page's most important fact, a step over a card's title: the server PLAY plays on, its name (24 px).
+        self.head = tkfont.Font(root, family=TEXT_FONT, size=18, weight="bold")
         self.card_title = tkfont.Font(root, family=TEXT_FONT, size=13, weight="bold")  # a card's title (17 px)
         self.body = tkfont.Font(root, family=TEXT_FONT, size=10)                     # text
         self.body_bold = tkfont.Font(root, family=TEXT_BOLD, size=10)                # labels and buttons
