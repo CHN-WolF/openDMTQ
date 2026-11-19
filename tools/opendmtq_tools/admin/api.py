@@ -657,7 +657,8 @@ def server_get(args):
     return {"install": lifecycle.install_kind(), "address": f"http://{core.PUBLIC_HOST}/",
             "version": os.environ.get("OPENDMTQ_VERSION") or None, "started": started,
             "runs_itself": lifecycle.can_run_itself(), "commands": lifecycle.commands(), "data": lifecycle.data_parts(),
-            "port": lifecycle.port_now(),
+            # Its own port, and the one in its address that the phones' app calls (a router's, forwarded to it, or the same).
+            "port": lifecycle.port_now(), "public_port": lifecycle.public_port(),
             # A URL as the other addresses are (lifecycle.next_address gives host:port).
             "next_address": f"http://{lifecycle.next_address()}/" if lifecycle.next_address() else None,
             "moved_from": (lifecycle.moved_off_80(once=False) or {}).get("was"),

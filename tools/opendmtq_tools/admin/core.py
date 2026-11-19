@@ -461,14 +461,25 @@ def static_types():
 static_types()
 
 
+def own_port():
+    """The server's own port as it started with it (LISTEN_PORT, which its host program and Docker Compose give these
+    pages), or None where none is given (Kubernetes, a start of an earlier version): the address's port may be a router's,
+    forwarded to it."""
+    own = str(os.environ.get("LISTEN_PORT") or "").strip()
+    # A port as a number from 1 to 65535; anything else is no port of its own to name.
+    return int(own) if own.isdigit() and 1 <= int(own) <= 65535 else None
+
+
 def public_url():
     """Where links to the public site point. Through the server (it passes /opendmtq/admin on), the site is
     on the same address. On the admin's own port, it is the site's port on the host this page was
-    opened with: the server PC reaches that without the router looping back to the public name."""
+    opened with: the server PC reaches that without the router looping back to the public name, on the server's own port
+    (a router's port in the address answers nothing there)."""
     if request.headers.get("X-Forwarded-Host"):
         return ""
     port = re.search(r":\d+$", PUBLIC_HOST)
-    return "http://" + re.sub(r":\d+$", "", request.host) + (port.group(0) if port else "")
+    own = own_port()
+    return "http://" + re.sub(r":\d+$", "", request.host) + (f":{own}" if own else port.group(0) if port else "")
 
 
 @app.context_processor

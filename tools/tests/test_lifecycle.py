@@ -7,6 +7,7 @@ repair's steps and the list need only the standard library."""
 
 import contextlib
 import hashlib
+import html
 import importlib.util
 import io
 import json
@@ -464,6 +465,49 @@ class PortMoveTest(unittest.TestCase):
             # Said, and kept in sight until the next start: where it will be.
             self.assertIn("From the server's next start it answers here: http://192.168.0.10:8792/", page)
             self.assertIn("From the next start: http://192.168.0.10:8792/", page)
+
+    def test_the_card_names_the_servers_own_port_and_a_forward_to_it(self):
+        # A server whose address names a router's own port (8443, forwarded to its own 8791, as the move off port 80 keeps
+        # it): the card names its own port, the one the form moves, and the line under it the port the phones' app calls
+        # and where it goes; where these pages open on the server PC is on its own port too; the API gives both (ADM-180;
+        # main named 8443 as the server's port and localhost:8443, where nothing answers).
+        with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", "game.example.com:8443"), \
+                mock.patch.dict(os.environ, {"LISTEN_PORT": "8791", "ADMIN_ON_PUBLIC_PORT": "no"}), \
+                mock.patch.object(admin.lifecycle, "port_free", lambda port: port != 8791):
+            # .env as the move off port 80 leaves it behind a router: the router's port in the address, its own beside it.
+            with open(inst.path(".env"), "w", encoding="utf-8") as f:
+                f.write("PUBLIC_HOST=game.example.com:8443\nLISTEN_PORT=8791\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PASSWORD=pw\n")
+            headers = self.token(inst)
+            inst.sign_in()
+            for lang, lead, line in (
+                    ("en", "Port 8791 carries everything: the game, the players' site, these pages and the API. On another port",
+                     "The phones' app calls http://game.example.com:8443/, and its port 8443 is forwarded to port 8791 of this server."),
+                    ("ko", "8791번 포트 하나로 게임, 플레이어 사이트, 이 관리자 페이지, API가 모두 열립니다. 다른 포트로 옮기면",
+                     "휴대폰 앱은 http://game.example.com:8443/로 접속하고, 그 8443번 포트가 이 서버의 8791번 포트로 포워딩됩니다.")):
+                inst.client.set_cookie("opendmtq_lang", lang)
+                page = html.unescape(inst.client.get("/opendmtq/admin/server").get_data(as_text=True))
+                self.assertIn(lead, page)
+                self.assertIn(f'<p class="meta" id="port-forwarded">{line}</p>', page)
+                self.assertNotIn("8443 carries", page)
+                self.assertNotIn("8443번 포트 하나로", page)
+                self.assertIn('placeholder="8791"', page)
+                self.assertIn("http://localhost:8791/opendmtq/admin/", page)
+                self.assertNotIn("localhost:8443", page)
+            got = inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()
+            self.assertEqual((got["port"], got["public_port"], got["address"]), (8791, 8443, "http://game.example.com:8443/"))
+            # The form takes the server's own port as the one it is on (main took it for another program's).
+            r = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8791}, headers=headers)
+            self.assertEqual((r.status_code, r.get_json()["error"]["code"]), (409, "same_port"))
+        # Where the address names the server's own port: the card as it was, no line under it, both the same in the API.
+        with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", "192.168.0.10:8791"), \
+                mock.patch.dict(os.environ, {"LISTEN_PORT": "8791"}):
+            headers = self.token(inst)
+            inst.sign_in()
+            page = html.unescape(inst.client.get("/opendmtq/admin/server").get_data(as_text=True))
+            self.assertIn("Port 8791 carries everything: the game, the players' site, these pages and the API. The phones' app calls it.", page)
+            self.assertNotIn('id="port-forwarded"', page)
+            got = inst.client.get("/opendmtq/api/v1/server", headers=headers).get_json()
+            self.assertEqual((got["port"], got["public_port"]), (8791, 8791))
 
     def test_what_is_refused_is_said(self):
         with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", "192.168.0.10:8791"):

@@ -1111,6 +1111,21 @@ def service(compose, name):
     return "\n".join(lines[start:end])
 
 
+class OwnPortTest(unittest.TestCase):
+    def test_the_admin_pages_are_told_the_servers_own_port(self):
+        # The Server page names the server's own port, which the address may not carry (a router's own port in it,
+        # forwarded to the server's): Docker Compose gives the admin service the port the edge publishes, and a host
+        # install's program the one the server serves (ADM-180; main gave neither, and the page named the address's).
+        with open(os.path.join(ROOT, "compose.yaml"), encoding="utf-8") as f:
+            compose = f.read()
+        published = re.search(r'"\$\{BIND_ADDRESS:-0\.0\.0\.0\}:(\$\{LISTEN_PORT:-\d+\}):8790"', service(compose, "edge")).group(1)
+        self.assertIn(f"\n      LISTEN_PORT: {published}\n", service(compose, "admin"))
+        sys.path.insert(0, os.path.join(ROOT, "host"))
+        from opendmtq_host import folders
+        given = folders.tools_env({"PUBLIC_HOST": "game.example.com:8443", "LISTEN_PORT": "8791"}, {})
+        self.assertEqual((given["LISTEN_PORT"], given["PUBLIC_HOST"]), ("8791", "game.example.com:8443"))
+
+
 class ChildOutputTest(unittest.TestCase):
     """What runs on a Windows PC reads other programs' output as UTF-8 (-X utf8), and those programs write in Windows'
     language and code page: strict decoding would stop this program on the first Korean word from tasklist or Java. Only

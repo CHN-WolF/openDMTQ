@@ -134,7 +134,15 @@ def uninstall_server(keep_data, confirm):
 
 
 def port_now():
-    """The port the server serves now: the one in the address it started with."""
+    """The server's own port, the one it serves now and that its port form (and ./opendmtq port) moves: LISTEN_PORT as
+    the server started with it, which its host program and Docker Compose give these pages. Where none is given (on
+    Kubernetes, whose command moves the port in publicHost; a start of an earlier version), the port in the address."""
+    return core.own_port() or public_port()
+
+
+def public_port():
+    """The port in the server's address, the one the phones' app calls (80 for an address without one, as a URL means it):
+    the server's own port, or another that is forwarded to it (a router's)."""
     return setup.address_parts(core.PUBLIC_HOST)[1]
 
 
@@ -173,8 +181,9 @@ def admin_address():
     # Off the chart's router: on the machine with kubectl, by its port-forward to the admin service's own port.
     if setup.IN_KUBERNETES:
         return "http://localhost:8000/opendmtq/admin/", "server.admin_local_kubernetes"
-    # A host install has no HTTPS: there an internet address keeps them on the server PC whatever .env says.
-    return f"http://localhost:{port}/opendmtq/admin/", "server.admin_local" if setup.HOST_INSTALL else "server.admin_local_docker"
+    # A host install has no HTTPS: there an internet address keeps them on the server PC whatever .env says. On the server
+    # PC its own port, not the address's (a router's, forwarded to it, answers nothing there).
+    return f"http://localhost:{port_now()}/opendmtq/admin/", "server.admin_local" if setup.HOST_INSTALL else "server.admin_local_docker"
 
 
 def env_setting(name):
@@ -520,7 +529,8 @@ def server_page():
                            removes=removes(), parts=parts, total=sum(p["bytes"] for p in parts),
                            since=datetime.datetime.fromtimestamp(started).strftime("%Y-%m-%d %H:%M") if started else "",
                            version=os.environ.get("OPENDMTQ_VERSION") or "", root=repairing.install_root(),
-                           port=port_now(), next_address=next_address(), moved_80=moved_off_80(), admin_at=admin_address(),
+                           port=port_now(), public_port=public_port(), next_address=next_address(), moved_80=moved_off_80(),
+                           admin_at=admin_address(),
                            can_move_port=bool(setup.HOST_INSTALL and setup.ENV_FILE),
                            # The owner's password: changed here by the owner, or the command that changes it.
                            password_here=bool(setup.HOST_INSTALL and setup.ENV_FILE), password_commands=password_commands(),

@@ -2655,7 +2655,8 @@ The server as the Server page shows it.
 - `started` (integer, or null): When the admin service started, with the server (Unix time).
 - `runs_itself` (boolean): True where this API can stop, restart and uninstall the server (a host install, the Windows bundle).
 - `commands` (object of string): Where it cannot: the command for each action, on the server PC or the cluster. With Docker Compose stop, restart, repair, delete_data, uninstall and port; on Kubernetes stop, restart, delete_data, uninstall and port; none on a host install, which does each through this API.
-- `port` (integer): Its one port: the game, the players' site, the admin pages and this API.
+- `port` (integer): Its one port, its own: the game, the players' site, the admin pages and this API, the port POST /server/port moves.
+- `public_port` (integer): The port in its address, the one the phones' app calls: the same as port, or another that is forwarded to port (a router's).
 - `next_address` (string, or null): The address it moves to at its next start (http://host:port/), when it was moved (POST /server/port); null otherwise.
 - `moved_from` (integer, or null): The port it left at its first start with this version: 80, for a server set up on it before 0.11.0 without its owner choosing it, which moved to the port its admin pages had; null for one that never moved.
 - `moved` ([Moved](#moved), or null): Its last move to another address, which the site's download page tells players of for a month: null otherwise.

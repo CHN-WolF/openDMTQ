@@ -37,7 +37,10 @@
    command that does it. #}
 <section class="card" id="port">
   <h2>{{ t('port.title') }}</h2>
-  <p class="lead">{{ t('port.lead', port=port) }}</p>
+  {# The server's own port, the one the form moves; where the phones' app calls another (a router's, forwarded to it),
+     the lead says nothing of the app and the line under it says where the app calls and where that goes. #}
+  <p class="lead">{{ t('port.lead' if public_port == port else 'port.lead_forwarded', port=port) }}</p>
+  {% if public_port != port %}<p class="meta" id="port-forwarded">{{ t('port.forwarded', address='http://' ~ public_host ~ '/', public=public_port, port=port) }}</p>{% endif %}
   {% if next_address %}<p class="setup-state"><span class="lamp wait"></span>{{ t('port.pending', address='http://' ~ next_address ~ '/') }}</p>{% endif %}
   {# A move off port 80 at the first start of this version: said here once, with the router's forward to the new port for
      an internet address (a router's own port in the address stays, and the app with it). #}

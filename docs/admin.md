@@ -230,8 +230,10 @@ The server's own life in one place, a card each:
   open, its version and how it is installed. On the server PC's own install (the Windows bundle, Linux, macOS),
   **Restart** (every part again, with `.env` as it is now) and **Stop the server**, each asking first. The page after a
   stop says when the server has stopped, how to start it again, and when it runs again.
-- **The server's port:** what it carries, and **Move to this port**: from the server's next start it answers there, the
-  app is built again for the new address, and the site's download page says so for a month. A port another program
+- **The server's port:** its own port, what it carries, and **Move to this port**: from the server's next start it answers
+  there, the app is built again for the new address, and the site's download page says so for a month. Where the
+  phones' app calls another port that is forwarded to it (a router's, `PUBLIC_HOST=<name>:8443` beside
+  `LISTEN_PORT=8791`), the line under it says so. A port another program
   holds is refused, and so is a port below 1024 that the computer keeps from the server's user.
 - **The owner's password:** by the owner alone, typed twice: written to `.env` and taken at once, for these pages and
   the players' site; the owner's other sign-ins end, this one stays.

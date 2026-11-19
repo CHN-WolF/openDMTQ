@@ -84,6 +84,8 @@ def tools_env(values, found):
         # The server, as the admin pages reach it (status, styles, fonts).
         "SERVER_URL": f"http://127.0.0.1:{listen_port(values)}",
         "PUBLIC_HOST": values.get("PUBLIC_HOST", ""),
+        # The server's own port, which the Server page names and its form moves (the address's may be a router's).
+        "LISTEN_PORT": str(listen_port(values)),
         "SERVER_NAME": values.get("SERVER_NAME", ""),
         "BASE_APK": values.get("BASE_APK", ""),
         # What new players start with until the owner chooses on the Broadcasts page, as the server reads it.

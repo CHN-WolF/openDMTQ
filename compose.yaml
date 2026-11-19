@@ -133,6 +133,9 @@ services:
       # Whether a visit from this stack's network gateway is the server PC's own, as the server takes it (above): Play on
       # this PC is for those alone.
       ADMIN_LOCAL: ${ADMIN_LOCAL:-none}
+      # The server's own port, as the edge publishes it (below), which the Server page names: the address's may be a
+      # router's, forwarded to it.
+      LISTEN_PORT: ${LISTEN_PORT:-8791}
       # What new players start with until the owner chooses on the Broadcasts page, as the server reads it.
       LIVE_DEFAULT: ${LIVE_DEFAULT:-off}
       HOME: /tmp
