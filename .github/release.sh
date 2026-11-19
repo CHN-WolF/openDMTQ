@@ -59,6 +59,9 @@ REGISTRY=ghcr.io/$(tr '[:upper:]' '[:lower:]' <<<"$OWNER")
 SOURCE=https://github.com/$REPO
 
 mkdir -p "$OUT" "$LOGS"
+# The PC client's packages take their version from the chart: a release's files of another number would not lay out.
+CHART=$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([0-9A-Za-z.+-]*\)"\{0,1\}[[:space:]]*$/\1/p' deploy/helm/opendmtq/Chart.yaml | head -n 1)
+[ "$CHART" = "$VERSION" ] || { echo "the chart says $CHART: set version and appVersion in deploy/helm/opendmtq/Chart.yaml to $VERSION first" >&2; exit 1; }
 # One step: its function in a shell of its own that stops at its first failure (a function tested by an if would not),
 # its output to its log, one line on the screen; the release stops at a step that failed.
 step() {
