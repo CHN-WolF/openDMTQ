@@ -30,6 +30,10 @@ CHAT_PORT=${CHAT_PORT:-18803}
 PASSWORD=smoke-pass
 # The browser's share of the machine: four processors at most, or what there is (GitHub gives a private repository two).
 BROWSER_CPUS=${BROWSER_CPUS:-$(($(nproc) < 4 ? $(nproc) : 4))}
+# The views of a list looked at side by side (audit.js sweep()), each in a window of its own: one for each of the browser's
+# processors. Its memory: 3 GB, and half a gigabyte more for each view at once past four.
+SWEEP_WORKERS=${SWEEP_WORKERS:-$BROWSER_CPUS}
+BROWSER_MEMORY=${BROWSER_MEMORY:-$((3072 + (SWEEP_WORKERS > 4 ? SWEEP_WORKERS - 4 : 0) * 512))m}
 BROWSER_IMAGE=zenika/alpine-chrome:with-puppeteer
 FFMPEG_IMAGE=mwader/static-ffmpeg:7.1
 DATA=$(mktemp -d)
@@ -172,8 +176,9 @@ stage() {
     return 0
   fi
   local status=0
-  docker run --rm --name "$NAME_PREFIX-uitest-browser" --network host --cpus "$BROWSER_CPUS" --memory 3g \
+  docker run --rm --name "$NAME_PREFIX-uitest-browser" --network host --cpus "$BROWSER_CPUS" --memory "$BROWSER_MEMORY" \
     -e SITE="http://127.0.0.1:$SITE_PORT" -e ADMIN="http://127.0.0.1:$ADMIN_PORT" -e PASSWORD="$PASSWORD" -e OUT=/out \
+    -e SWEEP_WORKERS="$SWEEP_WORKERS" \
     -e CHAT="http://$CHAT:8080" -e CHAT_LOCAL="http://127.0.0.1:$CHAT_PORT" \
     -e SHOTS_ALL="${SHOTS_ALL:-}" \
     -v "$UI:/usr/src/app/ui:ro" -v "$REPORT:/out" --entrypoint node "$BROWSER_IMAGE" ui/audit.js "$1" 2>&1 \
@@ -256,8 +261,9 @@ stage full
 # admin service on the same data that says it is the bundle (tests/ui/as_windows.py).
 here_stage() {
   local target=$1 windows=$2 status=0
-  docker run --rm --name "$NAME_PREFIX-uitest-browser" --network "container:$target" --cpus "$BROWSER_CPUS" --memory 3g \
+  docker run --rm --name "$NAME_PREFIX-uitest-browser" --network "container:$target" --cpus "$BROWSER_CPUS" --memory "$BROWSER_MEMORY" \
     -e SITE="http://127.0.0.1:8000" -e ADMIN="http://127.0.0.1:8000" -e PASSWORD="$PASSWORD" -e OUT=/out -e WINDOWS="$windows" \
+    -e SWEEP_WORKERS="$SWEEP_WORKERS" \
     -v "$UI:/usr/src/app/ui:ro" -v "$REPORT:/out" --entrypoint node "$BROWSER_IMAGE" ui/audit.js thispc 2>&1 \
     | tee "$REPORT/last.txt" >> "$REPORT/results.txt" || status=$?
   if [ "$status" -ne 0 ]; then

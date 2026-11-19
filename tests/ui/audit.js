@@ -268,46 +268,89 @@ async function audit(page) {
   return page.evaluate(() => [...window.layoutAudit(), ...window.spacingAudit()]);
 }
 
+// Views side by side, SWEEP_WORKERS of them at once (run.sh sets it): each worker has windows of its own, signed in as the
+// contexts given are (their cookies copied into them), and opens one view at a time in them. The browser keeps only the
+// front tab of a window in sight, and a view out of sight would neither finish its motion nor look at the server: each view
+// is the only one of its window, and says so (out of sight is a fault). The first worker is the contexts given.
+const WORKERS = Math.max(1, parseInt(process.env.SWEEP_WORKERS || '1', 10) || 1);
+
+// A context of its own with the cookies of another (its sign-ins on the site and the admin pages, its language).
+async function twin(context) {
+  const copy = await context.browser().createBrowserContext();
+  const page = await context.newPage();
+  const cookies = (await page.cookies(`${SITE}/opendmtq/`, `${ADMIN}/opendmtq/admin/`)).map(c => ({
+    name: c.name, value: c.value, domain: c.domain, path: c.path, httpOnly: c.httpOnly, secure: c.secure, sameSite: c.sameSite,
+    // A session cookie stays one.
+    ...(c.session || !(c.expires > 0) ? {} : { expires: c.expires }),
+  }));
+  await page.close();
+  if (cookies.length) {
+    const into = await copy.newPage();
+    await into.setCookie(...cookies);
+    await into.close();
+  }
+  return copy;
+}
+
+// One view: the page at a width in a language, in a worker's window; the faults found, as the keys sweep() groups them by.
+async function lookAt(worker, { name, url, options, width, lang }) {
+  const page = await (options.anon ? worker.anon : worker.signed).newPage();
+  await page.setViewport({ width, height: width < 500 ? 740 : 900, hasTouch: width < 500, isMobile: width < 500 });
+  await page.setCookie({ name: 'opendmtq_lang', value: lang, url });
+  const faults = watch(page, url);
+  let status = 0;
+  try {
+    const answer = await page.goto(url, { waitUntil: options.settle ? 'domcontentloaded' : 'networkidle2', timeout: 30000 });
+    status = answer ? answer.status() : 0;
+  } catch (e) {
+    faults.push(`did not load: ${String(e).slice(0, 120)}`);
+  }
+  if (options.settle) await pause(options.settle);
+  if (status !== (options.status || 200)) faults.push(`status ${status}, expected ${options.status || 200}`);
+  // The layout, and on the owner's pages one primary button to a screen.
+  const items = [...await audit(page), ...await twoPrimaries(page)];
+  // Measured in sight, as a person sees it (with views side by side, each in a window of its own).
+  const sight = await page.evaluate(() => document.visibilityState).catch(() => 'gone');
+  if (sight !== 'visible') faults.push(`out of sight while measured (${sight})`);
+  for (const f of faults) items.push({ kind: 'page-fault', at: f, detail: '' });
+  // Pictures for people to look through: the default language on phone and laptop, the other on a phone.
+  // SHOTS_ALL=1: both languages at the phone's width and the desktop's, for a look at a page in each.
+  if ((process.env.SHOTS_ALL && (width === 360 || width === 1280)) || (lang === 'en' && (width === 360 || width === 1280)) || (lang === 'ko' && width === 360)) {
+    await page.screenshot({ path: path.join(OUT, 'shots', `${stage}-${name}-${lang}-${width}.jpg`), type: 'jpeg', quality: 72, fullPage: true }).catch(() => {});
+  }
+  await page.close();
+  return items.map(f => `${f.kind} | ${name} | ${f.at} | ${f.detail}`);
+}
+
 // Every page of a list on every width, in both languages; findings grouped, so that one fault on eight views is one line.
 async function sweep(contexts, pages, widths, langs = ['en', 'ko']) {
-  const found = {};
-  let views = 0;
+  const views = [];
   for (const [name, url, options = {}] of pages) {
     for (const width of widths) {
-      for (const lang of langs) {
-        const page = await (options.anon ? contexts.anon : contexts.signed).newPage();
-        await page.setViewport({ width, height: width < 500 ? 740 : 900, hasTouch: width < 500, isMobile: width < 500 });
-        await page.setCookie({ name: 'opendmtq_lang', value: lang, url });
-        const faults = watch(page, url);
-        let status = 0;
-        try {
-          const answer = await page.goto(url, { waitUntil: options.settle ? 'domcontentloaded' : 'networkidle2', timeout: 30000 });
-          status = answer ? answer.status() : 0;
-        } catch (e) {
-          faults.push(`did not load: ${String(e).slice(0, 120)}`);
-        }
-        if (options.settle) await pause(options.settle);
-        if (status !== (options.status || 200)) faults.push(`status ${status}, expected ${options.status || 200}`);
-        // The layout, and on the owner's pages one primary button to a screen.
-        const items = [...await audit(page), ...await twoPrimaries(page)];
-        for (const f of faults) items.push({ kind: 'page-fault', at: f, detail: '' });
-        for (const f of items) {
-          const key = `${f.kind} | ${name} | ${f.at} | ${f.detail}`;
-          (found[key] = found[key] || []).push(`${lang}${width}`);
-        }
-        // Pictures for people to look through: the default language on phone and laptop, the other on a phone.
-        // SHOTS_ALL=1: both languages at the phone's width and the desktop's, for a look at a page in each.
-        if ((process.env.SHOTS_ALL && (width === 360 || width === 1280)) || (lang === 'en' && (width === 360 || width === 1280)) || (lang === 'ko' && width === 360)) {
-          await page.screenshot({ path: path.join(OUT, 'shots', `${stage}-${name}-${lang}-${width}.jpg`), type: 'jpeg', quality: 72, fullPage: true }).catch(() => {});
-        }
-        views++;
-        await page.close();
-      }
+      for (const lang of langs) views.push({ name, url, options, width, lang });
     }
   }
+  // Each finding's views, by their place in the list: grouped and listed in that order, however the workers took them.
+  const found = {};
+  const workers = [contexts];
+  for (let i = 1; i < Math.min(WORKERS, views.length); i++) {
+    workers.push({ signed: await twin(contexts.signed), anon: await twin(contexts.anon), own: true });
+  }
+  let next = 0;
+  await Promise.all(workers.map(async worker => {
+    while (next < views.length) {
+      const at = next++;
+      for (const key of await lookAt(worker, views[at])) (found[key] = found[key] || []).push(at);
+    }
+  }));
+  for (const worker of workers.filter(w => w.own)) {
+    await worker.signed.close();
+    await worker.anon.close();
+  }
+  const where = key => found[key].sort((a, b) => a - b).map(i => `${views[i].lang}${views[i].width}`);
   const keys = Object.keys(found).sort();
-  fs.appendFileSync(path.join(OUT, 'findings.txt'), keys.map(k => `${stage} | ${k} @${found[k].join(',')}\n`).join(''));
-  check(`${views} views, ${keys.length} findings`, keys.length === 0, keys.slice(0, 30).map(k => `\n  ${k.slice(0, 170)} @${found[k].slice(0, 4).join(',')}`).join(''));
+  fs.appendFileSync(path.join(OUT, 'findings.txt'), keys.map(k => `${stage} | ${k} @${where(k).join(',')}\n`).join(''));
+  check(`${views.length} views, ${keys.length} findings`, keys.length === 0, keys.slice(0, 30).map(k => `\n  ${k.slice(0, 170)} @${where(k).slice(0, 4).join(',')}`).join(''));
 }
 
 // Broadcasts off for the server: the site shows nothing of them, its live page says so in the site's own way, and the
