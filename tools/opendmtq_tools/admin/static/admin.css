@@ -823,7 +823,9 @@ table.sortable :is(th.r, th.rank)[data-sort]::after { position: absolute; margin
 .setup-phone img { flex: none; width: 168px; height: 168px; padding: 8px; background: #fff; }
 .setup-phone ol { flex: 1 1 260px; display: grid; gap: 6px; margin: 0; padding-left: 20px; color: var(--chalk); }
 /* The setup's app step: the question about newer phones above its button. */
-.setup-build { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0; }
+/* The build's button a line's room under what stands above it: the lead, the app's state, or the red box that says why it
+   waits (it sat against that box's edge). */
+.setup-build { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 12px 0 0; }
 /* The setup's last step on the server PC itself: the PC client here (this_pc.html), under what to do on each phone. */
 .setup-here { margin: 0 0 16px; }
 .setup-here .lead { margin: 0; }
