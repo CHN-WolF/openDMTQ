@@ -9,13 +9,16 @@ account, and the admin pages, where the owner sets up and runs the server. What 
 `http://<server>:8791/` is the players' site, on the server's one port (8791 unless it was moved; `status` and the
 server's window show the address):
 
-- **Home:** the server's version beside the logo, the way to the download page, what is on the server, top players,
-  newest records.
-- **Download:** for Android, the app (.apk) with its QR code, the three steps to install it, and help; and the PC
-  client's installer for Windows, set up for this server, when the server has it
-  ([the PC client's installer](#the-pc-clients-installer)). For a month after the server moved to another address or
-  port, it says so: phones and tablets install the app built for the new address over the old one, and a Windows PC
-  runs the installer from the page again.
+- **Home:** the server's version beside the logo, the way to the download page (drawn waiting, with why, while there
+  is no app for this server and none is being made), what is on the server, top players, newest records. For a month
+  after the server moved, a line under the download says so, with the way to the download page.
+- **Download:** for Android, the app (.apk) with its QR code and the three steps to install it, and on a local network
+  that the device must be on the server's Wi-Fi; and the PC client's installer for Windows, set up for this server, when
+  the server has it, with what it runs on ([the PC client's installer](#the-pc-clients-installer)). For a month after
+  the server moved to another address or port, it says so: phones and tablets install the app built for the new address
+  over the old one, and a Windows PC runs the installer from the page again. How the app and the game go on afterwards,
+  and what to do when one does not install, is [playing on a server](play.md) and
+  [troubleshooting](troubleshooting.md#for-players), not the page.
 - **Rankings:** the first three on a podium, then the others who have played, by total best score (best score per
   chart, summed), this month's as the game ranks them, or by S grades, perfect plays, charts played. Players with
   nothing in a category are not listed in it. Average accuracy is the game's own figure.

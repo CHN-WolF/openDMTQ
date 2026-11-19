@@ -342,9 +342,6 @@ $name = $fig ? (string)$fig['name'] : (string)$account['id'];
       <dt><?= t('me.rights') ?></dt><dd><?= t($account['owner'] ? 'me.rights_owner' : ($account['admin'] ? 'me.rights_yes' : 'me.rights_no')) ?></dd>
       <dt><?= t('me.language') ?></dt><dd><?= t('me.language_now') ?></dd>
     </dl>
-    <?php if (!$account['owner']): ?>
-      <p class="meta"><?= t('me.decided') ?></p>
-    <?php endif; ?>
   </section>
   <?php if ($account['owner']): ?>
     <?php // The server's own account: its ID and password are the server's, changed on the admin pages' Server page. ?>

@@ -1,5 +1,6 @@
 <?php
-/* The app's download page: the download (.apk), the steps after it, and help. The home page leads here. */
+/* The app's download page: the download (.apk) and the steps after it. The home page leads here. How the app and the
+   game go on afterwards (updates, other servers' apps, what to do when one does not install) is the docs' (play.md). */
 require __DIR__ . '/lib.php';
 // For those signed in only (a stranger goes to the sign-in page and comes back here).
 require_sign_in();
@@ -69,8 +70,7 @@ page_header(t('dl.title'), 'download', $start ? '1;url=/apk' : ($building ? '20'
         </figure>
       <?php endif; ?>
     </div>
-    <?php // What to do after the button: three steps in order, then the cases that are not every player's,
-          // then help folded away. ?>
+    <?php // What to do after the button: three steps in order. ?>
     <div class="get-app"<?= hidden_on_ios() ?>>
         <?php if ($apk && !$any_phone): ?>
           <p class="warn"><?= t('dl.32bit') ?></p>
@@ -91,23 +91,9 @@ page_header(t('dl.title'), 'download', $start ? '1;url=/apk' : ($building ? '20'
               <div class="screen screen-home" aria-hidden="true"><?php if (is_file(APK_DIR . '/app-icon.png')): ?><span class="screen-icon"><img src="icon.php" alt="" width="56" height="56"></span><?php endif; ?><?= app_name_html() ?></div>
             </li>
           </ol>
-          <ul class="notes">
-            <li><?= t(lan_only($host) ? 'step.lan' : 'step.net') ?> <?= t('note.songs') ?></li>
-            <li><?= t('note.update') ?></li>
-            <li><?= t('note.other') ?></li>
-          </ul>
+          <?php // What must be so for the app to reach this server, on a local network: the one line under the steps. ?>
+          <?php if (lan_only($host)): ?><p class="notes"><?= t('step.lan') ?></p><?php endif; ?>
         <?php endif; ?>
-        <details class="help" id="help">
-          <summary><?= t('help.title') ?></summary>
-          <ul>
-            <li><?= t('help.other') ?></li>
-            <?php if ($apk && !$any_phone): ?>
-              <li><?= t('help.32bit') ?></li>
-            <?php elseif ($any_phone): ?>
-              <li><?= t('help.compat') ?></li>
-            <?php endif; ?>
-          </ul>
-        </details>
     </div>
   </section>
   <?php if ($win): ?>

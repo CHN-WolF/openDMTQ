@@ -456,7 +456,7 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
 .app-name .addr span { white-space: nowrap; }
 
 /* Text links: the section's colour, a thin underline on the pointer. Buttons, tabs, tiles and rows are their own thing. */
-:where(.lead, .meta, .note, .warn, .done, .error, .empty, .steps, .notes, .help, .lost) a:not(.btn, .button) { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+:where(.lead, .meta, .note, .warn, .done, .error, .empty, .steps, .notes, .lost) a:not(.btn, .button) { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 
 /* ------------------------------------------------------------------ controls */
 
@@ -1345,16 +1345,6 @@ table.plays td.when { width: 6.5em; color: var(--ash); font-size: var(--t-sm); }
   .step-text > b:first-child { padding-left: 28px; margin-bottom: 6px; }
 }
 @media (max-width: 720px) { .install-head { grid-template-columns: minmax(0, 1fr); } .install-head .qr { display: none; } }
-/* Install troubleshooting, folded away until needed. */
-.help { margin-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
-.help summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 11px 0; }
-.help[open] summary { color: #fff; }
-/* Closed and last in its card: the summary's tap padding (11px) is not added to the card's at the foot. */
-.help:last-child:not([open]) { margin-bottom: -11px; }
-.help ul { margin: 1px 0 0; padding: 0; list-style: none; color: #dfe5eb; font-size: var(--t-md); }
-.help b { color: #fff; }
-.help li { margin: 6px 0; }
-
 /* Sign-in pages: one narrow panel in the middle of the page. */
 .signin { width: 100%; max-width: 440px; justify-self: center; margin-top: clamp(0px, 5vh, 56px); }
 /* The sign-in as the site's front door: the wordmark big and what this is, the form under them. The bar's own small mark
@@ -1789,11 +1779,11 @@ table.board.parts td.name a::after { content: none; }
   .auth:active, .lang-switch a:active, .tabs a:active { transform: translateY(1px); }
   .tabbar a:active { transform: scale(0.96); }
 
-  /* A fold (the download page's help, the licences' full texts) opens and closes over a fifth of a second instead of
-     jumping: the browser may now animate a height to and from auto (Chrome 131 and later; elsewhere it jumps). */
+  /* A fold (the licences' full texts) opens and closes over a fifth of a second instead of jumping: the browser may now
+     animate a height to and from auto (Chrome 131 and later; elsewhere it jumps). */
   :root { interpolate-size: allow-keywords; }
-  :is(.help, .license-fold)::details-content { block-size: 0; overflow-y: clip; transition: block-size 0.22s ease, content-visibility 0.22s allow-discrete; }
-  :is(.help, .license-fold)[open]::details-content { block-size: auto; }
+  .license-fold::details-content { block-size: 0; overflow-y: clip; transition: block-size 0.22s ease, content-visibility 0.22s allow-discrete; }
+  .license-fold[open]::details-content { block-size: auto; }
 
   /* As a page arrives: the grade line and the level bars fill from their start, a beat apart (the level bars one row
      after another, by their place among their siblings). */

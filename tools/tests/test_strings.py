@@ -143,6 +143,18 @@ class PortalStrings(unittest.TestCase):
                 if key.endswith(".one"):
                     self.assertIn("{n}", table.get(key.removesuffix(".one"), ""), key)
 
+    def test_the_site_carries_no_usage_text(self):
+        # The download page has the steps and what must be so to go on, no notes or folded help of how the app and the game
+        # go on (play.md and troubleshooting.md have them), and of the PC client what it runs on, not how it is played;
+        # MY PAGE has its account's state, not who sets what or where a control is (ADM-201).
+        for key in ("note.songs", "note.update", "note.other", "step.net", "help.title", "help.other", "help.32bit",
+                    "help.compat", "me.decided"):
+            self.assertNotIn(key, self.en, key)
+            self.assertNotIn(key, self.ko, key)
+        self.assertEqual((self.en["pc.needs"], self.ko["pc.needs"]), ("It runs on 64-bit Windows 10 or 11.", "64비트 Windows 10이나 11에서 실행됩니다."))
+        for table in (self.en, self.ko):
+            self.assertNotIn("KOR / ENG", table["me.language_now"])
+
     def test_an_account_without_admin_rights_says_so(self):
         # MY PAGE's row of the admin pages, for an account that has no rights there: said as that (ADM-195).
         self.assertEqual((self.en["me.rights_no"], self.ko["me.rights_no"]), ("No admin rights", "관리자 권한 없음"))
