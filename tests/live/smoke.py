@@ -258,8 +258,10 @@ switch("live-off")
 off = state()
 switch("live-on")
 on = state()
+# Nothing was uploaded while it was on: the off notice says there is no replay of it (off_unrecorded), not where one is.
 check("every change after that a notice of its own, numbered higher each time",
-      (off.get("toast_kind"), on.get("toast_kind")) == ("off", "on") and on.get("toast_id", 0) > off.get("toast_id", 0) > s.get("toast_id", 0), (off, on))
+      (off.get("toast_kind"), on.get("toast_kind")) == ("off_unrecorded", "on") and on.get("toast_id", 0) > off.get("toast_id", 0) > s.get("toast_id", 0)
+      and off.get("toast") == "Your broadcast has ended\nThere is no replay of it", (off, on))
 token = on.get("token", "")
 
 # Refused uploads.

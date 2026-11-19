@@ -728,14 +728,59 @@ class LiveSwitchTest(unittest.TestCase):
 
     def test_every_flip_leaves_a_new_notice_with_a_new_number(self):
         # LIVE-40: on, then off before the phone looked, then on again: each flip a notice of its own, in place of the
-        # one not read, numbered higher each time (the player shows a notice whose number it has not shown).
+        # one not read, numbered higher each time (the player shows a notice whose number it has not shown). Off before
+        # anything was recorded: the notice that says there is no replay (LIVE-60).
         with Install() as inst:
             numbers = []
-            for on, kind in ((True, "on"), (False, "off"), (True, "on")):
+            for on, kind in ((True, "on"), (False, "off_unrecorded"), (True, "on")):
                 row = self._switch(inst, on)
                 self.assertEqual(row["toast"], kind)
                 numbers.append(row["toast_id"])
             self.assertEqual(numbers, sorted(set(numbers)))
+
+    def _recording(self, start, ms=4000, hidden=False, opened=False):
+        """A recording of player 7 that started at `start`, as the server leaves one: closed with its length in meta.json,
+        or still open with its segments listed so far; hidden from the site when asked."""
+        rec = admin.recordings.rec_folder(7, start)
+        os.makedirs(rec, exist_ok=True)
+        with open(os.path.join(rec, "meta.json"), "w", encoding="utf-8") as f:
+            json.dump({"guid": 7, "id": start, "started": start} if opened else
+                      {"guid": 7, "id": start, "started": start, "ended": start + ms // 1000, "duration_ms": ms, "size": 5, "songs": []}, f)
+        if opened:
+            open(os.path.join(rec, ".open"), "w").close()
+            with open(os.path.join(rec, "segs.log"), "w", encoding="utf-8") as f:
+                f.write("".join(f"{n} 2000 0 1880\n" for n in range(ms // 2000)))
+        if hidden:
+            open(os.path.join(rec, ".hidden"), "w").close()
+        return rec
+
+    def test_off_says_where_the_replay_is_only_when_there_is_one(self):
+        # LIVE-60: switched off with a recording of this broadcast (since the switch went on), closed or still open, the
+        # notice says where to watch the replay ("off"); with none, or only a recording from before the switch went on, an
+        # empty one, or one the owner hid, it says there is no replay ("off_unrecorded"; main said "Watch the replay"
+        # whatever was recorded).
+        cases = (("nothing recorded", None, "off_unrecorded"),
+                 ("a closed recording of it", {}, "off"),
+                 ("an open recording of it", {"opened": True}, "off"),
+                 ("only an older recording", {"before": True}, "off_unrecorded"),
+                 ("a recording with nothing in it", {"opened": True, "ms": 0}, "off_unrecorded"),
+                 ("a hidden recording", {"hidden": True}, "off_unrecorded"))
+        for what, recording, kind in cases:
+            with self.subTest(what), Install() as inst:
+                on = self._switch(inst, True)
+                if recording is not None:
+                    before = recording.pop("before", False)
+                    self._recording(on["changed_at"] - 600 if before else on["changed_at"] + 1, **recording)
+                self.assertEqual(self._switch(inst, False)["toast"], kind)
+
+    def test_off_with_broadcasts_off_for_the_server_is_held_whatever_was_recorded(self):
+        # LIVE-61: the switch off while the server's broadcasts are off speaks of the server's switch, recorded or not.
+        with Install() as inst:
+            on = self._switch(inst, True)
+            self._recording(on["changed_at"] + 1)
+            with sqlite3.connect(inst.path("state/dmtq.db3")) as con:
+                admin.recordings.write_settings(con, {"on": False})
+            self.assertEqual(self._switch(inst, False)["toast"], "held")
 
     def test_a_flip_with_broadcasts_off_for_the_server_says_so(self):
         # LIVE-41: with the server's broadcasts off, a player's switch flipped still tells them, in words that say it

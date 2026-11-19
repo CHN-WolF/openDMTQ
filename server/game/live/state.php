@@ -11,16 +11,21 @@ require __DIR__ . '/../../portal/live_lib.php';
 // for it. A player hears of every change of their own switch, and of every change of the server's while their own is on:
 // "on" and "off" are their own switch flipped while broadcasts are on for the server; "wait" and "held" the same while
 // they are off (nothing goes out until the server's are on again); "end" is the server's switch turned off under a player
-// switched on. The server's switch turned on under a player switched on is "on" too. Phones show both lines in their
-// toast; the PC player draws the first as the title of its card and the second under it.
+// switched on. The server's switch turned on under a player switched on is "on" too. "off_unrecorded" is "off" for a
+// broadcast with nothing of it to watch again (the admin pages choose it as they switch the player off: no recording
+// since the switch went on, or only ones the owner hid), so that its second line says so rather than where a replay
+// would be. Phones show both lines in their toast; the PC player draws the first as the title of its card and the second
+// under it.
 const TOASTS = [
     'ko' => ['on' => "이 플레이를 방송하고 있어요\n%s 사이트 LIVE에서 지금도, 끝난 뒤에도 볼 수 있어요",
              'off' => "방송을 마쳤어요\n%s 사이트 LIVE에서 다시 볼 수 있어요",
+             'off_unrecorded' => "방송을 마쳤어요\n다시 볼 영상은 없어요",
              'end' => "방송을 마쳤어요\n이 서버의 방송이 꺼졌어요",
              'wait' => "내 방송이 켜졌어요\n이 서버의 방송이 켜지면 시작해요",
              'held' => "내 방송이 꺼졌어요\n이 서버의 방송이 켜져도 방송하지 않아요"],
     'en' => ['on' => "Broadcasting your play\nWatch it now or later under LIVE on %s",
              'off' => "Your broadcast has ended\nWatch the replay under LIVE on %s",
+             'off_unrecorded' => "Your broadcast has ended\nThere is no replay of it",
              'end' => "Your broadcast has ended\nBroadcasts are off on this server",
              'wait' => "Your broadcast is switched on\nIt starts once broadcasts are on for this server",
              'held' => "Your broadcast is switched off\nIt stays off when broadcasts come back on for this server"],

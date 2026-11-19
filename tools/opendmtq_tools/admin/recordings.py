@@ -27,7 +27,8 @@ LIVE_TABLE = """CREATE TABLE IF NOT EXISTS LiveSwitch (guid INTEGER PRIMARY KEY,
 
 # The notices, by what changed for a player (server/game/live/state.php words them): their own switch flipped while
 # broadcasts are on for the server ("on", "off"), or while they are off ("wait", "held"); the server's switch turned on
-# ("on") or off ("end") under a player whose own switch is on.
+# ("on") or off ("end") under a player whose own switch is on. "off" is "off_unrecorded" where the broadcast left nothing
+# to watch again (live_set).
 NOTICE_OWN = {(True, True): "on", (True, False): "off", (False, True): "wait", (False, False): "held"}
 
 
@@ -238,7 +239,7 @@ def live_set(con, guid, on):
     player a new notice with a new number, in place of one not read yet, which says what the switch is now and what the
     server's switch makes of it (NOTICE_OWN): flipped on and back off before the phone looked, the phone hears "off"."""
     live_table(con)
-    row = con.execute("SELECT live FROM LiveSwitch WHERE guid = ?", (guid,)).fetchone()
+    row = con.execute("SELECT live, changed_at FROM LiveSwitch WHERE guid = ?", (guid,)).fetchone()
     # Already so (a form sent twice): no new key, no second notice.
     if bool(row and row["live"]) == on:
         return
@@ -249,6 +250,11 @@ def live_set(con, guid, on):
         con.execute("INSERT OR IGNORE INTO LiveSetting (name, value) VALUES ('on', ?)", ("1" if used_before(con) else "0",))
         rows = setting_rows(con)
     toast = NOTICE_OWN[(rows.get("on") == "1", on)]
+    # Switched off with nothing of the broadcast to watch again: its notice says so in place of where the replay is (the
+    # switch's last change, when it went on, is where this broadcast's recordings start; a row from before that column
+    # has none: any recording counts).
+    if toast == "off" and not replay_since(guid, (row["changed_at"] or 0) if row else 0):
+        toast = "off_unrecorded"
     token = secrets.token_hex(16) if on else None
     con.execute("""INSERT INTO LiveSwitch (guid, live, token, toast, toast_id, changed_at) VALUES (?, ?, ?, ?, 1, ?)
                    ON CONFLICT (guid) DO UPDATE SET live = excluded.live, token = excluded.token,
@@ -263,6 +269,13 @@ def live_set(con, guid, on):
             if rec["open"]:
                 with open(os.path.join(rec["dir"], ".close-now"), "a", encoding="utf-8"):
                     pass
+
+
+def replay_since(guid, since):
+    """True when a player has a recording that started at `since` or later (a Unix time) with something in it, that the
+    owner has not hidden: a replay players can watch under LIVE. An open one counts by what it holds so far (the switch
+    going off closes it and keeps it)."""
+    return any(rec["id"] >= since and rec["duration_ms"] > 0 and not rec["hidden"] for rec in rec_player(guid))
 
 
 def rec_root():

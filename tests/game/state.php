@@ -16,6 +16,7 @@
  *   - a ban refuses the game's sign-in and every call of the player's, with the notice that says why over the game, no
  *     broadcast, and the site's and the PC client's sign-ins refused with the reason; an ended ban lets them in;
  *   - the rankings and the achievements follow each player's level.
+ *   - A broadcast switched off with nothing recorded of it says that there is no replay, in both languages.
  *
  * Usage: php tests/game/state.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
@@ -304,6 +305,21 @@ $db->exec("INSERT INTO LiveSwitch (guid, live, token) VALUES (9202, 1, 'stalekey
 $up = post_raw("$base/live/upload?ids=protocol-state-9202&seq=0&dur=2000", "\x47" . str_repeat("\0", 187), ['X-Live-Token: stalekey']);
 check("GAME-92 a banned player's upload is refused, which stops the phone", $up === 403, (string)$up);
 $db->exec("UPDATE LiveSetting SET value = '0' WHERE name = 'on'");
+// ------------------------------------------------------------------ GAME-123: a broadcast switched off that left no replay
+
+// The kind the admin pages leave when a player's switch goes off with nothing of the broadcast recorded (recordings.py
+// live_set): its second line says there is no replay, in either language, where "off" says where to watch it. The player
+// out of a song (a start above left them in one), where notices of the broadcast are handed out.
+$texts = [];
+foreach (['en', 'ko'] as $lang) {
+    $db->exec("INSERT INTO LiveSwitch (guid, live, toast, toast_id) VALUES (9203, 0, 'off_unrecorded', 1)
+               ON CONFLICT (guid) DO UPDATE SET toast = 'off_unrecorded', toast_id = toast_id + 1, playing = 0");
+    [, $off] = get("$base/live/state?ids=protocol-state-9203&lang=$lang");
+    $texts[$lang] = json_decode($off, true) ?: [];
+}
+check('GAME-123 a broadcast switched off with no recording of it says so in both languages, not where to watch a replay',
+    ($texts['en']['toast'] ?? '') === "Your broadcast has ended\nThere is no replay of it" && ($texts['en']['toast_kind'] ?? '') === 'off_unrecorded'
+    && ($texts['ko']['toast'] ?? '') === "방송을 마쳤어요\n다시 볼 영상은 없어요", json_encode($texts, JSON_UNESCAPED_UNICODE));
 
 // ------------------------------------------------------------------ GAME-93: a ban, on the site and the PC client
 
