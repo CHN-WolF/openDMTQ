@@ -72,13 +72,14 @@ wanted() {
 # Each part's container: three virtual screens (the usual one at 96 dots to the inch, Windows' 100 %, where Xvfb's own
 # 100 would scale the launcher by 1.04 and no window would be the size asked; one at twice that, as Windows draws at
 # 200 % scaling; a small one at 100 %, as a netbook's, for the installer's window), the fonts Tk uses known to
-# fontconfig the way Windows loads them privately (the leaning face is drawn into pictures only, as on Windows), each
+# fontconfig the way Windows loads them privately (the leaning face and the icons are drawn into pictures only, from
+# their files, as on Windows: a character a text font lacks then falls back as Windows' does, never to the icons), each
 # screen waited for until it answers, then the part's command.
 PREP='Xvfb :99 -screen 0 1920x1200x24 -dpi 96 -nolisten tcp >/dev/null 2>&1 &
 Xvfb :98 -screen 0 3840x2160x24 -dpi 192 -nolisten tcp >/dev/null 2>&1 &
 Xvfb :97 -screen 0 800x480x24 -dpi 96 -nolisten tcp >/dev/null 2>&1 &
 mkdir -p /usr/local/share/fonts/opendmtq
-for f in DMTQWide-ExtraBold Pretendard-Regular Pretendard-SemiBold Pretendard-Bold MaterialIcons-Regular; do
+for f in DMTQWide-ExtraBold Pretendard-Regular Pretendard-SemiBold Pretendard-Bold; do
   cp "opendmtq_client/assets/fonts/$f.ttf" /usr/local/share/fonts/opendmtq/
 done
 fc-cache -f >/dev/null
