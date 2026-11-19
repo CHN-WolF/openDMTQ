@@ -26,7 +26,7 @@ both.
 | Guest file names | Where the player for Windows puts each name the game gives: the app's folders as before, the runtime's own names, everything else in a folder of the app's data; no name reaching past them; and the guest's system, the app's libraries and its APK read only, by any spelling (`arm32/tests/host/guest_paths_test.cpp`) | see `ci.yml` | CI | no |
 | Video reader | The player's MP4 reader on files made to break it (a box size that steps back, a sample count or a sample larger than the file, many chunks and runs): each turned away or read as far as it is true, within a second and in bounded memory (`arm32/tests/host/mp4_test.cpp`) | see `ci.yml` | CI | no |
 | The player's HTTP | The player's requests to the game server, on stand-in servers: each asks for gzip as a phone's does, unless the game chose its encodings; an answer compressed for it inflated whole, with a length, in chunks or until the connection closes, read in any pieces, without the compressed body's headers; one cut short, broken, followed by more or inflating past 64 MB fails as a lost connection does, after no more than that; every other answer as it always was (`arm32/tests/host/http_test.cpp`) | see `ci.yml` | CI | no |
-| PC client | The launcher's logic on a stand-in server and player (`client/tests`), then on a virtual screen (`client/tests/ui`): every page, the first-start guide and the dialogs in both languages at three window sizes and at 200 %, with the layout and the spacing measured and the page's field compared with the window's own background picture (`shots.py`); every page by the keyboard alone (`keyboard.py`); a setting's change and a page switch filmed, with no frame of a page half drawn, no picture cut for the page's field, no card taken off the screen for a moment and the page before kept whole while the next is made (`flicker.py`); each change of the server, the sign-in, the app and the launcher's version said every time (`notices.py`); the sound set in the game kept after it (`sound_back.py`); a field and its buttons on one line (`rows.py`); the installer's window at 100 %, at 200 % and on a small screen, with its own header in place of Windows' title bar: its minimise and close buttons, by the keyboard and the pointer, and its top moving it (`setup_shots.py`) | `(cd client && python3 -m unittest discover -s tests -t .)` (it needs Python with Tk, Pillow and fontTools; CI runs it in the image of `client/tests/ui`), `client/tests/ui/run.sh <folder>` | CI (`client`), `qa.sh` | no |
+| PC client | The launcher's logic on a stand-in server and player (`client/tests`), then on a virtual screen (`client/tests/ui`): every page, the first-start guide and the dialogs in both languages at three window sizes and at 200 %, with the layout and the spacing measured and the page's field compared with the window's own background picture (`shots.py`); every page by the keyboard alone (`keyboard.py`); a setting's change and a page switch filmed, with no frame of a page half drawn, no picture cut for the page's field, no card taken off the screen for a moment and the page before kept whole while the next is made (`flicker.py`); each change of the server, the sign-in, the app and the launcher's version said every time (`notices.py`); the sound set in the game kept after it (`sound_back.py`); a field and its buttons on one line (`rows.py`); the installer's window at 100 %, at 200 % and on a small screen, with its own header in place of Windows' title bar: its minimise and close buttons, by the keyboard and the pointer, and its top moving it (`setup_shots.py`); each check a part in a container of its own, side by side (`JOBS`), the flicker film first and alone | `(cd client && python3 -m unittest discover -s tests -t .)` (it needs Python with Tk, Pillow and fontTools; CI runs it in the image of `client/tests/ui`), `client/tests/ui/run.sh <folder>` | CI (`client`), `qa.sh` | no |
 | PC client on Windows | The installer as a release builds it, installed silently on Windows itself for the runner's user; its command line (its version, no server yet, the player found), the player's sound devices without a window, the same installer again as a repair, the launcher's Repair of a file of the player gone, and Uninstall with the data: the program, its shortcuts and the data gone | `client/tests/windows/install.ps1` | CI (`client-build`, `client-windows`) | no |
 | PC client, end to end | The installer as the site hands it out, under Wine against a throwaway server (on llvmpipe, or on WSL's graphics card, [below](#under-wine)): installed through its own window, the first-start guide, the sign-in, the app's download, PLAY; the bar down by itself for 3 seconds when the game's picture first shows, the pointer resting on the handle bringing it, a click on its place reaching the game; the bar at the game's top edge switching to a window and back, in the window no buttons of its own, the bar's minimise and the taskbar's restore, a minimise and a restore with the bar down as Windows makes them (the window's pop-ups hidden and shown again: the bar stays gone), its X pressed while the bar slides down, its X asking with the game held still, Keep playing, then Quit the game, the launcher back; the Screen, Sound and Controls pages by the keyboard alone, keyboard play's keys on a US and a French layout; the last game's sound the player wrote, as `--status` says it; the connection test on the command line, of the server and of an address no network leads to, and a report whose files keep none of the server's address, the site ID or the address tested; then Repair, a file of the player and one of the launcher put back as installed; Clear game data, after which the game starts again with the same id; Uninstall with the data, refused while the window is open, then the program, its shortcut, the data and the installs' logs gone | `client/tests/windows/e2e.sh` (`OPENDMTQ_WINE_GPU=1` on the graphics card) | by hand, with a change to the client or the player | yes |
 | PC client's installer | The installer under Wine as a person uses it, with no server and no game: its window without Windows' title bar (Wine drawing Windows' own title bars), its styles read back, a drag of its top, its own minimise and close buttons, the taskbar's restore and Alt+F4; its Install page and its end page, which opens the launcher; run again to Repair, then to Uninstall with the data kept; Windows' quiet uninstall; Windows' Apps opening OpenDMTQ's own uninstall, whose Delete everything leaves nothing of OpenDMTQ on the PC | `client/tests/windows/setup_e2e.sh` | by hand, with a change to the installer | no |
@@ -168,7 +168,9 @@ lines; a sentence a column or grid box cuts into lines of their own; a placehold
 mentions; something too small to press; a picture that did not load. Beside it `spacing.js` measures the room between
 things: two boxes that touch or overlap, a box against its box's inner edge, text closer to its box's edge than the box's
 padding, gaps of different sizes in one row or column, and a gap off the page's own spacing. A failed request or a
-script error also counts. The findings, the list of results and screenshots end up in the report folder
+script error also counts. The views of a list are looked at side by side (`SWEEP_WORKERS`, one for each of the browser's
+processors): each in a window of its own, as its front tab, so that it is in sight as a person sees it (a view measured
+out of sight is a fault). The findings, the list of results and screenshots end up in the report folder
 (`_work/ui-report`), and in CI as the workflow's `ui-report` artifact.
 
 A rule that fits a page on purpose goes on that page's element as `data-layout-ok` (or `data-spacing-ok` for its room), with the reason in a comment, not in the checker.
@@ -193,22 +195,44 @@ It takes the newest release in CHANGELOG.md whose images there are: pulled from 
 
 ## The gates
 
-**CI** (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request.
+**CI** (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request. Its jobs run side by side: the
+pages' tests in three parts, each a server of its own taken through its stages in their order; the contract, admin
+access and upgrade as a job of their own; the PC client's suite one language in each job. A newer push stops the older
+run of the same branch or pull request (a tag's run is never stopped), and a change to the guides alone (README.md,
+CONTRIBUTING.md, docs/ but the guide the launcher's tests read: `.github/changes.py`) runs the test job, whose
+repository checks read them, and skips the others.
+
+**Before a push to main**, `python3 .github/ci_local.py` runs CI's jobs on this computer the way GitHub runs them: each in a
+container that stands in for GitHub's runner (`.github/ci-runner.Dockerfile`: Ubuntu 24.04, as a user who is not root),
+on a fresh clone of the commit, its steps as the workflow has them and the actions it uses done the same way here (the
+checkout, the images' builds, Helm, the cache, the artifacts between jobs), side by side as their needs allow, each with
+names, an image tag and ports of its own. The changes job decides what runs, as on GitHub (for what the commit changes
+since `origin/main`; `--all` runs everything); `ci_local.py JOB...` runs those jobs and the ones they need. Each job's log
+is in `_work/ci/<commit>`. The jobs for a Windows runner run on GitHub only: it names them.
 
 **The local gate** (`tests/qa.sh`) runs on the commit that is checked out, on a clean tree, and sends GitHub the commit status
-`qa/local` when everything passed. `--no-status` runs it on a tree with changes, for a look. Its report, with each step's whole
-output, is in `_work/qa/<commit>`; the newest five are kept.
+`qa/local` when everything passed. `--no-status` runs it on a tree with changes, for a look. The launcher's flicker film runs
+first, with nothing else of the gate beside it: it counts the frames a change shows, which a machine busy with the other
+steps adds to. Then the server's and the tools' images are built once for every step, and the steps run in four lanes side
+by side: the launcher's other parts; the pages; the server on the real game files, under load, upgraded and as a host
+install; and the quick ones (shell, cli, tools, access, game). `SERIAL=1` runs one step after another, for a machine with
+few processors, and `NAME_PREFIX`, `TAG` and `PORTS` (the first of nine in a row) keep a run's containers, images and
+ports apart from another's on the same machine. Its report, with each step's whole output and one line for each step in
+the steps' order, is in `_work/qa/<commit>`; the newest five are kept.
 
 **A release** (`.github/workflows/release.yml`, a tag `v*`) first checks that the tag, the chart and CHANGELOG.md name one
-version (`.github/release_notes.py`), runs CI again on the tag's commit and asks for `qa/local`. Its files are then laid
-out, signed and published on the machine that holds the project's signing key, with the steps of the workflow's own
-publishing job, which stops on GitHub as it has no key ([CONTRIBUTING.md](../CONTRIBUTING.md#releases)): the images, the
-chart and the GitHub release with its files under their names (`.github/release_assets.py`: the PC client's installer,
-the server for Windows, the chart, the runtime for newer phones, the PC client's update feed and its full and delta
-packages, the checksums and their signature), whose notes are that version's section of the changelog.
-`tests/release/update.sh` and `tests/release/update_signed.sh` update installed PC clients from such files under Wine
-([above](#what-runs-where)). `gh workflow run release.yml` rehearses the gates on any commit, with the chart's own
-version, and publishes nothing.
+version (`.github/release_notes.py`), runs CI again on the tag's commit and asks for `qa/local`. Its files are then made,
+laid out, signed, checked and published on the machine that holds the project's signing key by `.github/release.sh`, with
+the steps of the workflow's own publishing job, which stops on GitHub as it has no key
+([CONTRIBUTING.md](../CONTRIBUTING.md#releases)): the runtime for newer phones, the player for Windows, the PC client's
+installer and its update packages (the delta from the last release's full package), the Windows bundle, then the
+release's files under their names (`.github/release_assets.py`: the PC client's installer, the server for Windows, the
+chart, the runtime for newer phones, the PC client's update feed and its full and delta packages, the checksums and their
+signature), whose notes are that version's section of the changelog. Before anything is pushed it runs the release's own
+checks: the Windows bundle under Wine, a host install on Debian 12, and the last release's PC client updating to these
+files (`tests/release/update.sh`; `tests/release/update_signed.sh` does the same with a key made for the test,
+[above](#what-runs-where)). `.github/release.sh --dry-run VERSION` does all of it, the images for both platforms
+included, and publishes nothing; `gh workflow run release.yml` rehearses the gates on GitHub, with the chart's own version.
 
 **A deploy** (`./opendmtq deploy`) puts the commit that is checked out on this machine's server:
 

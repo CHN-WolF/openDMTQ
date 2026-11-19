@@ -178,7 +178,10 @@ from a fixed path, and print one line per step: the admin pages show those lines
 
 - One change per pull request, with its tests and the docs it changes.
 - The first line of a commit message says what changed; the lines below say why, when that is not plain.
-- CI has to pass. A maintainer runs `tests/qa.sh` on the real game files before a release.
+- CI has to pass. Before a push to `main`, run CI's jobs on your computer: `python3 .github/ci_local.py` runs them the way
+  GitHub does, each in a container standing in for GitHub's runner, as a user who is not root, on a fresh clone of the
+  commit (Docker, git and Python 3 with PyYAML; the jobs for a Windows runner run on GitHub only). A maintainer runs
+  `tests/qa.sh` on the real game files before a release.
 
 ## Releases
 
@@ -190,17 +193,27 @@ Removed).
 A release, by a maintainer:
 
 1. Move the `[Unreleased]` notes under `## [1.2.3] - YYYY-MM-DD`, and set `version` and `appVersion` in
-   `deploy/helm/opendmtq/Chart.yaml` to `1.2.3`.
+   `deploy/helm/opendmtq/Chart.yaml` to `1.2.3`. Commit, run CI's jobs here (`python3 .github/ci_local.py`), push to
+   `main`, and let CI pass on GitHub.
 2. Run `tests/qa.sh` on that commit, on a machine with the game's files: it marks the commit when everything passes.
    `CLIENTS=<folder>` checks the patcher against every APK in that folder too: the game's other version, a copy
    changed for another server.
-3. Push the tag `v1.2.3`, and publish from the machine that holds the project's signing key: the release's checksums
-   are signed with it, and every server and PC client checks a release's files against that signature
-   (`tools/opendmtq_tools/signing.py`). The key never enters the repository or GitHub: `OPENDMTQ_SIGNING_KEY` names its
-   file, and `.github/release_assets.py layout` signs with it and refuses to lay a release out without it. The steps are
-   `.github/workflows/release.yml`'s: the tag, the chart and the changelog name one version (`.github/release_notes.py`),
-   CI and the mark pass, the images and the chart go to GHCR, and the GitHub release has that version's section of the
-   changelog as its notes. On GitHub, release.yml checks the same and stops before it builds anything, as it has no key.
+3. Rehearse it: `.github/release.sh --dry-run 1.2.3` makes every file of the release (the runtime for newer phones, the
+   player for Windows, the PC client's installer and its update packages, the Windows bundle, the chart, the images for
+   both platforms), lays them out under their names, checks them, and runs the release's own checks (the Windows bundle
+   under Wine, a host install on Debian 12, the last release's PC client updating to these files), publishing nothing.
+   `APK=<the game's client>` also builds the phone app in the checks that can.
+4. Tag it (`git tag -a v1.2.3`), and publish from the machine that holds the project's signing key:
+   `OPENDMTQ_SIGNING_KEY=<the key's file> .github/release.sh 1.2.3`. It checks the gates first (the tag is the
+   commit's, the chart and the changelog name one version with notes, CI and the mark passed), makes and checks
+   everything again, and only then pushes `main` and the tag, the images and the chart to GHCR, and the GitHub release
+   with that version's section of the changelog as its notes. The release's checksums are signed with the key, and every
+   server and PC client checks a release's files against that signature (`tools/opendmtq_tools/signing.py`). The key
+   never enters the repository or GitHub: `OPENDMTQ_SIGNING_KEY` names its file, and `.github/release_assets.py layout`
+   signs with it and refuses to lay a release out without it (a dry run without it lays out an unsigned rehearsal).
+   `OPENDMTQ_PREVIOUS_RELEASE` names a folder with the last release's files, which the delta package and the update
+   check start from; without it they come from the latest release on GitHub. On GitHub, release.yml checks the same
+   gates and stops before it builds anything, as it has no key: the script holds it while the tag goes up.
 
 What a release publishes:
 
