@@ -1765,6 +1765,11 @@ def test_step_shown(app, test, step):
     row["found"].configure(text=app.words.say(step.said) if step.said else app.words("test.waiting"),
                            fg=theme.TEXT if step.state == "bad" else theme.MUTED)
     row["took"].configure(text=connection.took(step.ms) if step.ms is not None and step.state != "skip" else "")
+    # The time beside the words grew from nothing ("12 ms"), and the row's width did not change to tell the words: they
+    # are wrapped again for the room left of it, so that no line of them is wider than that room (Tk would cut it).
+    wrap = getattr(row["found"], "odq_wrap", None)
+    if wrap is not None:
+        wrap(row["found"].master.winfo_width())
     _test_verdict(app, test)
 
 

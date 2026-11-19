@@ -918,11 +918,15 @@ def follow_width(ui, widget, margin=0, beside=()):
         width = width or master.winfo_width()
         if width <= 1 or not widget.winfo_exists():
             return
-        taken = sum(b.winfo_reqwidth() for b in beside if b.winfo_exists())
+        # Each widget beside it with its own pack or grid padding: the packer keeps that room for it too.
+        taken = sum(b.winfo_reqwidth() + own_padding(b) for b in beside if b.winfo_exists())
         # The label's own edge and padding come on top of its wrapped text: a line that fills the wrap width exactly
         # would otherwise be a few pixels wider than the room, and Tk would cut it.
-        room = width - inner_padding(master) - own_padding(widget) - inner_padding(widget) - taken - ui.px(margin)
-        widget.configure(wraplength=max(ui.px(120), room))
+        room = max(ui.px(120), width - inner_padding(master) - own_padding(widget) - inner_padding(widget) - taken
+                   - ui.px(margin))
+        if str(widget.cget("wraplength")) != str(room):
+            # Only a new width is set: the same one would have Tk lay the label out and draw it again for nothing.
+            widget.configure(wraplength=room)
 
     # Start narrow: a label that first asks for its whole line would widen its box, and the box's width would
     # then come from the label instead of the page. Narrow first, the box takes the page's width, then the

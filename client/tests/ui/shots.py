@@ -1518,6 +1518,7 @@ def test_check(app, site, out, tag, problems):
         # Said with the server's name, as PLAY's line names it (main named its address).
         if app.state.current != site.url or "Stand-in" not in app.status_text or site.url in app.status_text:
             problems.append("%s: Use this address left PLAY on %s (%r)" % (name, app.state.current, app.status_text))
+        other_web_check(app, site, out, tag, problems, closed)
     finally:
         connection.PORTS = real_ports
         # The stand-in again for what follows, signed in as before.
@@ -1530,6 +1531,68 @@ def test_check(app, site, out, tag, problems):
         app.connection_test = None
         app.refresh_checks(force=True)
         settle(app)
+
+
+def other_web_check(app, site, out, tag, problems, closed):
+    """The connection test when another web server answers where the launcher knows the server, which answers on a port
+    a new server takes: the OpenDMTQ server step's longer words (wrapped beside the step's time, none cut), the verdict
+    that another server answers there, and Use this address. Leaves PLAY on the stand-in, as test_check had it."""
+    import http.server
+    import socketserver
+    import threading
+    import tkinter as tk
+    from opendmtq_client import connection
+    w = app.words
+
+    class Page(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            # Quiet: the suite's own output only.
+            pass
+
+        def do_GET(self):
+            data = b"<!doctype html><title>It works</title>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    web = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Page)
+    threading.Thread(target=web.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+    other = "http://127.0.0.1:%d" % web.server_address[1]
+    try:
+        app.state.add_server(other, "Stand-in")
+        app.state.servers = [x for x in app.state.servers if x["url"] != site.url]
+        connection.PORTS = (closed + 1, int(site.url.rsplit(":", 1)[1]))
+        app.refresh_checks(force=True)
+        app.go("online")
+        settle(app)
+        button(app, w("test.button")).press()
+        settle(app, 30, until=lambda: app.connection_test is not None and not app.connection_test["running"])
+        settle(app)
+        name = tag + "_online-test-other"
+        card = card_titled(app, w("test.title"))
+        if card is None:
+            problems.append("%s: no connection test card" % name)
+            return
+        app.body.show_widget(card)
+        settle(app)
+        shot(app.root, out, name)
+        measure(app, name, problems)
+        shown = [x.cget("text") for x in widgets_of(card) if isinstance(x, tk.Label) and x.winfo_ismapped()]
+        for words in (w("test.verdict.moved_other", url=other, found=site.url),
+                      w("test.server.not_opendmtq_moved", url=site.url)):
+            if words not in shown:
+                problems.append("%s: the card does not say %r" % (name, words))
+        button(app, w("test.use")).press()
+        settle(app, 12, until=lambda: app.state.current == site.url)
+        settle(app, 30, until=lambda: app.connection_test is not None and not app.connection_test["running"])
+        # Said with the server's name, as PLAY's line names it.
+        if app.state.current != site.url or app.status_text != w("test.used", name=app.state.server()["name"]):
+            problems.append("%s: Use this address left PLAY on %s (%r)" % (name, app.state.current, app.status_text))
+    finally:
+        web.shutdown()
+        web.server_close()
 
 
 def report_check(app, out, tag, problems):
