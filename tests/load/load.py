@@ -637,6 +637,11 @@ def main():
     if seeded:
         with open(seeded) as f:
             made = [(int(ln.split()[0]), ln.split()[1]) for ln in f if ln.strip()][:need]
+        # Each of them signed in again, as a phone signs in at each start of the game: the seed step's keys stayed in its
+        # own process, and the server takes a save only signed with the key of its player's own sign-in.
+        for g, udid in made:
+            if new_player(udid) != g:
+                sys.exit(f"the seeded player {g} signed in as another")
     else:
         made = []
         for i in range(need):
