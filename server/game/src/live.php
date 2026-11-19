@@ -17,10 +17,14 @@ require_once __DIR__ . '/db.php';
  * The guid is the first parameter of all of these.
  *
  * Only players with a row that matters are written: a game request costs at most one extra read for
- * everybody else. Nothing here may ever get in the way of the game's reply.
+ * everybody else, once per request (the batch after the game's sign-in holds seven of these calls of one player): the
+ * row is kept for the rest of the request, as this request last read or wrote it. Nothing here may ever get in the way of
+ * the game's reply.
  */
 function odq_live_seen($method, $params)
 {
+    // The player's row as this request last saw it, by guid: [playing, pattern_id, play_at], or false for none.
+    static $rows = [];
     // Requests that open a play, close one, or only happen in the menus.
     static $kinds = [
         'game.getPreviewPlayInfo' => 'open', 'game.getPatternUrl' => 'open',
@@ -44,6 +48,15 @@ function odq_live_seen($method, $params)
         // old database) the statements fail and nobody is followed.
         $db = odq_db();
         $kind = $kinds[$method];
+        // The row, read once per request (a failed read is read again by the next call).
+        if (!array_key_exists($guid, $rows)) {
+            $read = @$db->querySingle("SELECT playing, pattern_id, play_at FROM LiveSwitch WHERE guid = $guid", true);
+            // An empty array is no row; a failed read (false) is not kept.
+            if ($read !== false) {
+                $rows[$guid] = $read ?: false;
+            }
+        }
+        $row = $rows[$guid] ?? false;
         if ($kind === 'open') {
             // For everyone, not only players switched on: the owner may switch one on during a song,
             // and the notice must wait for its end then too. Only for real players, so that made-up
@@ -51,19 +64,27 @@ function odq_live_seen($method, $params)
             $pattern = isset($list[1]) && is_numeric($list[1]) ? (int)$list[1] : 0;
             $now = time();
             // The two requests that open a play come together: the second finds it written and costs
-            // a read, not a commit. A play opened again later (a retry) does write.
-            $row = @$db->querySingle("SELECT playing, pattern_id, play_at FROM LiveSwitch WHERE guid = $guid", true);
+            // nothing more, not a commit. A play opened again later (a retry) does write.
             if ($row && $row['playing'] && (int)$row['pattern_id'] === $pattern && $now - (int)$row['play_at'] <= $start_grace) {
                 return;
             }
-            @$db->exec("INSERT INTO LiveSwitch (guid, playing, pattern_id, play_at)
+            $written = @$db->exec("INSERT INTO LiveSwitch (guid, playing, pattern_id, play_at)
                         SELECT $guid, 1, $pattern, $now WHERE EXISTS (SELECT 1 FROM Member WHERE guid = $guid)
                         ON CONFLICT (guid) DO UPDATE SET playing = 1, pattern_id = $pattern, play_at = $now");
+            if (!$written) {
+                // Not written (the database busy past the wait): the next call reads the row again.
+                unset($rows[$guid]);
+            } elseif ($db->changes() > 0) {
+                // The play open, as the second request of the pair then finds it.
+                $rows[$guid] = ['playing' => 1, 'pattern_id' => $pattern, 'play_at' => $now];
+            }
+            // Otherwise a number without an account: nothing written, the row as it was read.
             return;
         }
-        $row = @$db->querySingle("SELECT playing, play_at FROM LiveSwitch WHERE guid = $guid", true);
-        if ($row && $row['playing'] && ($kind === 'close' || time() - (int)$row['play_at'] > $start_grace)) {
-            @$db->exec("UPDATE LiveSwitch SET playing = 0 WHERE guid = $guid");
+        if ($row && $row['playing'] && ($kind === 'close' || time() - (int)$row['play_at'] > $start_grace)
+            && @$db->exec("UPDATE LiveSwitch SET playing = 0 WHERE guid = $guid")) {
+            // The play is over for the rest of this request too (a write that failed is tried by the next call).
+            $rows[$guid]['playing'] = 0;
         }
     } catch (Throwable $e) {
     }

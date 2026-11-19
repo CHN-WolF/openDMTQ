@@ -152,6 +152,45 @@ else
   echo "$plan" | sed 's/^/  /'
   failed=1
 fi
+# The batch after a sign-in (fourteen calls, nine of them a player's, seven the live view follows) asks for the player's
+# ban once and reads their row of the live view once, not once a call: the statements SQLite makes of each table, as an
+# authorizer sees each one made, while the server's own code answers the batch on its database, signed as the game signs.
+# shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.
+once=$(docker exec "$NAME" php -r '
+  require "/opt/opendmtq/game/src/rpc.php";
+  $g = (int)odq_db()->querySingle("SELECT CAST(guid AS INTEGER) FROM Member WHERE udid IS NOT NULL AND code IS NOT NULL
+                                     AND CAST(guid AS INTEGER) NOT IN (SELECT guid FROM PlayerBan) ORDER BY rowid LIMIT 1");
+  $made = [];
+  odq_db()->setAuthorizer(function (int $action, ...$what) use (&$made) {
+      if ($action === SQLite3::READ && in_array($what[0] . "." . $what[1], ["PlayerBan.reason", "LiveSwitch.playing"], true)) {
+          $made[$what[0]] = ($made[$what[0]] ?? 0) + 1;
+      }
+      return SQLite3::OK;
+  });
+  $calls = [["game.getLineTopRankWithLevel", [0, 1, 20, [$g]]], ["game.getAchievementCount", []], ["board.getNoticeList", ["US", 0, 4]],
+            ["user.getConnectUuid", [$g, "ANDROID"]], ["memo.getMemoList", [$g, 0, 50]], ["game.getUserAsset", [$g]],
+            ["game.getOwnSongList", [$g]], ["shop.getOwnItemList", [$g]], ["game.getOwnAchievementList", [$g]],
+            ["game.getOwnQuestList", [$g]], ["game.getOwnPatternScore", [$g]], ["shop.getUnlockedProductList", [$g]],
+            ["game.getFirstResourceSongList", []], ["user.getUsersByPuid", [[(string)$g], ["display_name"]]]];
+  $body = json_encode(array_map(fn($c, $i) => ["id" => $i, "method" => $c[0], "params" => $c[1]], $calls, array_keys($calls)));
+  // Signed as the player'"'"'s own game signs after its sign-in, with the key that sign-in keeps (signin.php).
+  odq_sign_in_table(odq_db());
+  $w = odq_db()->prepare("INSERT OR REPLACE INTO SignIn (access, puid, at, key, guid) VALUES (:a, :p, :t, :k, :g)");
+  foreach ([":a" => "protocol-once", ":p" => (string)$g, ":t" => time(), ":k" => "protocol-once-key", ":g" => $g] as $name => $value) {
+      $w->bindValue($name, $value);
+  }
+  $w->execute();
+  $_SERVER["HTTP_FP"] = md5("protocol-once-key" . $body);
+  [$status, $out] = odq_rpc($body);
+  $errors = array_filter(array_column(json_decode($out, true) ?: [], "error"));
+  ksort($made);
+  echo $g > 0 ? "" : "no player ", $status, " ", count(json_decode($out, true) ?: []), " errors ", count($errors), " ", json_encode($made);' 2>&1) || true
+if [ "$once" = '200 14 errors 0 {"LiveSwitch":1,"PlayerBan":1}' ]; then
+  echo "PASS the batch after a sign-in asks for the player's ban once and reads their live view's row once"
+else
+  echo "FAIL the batch after a sign-in asks the same of a player more than once: $once"
+  failed=1
+fi
 # The home page's newest records come from the index of the record rows alone (PlayLog_records), in its order: never the
 # whole log read back from its newest play (2.4 s a page on a million plays that were seldom records).
 # shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.

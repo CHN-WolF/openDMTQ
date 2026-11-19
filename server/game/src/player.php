@@ -214,22 +214,34 @@ function odq_item_owned(SQLite3 $db, int $guid, int $item, string $how): void
 
 /*
  * A player's ban while it lasts: ['reason', 'since', 'until' (null: until it is lifted), 'by'], or null. A ban whose end
- * has passed is over by itself: null, its row left for the admin pages to tidy.
+ * has passed is over by itself: null, its row left for the admin pages to tidy. Read once per request through the
+ * request's own handle: rpc.php asks before each call of a player's, fourteen of one player in the batch after the game's
+ * sign-in. Through another handle (the site's) it is read each time.
  */
 function odq_ban_of(int $guid, ?SQLite3 $db = null): ?array
 {
+    // What this request read of each player, by guid.
+    static $seen = [];
+    if ($db === null && array_key_exists($guid, $seen)) {
+        return $seen[$guid];
+    }
+    $ban = null;
     $q = @($db ?? odq_db())->prepare('SELECT reason, since, until, by FROM PlayerBan WHERE guid = :g');
-    if (!$q) {
-        return null;
+    if ($q) {
+        $q->bindValue(':g', $guid, SQLITE3_INTEGER);
+        $r = @$q->execute();
+        $row = $r ? $r->fetchArray(SQLITE3_ASSOC) : false;
+        // A ban that lasts: one without an end, or one whose end has not come.
+        if ($row && ($row['until'] === null || (int)$row['until'] > time())) {
+            $ban = ['reason' => (string)$row['reason'], 'since' => (int)$row['since'],
+                    'until' => $row['until'] === null ? null : (int)$row['until'], 'by' => (string)$row['by']];
+        }
     }
-    $q->bindValue(':g', $guid, SQLITE3_INTEGER);
-    $r = @$q->execute();
-    $row = $r ? $r->fetchArray(SQLITE3_ASSOC) : false;
-    if (!$row || ($row['until'] !== null && (int)$row['until'] <= time())) {
-        return null;
+    // Kept for the rest of the request, unless read through another handle.
+    if ($db === null) {
+        $seen[$guid] = $ban;
     }
-    return ['reason' => (string)$row['reason'], 'since' => (int)$row['since'],
-            'until' => $row['until'] === null ? null : (int)$row['until'], 'by' => (string)$row['by']];
+    return $ban;
 }
 
 /*
