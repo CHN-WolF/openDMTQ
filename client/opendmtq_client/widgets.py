@@ -1082,6 +1082,8 @@ def follow_width(ui, widget, margin=0, beside=()):
         if str(widget.cget("wraplength")) != str(room):
             # Only a new width is set: the same one would have Tk lay the label out and draw it again for nothing.
             widget.configure(wraplength=room)
+        # A label that may say other words (a choice's own hint) keeps the room of the longest at this width.
+        keep_room(widget, room)
 
     # Start narrow: a label that first asks for its whole line would widen its box, and the box's width would
     # then come from the label instead of the page. Narrow first, the box takes the page's width, then the
@@ -1091,6 +1093,33 @@ def follow_width(ui, widget, margin=0, beside=()):
     widget.after_idle(update)
     # Wrapped for a width the box will have before it is laid out (RowList.show): no moment of narrow text.
     widget.odq_wrap = lambda width: update(width=width)
+
+
+def keep_room(label, wrap):
+    """A label that may say any of several words (label.odq_texts: each choice's own hint) as tall as the longest of
+    them wraps to at `wrap` pixels, its words at its top: whichever it says, it takes the same room, and nothing round
+    it moves when another is said. A choice that brings a row and says its own hint anew (the Screen page's Mode and
+    the window's size) is then laid out once: when the hint had another number of lines, Tk laid the row that came out
+    with the hint's old height, then the whole card, the cards beside it and the cards under them again a moment later
+    for its new one, and the screen showed the first of the two (three frames between where two are allowed)."""
+    texts = getattr(label, "odq_texts", None)
+    if not texts or not label.winfo_exists():
+        return
+    root = label._root()
+    probe = getattr(root, "odq_room_probe", None)
+    if probe is None or not probe.winfo_exists():
+        # Never shown: Tk works out the size of its words all the same, wrapped as the label's would be.
+        probe = root.odq_room_probe = tk.Label(root, bd=0, padx=0, pady=0, highlightthickness=0)
+    font = label.cget("font")
+    # A line's height in the label's face: its words take a whole number of them.
+    line = max(1, int(label.tk.call("font", "metrics", font, "-linespace")))
+    lines = 1
+    for text in texts:
+        probe.configure(text=text, font=font, wraplength=wrap)
+        lines = max(lines, -(-probe.winfo_reqheight() // line))
+    if str(label.cget("height")) != str(lines):
+        # Set only when it changes: the same height would have Tk lay the label out again for nothing.
+        label.configure(height=lines)
 
 
 def focus_ring(widget, ui, bg):
@@ -2014,9 +2043,11 @@ def name_width(ui, names):
     return max(ui.fonts.body_bold.measure(name) for name in names) + ui.px(LABEL_GAP)
 
 
-def setting_row(parent, ui, title, control_factory, hint=None, bg=None):
+def setting_row(parent, ui, title, control_factory, hint=None, bg=None, hints=()):
     """A setting: its name on the left, the control on the right of it, the hint underneath. The page fits one column
-    for its rows' names afterwards (fit_names); until then the row's own name sets it."""
+    for its rows' names afterwards (fit_names); until then the row's own name sets it. `hints`: every hint the row may
+    say (each choice's own), for a row whose choice also brings or takes a row: its hint keeps the room of the longest
+    (keep_room), so that the row that comes is laid out with everything under it in one pass."""
     from opendmtq_client import i18n
     bg = bg or parent.cget("bg")
     row = tk.Frame(parent, bg=bg)
@@ -2041,10 +2072,21 @@ def setting_row(parent, ui, title, control_factory, hint=None, bg=None):
         # once, never cut for a moment while the row makes room for them.
         hint_label.grid(row=1, column=0, columnspan=2, sticky="we", pady=(ui.px(4), 0))
     row.control, row.hint = control, hint_label
+    if hint_label is not None and hints:
+        # Its words at the top of its room (the shorter hints leave the rest of it under them), and every hint it may
+        # say known to it, its own first.
+        hint_label.configure(anchor="nw")
+        hint_label.odq_texts = tuple(dict.fromkeys((hint,) + tuple(hints)))
 
     def say(text):
         """Another hint under the row (a choice's own), in place."""
         if row.hint is not None and row.hint.cget("text") != text:
+            texts = getattr(row.hint, "odq_texts", None)
+            if texts is not None and text not in texts:
+                # Words it was not told of: its room made for them too before they show.
+                row.hint.odq_texts = texts + (text,)
+                wrap = row.hint.cget("wraplength")
+                keep_room(row.hint, int(row.hint.winfo_fpixels(str(wrap))))
             row.hint.configure(text=text)
 
     row.say = say

@@ -203,6 +203,41 @@ def main():
     state_rows_on_one_line("play")
     # Help's checks: their values in their column after the names, on the lamp's line too.
     state_rows_on_one_line("help")
+
+    # ---- A choice that brings or takes a row (Mode a window's size, the FPS counter its corner, keyboard play the
+    # lanes) keeps its own row as tall whichever is chosen: its hint keeps the room of the longer of its words
+    # (widgets.keep_room). Mode's hint in Korean was two lines for full screen and one for a window: the window's size
+    # came laid out under the row's old height, then the card, the card beside it and the one under them were laid out
+    # again a moment later for its new one (three frames between on the flicker film, where two are allowed).
+    def row_keeps_height(page, kind, key, choose, choices):
+        app.nav_go(page)
+        shots.settle(app)
+        control = keyboard.setting_control(app.body, kind, w(key))
+        if control is None:
+            problems.append("%s: no %r row" % (page, w(key)))
+            return
+        # The setting's row: the frame that holds the control and its name.
+        row = control.master
+        heights = {}
+        for choice in choices:
+            choose(control, choice)
+            shots.settle(app)
+            heights[choice] = row.winfo_height()
+        if len(set(heights.values())) != 1:
+            problems.append("%s: the %r row is %s px tall by its choice" % (page, w(key), heights))
+        # Back to the first choice, as the page was.
+        choose(control, choices[0])
+        shots.settle(app)
+
+    def segmented(control, value):
+        control.set(value, notify=True)
+
+    def toggle(control, value):
+        control.set(value, notify=True)
+
+    row_keeps_height("screen", widgets.Segmented, "screen.mode", segmented, ("fullscreen", "window"))
+    row_keeps_height("screen", widgets.Toggle, "screen.counter", toggle, (False, True))
+    row_keeps_height("controls", widgets.Toggle, "controls.keys.play", toggle, (True, False))
     for job in app.root.tk.splitlist(app.root.tk.call("after", "info")):
         app.root.after_cancel(job)
     app.root.destroy()

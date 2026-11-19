@@ -801,11 +801,12 @@ def screen_rows(app, parent, full=True, frames_in=None):
     shown = widgets.RowList(card.body, ui)
     shown.pack(fill="x")
     slot = shown.add()
+    # Its hint keeps the room of the longer of the two (widgets.keep_room): a window brings the window's size with it.
     rows["mode"] = widgets.setting_row(
         slot.body, ui, w("screen.mode"),
         lambda p: widgets.Segmented(p, ui, [("fullscreen", w("screen.mode.fullscreen")), ("window", w("screen.mode.window"))],
                                     v["display"], lambda value: setter("display", value)),
-        w("screen.mode.hint." + v["display"]))
+        w("screen.mode.hint." + v["display"]), hints=[w("screen.mode.hint." + m) for m in ("fullscreen", "window")])
     rows["mode"].pack(fill="x")
     if full:
         # Sizes that fit the display with room for the title bar and the taskbar (values.fits, which --set window= uses
@@ -845,11 +846,12 @@ def screen_rows(app, parent, full=True, frames_in=None):
         lambda p: widgets.Select(p, ui, fps_options(w, found, hz, v["fps"]), v["fps"], lambda f: setter("fps", f),
                                  width=22), " ")
     rows["fps"].pack(fill="x")
-    # The frame counter over the game, on or off; while on, its corner (the bottom right unless another is picked).
+    # The frame counter over the game, on or off; while on, its corner (the bottom right unless another is picked). Its
+    # hint keeps the room of the longer of the two, as Mode's does: on brings the corner's row.
     rows["counter"] = widgets.setting_row(
         frames.add().body, ui, w("screen.counter"),
         lambda p: widgets.Toggle(p, ui, v["show_fps"] == "on", lambda on: setter("show_fps", "on" if on else "off")),
-        " ")
+        " ", hints=[w("screen.counter.hint." + state) for state in ("on", "off")])
     rows["counter"].pack(fill="x")
     options = [(corner, w("screen.counter.position." + corner)) for corner in choices.FPS_POSITION]
     rows["corner_slot"] = frames.add(shown=v["show_fps"] == "on")
@@ -1245,8 +1247,10 @@ def lanes_card(app, parent):
         rows.show(holder, value)
         table.show_reset(value)
 
+    # Its hint keeps the room of the longer of the two (widgets.keep_room), as the switch brings or takes the lanes.
     row = widgets.setting_row(rows.add().body, ui, w("controls.keys.play"), lambda p: widgets.Toggle(p, ui, on, switch),
-                              w("controls.keys.play.hint." + ("on" if on else "off")))
+                              w("controls.keys.play.hint." + ("on" if on else "off")),
+                              hints=[w("controls.keys.play.hint." + state) for state in ("on", "off")])
     row.pack(fill="x")
     rows.pack(fill="x")
     # Where the lanes go, under the switch: made whether shown or not, so that the switch only shows them.
