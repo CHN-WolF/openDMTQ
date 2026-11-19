@@ -6,7 +6,7 @@ for the keyboard's place.
 
 Page titles, the menu and the guide's numerals are in the wide face, as the site's are. Fonts are bundled under open
 licences: DMTQ Wide (the site's cut of Saira) for those, Pretendard for text in both languages, Material Icons for the
-chevron after a link (assets/fonts/README.md).
+chevron after a link, drawn into a picture (assets/fonts/README.md).
 """
 
 import os
@@ -49,13 +49,16 @@ BAD = "#ff5f72"         # a problem, an error, removing for good (--bad)
 CYAN = "#6fd6ff"        # the keyboard's place (focus rings, --cyan)
 
 # Material Icons code points used by the launcher (a test checks each against the bundled font): the chevron after a
-# link, the only glyph it draws from that font.
-ICON = {"chevron": ""}
+# link, the only glyph it draws from that font, into a picture (art.link_chevron). Never in a label's words: Windows
+# draws a character its font lacks from a font of its own choosing, never from this one.
+ICON = {"chevron": "\ue5cc"}
+# The height of Pretendard's capitals in its em (its OS/2 table's 1448 of 2048): a link's chevron stands on their middle.
+TEXT_CAP = 1448 / 2048.0
 
-# Bundled font files Tk uses, and the family names Windows and fontconfig give them. The leaning wide face is drawn into
-# pictures only (art.py), so it is not among them: two faces of one family and style would be one too many for Windows.
-FONT_FILES = ("DMTQWide-ExtraBold.ttf", "Pretendard-Regular.ttf", "Pretendard-SemiBold.ttf", "Pretendard-Bold.ttf",
-              "MaterialIcons-Regular.ttf")
+# Bundled font files Tk uses, and the family names Windows and fontconfig give them. The leaning wide face and the icons
+# are drawn into pictures only (art.py), so they are not among them: two faces of one family and style would be one too
+# many for Windows, and Tk sets no icon as a character.
+FONT_FILES = ("DMTQWide-ExtraBold.ttf", "Pretendard-Regular.ttf", "Pretendard-SemiBold.ttf", "Pretendard-Bold.ttf")
 DISPLAY = "DMTQ Wide"
 TEXT_FONT = "Pretendard"
 TEXT_BOLD = "Pretendard SemiBold"

@@ -56,7 +56,9 @@ def _kind(widget):
         return "control"
     if isinstance(widget, tk.Canvas) and isinstance(widget.master, widgets.Slider):
         return "control"
-    if isinstance(widget, tk.Label) and str(widget.cget("text")).strip() and not str(widget.cget("image")):
+    if isinstance(widget, tk.Label) and str(widget.cget("text")).strip() and (
+            not str(widget.cget("image")) or str(widget.cget("compound")) in ("left", "right")):
+        # Words, alone or with a picture beside them on their line (a link's chevron, widgets.link): measured whole.
         return "text"
     return None
 
@@ -380,7 +382,52 @@ def check(root, ui, name):
                         continue
                     problems.append("%s: %d px between %s and %s, off the spacing scale" % (
                         name, gap, _name(a), _name(b)))
+    # ---- an icon font's character in words (the screen's every label and canvas text, shown or not).
+    problems.extend(private_use(root, name))
     return sorted(set(problems))
+
+
+# The icon fonts whose own labels may hold their private characters: none of the launcher's sets one (its icons are
+# pictures, art.link_chevron), and a label in one of these would show the character from its own font.
+ICON_FAMILIES = ("Material Icons",)
+
+
+def _private(text):
+    """The first private-use character in `text` (an icon font's code point), or None."""
+    for ch in str(text):
+        code = ord(ch)
+        if 0xE000 <= code <= 0xF8FF or 0xF0000 <= code <= 0xFFFFD or 0x100000 <= code <= 0x10FFFD:
+            return code
+    return None
+
+
+def private_use(root, name):
+    """Words that hold a private-use character outside an icon font's own label: Windows' GDI draws a character the
+    words' font lacks from a font of its own choosing, never from the launcher's private icon font (a link's chevron
+    showed as a Korean font's private glyph), where this container's fontconfig falls back to the icon font and shows
+    it right. Every label and every canvas's text (buttons, the menu, a dialog's words) under `root`."""
+    import tkinter.font as tkfont
+    problems = []
+    for widget in [root] + _all(root):
+        try:
+            if isinstance(widget, tk.Label):
+                code = _private(widget.cget("text"))
+                if code is not None and tkfont.Font(widget, font=widget.cget("font")).actual("family") \
+                        not in ICON_FAMILIES:
+                    problems.append("%s: the words %r hold U+%04X, a private-use character" % (
+                        name, str(widget.cget("text"))[:40], code))
+            elif isinstance(widget, tk.Canvas):
+                for item in widget.find_all():
+                    if widget.type(item) != "text":
+                        continue
+                    code = _private(widget.itemcget(item, "text"))
+                    if code is not None:
+                        problems.append("%s: the words %r hold U+%04X, a private-use character" % (
+                            name, widget.itemcget(item, "text")[:40], code))
+        except tk.TclError:
+            # A widget gone while the screen was read.
+            continue
+    return problems
 
 
 def check_list(droplist, ui, name):
@@ -425,6 +472,8 @@ def check_dialog(dialog, name):
             gap = _gap(a, b)
             if _overlap(a, b) or (gap is not None and gap < ui.px(LEAST_GAP)):
                 problems.append("%s: the dialog's buttons touch" % name)
+    # Its words, as every screen's: no icon font's character in them.
+    problems.extend(private_use(c, name))
     words = [c.bbox(item) for item in c.find_withtag("words") if "button" not in " ".join(c.gettags(item))]
     if buttons and words:
         lowest = max(box[3] for box in words)

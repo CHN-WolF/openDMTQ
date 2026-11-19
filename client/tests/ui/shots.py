@@ -202,7 +202,10 @@ def _field_frame(frame, area):
 
 def lime_check(app, name, problems):
     """One lime main action on a screen: of PLAY lit at the foot and the page's lit lime buttons (the guide's Next among
-    them), never more than one."""
+    them), never more than one; and no words that act in lime (a link is in the words' own colour, widgets.link: four
+    lime links beside a lime button once made five lime things on PLAY)."""
+    import tkinter as tk
+    from opendmtq_client import theme
     lit = []
     for w in widgets_of(app.root):
         if not w.winfo_ismapped():
@@ -211,6 +214,9 @@ def lime_check(app, name, problems):
             lit.append(w.words)
         elif isinstance(w, widgets.PlaySlab) and w.state == "ready":
             lit.append("PLAY")
+        elif isinstance(w, tk.Label) and str(w.cget("cursor")) == "hand2" and \
+                str(w.cget("fg")).lower() == theme.OK.lower():
+            problems.append("%s: the link %r is lime" % (name, w.cget("text")))
     if len(lit) > 1:
         problems.append("%s: %d lime main actions: %r" % (name, len(lit), lit))
 

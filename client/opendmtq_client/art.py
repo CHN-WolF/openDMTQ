@@ -621,6 +621,28 @@ def chevron(width, height, colour, scale=1.0):
     return img.resize((width, height), Image.LANCZOS)
 
 
+def link_chevron(em, ascent, line, cap, gap, colour, bg):
+    """The chevron after a link's words (widgets.link), as a picture: Material Icons' chevron_right (theme.ICON) drawn
+    from the bundled font by Pillow, never set as a character in the words' own font, where Windows' GDI would draw it
+    from whatever font it falls back to (a Korean font's private glyph showed instead of the chevron).
+
+    `em` is the words' font size in pixels, `ascent` and `line` their line's ascent and height (the picture is as tall
+    as the line, so that Tk sets it beside the words without moving them), `cap` the height of their capitals (the
+    chevron's middle on the capitals' middle), `gap` the room before it (the two spaces that stood there). On `bg`,
+    opaque: Tk draws it as it is on every platform."""
+    k = SS
+    # The glyph's own advance is one em: the picture keeps the width the character took.
+    width = max(1, int(round(gap + em)))
+    height = max(1, int(line))
+    img = Image.new("RGB", (width * k, height * k), _rgb(bg))
+    font = ImageFont.truetype(theme.ICON_FILE, max(1, int(round(em * k))))
+    # The chevron's middle is half an em over its baseline in the icon font; its baseline goes where that middle meets
+    # the capitals' middle over the words' baseline (their line's ascent from the top).
+    baseline = (ascent - cap / 2.0 + em / 2.0) * k
+    ImageDraw.Draw(img).text((gap * k, baseline), theme.ICON["chevron"], font=font, fill=_rgb(colour), anchor="ls")
+    return img.resize((width, height), Image.LANCZOS)
+
+
 def bar(width, height, fraction, colour, track=theme.RAIL):
     """A progress bar: the track with its done part in a colour, rounded at both ends (downloads)."""
     w, h = width * SS, height * SS

@@ -13,8 +13,9 @@ from opendmtq_client import art, theme
 
 
 class Ui:
-    """What every widget needs to draw itself: the root, the fonts, the DPI scale and the words. Every page's main
-    buttons, switches and links are lit in the site's lime (theme.OK), the one colour for what is in use."""
+    """What every widget needs to draw itself: the root, the fonts, the DPI scale and the words. A page's main button
+    and its switches that are on are lit in the site's lime (theme.OK), the one colour for what is in use; links are in
+    the words' own colour with a chevron after them (link)."""
 
     def __init__(self, root, fonts, scale, words):
         self.root = root
@@ -941,14 +942,37 @@ def focus_ring(widget, ui, bg):
 
 def link(parent, ui, text, command, fg=None, bg=None, font=None, chevron=True):
     """Words that do something: a click, or Enter or Space once Tab has reached them (a cyan ring shows it). In the
-    page's colour with a chevron after them by default; on the parent's colour unless told."""
+    words' own colour (lime is the screen's main button's alone), with a chevron after them by default; on the parent's
+    colour unless told. The chevron is a picture beside the words (chevron_picture), so that the words can change
+    (configure(text=...)) and keep it."""
     bg = bg or parent.cget("bg")
-    words = tk.Label(parent, text=text + ("  " + theme.ICON["chevron"] if chevron else ""),
-                     font=font or ui.fonts.body_bold, fg=fg or theme.OK, bg=bg, cursor="hand2")
+    fg, font = fg or theme.TEXT, font or ui.fonts.body_bold
+    words = tk.Label(parent, text=text, font=font, fg=fg, bg=bg, cursor="hand2")
+    if chevron:
+        # After the words, in their colour, as tall as their line: the label is as wide and as tall as when the chevron
+        # was a character of the words.
+        picture = chevron_picture(words, font, fg, bg)
+        image = ImageTk.PhotoImage(picture, master=parent)
+        words.configure(image=image, compound="right")
+        # Kept on the label: Tk drops a picture the moment Python forgets it. Not named odq_picture: the label is words,
+        # not a picture that stands for the whole widget (snapshot.py, the UI checks' lamps).
+        words.odq_chevron = (image, picture)
     focus_ring(words, ui, bg)
     for sequence in ("<Button-1>", "<Return>", "<space>"):
         words.bind(sequence, lambda e: command())
     return words
+
+
+def chevron_picture(label, font, colour, bg):
+    """The chevron after a link's words (art.link_chevron), sized from their font as Tk sets it on this screen: its em
+    in pixels, its line's ascent and height, its capitals' height; the room before it the two spaces that stood there,
+    less the room Tk keeps between the words and a picture beside them (the label's padx)."""
+    size = float(font.actual("size"))
+    # A size in points (positive) or in pixels (negative), as Tk takes it.
+    em = size * label.winfo_fpixels("1p") if size > 0 else -size
+    pad = label.winfo_fpixels(str(label.cget("padx")))
+    gap = max(0.0, font.measure("  ") - pad)
+    return art.link_chevron(em, font.metrics("ascent"), font.metrics("linespace"), em * theme.TEXT_CAP, gap, colour, bg)
 
 
 def label(parent, ui, text, font=None, fg=theme.TEXT, bg=None, wrap_margin=None, beside=(), **kw):

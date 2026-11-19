@@ -193,9 +193,10 @@ class LauncherApp:
                                      justify="left", anchor="w",
                                      wraplength=self.rail.inner_width() - lamp_width - px(6))
         self.status_label.pack(side="left", fill="x", padx=(px(6), 0))
-        # The link under the words, in the status's own column, when the message has one (_paint_status).
+        # The link under the words, in the status's own column, when the message has one (_paint_status): its words set
+        # then, its chevron made once with it.
         self.status_link = widgets.link(foot, ui, "", lambda: self.status_link.odq_action and self.status_link.odq_action(),
-                                        fg=theme.TEXT, bg=theme.STRIP, font=self.fonts.small, chevron=False)
+                                        fg=theme.TEXT, bg=theme.STRIP, font=self.fonts.small)
         self.status_link.odq_action = None
         self.status_link_place = (lamp_width + px(6) - int(self.status_link.cget("highlightthickness")))
         # PLAY: the lime slab on the column's own colour, as wide as the column holds, the same as the guide's last
@@ -1078,7 +1079,8 @@ class LauncherApp:
         # The link under the words: shown with an action, gone without one.
         if self.status_action:
             message, function = self.status_action
-            self.status_link.configure(text=self.words.say(message) + "  " + theme.ICON["chevron"])
+            # The words alone: the chevron after them is the link's own picture (widgets.link).
+            self.status_link.configure(text=self.words.say(message))
             self.status_link.odq_action = function
             if not self.status_link.winfo_manager():
                 self.status_link.pack(side="top", anchor="w", padx=(self.status_link_place, 0),
