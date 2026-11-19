@@ -390,8 +390,10 @@ def _tested(scrub, tested):
             scrub.server(str(params.get(key) or ""))
         for address in str(params.get("addresses") or "").split(","):
             scrub.server(address)
-        if step.key == "server" and params.get("name"):
-            scrub.add("server_name", str(params["name"]), whole=True)
+        name = str(params.get("name") or "") if step.key == "server" else ""
+        # A server without a name of its own calls itself by its address: left out as the address it is.
+        if name and ("server", name.lower(), True) not in scrub.known:
+            scrub.add("server_name", name, whole=True)
 
 
 def _devices(scrub):
