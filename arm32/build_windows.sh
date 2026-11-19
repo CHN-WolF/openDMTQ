@@ -27,7 +27,9 @@ docker build -q -t opendmtq-arm32-windows -f "$here/windows.Dockerfile" "$here" 
 # (OpenGL ES and EGL on Direct3D 11), the Khronos EGL and GLES headers, zlib, and the GCC runtime ANGLE's DLLs were
 # built with. Fetched once into _work/arm32/win-deps (include, lib, bin); the DLLs go beside the player.
 deps=_work/arm32/win-deps
+# MSYS2's mirror list, which sends each request to a mirror near the machine, and the server every mirror copies.
 msys=https://mirror.msys2.org/mingw/ucrt64
+primary=https://repo.msys2.org/mingw/ucrt64
 packages="
 mingw-w64-ucrt-x86_64-angleproject-2.1.r25748.890b5d8f-6-any.pkg.tar.zst 3c184061a3a3ef6478055e11eb786e20c40e62c1c239a1d65bf1399b7e2e7113
 mingw-w64-ucrt-x86_64-egl-headers-1.5.r284.3ae2b7c-1-any.pkg.tar.zst 29743159048cf216f75d0dc3eb3e0a04a07515db17d839803e54b060f5aeb0b3
@@ -44,7 +46,11 @@ if [ ! -f "$root/$deps/.done" ] || [ "$(cat "$root/$deps/.done")" != "$(echo "$p
     rm -rf $deps && mkdir -p $deps/pkgs $deps/include $deps/lib $deps/bin $deps/licenses
     echo '$packages' | while read -r file sum; do
       [ -n \"\$file\" ] || continue
-      curl -fsSL --retry 3 --connect-timeout 30 -o $deps/pkgs/\$file $msys/\$file
+      # Each try goes through the mirror list again. One of the mirrors it picks answers some machines 403 (a third of
+      # the tries from East Asia), an answer curl tries again only when told to on every error; should every try meet
+      # it, the server the mirrors copy gives the file. The hash below checks the file whichever server gave it.
+      curl -fsSL --retry 3 --retry-all-errors --connect-timeout 30 -o $deps/pkgs/\$file $msys/\$file \
+        || curl -fsSL --retry 3 --retry-all-errors --connect-timeout 30 -o $deps/pkgs/\$file $primary/\$file
       echo \"\$sum  $deps/pkgs/\$file\" | sha256sum -c --quiet -
       mkdir -p $deps/x && tar --zstd -xf $deps/pkgs/\$file -C $deps/x ucrt64
     done
