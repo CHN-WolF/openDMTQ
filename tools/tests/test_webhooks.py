@@ -886,6 +886,30 @@ class SendingTest(unittest.TestCase):
             self.assertEqual(chat.sni[:1], ["chat.example"])
             self.assertEqual((other["ok"], other["code"]), (False, "unreachable"))
 
+    def test_a_discord_address_with_its_hosts_last_dot_kept_before_is_sent_discords_format(self):
+        # A webhook added before a host's last dot was read as the host (kept as Slack's): the card names Discord, and its
+        # messages and tests go in Discord's format (ADM-172; main sent Slack's, which Discord refuses).
+        with Server() as inst:
+            url = f"http://discord.com.:{inst.chat.port}/api/webhooks/1234/secret-part-9876"
+            con = sqlite3.connect(admin.core.DB)
+            webhooks.tables(con)
+            con.execute("INSERT INTO Webhook (url, kind, lang, events, made_at) VALUES (?, 'slack', 'en', 'maint_on', 1)", (url,))
+            con.commit()
+            con.close()
+            real = socket.getaddrinfo
+            with mock.patch.object(webhooks.socket, "getaddrinfo", lambda host, *a, **k: real("127.0.0.1" if host == "discord.com." else host, *a, **k)):
+                self.assertEqual(webhooks.listing()[0]["kind"], "discord")
+                with admin.app.test_request_context():
+                    self.assertTrue(webhooks.send_test(1)["sent"])
+                # The loop's first look takes the present; maintenance after it is told.
+                webhooks.detect()
+                admin.songs.set_maintenance(True, "", HOST)
+                webhooks.detect()
+                webhooks.deliver()
+            self.assertEqual(len(inst.chat.got), 2)
+            for got in inst.chat.got:
+                self.assertIn("embeds", got["body"])
+
     def test_a_redirect_is_not_followed(self):
         with Server() as inst:
             inst.chat.answers = [(302, b"", {"Location": "http://127.0.0.1:9/elsewhere"})]

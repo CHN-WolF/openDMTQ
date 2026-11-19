@@ -305,7 +305,8 @@ def view(row, waiting=0):
     """A webhook as the card and the API show it: its address masked, never whole."""
     # A success clears the failure before it (note_result): one there is the last result.
     failing = bool(row["fail_at"])
-    return {"id": int(row["id"]), "address": masked(row["url"]), "kind": row["kind"], "language": row["lang"],
+    # The format by its address as it is read now (kind_of): one kept before a host's last dot was read as the host.
+    return {"id": int(row["id"]), "address": masked(row["url"]), "kind": kind_of(row["url"]), "language": row["lang"],
             "events": [e for e in EVENTS if e in row["events"].split(",")], "made_by": row["made_by"], "made_at": int(row["made_at"]),
             "last_sent": int(row["ok_at"]) if row["ok_at"] else None,
             # The last failure, while nothing went through since.
@@ -419,7 +420,7 @@ def send_test(hook):
         row = find(con, hook)
     finally:
         con.close()
-    result = post(row["url"], payload(row["kind"], row["lang"], "test", {"events": row["events"].split(",")}, int(time.time())))
+    result = post(row["url"], payload(kind_of(row["url"]), row["lang"], "test", {"events": row["events"].split(",")}, int(time.time())))
     note_result(hook, result)
     changed("webhook_action:test", masked(row["url"]))
     return {"sent": result["ok"], "status": result["status"], "code": None if result["ok"] else result["code"],
@@ -1134,7 +1135,8 @@ def deliver(now=None, me=None):
                 data = json.loads(row["event"])
             except ValueError:
                 data = {}
-            result = post(row["url"], payload(row["chat"], row["lang"], row["kind"], data, row["made_at"]))
+            # The chat's format by its address as it is read now (kind_of), whatever was kept when it was added.
+            result = post(row["url"], payload(kind_of(row["url"]), row["lang"], row["kind"], data, row["made_at"]))
             settle(con, row, me, result, time.time() if now is None else now)
             note_result(row["hook"], result)
             sent += 1 if result["ok"] else 0
