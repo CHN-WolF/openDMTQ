@@ -79,19 +79,14 @@ class Guide:
     def show(self, index):
         self.index = index
         app, w = self.app, self.app.words
-        for child in self.body.inner.winfo_children():
-            child.destroy()
         # A progress bar of the page that went: the download's progress waits for the next one.
         app.download_bar = None
         # The step that went took its own update with it (SOUND CHECK sets its own).
         app.page_follow = None
         key = STEPS[index]
-        # The step's question as the page's title, in the player's language (the strip above names the step), and its
-        # few words under it.
-        lead = LEADS.get(key)
-        self.body.set_heading(w("guide.%s.title" % key), w(lead) if lead else "")
-        content = tk.Frame(self.body.inner, bg=theme.BG)
-        content.pack(fill="both", expand=True)
+        # The step made off the screen while the one on show stays whole on it, then put in its place with its title,
+        # its step in the column and its buttons, all at once (widgets.ScrollArea.show_page), as a page is.
+        content = self.body.new_page()
         # The step's cards, each made again in place when what it shows changes (pages.Sections): an answer from the
         # server, a sign-in, a download that ended change their own card, never the step drawn again.
         self.sections = pages.Sections(content, app.ui)
@@ -102,6 +97,10 @@ class Guide:
         # One column for the names of the step's settings, as a page has (pages.ROWS_THAT_COME names the guide's own as
         # "guide:<step>", apart from the pages' names).
         widgets.fit_names(content, app.ui, pages.rows_that_come("guide:" + key))
+        # The step's question as the page's title, in the player's language (the strip above names the step), and its
+        # few words under it.
+        lead = LEADS.get(key)
+        self.body.set_heading(w("guide.%s.title" % key), w(lead) if lead else "")
         self.rail.set_step(index)
         self.back_button.enable(index > 0)
         last = index == len(STEPS) - 1
@@ -118,7 +117,8 @@ class Guide:
             if not self.skip.winfo_manager():
                 self.skip.pack(side="top", anchor="w", before=self.buttons, pady=(0, px(10)))
         self._update_next()
-        self.body.to_top()
+        # Then the step in place of the one on show, drawn with its title, its step and its buttons in one turn.
+        self.body.show_page(content)
 
     def redraw(self):
         """The step on show follows a change (an answer came, a sign-in, a download that ended): its cards whose

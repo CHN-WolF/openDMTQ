@@ -934,6 +934,31 @@ class ScrollArea(tk.Frame):
     def to_top(self):
         self.canvas.yview_moveto(0)
 
+    def new_page(self):
+        """A frame for a page, made in the column off the screen (not yet laid out in it): the page is made in it while
+        the one on show stays whole on the screen, then put in its place (show_page). In the area's own colour, the
+        field's."""
+        return tk.Frame(self.inner, bg=self.cget("bg"))
+
+    def show_page(self, page):
+        """`page` (new_page, made) takes the place of the page on show. The old one leaves the screen whole first, in
+        one step, and only then are its widgets taken away: tkinter takes a frame's widgets away one by one, and the
+        old page's own frame showed in the field's flat colour where each had been, a slab under the old title for as
+        long as the new page then took to make (0.8 s at 150 % on Windows for HELP). The column has no colour of its
+        own, so the old page's last look stays on the screen until the new page is drawn over it."""
+        old = [child for child in self.inner.winfo_children() if child is not page]
+        for child in old:
+            # Off the screen whole: one window unmapped, its own and its widgets' look gone with it at once.
+            manager = child.winfo_manager()
+            if manager:
+                getattr(child, manager + "_forget")()
+        for child in old:
+            # Taken away unseen, its frame no longer on the screen.
+            child.destroy()
+        # A page starts at its top.
+        self.to_top()
+        page.pack(fill="both", expand=True)
+
     def _focus_came(self, path):
         """A widget of the window took the keyboard (`path`, Tk's name for it): one on this page is shown."""
         try:
@@ -1181,20 +1206,27 @@ class Button(tk.Canvas):
         height = px(self.HEIGHT)
         self.configure(width=width, height=height)
         self.delete("all")
-        # Each state's face, without and with the keyboard's ring (a disabled button never has the keyboard).
-        self.faces = {(state, ring): art.button_face((width, height), 0, self.look, state, ring, self.ui.scale,
-                                                     bg=self.bg)
-                      for state in ("normal", "hover", "pressed", "disabled") for ring in (False, True)
-                      if not (ring and state == "disabled")}
-        self.images = {key: ImageTk.PhotoImage(face, master=self) for key, face in self.faces.items()}
-        self.face = self.create_image(0, 0, image=self.images[("normal", False)], anchor="nw")
+        # Each state's face, without and with the keyboard's ring (a disabled button never has the keyboard), made the
+        # first time the button shows it (_face): a page makes a dozen buttons each time it is shown, most of them seen
+        # only as they are, and drawing every face of each made the click on the page's name wait for them all (seven
+        # pictures a button, a third of HELP's making at 150 %).
+        self.face_size, self.faces, self.images = (width, height), {}, {}
+        self.face = self.create_image(0, 0, anchor="nw")
         self.parts = [self.create_text(px(18), height // 2, text=text, font=fonts.body_bold, anchor="w")]
         self._paint(self.state if self.enabled else "disabled")
+
+    def _face(self, key):
+        """The face of `key` (its state, and whether the keyboard's ring shows) as a Tk image, made when first asked."""
+        if key not in self.images:
+            state, ring = key
+            self.faces[key] = art.button_face(self.face_size, 0, self.look, state, ring, self.ui.scale, bg=self.bg)
+            self.images[key] = ImageTk.PhotoImage(self.faces[key], master=self)
+        return self.images[key]
 
     def _paint(self, state):
         self.state = state
         key = (state, self.focused and state != "disabled")
-        self.itemconfigure(self.face, image=self.images[key])
+        self.itemconfigure(self.face, image=self._face(key))
         for part in self.parts:
             self.itemconfigure(part, fill=self.text_colour[state])
         # A dialog draws the window behind it from the widgets (snapshot.py): this is the button's part.

@@ -822,24 +822,23 @@ class LauncherApp:
     # ----------------------------------------------------------------------------------- pages
 
     def go(self, page):
-        """Show a page: its title and the line under it, and its cards."""
+        """Show a page: its title and the line under it, and its cards. The page is made off the screen while the one
+        on show stays whole on it, then takes its place with the menu's light and its title, all at once
+        (widgets.ScrollArea.show_page): never a page half made on the screen while the rest of it is made."""
         from opendmtq_client import pages
         self.page = page
-        # The menu lights the page's name.
-        self.rail.set_current(page)
-        for child in self.body.inner.winfo_children():
-            child.destroy()
         self.download_bar = None
         # The page that went took its own update with it; the new one sets its own (Screen, Sound).
         self.page_follow = None
-        content = tk.Frame(self.body.inner, bg=theme.BG)
-        content.pack(fill="both", expand=True)
-        title, description = pages.heading(self, page)
-        self.body.set_heading(title, description)
+        content = self.body.new_page()
         pages.BUILDERS[page](self, content)
         # One column for the names of the page's settings, its cards' and both languages' widest (Help, Screen, Sound).
         widgets.fit_names(content, self.ui, pages.rows_that_come(page))
-        self.body.to_top()
+        # The menu lights the page's name, and the page's title and the line under it come, drawn with the page.
+        self.rail.set_current(page)
+        title, description = pages.heading(self, page)
+        self.body.set_heading(title, description)
+        self.body.show_page(content)
 
     # ------------------------------------------------------------------------------ background
 

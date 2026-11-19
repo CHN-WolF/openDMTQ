@@ -819,14 +819,36 @@ def _fill(size, colours):
     return _vertical(size, ((0.0, colours[0]), (0.55, colours[1]), (1.0, colours[2])))
 
 
+# The faces button_face drew on a plain colour, by what they are, the one used longest ago going first past FACES_KEPT:
+# a page shown again makes the same buttons, each face a picture drawn three times over and smoothed (2 ms at 150 %).
+FACES_KEPT = 256
+_faces = collections.OrderedDict()
+
+
 def button_face(size, margin, look, state, focused, scale, under=None, bg=None):
     """A button's picture, cut at two corners as the site's buttons: quiet metal, or lit in a colour.
 
     `under` is what lies beneath (a dialog's panel pixels) or `bg` a plain colour; `margin` pixels on every side hold
     the focus ring when the button has the keyboard. With no margin (a page's button, which keeps its size) the ring
     runs just inside the outline instead: cyan on metal, the words' dark ink on a coloured fill, where cyan would not
-    show.
+    show. A face on a plain colour is drawn once and kept (_faces), each caller given its own copy (the installer's
+    window buttons draw their glyph on theirs).
     """
+    key = None if under is not None else (tuple(size), margin, look, state, bool(focused), scale, bg)
+    found = _faces.pop(key, None) if key is not None else None
+    if found is None:
+        found = _button_face(size, margin, look, state, focused, scale, under, bg)
+        if key is None:
+            return found
+    # Put back last: the one used longest ago goes first.
+    _faces[key] = found
+    while len(_faces) > FACES_KEPT:
+        _faces.popitem(last=False)
+    return found.copy()
+
+
+def _button_face(size, margin, look, state, focused, scale, under, bg):
+    """button_face's picture, drawn."""
     colours = BUTTON_LOOKS[look]
     w, h = size
     img = under.copy() if under is not None else Image.new("RGB", size, _rgb(bg or theme.BG))
