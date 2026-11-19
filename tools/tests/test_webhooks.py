@@ -763,7 +763,9 @@ class SendingTest(unittest.TestCase):
                 webhooks.deliver(now + i * 2)
             self.assertEqual((len(inst.chat.got), [s for _, _, _, s in inst.queued()]), (9, ["waiting"]))
             self.assertEqual(webhooks.listing()[0]["given_up"], 0)
-            webhooks.deliver(now + webhooks.GIVE_UP + 1)
+            # Past the half hour as counted from the news's own time, which the maintenance's change took from the clock a
+            # moment after `now`: in the next second, now + GIVE_UP + 1 was not yet past it, and the message still waited.
+            webhooks.deliver(time.time() + webhooks.GIVE_UP + 2)
             self.assertEqual(([s for _, _, _, s in inst.queued()], webhooks.listing()[0]["given_up"]), (["dropped"], 1))
 
     def test_a_webhook_gone_stops_its_message_and_says_so(self):
