@@ -6,6 +6,114 @@ one of fixes, changes and smaller additions raises the patch number. Each releas
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-19
+
+OpenDMTQ 0.11.1 closes holes in the game server's currency and bans, keeps a server's address and its phones through
+the move off port 80 on every install kind, and makes the launcher, the installer, the site, the admin pages and the
+pieces over the game plainer and quicker.
+
+### Added
+
+- The app's name on the Server page: a card with its field, `POST /server/name` in the API, and `opendmtq name` on a
+  host install. The phones' app is called by it from the server's next start; the app players have keeps working.
+- `GET /server` gives `port`, the server's own, and `public_port`, the address's, where a router forwards another
+  public port to the server.
+- For contributors: `.github/ci_local.py` runs CI's jobs on a computer as GitHub runs them, before a push to `main`, and
+  `.github/release.sh` makes, checks and publishes a release from the computer that holds the signing key, with
+  `--dry-run` to rehearse it.
+
+### Changed
+
+- The launcher's and the installer's pages are composed on one grid: **Play** opens on the server and the signed-in
+  player, with the ready check and the last game side by side and My records under them as a scoreboard; the settings
+  pages hold their groups as rows in cards, side by side where the window is wide, and a lone button is a row of its
+  group. Each card takes a surface and a shape of its role (the page's head, the checklists, the results, the settings,
+  About, the dialogs), and buttons, text sizes, paddings and alignment follow one scale. The window's background shows
+  round the cards, its shards in the margin, clear of every card's edge and corner.
+- The launcher's pages show what to do now and the state: the How to play card (on **Play** and the guide's last step),
+  the **Controls** page's Mouse, Touch screen and Keyboard cards, and **Help**'s card on a game that does not start are
+  gone; what they said is in the guides ([Playing on a server](docs/play.md), [the Windows player](docs/windows-player.md)).
+- The launcher's links are in the words' colour with their chevron, lime staying the main button's alone, and Windows'
+  title bar over the launcher is drawn dark in the launcher's colours.
+- The launcher's words: **Play**'s Server card says when the server does not answer, and the status line says a sign-in
+  that ended; **Use this address** names the server by its name; the connection test's verdict names the server once
+  and its round trip each figure once; the **Screen** page's lines say what a setting does, and the FPS counter's says
+  where it stands; the **Sound** page's card is Last game's sound; My records name a chart's mode as 3 LINE.
+- The installer: **Uninstall** is its page's main button, filled red; the line that the launcher closes first shows
+  only for a choice that closes it; a long program folder breaks after its separators; waiting for a game to close
+  shows the chosen work's own steps and words.
+- The site and the admin pages show what to do now and the state: the Download page's notes, its folded trouble card,
+  the setup's "On each phone" steps, a player's page's economy lines and the API token card's path are in the guides.
+  With no app yet, Home's download waits with a line saying why; after a move Home says the address changed; while
+  players are on air the broadcasts button is plain with its red light. The owner is 소유자 and Notices are 공지 in
+  Korean throughout, and a new webhook takes every event. Play on this PC gives its reason in the page's own words, and
+  the Server page says where an action is done when the admin pages run without the server's own program.
+- Over the game: the notice and the FPS counter stand clear of the game's own header and buttons (in the menus under
+  the header, the counter at the top right where the game leaves room; in a song in the chosen corner, clear of the
+  pause button); the question before quitting speaks of a song's record only while a song is being played; each of the
+  equaliser's chips is as wide as its word.
+- Quicker: the launcher and the installer make a page off the screen and put it in place whole, the launcher in about
+  half the time of 0.11.0's (its controls draw a face only when they first show it), with its memory back to 0.10.0's; the game server looks players up by indexes and reads a player's ban once per
+  request (the batch after a song's start takes about a third less); the site opens its database once per page; a
+  player's admin page reads that player alone; the webhooks' loop writes nothing while nothing happens.
+- The local test gate runs in about 18 minutes where it took 80, and CI in about 12 where it took 31: images built once,
+  steps and the launcher's checks side by side, the pages in parts, a docs-only change skipping the heavy jobs, a newer
+  push stopping the older run.
+
+### Security
+
+- The game server ties a player's calls to that player's own game: each sign-in gets a key of its own, and a chart's
+  start, a save and a purchase are taken only when signed with one of that player's keys; a save is paid once, for the
+  play its sign-in started. Before, anyone who reached the game server could spend another player's MAX POINT by
+  naming their id, and made-up saves could earn MAX POINT, EXP and levels. A game left open while its server is updated
+  to 0.11.1 has a key the server does not know: its next start, save or purchase fails until the game starts again.
+- A ban holds whatever form a call gives the player id.
+- A webhook's chat is looked up once per message and the message goes to the address that was checked; the server's
+  own addresses, on any of its networks, are refused.
+- Play on this PC is not offered to a visit passed on by another proxy on the server PC.
+- The PC client's report leaves out every site ID and every server's address and name wherever the launcher wrote them,
+  servers the settings no longer know included.
+
+### Fixed
+
+- On Windows every link's chevron in the launcher showed as a broken character; it is drawn as a picture.
+- A change on a launcher page flashed (a card's field picture was cut again on every change, and a page was taken down
+  piece by piece while it was on the screen), and so did the installer's page switches.
+- Helm: values from before 0.11.0 that name `router.service.port: 80` beside a `publicHost` without a port put the
+  Service and the phones' app on the same port, 8791.
+- A server reached through a router's forward from another public port keeps its address through the move off port 80,
+  and an exposed server is told where the router's forward now goes; the Server page's port card names the server's own
+  port.
+- Play on this PC shows for a browser on the server PC with Docker Engine on Linux.
+- The App page says every refusal of the PC client's updates and of the installer.
+- The connection test finds a server that moved also over HTTPS with its own certificate authority, and when another
+  program answers the old port; **Use this address** takes the trust along; an unreachable network is said at once.
+- A server built from a clone that names a version past its release no longer breaks its launchers' update check.
+- **Use this address** moves the server and says it in one step (**Play** could show the new address under the old
+  words).
+- The setup's and the Server page's restart pages go on once the new server has answered twice in a row (they could
+  land on an error while the server's other parts came up).
+- A ban is told in the game as it is made, also in a song, and its notice stays for as long as the server refuses the
+  game; a banned player's one-time link signs nobody in, and the sign-in page says why.
+- An account the owner switched off, signing in with its right password on the site or in the launcher, is told it is
+  disabled, and the try does not count toward the lockout.
+- The owner stays signed in on the site with an ID of any length the server takes.
+- With unlimited currency on, a MAX POINT pack gives nothing, as it takes nothing; a player equips only items they own.
+- A ban's end further off than 3,650 days is refused in words.
+- A restore onto a server with nothing of its own yet keeps the backup's webhooks, and every restore keeps the game's
+  sign-ins of now.
+- Webhook addresses of other chats are masked whole; a Discord address written with its host's last dot is Discord's.
+- A broadcast that ends with nothing recorded says there is no replay.
+- Accounts: the player list fits a long name; the setup's Build button stands clear of the box above it; the Backups
+  card lists the kept daily backups with their days and sizes; a repair's messages stack, and on a phone held upright
+  they stand at the foot of the screen; the hall of fame's own row keeps its rim off the place's figure; Expert's chart
+  tab has the contrast of the others.
+- The launcher's words that wrap beside other widgets are no longer cut at the right edge.
+- Building the PC client leaves no Windows program executable in its folders.
+- The Windows player read the two arguments of the game's FUTEX_WAKE_OP calls without their sign, where a phone's
+  kernel reads them with it; it now answers as a phone does. The runtime's futex test asks what the kernel does, and
+  its own clock and signals no longer stop it on a busy machine.
+
 ## [0.11.0] - 2026-11-17
 
 OpenDMTQ 0.11.0 puts the site, the admin pages and the API on one port, 8791, and gives the owner a Server page, a
