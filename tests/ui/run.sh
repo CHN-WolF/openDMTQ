@@ -209,6 +209,10 @@ CSRF=$(curl -sf -m 10 -b "$JAR" "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/acc
 curl -sf -m 10 -b "$JAR" -o /dev/null --data-urlencode "csrf=$CSRF" --data-urlencode action=create --data-urlencode name=mypage \
   --data-urlencode password=mypage-pass-1 --data-urlencode password2=mypage-pass-1 --data-urlencode admin=1 --data-urlencode player=1 \
   --data-urlencode "note=my page's checks" "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts"
+# A player's account linked to one of the seed's long names (player 5, sixteen Korean syllables), as the owner links one:
+# its row on the Accounts page shows that name in the player's list, beside the Link button, at every width.
+curl -sf -m 10 -b "$JAR" -o /dev/null --data-urlencode "csrf=$CSRF" --data-urlencode action=create --data-urlencode name=wide \
+  --data-urlencode player=5 "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts"
 rm -f "$JAR"
 curl -sf -m 10 -c "$JAR" -b "$JAR" -o /dev/null --data-urlencode name=mypage --data-urlencode password=mypage-pass-1 "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/login"
 CSRF=$(curl -sf -m 10 -b "$JAR" "http://127.0.0.1:$ADMIN_PORT/opendmtq/admin/accounts" | grep -o 'name="csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
