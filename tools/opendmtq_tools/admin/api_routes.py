@@ -981,7 +981,7 @@ ROUTES = [
           body=[Field("url", "string", "The webhook's address, http or https (Discord's or Slack's, or any chat that takes Slack's).",
                       max_length=1000),
                 Field("language", "string", "The language of its messages. Left out: English.", optional=True, enum=["en", "ko"]),
-                Field("events", "[string]", "What it hears of (Webhook's events). Left out: all but live_off.", optional=True)],
+                Field("events", "[string]", "What it hears of (Webhook's events). Left out: all of them.", optional=True)],
           answer="WebhookAnswer", status=201,
           errors=[(400, "bad_url", "No address of a webhook: another scheme, a name or password in it, spaces, too long, Discord's "
                    "ending for GitHub's events, or the server itself or its network link's own address (loopback, link-local)."),

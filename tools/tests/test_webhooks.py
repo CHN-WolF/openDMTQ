@@ -9,6 +9,7 @@ import http.server
 import json
 import multiprocessing
 import os
+import re
 import socket
 import sqlite3
 import ssl
@@ -1066,6 +1067,17 @@ class CardTest(unittest.TestCase):
             self.assertNotIn('value="ftp://chat.example/x"', inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True))
             self.form(inst, "/opendmtq/admin/webhooks", url=inst.chat.url + "/x", language="en")
             self.assertIn("Pick at least one thing", inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True))
+
+    def test_a_new_webhook_hears_of_everything_as_it_comes(self):
+        # The form starts with every event ticked, a broadcast's end as its start; the API's, sent with none named, the
+        # same (ADM-193).
+        with Server() as inst:
+            inst.sign_in()
+            page = inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True)
+            new = page[page.index('class="hook-new"'):]
+            ticked = re.findall(r'<input type="checkbox" name="event" value="(\w+)" checked>', new[:new.index("</form>")])
+            self.assertEqual(ticked, list(webhooks.EVENTS))
+            self.assertEqual(webhooks.DEFAULT_EVENTS, webhooks.EVENTS)
 
     def test_the_card_in_korean_and_its_delete_asks_first(self):
         with Server() as inst:

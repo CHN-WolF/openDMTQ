@@ -38,9 +38,9 @@ from .. import songs, strings, windows_client
 from . import auth, core, notices, site
 from .core import Refused, ago, app, BASE, changed, t, tp
 
-# What a chat can hear of, in the card's order. live_off: a broadcast's end, unticked as a new webhook comes.
+# What a chat can hear of, in the card's order: every one ticked as a new webhook comes, a broadcast's end as its start.
 EVENTS = ("live_on", "live_off", "chart_top", "month_top", "maint_on", "maint_off")
-DEFAULT_EVENTS = ("live_on", "chart_top", "month_top", "maint_on", "maint_off")
+DEFAULT_EVENTS = EVENTS
 # Each event's words on the card, as keys of strings.py (written out: the strings' test finds them so).
 EVENT_WORDS = {"live_on": "hook.ev_live_on", "live_off": "hook.ev_live_off", "chart_top": "hook.ev_chart_top",
                "month_top": "hook.ev_month_top", "maint_on": "hook.ev_maint_on", "maint_off": "hook.ev_maint_off"}

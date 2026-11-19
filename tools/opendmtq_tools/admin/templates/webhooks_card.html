@@ -36,8 +36,7 @@
   {% endfor %}
   </ul>
   {% else %}<p class="empty">{{ t('hook.none') }}</p>{% endif %}
-  {# A new webhook: its address, its language (the page's as it comes) and what it hears of (all but a broadcast's end as it
-     comes). A refused one comes back with what was typed. Checked on the page as the other forms (novalidate): what is
+  {# A new webhook: its address, its language (the page's as it comes) and what it hears of (everything as it comes). A refused one comes back with what was typed. Checked on the page as the other forms (novalidate): what is
      wrong said under the field. #}
   {% set typed = hooks.typed or {} %}
   <form method="post" action="{{ url_for('webhook_new') }}" class="hook-new" novalidate data-inplace>

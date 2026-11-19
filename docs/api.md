@@ -765,7 +765,7 @@ Body (JSON):
 
 - `url` (string, 1000 characters at most): The webhook's address, http or https (Discord's or Slack's, or any chat that takes Slack's).
 - `language` (string, optional): The language of its messages. Left out: English. One of `en`, `ko`.
-- `events` (list of string, optional): What it hears of (Webhook's events). Left out: all but live_off.
+- `events` (list of string, optional): What it hears of (Webhook's events). Left out: all of them.
 
 Answer: `201` with [WebhookAnswer](#webhookanswer).
 
