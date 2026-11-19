@@ -1449,6 +1449,40 @@ class BackupFailureTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
+class DailyBackupsCardTest(unittest.TestCase):
+    """The Backups card's row of daily backups: each place it draws says its day and size; none is drawn for a daily backup
+    not made yet, and no row at all before the first (ADM-191)."""
+
+    def places(self, page):
+        """Each place of the row as its words, or None when the page has no row."""
+        row = re.search(r'<ol class="bak-slots"[^>]*>(.*?)</ol>', page, re.S)
+        if not row:
+            return None
+        return [re.sub(r"<[^>]+>", " ", li).split() for li in re.findall(r"<li[^>]*>(.*?)</li>", row.group(1), re.S)]
+
+    def test_each_place_says_its_day_and_none_is_drawn_empty(self):
+        with Install() as inst:
+            inst.sign_in()
+            # Daily backups on (as they are by default) and none made yet: no row, the line above says how many are kept.
+            page = inst.client.get("/opendmtq/admin/backups").get_data(as_text=True)
+            self.assertIn("The latest 7 are kept.", page)
+            self.assertIsNone(self.places(page))
+            # A backup made by hand is no daily one: still no row.
+            inst.write("backups/opendmtq-server-backup-20261116-101500-manual.tar.gz", "x" * 2048)
+            self.assertIsNone(self.places(inst.client.get("/opendmtq/admin/backups").get_data(as_text=True)))
+            # Two daily ones: two places, the older first, each with its day (a backup's day is its file's, at noon here so
+            # that no time zone moves it).
+            for day in (17, 18):
+                name = f"backups/opendmtq-server-backup-202611{day}-030000-auto.tar.gz"
+                inst.write(name, "x" * 4096)
+                noon = datetime.datetime(2026, 11, day, 12).timestamp()
+                os.utime(inst.path(name), (noon, noon))
+            places = self.places(inst.client.get("/opendmtq/admin/backups").get_data(as_text=True))
+            self.assertEqual([p[0] for p in places], ["11-17", "11-18"])
+            self.assertTrue(all(len(p) >= 2 for p in places), places)
+
+
+@unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class ChangeLogPageTest(unittest.TestCase):
     """The log of what was changed in these pages: in words, under names."""
 

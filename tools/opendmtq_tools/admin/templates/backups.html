@@ -12,14 +12,16 @@
   <h2>{{ t('bak.title') }}</h2>
   <p class="lead">{{ t('bak.lead') }}</p>
   <p class="auto-line"><span class="lamp {{ 'on' if auto else 'off' }}"></span><span>{{ t('bak.auto_is_on') if auto else t('bak.auto_is_off') }}</span></p>
-  {# The daily backups kept, as seven places, the newest at the right; then when the next one comes, and the other backups. #}
+  {# The daily backups kept, the newest at the right, each with its day and size (as many as there are: the line above
+     says how many are kept, and a place with nothing in it says nothing); then when the next one comes, and the other
+     backups. #}
   {% if auto %}
+  {% set kept = slots|select|list %}
+  {% if kept %}
   <ol class="bak-slots" aria-label="{{ t('bak.slots') }}">
-    {% for f in slots %}
-      {% if f %}<li class="full" data-tip="{{ f.name }}" tabindex="0"><b>{{ (f.made|rec_date)[5:10] }}</b><span>{{ f.size|human }}</span></li>
-      {% else %}<li data-tip="{{ t('bak.slot_free') }}" tabindex="0"></li>{% endif %}
-    {% endfor %}
+    {% for f in kept %}<li class="full" data-tip="{{ f.name }}" tabindex="0"><b>{{ (f.made|rec_date)[5:10] }}</b><span>{{ f.size|human }}</span></li>{% endfor %}
   </ol>
+  {% endif %}
   <p class="meta bak-next">{{ t('bak.next', time=next_at) if next_at else t('bak.next_soon') }}{% if others %} {{ t('bak.others', n=others) }}{% endif %}</p>
   {% endif %}
   <div class="btn-line">
