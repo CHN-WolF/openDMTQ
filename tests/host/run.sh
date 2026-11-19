@@ -295,7 +295,14 @@ if [ -n "$lan" ]; then
     sleep 1
   done
   expect "the server starts again by itself" test "$restarted" = yes
-  went=$(web "$admin" -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$PORT$back")
+  # As the page does: the new process answering twice in a row before the way back, and the way back asked again while
+  # the server's one port says 503 (its parts still coming up), as a person reloading would.
+  curl -s -m 3 "$A/setup/ping" >/dev/null || true
+  for _ in $(seq 30); do
+    went=$(web "$admin" -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$PORT$back")
+    [ "${went%% *}" = 503 ] || break
+    sleep 1
+  done
   expect "the page comes back signed in, at the players' step ($went)" test "$went" = "302 $A/setup?step=players"
   expect "the server answers at the new address" is 200 "http://$lan:$PORT/opendmtq/health.php"
 else

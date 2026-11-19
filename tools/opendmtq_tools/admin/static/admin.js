@@ -851,18 +851,24 @@ document.addEventListener('click', e => {
 for (const el of document.querySelectorAll('[data-reload]')) setTimeout(() => location.reload(), Number(el.dataset.reload));
 
 // A restart the setup asked for (a new address): which process answers is asked (data-ping) until it is a new one (not
-// data-instance), then the page goes on (data-back), signed in by the one-time key it carries. After a minute it says that
-// this takes longer than usual.
+// data-instance) on two looks in a row, then the page goes on (data-back), signed in by the one-time key it carries: a
+// new process that answered once may still be bringing the server's other parts up, and the page it went on to was then
+// an error. After a minute it says that this takes longer than usual.
 (() => {
   const wait = document.getElementById('restart-wait');
   if (!wait) return;
   const started = Date.now();
+  let seen = null;
   (async function look() {
     try {
       const r = await fetch(wait.dataset.ping, { cache: 'no-store' });
-      if (r.ok && (await r.json()).instance !== wait.dataset.instance) { location.replace(wait.dataset.back); return; }
+      const now = r.ok ? (await r.json()).instance : null;
+      // The same new process a second time: it has stayed up, and the way back is open.
+      if (now && now !== wait.dataset.instance && now === seen) { location.replace(wait.dataset.back); return; }
+      seen = now && now !== wait.dataset.instance ? now : null;
     } catch (e) {
       // Not answering yet: it is starting.
+      seen = null;
     }
     if (Date.now() - started > 60000) document.getElementById('slow').hidden = false;
     setTimeout(look, 1500);
