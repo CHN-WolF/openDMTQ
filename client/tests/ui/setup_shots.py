@@ -329,6 +329,28 @@ def main():
     shutil.rmtree(folder, ignore_errors=True)
     run("install", installer.Installer)
 
+    # A long user folder: the Program row's lines each end after a separator, a folder's name never cut (main broke
+    # "OpenDMT / Q.Client" on Windows at 150 %).
+    long_folder = os.path.join(home, "a-user-folder-whose-name-runs-long", "AppData", "Local", "Temp", "odq-test",
+                               "OpenDMTQ.Client")
+
+    def program_row(made):
+        import tkinter.font as tkfont
+        settle(made.root, 0.5)
+        label = next((w for w in widgets_of(made.root) if w.winfo_class() == "Label" and w.winfo_ismapped()
+                      and w.cget("text").replace("\n", "") == long_folder), None)
+        if label is None:
+            problems.append("setup-%s: the Install page does not show the long folder whole" % tag)
+            return
+        font = tkfont.Font(made.root, font=label.cget("font"))
+        lines = label.cget("text").split("\n")
+        wrap = int(label.winfo_fpixels(str(label.cget("wraplength"))))
+        if len(lines) < 2 or any(not line.endswith(os.sep) for line in lines[:-1]) or \
+                any(font.measure(line) > wrap for line in lines):
+            problems.append("setup-%s: the long folder's lines are %r in %d px" % (tag, lines, wrap))
+
+    run("install-long-folder", lambda: installer.Installer(folder=long_folder), [program_row])
+
     def setup_runs(path):
         """Velopack's setup as it runs: its log written (to the path the installer names), the program's folder filling
         a little at each look."""

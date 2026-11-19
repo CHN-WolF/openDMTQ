@@ -77,6 +77,23 @@ class Installer(unittest.TestCase):
         for action in installer.WORK:
             self.assertTrue(all(i18n.TEXT["setup.work.%s.line" % action]), action)
 
+    def test_a_long_program_path_breaks_after_its_separators(self):
+        # The Install page's Program row: lines no wider than the room, each ending after a \ (Tk breaks a line at
+        # spaces only, so main cut "OpenDMT / Q.Client" in two on a long user folder at 150 %), a folder's name whole.
+        class Font:
+            # A made-up font: every character 7 px wide.
+            def measure(self, text):
+                return 7 * len(text)
+
+        path = r"C:\Users\a-long-user-name\AppData\Local\Temp\odq-test\lad\OpenDMTQ.Client"
+        lines = installer.path_lines(Font(), path, 7 * 45).split("\n")
+        self.assertEqual(lines, ["C:\\Users\\a-long-user-name\\AppData\\Local\\Temp\\",
+                                 "odq-test\\lad\\OpenDMTQ.Client"])
+        # A path that fits stays one line; the separators of Linux's paths too.
+        self.assertEqual(installer.path_lines(Font(), path, 7 * 200), path)
+        self.assertEqual(installer.path_lines(Font(), "/tmp/abc/local/OpenDMTQ.Client", 7 * 20),
+                         "/tmp/abc/local/\nOpenDMTQ.Client")
+
     def test_the_server_from_its_own_file(self):
         folder = tempfile.mkdtemp()
         exe = os.path.join(folder, "OpenDMTQ-Setup.exe")

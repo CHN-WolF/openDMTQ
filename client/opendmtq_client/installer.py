@@ -202,6 +202,23 @@ def maintenance(have, here):
     return ["open", "repair", "uninstall"]
 
 
+def path_lines(font, path, room):
+    """A path as lines no wider than `room` pixels in `font` (a Tk font), each broken after a separator (\\ or /), a
+    folder's name kept whole; a name wider than the room alone has a line of its own (Tk then wraps it where it must)."""
+    # The path's parts, each with the separator after it, and the last part.
+    parts = re.findall(r"[^\\/]*[\\/]|[^\\/]+$", path)
+    lines, line = [], ""
+    for part in parts:
+        if line and font.measure(line + part) > room:
+            # The part goes on the next line: this one ends after a separator.
+            lines.append(line)
+            line = part
+        else:
+            line += part
+    lines.append(line)
+    return "\n".join(lines)
+
+
 class SetupLog:
     """Where Velopack's setup is, read from its log as it writes it: the step it is on (SETUP_STEPS), how big the
     program is once installed (its "this package requires N MB"), and the size of its package inside the installer (the
@@ -362,7 +379,8 @@ class Installer:
         content = self._page(w("setup.title.install"), w("setup.lead.install", v=__version__),
                              ("ready", "install", "done"), 0)
         card = self.window.card(content, w("setup.card.install"))
-        rows = [(w("setup.row.program"), self.folder), (w("setup.row.shortcuts"), w("setup.row.shortcuts.where")),
+        # The program's folder broken only after its separators (path_lines), never inside a folder's name.
+        rows = [(w("setup.row.program"), self.folder, True), (w("setup.row.shortcuts"), w("setup.row.shortcuts.where")),
                 (w("setup.row.rights"), w("setup.row.rights.what"))]
         if self.server:
             # Its name, and its address after it when it has one of its own.
@@ -378,13 +396,15 @@ class Installer:
         self.watch = lambda: installed_version(self.folder) is not None and self.ask()
 
     def _facts(self, parent, rows):
-        """A card's facts, a line each: the name in the names' column, what it is beside it."""
+        """A card's facts, a line each: the name in the names' column, what it is beside it. A row (name, value, True)
+        holds a path, broken into lines after its separators (path_lines)."""
         import tkinter as tk
         from opendmtq_client import theme, widgets
         px = self.ui.px
-        names = [name for name, _value in rows]
+        names = [row[0] for row in rows]
         width = widgets.name_width(self.ui, names)
-        for i, (name, value) in enumerate(rows):
+        for i, row in enumerate(rows):
+            name, value, path = row[0], row[1], len(row) > 2 and row[2]
             line = tk.Frame(parent, bg=theme.PANEL)
             # One under another with the card's gap between lines (setup_window.LINE_GAP).
             line.pack(fill="x", pady=(px(self.ui_module.LINE_GAP) if i else 0, 0))
@@ -394,9 +414,17 @@ class Installer:
                 row=0, column=0, sticky="nw")
             said = widgets.label(line, self.ui, value, fg=theme.MUTED, bg=theme.PANEL, wrap_margin=0)
             said.grid(row=0, column=1, sticky="we")
-            # A long path wraps in its own column, never under the names'.
-            line.bind("<Configure>", lambda e, label=said, room=width: label.configure(
-                wraplength=max(px(120), e.width - room)), add="+")
+
+            def fit(event, label=said, text=value, room=width, path=path):
+                # What the row has beside the names' column: a long value wraps there, never under the names.
+                wrap = max(px(120), event.width - room)
+                if path:
+                    # Its lines as wide as that room, each ending after a separator (Tk breaks at spaces only, and cut
+                    # a long folder's name in two).
+                    label.configure(text=path_lines(self.ui.fonts.body, text, wrap))
+                label.configure(wraplength=wrap)
+
+            line.bind("<Configure>", fit, add="+")
 
     def choose_page(self, have, running=False):
         """What to do with the OpenDMTQ installed: open it, repair it or update it (or go back to this installer's
