@@ -295,8 +295,8 @@ header, well below it) and while the game holds still.
 
 <p align="center">
   <img src="images/game-pc-sound.jpg" alt="The sound panel open under the bar during a song, its Sound button pressed in:
-  Master, Music and Effects as sliders at 85, 80 and 90 %, the equaliser's presets with Bass chosen, and its Low, Mid
-  and High bands in decibels" width="100%">
+  Master, Music and Effects as sliders at 85, 80 and 90 %, the equaliser's presets, each as wide as its word, with Bass
+  chosen, and its Low, Mid and High bands in decibels; the FPS counter at 240 at the bottom right" width="100%">
 </p>
 
 The bar's **Sound** button opens a card of glass under the bar at the game's right side: **Master**, **Music** and
@@ -312,9 +312,9 @@ every window size and scale. [The sound](#the-sound) says what each control chan
 ### Quitting, the window and the pointer
 
 <p align="center">
-  <img src="images/game-pc-quit.jpg" alt="The question before quitting: a card of frosted glass over the game, dimmed
-  and blurred behind it, Quit the game? with Keep playing as the main button, ringed by the keyboard's choice, and Quit
-  the game beside it" width="100%">
+  <img src="images/game-pc-quit.jpg" alt="The question before quitting, asked mid-song: a card of frosted glass over the
+  game, dimmed and blurred behind it, Quit the game? with its line that quitting mid-song loses the song's record, Keep
+  playing as the main button, ringed by the keyboard's choice, and Quit the game beside it" width="100%">
 </p>
 
 - **Quitting**: the X asks first, in a glass card over the game dimmed and blurred behind it: **Keep playing** as the
