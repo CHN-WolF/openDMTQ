@@ -264,6 +264,11 @@ async function audit(page) {
     Promise.all(document.getAnimations().filter(a => a.effect && Number.isFinite(a.effect.getComputedTiming().endTime)).map(a => a.finished.catch(() => {}))),
     new Promise(done => setTimeout(done, 3000)),
   ]));
+  // And the site's arrival itself (lib.php: the class "arriving", gone after 1.6 s): until it goes, a finished glow holds
+  // its last frame, a colour the browser reads back in oklab (which the checkers do not read), so the row it lights was a
+  // box to them or not by the moment they looked. Waited for only where something moves.
+  await page.waitForFunction(() => !document.documentElement.classList.contains('arriving') || !document.getAnimations().length,
+    { timeout: 3000, polling: 100 }).catch(() => {});
   await page.addScriptTag({ content: `${layout}\n${spacing}` });
   return page.evaluate(() => [...window.layoutAudit(), ...window.spacingAudit()]);
 }
