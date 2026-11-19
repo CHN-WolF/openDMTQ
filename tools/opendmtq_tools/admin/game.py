@@ -396,6 +396,10 @@ def ban(pid, reason, days=0, until=None, seen=None):
         end = whole(until)
         if end is None or end <= now:
             raise Refused(400, "bad_until", t("game.bad_until"))
+        # No further off than the longest ban the page sets in days: past that a date is past what the log's words and
+        # the database's numbers hold (a year after 9999, a number past 64 bits), and a request would end in an error.
+        if end > now + BAN_DAYS_MAX * 86400:
+            raise Refused(400, "bad_until", t("game.far_until", most=BAN_DAYS_MAX))
     else:
         d = whole(days) if days not in (None, "") else 0
         if d is None or not 0 <= d <= BAN_DAYS_MAX:

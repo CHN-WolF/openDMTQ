@@ -783,6 +783,12 @@ def CASES():
         C("player_ban", "POST", "/players/7/ban", 200, json={"reason": "No end"}, check=lambda t, inst, r: t.assertIsNone(r.get_json()["game"]["ban"]["until"])),
         C("player_ban", "POST", "/players/7/ban", 400, "no_reason", json={"reason": "   "}),
         C("player_ban", "POST", "/players/7/ban", 400, "bad_until", json={"reason": "Past", "until": 1000}),
+        # An end further off than the longest ban the page sets: refused in words, never an error of the server (ADM-170; main
+        # answered 500 for a year past 9999). Past 64 bits the body's own check refuses it first (bad_field).
+        *(C("player_ban", "POST", "/players/7/ban", 400, "bad_until", json={"reason": "Far", "until": until},
+            check=lambda t, inst, r: t.assertEqual(r.get_json()["error"]["message"], "The end must be within 3650 days from now."))
+          for until in (10 ** 12, int(time.time()) + 3651 * 86400)),
+        C("player_ban", "POST", "/players/7/ban", 400, "bad_field", json={"reason": "Far", "until": 2 ** 63}),
         C("player_ban", "POST", "/players/7/ban", 400, "bad_field", json={"reason": "x" * 201}),
         C("player_unban", "DELETE", "/players/7/ban", 200, setup=banned_seven, check=lambda t, inst, r: t.assertIsNone(r.get_json()["game"]["ban"])),
         C("player_unban", "DELETE", "/players/99/ban", 404, "player_not_found"),

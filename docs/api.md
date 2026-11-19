@@ -1240,7 +1240,7 @@ Body (JSON):
 
 - `reason` (string, 200 characters at most): Why, as the game shows it to the player.
 - `days` (integer, optional): Days from now, 1 to 3,650; 0 (as when left out without until): until it is lifted.
-- `until` (integer, optional): When it ends (Unix time, to come).
+- `until` (integer, optional): When it ends (Unix time, to come, within 3,650 days).
 
 Answer: `200` with [PlayerGameAnswer](#playergameanswer).
 
@@ -1248,7 +1248,7 @@ Refusals:
 
 - `400 no_reason`: No reason.
 - `400 bad_days`: days outside 0 to 3,650.
-- `400 bad_until`: until has passed.
+- `400 bad_until`: until has passed, or is more than 3,650 days away.
 - `404 player_not_found`: No such player.
 - `409 stale`: The number belongs to someone else now.
 

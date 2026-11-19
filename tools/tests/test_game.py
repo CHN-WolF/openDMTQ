@@ -159,6 +159,29 @@ class PlayerGamePageTest(unittest.TestCase):
             self.assertEqual(r.headers["Location"], "/opendmtq/admin/players")
             self.assertNotIn("Banned players", inst.client.get("/opendmtq/admin/players").get_data(as_text=True))
 
+    def test_a_ban_ending_further_off_than_the_longest_is_refused_in_words(self):
+        # An end the API may send: refused with the longest ban there is, nothing kept, never an exception that a request
+        # turns into an error of the server (ADM-170; main raised ValueError for a year past 9999, OverflowError past 64 bits).
+        with Install() as inst:
+            self.server(inst)
+            now = int(time.time())
+            for until in (now + admin.game.BAN_DAYS_MAX * 86400 + 60, 10 ** 12, 2 ** 63, 10 ** 30):
+                with admin.app.test_request_context(), self.assertRaises(admin.core.Refused, msg=until) as e:
+                    admin.game.ban(7, "Far", until=until)
+                self.assertEqual((e.exception.status, e.exception.code), (400, "bad_until"), until)
+                self.assertEqual(str(e.exception.words), "The end must be within 3650 days from now.", until)
+            # Nothing kept of it (no table of bans made either).
+            with sqlite3.connect(admin.core.DB) as con:
+                self.assertIsNone(admin.game.ban_of(con, 7))
+            # In Korean, on a page.
+            with admin.app.test_request_context(headers={"Cookie": "opendmtq_lang=ko"}), self.assertRaises(admin.core.Refused) as e:
+                admin.game.ban(7, "Far", until=10 ** 12)
+            self.assertEqual(str(e.exception.words), "끝나는 때는 지금부터 3650일 이내여야 합니다.")
+            # The longest is taken.
+            with admin.app.test_request_context():
+                done = admin.game.ban(7, "Ten years", until=now + admin.game.BAN_DAYS_MAX * 86400 - 60)
+            self.assertEqual(done["until"], now + admin.game.BAN_DAYS_MAX * 86400 - 60)
+
     def test_every_change_is_in_the_log_of_changes_with_before_and_after_and_on_the_page(self):
         with Install() as inst:
             csrf, seen = self.server(inst)
