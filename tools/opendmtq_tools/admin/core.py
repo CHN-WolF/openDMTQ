@@ -330,10 +330,12 @@ def refusal(sentence, general=None):
     own sentence; None for no sentence, for a fetch that only failed (NOT_REACHED), and for another sentence without
     `general`."""
     text = (sentence or "").strip()
+    # The signature's own refusals, each in words of its own.
     for pattern, key in REFUSALS:
         found = pattern.match(text)
         if found:
             return t(key, **found.groupdict())
+    # Any other refusal after what it was of, in the tools' own sentence (escaped as any value is).
     if general and text and not NOT_REACHED.match(text):
         return t(general, why=text)
     return None

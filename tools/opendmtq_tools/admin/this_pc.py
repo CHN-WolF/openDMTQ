@@ -75,8 +75,10 @@ def passed_on_by_a_proxy():
     or a tunnel on the server PC passes on visits from elsewhere from loopback): Forwarded or Via, or X-Forwarded-For or
     X-Forwarded-Host naming more hops than the server's own Apache adds to a visit through it (one; none to a visit that
     did not come through it). A browser sends none of these."""
+    # The standard header, or the one each proxy adds of itself: neither comes from a browser, nor from the server.
     if request.headers.get("Forwarded") or request.headers.get("Via"):
         return True
+    # The server's own hop, when the visit came through it (from its address).
     own = 1 if request.remote_addr in auth.server_addresses() else 0
     # Apache adds the address it took the visit from, and the Host it was sent with, after any a proxy before it gave.
     return any(len([hop for hop in request.headers.get(name, "").split(",") if hop.strip()]) > own
@@ -88,8 +90,10 @@ def from_the_stack_gateway(ip):
     as the server's own rule for the admin pages takes it (server/entrypoint.sh LOCAL_FROM) where the command line says
     that is how this PC's visits come (ADMIN_LOCAL=gateway; under Docker Desktop and rootless Docker every visit comes
     from such an address, and none counts)."""
+    # Docker Compose under Docker Engine alone: a host install and Kubernetes have no stack network's gateway.
     if os.environ.get("ADMIN_LOCAL") != "gateway" or setup.HOST_INSTALL or setup.IN_KUBERNETES:
         return False
+    # Through the server (its X-Real-IP believed), from the gateway this service's own network has too.
     return request.remote_addr in auth.server_addresses() and ip == auth.stack_gateway()
 
 
@@ -97,6 +101,7 @@ def from_this_pc():
     """True when the visit (a page, or an API call) comes from the server PC itself, and no proxy passed it on: from
     loopback, from one of this computer's own addresses (a browser on it that opened the server's address on the
     network), or, with Docker Engine, through the server from the stack network's gateway."""
+    # Whatever address it comes from, a visit another proxy passed on comes from elsewhere.
     if passed_on_by_a_proxy():
         return False
     ip = auth.client_ip()
@@ -109,6 +114,7 @@ def from_this_pc():
     if setup.HOST_INSTALL and ip in own_addresses():
         # The server runs on this computer, and the visitor's address is one of its own: the visitor is on it too.
         return True
+    # With Docker Engine, a visit to localhost on the server PC reaches the server from the stack network's gateway.
     return from_the_stack_gateway(ip)
 
 

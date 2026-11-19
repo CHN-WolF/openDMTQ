@@ -85,10 +85,12 @@ def own_address(address):
 def _takes(ip):
     """True when this machine lets a program take the address (an ipaddress object) for its own end of a connection."""
     try:
+        # A datagram socket bound to it and closed at once: nothing is sent, no port stays taken.
         with socket.socket(socket.AF_INET6 if ip.version == 6 else socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.bind((str(ip), 0))
         return True
     except OSError:
+        # Not this machine's (or no such version of the address here).
         return False
 
 
@@ -104,9 +106,12 @@ def this_servers(address):
     # An IPv4 address written as IPv6 (::ffff:192.168.0.10) is that IPv4 address.
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
+    # One this machine takes for its own, where it does not take any (where it does, that tells nothing).
     if _takes(ip) and not _takes(NOBODYS[ip.version]):
         return True
+    # The game server's, as these pages reach it (in Docker Compose another container, in the same network).
     return str(ip) in auth.server_addresses()
+
 
 # How often the loop looks, in seconds.
 EVERY = 5
@@ -611,6 +616,7 @@ class _PinnedHTTP(http.client.HTTPConnection):
         self.found = found
 
     def connect(self):
+        # To the checked addresses, never to the name looked up again.
         self.sock = _connect(self.found, self.timeout)
 
 
@@ -620,6 +626,7 @@ class _PinnedHTTPS(_PinnedHTTP):
     default_port = http.client.HTTPS_PORT
 
     def connect(self):
+        # The same connection, then TLS over it for the name (self.host is the address's host, never the number).
         self.sock = _TLS.wrap_socket(_connect(self.found, self.timeout), server_hostname=self.host)
 
 
@@ -628,9 +635,11 @@ class _PinnedHTTPHandler(urllib.request.HTTPHandler):
 
     def __init__(self, found):
         super().__init__()
+        # The checked addresses each connection of this request goes to.
         self.found = found
 
     def http_open(self, req):
+        # urllib's own request and answer, through a connection to those addresses.
         return self.do_open(functools.partial(_PinnedHTTP, found=self.found), req)
 
 
@@ -639,9 +648,11 @@ class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
 
     def __init__(self, found):
         super().__init__(context=_TLS)
+        # The checked addresses each connection of this request goes to.
         self.found = found
 
     def https_open(self, req):
+        # urllib's own request and answer, through a TLS connection to those addresses.
         return self.do_open(functools.partial(_PinnedHTTPS, found=self.found), req)
 
 

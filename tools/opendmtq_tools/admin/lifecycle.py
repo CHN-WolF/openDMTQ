@@ -217,8 +217,10 @@ def moved_view(moved):
     router's own port in it, which goes on to the new port: env.address_after_80), and whether the server is reached
     through a router (an internet address), which then forwards to the new port."""
     address = str(moved.get("address", ""))
+    # The port the address names (80 when it names none, as a URL without one means).
     _, sep, port = address.rpartition(":")
     public = int(port) if sep and port.isdigit() else 80
+    # The address stayed when its port is not the server's new one: a router's, forwarding it there.
     return {"was": moved.get("from", 80), "now": moved["to"], "address": f"http://{address}/", "public": public,
             "stays": public != moved["to"], "router": not core.lan_only(address)}
 
