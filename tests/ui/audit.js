@@ -401,6 +401,23 @@ async function broadcastsOff(contexts, held) {
   await page.close();
 }
 
+// No app for this server yet (the empty stage: nothing built, nothing being built): the home page's download is drawn
+// waiting, no way to a page that says the same, with the line under it saying why (SRV-91).
+async function noAppYet(contexts) {
+  const page = await contexts.signed.newPage();
+  await page.setViewport({ width: 1280, height: 900 });
+  await page.setCookie({ name: 'opendmtq_lang', value: 'en', url: P });
+  await page.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
+  const got = await page.$eval('.stage-acts .button.get', b => ({
+    link: b.tagName === 'A' && b.hasAttribute('href'), waiting: b.getAttribute('aria-disabled') === 'true',
+    lit: getComputedStyle(b).backgroundImage !== 'none',
+    why: (document.getElementById(b.getAttribute('aria-describedby') || '-') || { textContent: '' }).textContent.trim(),
+  })).catch(e => ({ error: String(e) }));
+  check('with no app yet the home page draws its download waiting, the line under it saying why',
+    got.link === false && got.waiting && !got.lit && got.why === 'There is no app for this server yet.', JSON.stringify(got));
+  await page.close();
+}
+
 // The checker itself: one of each thing it looks for must be seen.
 async function self(contexts) {
   const page = await contexts.anon.newPage();
@@ -2668,6 +2685,7 @@ async function myPage(contexts) {
     await self(contexts);
   } else if (stage === 'empty') {
     await broadcastsOff(contexts, false);
+    await noAppYet(contexts);
     await sweep(contexts, EMPTY, FEW_WIDTHS);
   } else if (stage === 'full') {
     await sweep(contexts, FULL, ALL_WIDTHS);

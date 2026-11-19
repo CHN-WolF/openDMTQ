@@ -36,6 +36,13 @@ $ready = $apk && !$stale && !in_app_browser();
 // nothing making one).
 $failed = (!$apk || $stale) && build_failed();
 $building = (!$apk || $stale) && build_state() === 'building';
+// Nothing to get and nothing on its way (none built for this address, or the build given up on): the button is drawn
+// waiting, with the line under it saying why, where it would lead to a page that says the same. While the app is being
+// made it leads to the download page, which shows it once it is there.
+$waiting = (!$apk || $stale) && !$building;
+// The server moved to this address lately (another port, another PC): said here too, under the download, where players
+// land first, as the download page says it.
+$moved = odq_address_moved();
 // PlayLog.user_id is the player's guid: one name per player, however many phones (PLAYER_ROWS). As many as go well beside
 // the list of players, which is short on a server with few.
 $records = ($db && has_playlog($db)) ? rows($db, recent_records_sql(),
@@ -70,7 +77,13 @@ ob_start();
       <?php // The app in one press when there is one to give, its size and date under it and the steps a press away.
             // Watching works on any phone or computer: lit, with the count, while someone is on air (thumbs.js keeps it so). ?>
       <div class="stage-acts">
+        <?php if ($waiting): ?>
+        <?php // No link: a press would only lead to the same words. Named for a screen reader as a button that cannot be
+              // pressed now, the line under it saying why. ?>
+        <span class="button get get-app" role="link" aria-disabled="true" aria-describedby="app-why"<?= hidden_on_ios() ?>><?= t('dl.button') ?></span>
+        <?php else: ?>
         <a class="button get get-app" href="<?= $ready ? '/apk' : 'download.php' ?>"<?= hidden_on_ios() ?>><?= t('dl.button') ?></a>
+        <?php endif; ?>
         <?php // Live while someone is on air, the broadcasts otherwise; nothing at all with neither (the box under it says so),
               // nor with broadcasts off for the server. ?>
         <?php if ($casting): ?>
@@ -80,7 +93,13 @@ ob_start();
       <?php if ($ready): ?>
         <p class="meta stage-meta get-app"<?= hidden_on_ios() ?>><?= t('dl.meta', ['size' => number_format($apk['size'] / 1048576, 1), 'date' => substr($apk['built_at'], 0, 10)]) ?> · <a href="download.php"><?= t('home.howto') ?></a></p>
       <?php elseif (!$apk || $stale): ?>
-        <p class="meta stage-meta get-app"<?= hidden_on_ios() ?>><?= t($failed ? 'home.app_failed' : ($building ? 'home.app_wait' : 'build.none')) ?></p>
+        <?php // Why the button waits, or where the app comes once it is made: the download page has nothing more to say of a
+              // build given up on, so this line says it all. ?>
+        <p class="meta stage-meta get-app" id="app-why"<?= hidden_on_ios() ?>><?= t($failed ? 'build.failed' : ($building ? 'home.app_wait' : 'build.none')) ?></p>
+      <?php endif; ?>
+      <?php if ($moved): ?>
+        <?php // Whoever comes with the app for the old address needs the new one: the download page says the whole of it. ?>
+        <p class="warn stage-moved" id="moved" role="status"><?= t('home.moved', ['date' => date('Y-m-d', $moved['at'])]) ?></p>
       <?php endif; ?>
       <?= android_only() ?>
     </div>

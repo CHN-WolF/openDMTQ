@@ -491,6 +491,10 @@ code { font-family: var(--mono); font-size: var(--t-xs); background: rgba(255, 2
 .button:active { transform: translateY(1px); filter: brightness(0.97); }
 /* Sent, the answer on its way. */
 .button[aria-busy="true"], .btn[aria-busy="true"] { filter: saturate(0.5) brightness(0.85); cursor: progress; }
+/* Nothing to get yet (the home page's download with no app for this address): plain, as a button that waits is drawn,
+   and nothing happens at a press. */
+.button[aria-disabled="true"], .button[aria-disabled="true"]:hover { color: #8d97a2; background: var(--rail); filter: none; cursor: not-allowed; }
+.button[aria-disabled="true"]:active { transform: none; }
 /* The cut clips anything outside the box, so the ring sits inside it. */
 .button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -6px; }
 
@@ -974,6 +978,9 @@ td.actions { width: 1%; text-align: right; }
 .watch-count { min-width: 1.7em; padding: 3px 6px; font: 800 var(--t-md)/1 var(--display); font-variant-numeric: tabular-nums; text-align: center; color: #fff; background: #2b0409; }
 /* The app's size and date under the buttons, and the way to the steps; or why there is no app yet. */
 .stage-meta { margin: 12px 0 0; color: #d7dde4; }
+/* The server's move under them, as the download page says it: the stage's width of words, no wider than the buttons'
+   row reads. */
+.stage-moved { max-width: 62ch; margin: 14px 0 0; }
 /* The way to the broadcasts says what is there: live while someone is on air, the broadcasts otherwise. */
 .watch-live .when-on { display: none; }
 .watch-live.on .when-on { display: inline; }

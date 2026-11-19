@@ -76,12 +76,22 @@ check('the download page says the server moved, from where to where, that phones
     && str_contains($page, h_like(odq_host())) && str_contains($page, 'Phones and tablets need the app built for the new address')
     && str_contains($page, 'On a Windows PC, run the installer from this page'),
     substr(strip_tags($page), 0, 300));
+// The home page, where players land, says it too, under its download, with the way to the download page (SRV-90).
+$home = (string)@file_get_contents("$base/opendmtq/", false, stream_context_create(['http' => [
+    'header' => "Cookie: $cookie; opendmtq_lang=en\r\n", 'ignore_errors' => true]]));
+check('the home page says the server moved too, with the way to the download page',
+    str_contains($home, 'id="moved"') && str_contains($home, 'This server moved on ' . date('Y-m-d'))
+    && str_contains($home, 'href="download.php#moved"'),
+    substr(strip_tags($home), 0, 300));
 // The move goes again: the page, still signed in, says none. Then its own account goes: the rest of the run sees the
 // server as it was.
 @unlink("$state/address-moved.json");
 $page = (string)@file_get_contents("$base/opendmtq/download.php", false, stream_context_create(['http' => [
     'header' => "Cookie: $cookie; opendmtq_lang=en\r\n", 'ignore_errors' => true]]));
 check('without a move, the page says none', str_contains($page, 'id="install"') && !str_contains($page, 'id="moved"'));
+$home = (string)@file_get_contents("$base/opendmtq/", false, stream_context_create(['http' => [
+    'header' => "Cookie: $cookie; opendmtq_lang=en\r\n", 'ignore_errors' => true]]));
+check('nor the home page', str_contains($home, 'id="install"') && !str_contains($home, 'id="moved"'));
 $db->exec("DELETE FROM SiteUser WHERE name = 'movedcheck'");
 $db->close();
 
