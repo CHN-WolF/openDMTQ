@@ -647,6 +647,17 @@ hand.
   PC passes on visits from elsewhere. No header a visit brings exempts it from the sign-in throttle, and the server drops
   any `X-Server-PC` a visitor sends. Once HTTPS is set up a plain-HTTP visit from elsewhere is sent to HTTPS; one to
   localhost stays on plain HTTP.
+- What the server can and cannot tell apart there. With Docker Engine the stack network's gateway is where every visit
+  that reaches the server's published port from the server PC itself comes from: a browser on it that opens
+  `localhost`, a container of the same machine on any Docker network that opens the PC's own address or its network's
+  gateway (Docker passes those on from the gateway too), and a TCP tunnel or stream proxy running on the PC (frpc, an
+  nginx `stream` block), which adds no header and passes the internet's visits on from there. Each of them counts as the
+  server PC's own visit, for the admin pages of an exposed server and for Play on this PC; a container that opens the
+  server's own container directly comes from its own address, and a browser on the PC that opens its LAN address from
+  that address, neither from the gateway. What keeps the admin pages to the server PC then is what runs on it: a visit
+  from elsewhere reaches them only when a program on the PC passes it on, and the sign-in (the owner's ID and password or
+  an account's, throttled per address and overall) stands before every page and every API call either way. A host
+  install takes loopback alone for the server PC, where only a program on the PC itself comes from, a tunnel among them.
 - Their API (`/opendmtq/api`) is passed on where they are, with a token on each request. Once HTTPS is set up, a
   plain-HTTP request to it is refused (`403 use_https`) and passed on nowhere: its token has gone out in clear already.
   The database keeps a SHA-256 of each token, compared in constant time; a token that works is never throttled, and

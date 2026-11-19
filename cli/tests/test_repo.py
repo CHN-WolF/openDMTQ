@@ -180,6 +180,26 @@ class PlayerRateTest(unittest.TestCase):
         self.assertNotRegex(text, r"up to \d+ Hz")
 
 
+class SecurityModelTest(unittest.TestCase):
+    def test_it_says_which_visits_count_as_the_server_pcs_under_docker_engine(self):
+        # Measured on Docker Engine: a browser on the server PC that opens localhost, a container of the same machine on
+        # any network that opens the PC's address or its network's gateway, and a TCP tunnel on the PC all reach the
+        # server from the stack network's gateway, which the server takes for the server PC's own (server/entrypoint.sh
+        # LOCAL_FROM, and Play on this PC: this_pc.py). The security model says so, and what keeps the admin pages to the
+        # PC then (ADM-179; main's said only that a proxy's headers make a visit one from elsewhere).
+        with open(os.path.join(ROOT, "docs", "architecture.md"), encoding="utf-8") as f:
+            model = " ".join(re.search(r"## Security model\n(.*?)\n## ", f.read(), re.S).group(1).split())
+        for words in ("a container of the same machine on any Docker network", "a TCP tunnel or stream proxy running on the PC",
+                      "for the admin pages of an exposed server and for Play on this PC", "What keeps the admin pages to the server PC then",
+                      "the sign-in", "stands before every page and every API call either way"):
+            self.assertIn(words, model)
+        # The rule the words describe, where the code keeps it.
+        with open(os.path.join(ROOT, "server", "entrypoint.sh"), encoding="utf-8") as f:
+            self.assertIn("Require ip $LOCAL_FROM", f.read())
+        with open(os.path.join(ROOT, "tools", "opendmtq_tools", "admin", "this_pc.py"), encoding="utf-8") as f:
+            self.assertIn("ip == auth.stack_gateway()", f.read())
+
+
 class WindowsLinesTest(unittest.TestCase):
     def test_the_guides_count_the_windows_lines_as_the_block_has_them(self):
         # The guides say "the same N lines" of the Windows install's PowerShell block: as many as it has (they said four
