@@ -422,9 +422,15 @@ function patch_version(): string
     return odq_patch_id();
 }
 
-/* Read-only handle on the game database, or null if it is missing, empty or not readable. */
+/* Read-only handle on the game database, or null if it is missing, empty or not readable. One a request: the header's look
+   at the signed-in player and the page's own reads share it (each handle opened cost a quarter of a millisecond, and MY
+   PAGE opened three). Its reads see what a write through another handle (MY PAGE's changes) committed meanwhile. */
 function db(): ?SQLite3
 {
+    static $kept = null;
+    if ($kept !== null) {
+        return $kept;
+    }
     try {
         if (!is_file(DB) || filesize(DB) === 0) {
             return null;
@@ -432,8 +438,8 @@ function db(): ?SQLite3
         $db = new SQLite3(DB, SQLITE3_OPEN_READONLY);
         $db->busyTimeout(2000);
         // Failures come back as false (PHP 8's default for SQLite3; asking for it is deprecated).
-        // A file that is not a database, or lacks the game's tables, counts as unavailable.
-        return @$db->querySingle('SELECT 1 FROM Member LIMIT 1') !== false ? $db : null;
+        // A file that is not a database, or lacks the game's tables, counts as unavailable (and is asked again next time).
+        return @$db->querySingle('SELECT 1 FROM Member LIMIT 1') !== false ? ($kept = $db) : null;
     } catch (Exception $e) {
         return null;
     }

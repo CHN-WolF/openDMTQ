@@ -191,6 +191,34 @@ else
   echo "FAIL the batch after a sign-in asks the same of a player more than once: $once"
   failed=1
 fi
+# A page of the site opens the database once and works out the signed-in player's figures once, whoever asks: the header
+# (the name and place at the top of every page) and MY PAGE (its profile, its account, its places) asked three times each.
+# The reads SQLite makes of the best scores' table, as an authorizer sees each statement made, on the server's database.
+# shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.
+figures=$(docker exec "$NAME" php -r '
+  require "/opt/opendmtq/portal/lib.php";
+  $db = db();
+  $g = (int)$db->querySingle("SELECT user_id FROM Play ORDER BY rowid LIMIT 1");
+  // Everyone'"'"'s totals, kept in the run folder (the rank compares with them): worked out before the count.
+  play_totals($db);
+  $made = 0;
+  $db->setAuthorizer(function (int $action, ...$what) use (&$made) {
+      if ($action === SQLite3::READ && $what[0] === "Play" && $what[1] === "score") {
+          $made++;
+      }
+      return SQLite3::OK;
+  });
+  $seen = [];
+  foreach ([1, 2, 3] as $_) {
+      $seen[] = player_figures(db(), $g);
+  }
+  echo $g > 0 ? "" : "no player ", db() === $db ? "one handle" : "handles", " ", $seen[0] !== null && $seen[0] === $seen[2] ? "same" : "differ", " ", $made;' 2>&1) || true
+if [ "$figures" = "one handle same 1" ]; then
+  echo "PASS a page opens the database once and works out the signed-in player's figures once"
+else
+  echo "FAIL a page opens the database again or works out a player's figures again: $figures"
+  failed=1
+fi
 # The home page's newest records come from the index of the record rows alone (PlayLog_records), in its order: never the
 # whole log read back from its newest play (2.4 s a page on a million plays that were seldom records).
 # shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.

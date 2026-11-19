@@ -288,8 +288,21 @@ function top_players(SQLite3 $db, int $limit): array
 }
 
 /* One player as players() has them, rank included, without working out everybody's figures; null for
-   somebody who is no player. */
+   somebody who is no player. Worked out once a request for each player on each handle: every signed-in page's header asks
+   for the player's, and MY PAGE asked twice more (each half a millisecond on a thousand players). */
 function player_figures(SQLite3 $db, int $guid): ?array
+{
+    static $known = [];
+    // The handle is the request's (db()), which lives as long as the request: its number names it meanwhile.
+    $key = spl_object_id($db) . ':' . $guid;
+    if (array_key_exists($key, $known)) {
+        return $known[$key];
+    }
+    return $known[$key] = player_figures_made($db, $guid);
+}
+
+/* player_figures() worked out. */
+function player_figures_made(SQLite3 $db, int $guid): ?array
 {
     $row = rows($db,
         "SELECT m.guid AS id, m.nickname, COALESCE(a.charts, 0) AS charts, COALESCE(a.total, 0) AS total,
