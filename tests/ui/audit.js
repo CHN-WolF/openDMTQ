@@ -1213,6 +1213,16 @@ async function portalFlows(contexts) {
   check('and /windows hands a signed-in visitor the installer set up for this server',
     setup[0] === 200 && /portable-executable/.test(setup[1] || '') && /filename="opendmtq-pc-client-[0-9a-z.+-]*-?windows-x64-setup-[0-9a-z.-]+\.exe"/.test(setup[2] || '') &&
     setup[3].endsWith('OPENDMTQ-PRESET1') && setup[3].includes(`"url":"${SITE}"`), JSON.stringify(setup.slice(0, 3)));
+  // And the app under the name its builder gives it (patch_apk.app_file_name): what it is, the day's stamp, the system and the
+  // server's address, in lower case, as every file the server hands a person is named.
+  const appName = await dl.evaluate(async () => {
+    const r = await fetch('/apk');
+    // Only its name is wanted: the rest of the file is left unread.
+    await r.body.cancel();
+    return [r.status, r.headers.get('content-disposition')];
+  });
+  check("and /apk hands out the app under its builder's name for it",
+    appName[0] === 200 && /filename="opendmtq-phone-app-\d{4}\.\d{2}\.\d{2}-android-[0-9a-z.-]+\.apk"/.test(appName[1] || ''), JSON.stringify(appName));
   // A broken download goes on where it stopped, the app's (a hundred megabytes and more on a phone's network) and the
   // installer's alike (apk.php, windows.php): the headers that say so, a part as asked (the last 200 bytes, which for the
   // installer reach from its own bytes into the server's details after them), the whole again once the file is another
