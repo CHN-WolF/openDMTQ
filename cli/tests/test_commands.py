@@ -763,6 +763,39 @@ class MessageTest(unittest.TestCase):
                 self.assertNotIn("moved", sb.output()[before:])
                 self.assertEqual(sb.env()["LISTEN_PORT"], str(want))
 
+    def test_an_exposed_server_on_port_80_moves_and_the_router_is_told(self):
+        # Exposed before 0.11.0 with `expose NAME --port 80`: its public port was its own and moves with it, and the start
+        # says the router's forward goes to the new port; a public port that differs from its own (a router forwarding
+        # 8443 to port 80) is the router's and stays, with the app and its address, the forward going to the new port
+        # (DEP-91; main rewrote the public port too and said nothing of the router). Never back to 80 after.
+        for env_text, address, said in (
+                ("PUBLIC_HOST=game.example.com\nLISTEN_PORT=80\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PASSWORD=x\n", "game.example.com:8791",
+                 ["The server moved from port 80 to 8791: http://game.example.com:8791/",
+                  "On the router(s), forward TCP 8791 to port 8791 of this PC in place of port 80.",
+                  "Phones install the app again from that address (the site's download page says so), and PCs connect to it."]),
+                ("PUBLIC_HOST=game.example.com:8443\nLISTEN_PORT=80\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PASSWORD=x\n", "game.example.com:8443",
+                 ["The server moved from port 80 to 8791; its address stays http://game.example.com:8443/",
+                  "On the router(s), forward TCP 8443 to port 8791 of this PC in place of port 80."])):
+            with Sandbox(env_text) as sb:
+                game_data(sb)
+                with mock.patch.object(app.time, "sleep"):
+                    self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+                self.assertEqual((sb.env()["PUBLIC_HOST"], sb.env()["LISTEN_PORT"]), (address, "8791"))
+                for line in said:
+                    self.assertEqual(sb.output().count(line), 1, (line, sb.output()))
+                if address.endswith(":8443"):
+                    self.assertNotIn("Phones install the app again", sb.output())
+                # status once, in one paragraph, with the router's line.
+                before = len(sb.output())
+                self.assertEqual(sb.call(app.cmd_status), 0)
+                self.assertIn(said[0] + ". " + said[1], sb.output()[before:])
+                # The next start moves nothing and says nothing more.
+                before = len(sb.output())
+                with mock.patch.object(app.time, "sleep"):
+                    self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+                self.assertNotIn("moved", sb.output()[before:])
+                self.assertEqual((sb.env()["PUBLIC_HOST"], sb.env()["LISTEN_PORT"]), (address, "8791"))
+
     def test_the_old_admin_container_frees_the_port_first(self):
         # Its admin pages still published on 127.0.0.1:8791 by the release before: that port is this server's to take,
         # and their container goes before up makes the edge that takes it.
@@ -805,6 +838,14 @@ class MessageTest(unittest.TestCase):
                                                                         return_value=None) as script:
                 self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
             script.assert_called_once_with(port=8791, internet=False, replaces=80)
+        # Behind a router that keeps its own public port: the rule is for the server's own new port, from anywhere.
+        with Sandbox("PUBLIC_HOST=game.example.com:8443\nLISTEN_PORT=80\nADMIN_ON_PUBLIC_PORT=no\nADMIN_PASSWORD=x\n", wsl=True) as sb:
+            game_data(sb)
+            sb.windows_reachable()
+            with mock.patch.object(app.time, "sleep"), mock.patch.object(app.system, "run_firewall_script",
+                                                                        return_value=None) as script:
+                self.assertEqual(sb.call(app.cmd_up), 0, sb.output())
+            script.assert_called_once_with(port=8791, internet=True, replaces=80)
 
     def test_up_with_no_firewall_leaves_the_rule_at_a_move(self):
         # --no-firewall leaves Windows' firewall alone at a move off port 80 too, as setup's does: a test of the move on

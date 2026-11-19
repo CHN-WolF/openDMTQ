@@ -183,6 +183,14 @@ def leaves_80(values, port):
     return bool(values.get("PUBLIC_HOST")) and port == 80 and values.get(CHOSE_80) != "chosen"
 
 
+def address_after_80(old, port):
+    """PUBLIC_HOST once the server leaves port 80 for `port`: the port in it moves with the server's when it was the
+    server's own (80, written or not); one that differs is a router's, forwarding it to the server's port (8443 to 80), and
+    stays, the forward going to the new port from then on."""
+    host, public = split(old)
+    return join(host, port) if public == 80 else old
+
+
 def port_after_80(values, free):
     """The port a server leaves 80 for: the one its admin pages had (ADMIN_PORT, which only a server set up before 0.11.0
     has; 8791 unless its owner set another), or the first one after it that free(port) allows."""
@@ -214,16 +222,37 @@ def _write_state(folder, name, data):
     os.replace(path + ".new", path)
 
 
-def note_move_off_80(folder, old, new, said="start"):
-    """Notes in the server's state folder that the server moved from the address `old` (port 80) to `new`: the address
-    served before, for the server's start to note the move as any move of its address (address.json, when no start of
-    this version wrote one: the site's download page then tells players to install the app built for the new one), and
-    the move itself, said already where `said` names."""
+def note_move_off_80(folder, old, new, said="start", port=None):
+    """Notes in the server's state folder that the server moved from port 80 to `port` (the port in `new` when not given)
+    and its address from `old` to `new` (the same when a router's own port stays: address_after_80): the address served
+    before, for the server's start to note the move as any move of its address (address.json, when no start of this
+    version wrote one: the site's download page then tells players to install the app built for the new one), and the
+    move itself, said already where `said` names."""
     import time
     if not os.path.isfile(os.path.join(folder, "address.json")):
         _write_state(folder, "address.json", {"host": old})
-    _write_state(folder, MOVED_80, {"from": split(old)[1], "to": split(new)[1], "address": new, "at": int(time.time()),
+    _write_state(folder, MOVED_80, {"from": 80, "to": int(port or split(new)[1]), "address": new, "at": int(time.time()),
                                     "said": [said]})
+
+
+def move_off_80_words(moved, start=False):
+    """What a move off port 80 says (note_move_off_80's record: from, to, address), in lines: where the server went and
+    its address with it, or that its address stays (a router's own port in it); for an internet address the router's
+    forward to the new port; when the address moved, the phones' app for it. start: as the start says it, the site's
+    download page named. The first line ends with the address, the others with their full stop."""
+    was, port, address = moved.get("from", 80), moved["to"], moved["address"]
+    public = split(address)[1]
+    # The address moved with the server's port, unless a router's own port in it stayed.
+    stays = public != port
+    lines = [f"The server moved from port {was} to {port}; its address stays http://{address}/" if stays else
+             f"The server moved from port {was} to {port}: http://{address}/"]
+    if not is_lan_only(address):
+        # The internet reaches the server through the router(s): what goes on to the server PC follows its port.
+        lines.append(f"On the router(s), forward TCP {public} to port {port} of this PC in place of port {was}.")
+    if not stays:
+        lines.append("Phones install the app again from that address" + (" (the site's download page says so)" if start else "")
+                     + ", and PCs connect to it.")
+    return lines
 
 
 def move_off_80_unsaid(folder, where):

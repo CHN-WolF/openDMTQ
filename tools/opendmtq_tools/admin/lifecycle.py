@@ -211,10 +211,22 @@ def address_moved():
     return {"from": moved["from"], "to": moved["to"], "at": moved["at"]}
 
 
+def moved_view(moved):
+    """A move off port 80 as the Server page says it: {"was", "now", "address", "public", "stays", "router"}: the port it
+    left and the one it took, its address as a link, the port the address names, whether the address stayed as it was (a
+    router's own port in it, which goes on to the new port: env.address_after_80), and whether the server is reached
+    through a router (an internet address), which then forwards to the new port."""
+    address = str(moved.get("address", ""))
+    _, sep, port = address.rpartition(":")
+    public = int(port) if sep and port.isdigit() else 80
+    return {"was": moved.get("from", 80), "now": moved["to"], "address": f"http://{address}/", "public": public,
+            "stays": public != moved["to"], "router": not core.lan_only(address)}
+
+
 def moved_off_80(once=True):
-    """The server's move off port 80 at its first start with this version (cli/opendmtq_cli/env.py note_move_off_80):
-    {"was", "now", "address"}. once: the first time this page asks for it, noted as said here, and None after that (the
-    API asks with once=False, and leaves it to the page). None for a server that never moved."""
+    """The server's move off port 80 at its first start with this version (cli/opendmtq_cli/env.py note_move_off_80), as
+    moved_view() gives it. once: the first time this page asks for it, noted as said here, and None after that (the API
+    asks with once=False, and leaves it to the page). None for a server that never moved."""
     path = os.path.join(os.path.dirname(core.DB), "port-moved.json")
     try:
         with open(path, encoding="utf-8") as f:
@@ -224,7 +236,7 @@ def moved_off_80(once=True):
     if not isinstance(moved, dict) or not isinstance(moved.get("to"), int):
         return None
     if not once:
-        return {"was": moved.get("from", 80), "now": moved["to"], "address": f"http://{moved.get('address', '')}/"}
+        return moved_view(moved)
     if "page" in moved.get("said", []):
         return None
     moved["said"] = list(moved.get("said", [])) + ["page"]
@@ -235,7 +247,7 @@ def moved_off_80(once=True):
         os.replace(path + ".new", path)
     except OSError:
         pass
-    return {"was": moved.get("from", 80), "now": moved["to"], "address": f"http://{moved.get('address', '')}/"}
+    return moved_view(moved)
 
 
 def port_free(port):

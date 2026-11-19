@@ -116,7 +116,8 @@ When the game does not start or shows no songs, this chart leads to the right se
   again for it. A new install takes 8791, or the first free port after it when 8791 is taken; the players' site, the
   admin pages and the API are all on that one port.
 - A server set up on port 80 before 0.11.0 is on 8791 after the update (its start, `status` and the **Server** page
-  say so once): phones open the address with `:8791` and install the app built for it from the download page.
+  say so once): phones open the address with `:8791` and install the app built for it from the download page. Exposed
+  to the internet, the router forwards to the server's new port: the start says which port to forward where.
 - `./opendmtq doctor` fails when the port in the address and `LISTEN_PORT` differ: phones would call one port while
   the server listens on the other. `./opendmtq host` sets both.
 

@@ -169,9 +169,12 @@ internet, forward the new port on the router instead of the old one.
 A server set up before 0.11.0 on port 80 moves off it at its first start after the update, as `port` moves a server:
 to the port its admin pages had, 8791 unless you set another (or the first free one after it). The app is built again
 for the new address, so every phone installs it again from the site's download page; the start, `status` and the
-Server page say it once, and on WSL the Windows firewall rule moves with it. Its admin pages answer on the one port
-after the update, nothing answers on their old port, and `.env` no longer names it. A server on another port keeps it,
-and so does one on port 80 by `port 80`.
+Server page say it once, and on WSL the Windows firewall rule moves with it. Exposed to the internet, the router then
+forwards the new port to it in place of 80, as the start says; a public port the router forwards from another one
+(`PUBLIC_HOST=myhome.example.com:8443` beside `LISTEN_PORT=80`) is the router's and stays, with the app and its address,
+and the router's forward of it goes to the new port. Its admin pages answer on the one port after the update, nothing
+answers on their old port, and `.env` no longer names it. A server on another port keeps it, and so does one on port 80
+by `port 80`.
 
 ## Backups and a new computer
 

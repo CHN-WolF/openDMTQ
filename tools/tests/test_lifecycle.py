@@ -511,6 +511,34 @@ class PortMoveTest(unittest.TestCase):
             with open(inst.path(".env"), encoding="utf-8") as f:
                 self.assertEqual(f.read(), "PUBLIC_HOST=192.168.0.10\nLISTEN_PORT=80\nADMIN_PASSWORD=pw\nPORT_80=chosen\n")
 
+    def test_a_move_off_port_80_behind_a_router_says_where_its_forward_goes(self):
+        # An exposed server moved off port 80: its public port moved with its own (the router forwards the new one), or
+        # it was the router's own and stays with the address (DEP-91, ADM-176); said once, in both languages.
+        cases = (({"from": 80, "to": 8791, "address": "game.example.com:8791"},
+                  "The server moved from port 80 to 8791 at its first start with this version: http://game.example.com:8791/. "
+                  "Phones install the app again from that address, and PCs connect to it. "
+                  "On the router, forward TCP 8791 to port 8791 of this PC in place of port 80.",
+                  "이 버전으로 처음 시작할 때 서버가 80번 포트에서 8791번 포트로 옮겨졌습니다: http://game.example.com:8791/. "
+                  "휴대폰은 이 주소에서 앱을 다시 설치하고, PC는 이 주소로 연결합니다. "
+                  "공유기에서 TCP 8791번 포트를 이 PC의 80번 포트 대신 8791번 포트로 포워딩하세요."),
+                 ({"from": 80, "to": 8791, "address": "game.example.com:8443"},
+                  "The server moved from port 80 to 8791 at its first start with this version; its address stays "
+                  "http://game.example.com:8443/. On the router, forward TCP 8443 to port 8791 of this PC in place of port 80.",
+                  "이 버전으로 처음 시작할 때 서버가 80번 포트에서 8791번 포트로 옮겨졌습니다. 주소는 http://game.example.com:8443/ "
+                  "그대로입니다. 공유기에서 TCP 8443번 포트를 이 PC의 80번 포트 대신 8791번 포트로 포워딩하세요."))
+        for moved, english, korean in cases:
+            for lang, words in (("en", english), ("ko", korean)):
+                with Install() as inst, self.host(inst), mock.patch.object(admin.core, "PUBLIC_HOST", moved["address"]):
+                    with open(os.path.join(os.path.dirname(admin.core.DB), "port-moved.json"), "w", encoding="utf-8") as f:
+                        json.dump(dict(moved, at=1, said=["start"]), f)
+                    inst.client.set_cookie("opendmtq_lang", lang)
+                    inst.sign_in()
+                    page = inst.client.get("/opendmtq/admin/server").get_data(as_text=True)
+                    shown = re.search(r'<p class="setup-state" id="moved-80"><span class="lamp ok"></span>(.*?)</p>', page, re.S)
+                    self.assertIsNotNone(shown, lang)
+                    self.assertEqual(shown.group(1), words)
+                    self.assertNotIn('id="moved-80"', inst.client.get("/opendmtq/admin/server").get_data(as_text=True))
+
     def test_in_containers_the_command_line_does_it(self):
         with Install() as inst:
             r = inst.client.post("/opendmtq/api/v1/server/port", json={"port": 8792}, headers=self.token(inst))

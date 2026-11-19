@@ -139,8 +139,8 @@ def cmd_status(args):
     moved = env.move_off_80_unsaid(os.path.join(DATA, "state"), "status")
     if moved:
         say("")
-        tell(f"The server moved from port {moved['from']} to {moved['to']}: http://{moved['address']}/. Phones install the "
-             "app again from that address, and PCs connect to it.")
+        first, *rest = env.move_off_80_words(moved)
+        tell(" ".join([first + "."] + rest))
     return 0
 
 

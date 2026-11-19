@@ -657,6 +657,41 @@ class HostPortsTest(unittest.TestCase):
                 self.assertFalse(self.settings.leave_port_80())
                 self.assertEqual(self.settings.settings()["LISTEN_PORT"], "80")
 
+    def test_an_exposed_host_install_on_port_80_moves_and_the_router_is_told(self):
+        # The Windows bundle or a host install exposed before 0.11.0 on port 80: its public port moves with its own and the
+        # router is told to forward the new one; one forwarded from another public port keeps that port and the address,
+        # the forward going to the new port (DEP-91; main rewrote the public port too and said nothing of the router).
+        from opendmtq_host import commands
+        for text, address, lines in (
+                ("PUBLIC_HOST=game.example.com\nLISTEN_PORT=80\nADMIN_PASSWORD=x\n", "game.example.com:8791",
+                 ["The server moved from port 80 to 8791: http://game.example.com:8791/",
+                  "On the router(s), forward TCP 8791 to port 8791 of this PC in place of port 80.",
+                  "Phones install the app again from that address (the site's download page says so), and PCs connect to it."]),
+                ("PUBLIC_HOST=game.example.com:8443\nLISTEN_PORT=80\nADMIN_PASSWORD=x\n", "game.example.com:8443",
+                 ["The server moved from port 80 to 8791; its address stays http://game.example.com:8443/",
+                  "On the router(s), forward TCP 8443 to port 8791 of this PC in place of port 80."])):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, ".env")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(text)
+                said = []
+                with mock.patch.object(self.settings, "ENV_FILE", path), mock.patch.object(self.settings, "DATA", d), \
+                        mock.patch.object(self.settings, "ok", said.append), \
+                        mock.patch.object(self.settings, "tell", said.append), \
+                        mock.patch.object(self.settings, "bindable", lambda port, address="0.0.0.0": True):
+                    self.assertTrue(self.settings.leave_port_80())
+                    values = self.settings.settings()
+                    self.assertFalse(self.settings.leave_port_80())
+                self.assertEqual((values["PUBLIC_HOST"], values["LISTEN_PORT"]), (address, "8791"))
+                self.assertEqual(said, lines)
+                # status once, in one paragraph.
+                out = []
+                with mock.patch.object(commands, "DATA", d), mock.patch.object(commands, "settings", lambda: values), \
+                        mock.patch.object(commands, "health", lambda values: None), \
+                        mock.patch.object(commands, "say", out.append), mock.patch.object(commands, "tell", out.append):
+                    commands.cmd_status(argparse.Namespace())
+                self.assertIn(lines[0] + ". " + lines[1], out[-1])
+
     def test_each_command_reaches_its_own(self):
         # The host program's command line: start is start and port is port (a sub-command's name must not stand in for
         # the whole line's parser).

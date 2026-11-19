@@ -26,18 +26,21 @@ def listen_port(values):
 def leave_port_80():
     """A server whose one port is 80 without its owner having chosen it (env.leaves_80: set up before 0.11.0) moves to
     the port its admin pages had, 8791 unless the owner set another, the first free one after it when taken, as `port`
-    moves one: LISTEN_PORT and the port in PUBLIC_HOST, the app built for the new address at this start, the site's
-    download page saying so. Said here once (status and the Server page say it once each). True when it moved."""
+    moves one: LISTEN_PORT and the port in PUBLIC_HOST (a router's own port there stays, env.address_after_80), the app
+    built for the new address at this start, the site's download page saying so. Said here once (status and the Server
+    page say it once each, env.move_off_80_words). True when it moved."""
     values = settings()
     if env.check_host(values.get("PUBLIC_HOST", "")) or not env.leaves_80(values, listen_port(values)):
         return False
     old = values["PUBLIC_HOST"]
     port = env.port_after_80(values, bindable)
-    new = env.join(env.split(old)[0], port)
+    new = env.address_after_80(old, port)
     env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(port)})
-    env.note_move_off_80(os.path.join(DATA, "state"), old, new)
-    ok(f"The server moved from port 80 to {port}: http://{new}/")
-    tell("Phones install the app again from that address (the site's download page says so), and PCs connect to it.")
+    env.note_move_off_80(os.path.join(DATA, "state"), old, new, port=port)
+    first, *rest = env.move_off_80_words({"to": port, "address": new}, start=True)
+    ok(first)
+    for line in rest:
+        tell(line)
     return True
 
 

@@ -276,22 +276,22 @@ OLD_ADMIN_KEYS = ("ADMIN_PORT", "ADMIN_BIND")
 def leave_port_80():
     """A server whose one port is 80 without its owner having chosen it (env.leaves_80: set up before 0.11.0) moves to
     the port its admin pages had, 8791 unless the owner set another, as `port` moves one: LISTEN_PORT and the port in
-    PUBLIC_HOST, the app built for the new address at this start, the site's download page saying so. Returns the
-    words that say it (this start says them once, status and the Server page once each), or None."""
+    PUBLIC_HOST (a router's own port there stays, env.address_after_80), the app built for the new address at this start,
+    the site's download page saying so. Returns the words that say it (this start says them once, status and the Server
+    page once each, env.move_off_80_words), or None."""
     values = env.load(ENV_FILE)
     if env.check_host(values.get("PUBLIC_HOST", "")) or not env.leaves_80(values, env.listen_port(values)):
         return None
     old = values["PUBLIC_HOST"]
     # Free, or held by this copy's own admin pages on their port of their own before 0.11.0, which go below.
     port = env.port_after_80(values, lambda p: not system.port_busy(p) or system.admin_holds(p))
-    new = env.join(env.split(old)[0], port)
+    new = env.address_after_80(old, port)
     env.save(ENV_FILE, {"PUBLIC_HOST": new, "LISTEN_PORT": str(port)})
-    env.note_move_off_80(os.path.join(DATA, "state"), old, new)
+    env.note_move_off_80(os.path.join(DATA, "state"), old, new, port=port)
     # Their old container holds the port the edge now takes (127.0.0.1:ADMIN_PORT): it goes first, made again by up.
     if system.admin_holds(port):
         system.compose("rm", "-sf", "admin")
-    return [f"The server moved from port 80 to {port}: http://{new}/",
-            "Phones install the app again from that address (the site's download page says so), and PCs connect to it."]
+    return env.move_off_80_words({"to": port, "address": new}, start=True)
 
 
 def cmd_up(args):
@@ -306,10 +306,10 @@ def cmd_up(args):
     if moved:
         for line in moved:
             ok(line)
-        # The rule for phones on WSL follows the port, as `port` moves it; --no-firewall (up's, or the setup's that
-        # comes here) leaves Windows' firewall alone.
+        # The rule for phones on WSL follows the server's port, as `port` moves it (a router's own port in the address
+        # is the router's); --no-firewall (up's, or the setup's that comes here) leaves Windows' firewall alone.
         if env.is_wsl() and not getattr(args, "no_firewall", False):
-            open_firewall(env.split(host)[1], internet=not env.is_lan_only(host), replaces=80)
+            open_firewall(env.listen_port(env.load(ENV_FILE)), internet=not env.is_lan_only(host), replaces=80)
     if not have_game_data():
         die("no client data yet; run ./opendmtq import <folder with your game files>")
     # Folders the containers mount must exist and belong to the user they run as, not be created by
@@ -450,8 +450,8 @@ def cmd_status(args):
     # A move off port 80 at the first start of this version, said here once too.
     moved = env.move_off_80_unsaid(os.path.join(DATA, "state"), "status")
     if moved:
-        print(f"\nThe server moved from port {moved['from']} to {moved['to']}: http://{moved['address']}/. Phones install "
-              "the app again from that address, and PCs connect to it.")
+        first, *rest = env.move_off_80_words(moved)
+        print("\n" + " ".join([first + "."] + rest))
 
 
 def cmd_logs(args):

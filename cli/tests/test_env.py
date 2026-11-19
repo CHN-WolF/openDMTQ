@@ -183,6 +183,31 @@ class HostTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             self.assertIsNone(env.move_off_80_unsaid(folder, "status"))
 
+    def test_a_routers_own_public_port_stays_at_the_move_and_its_forward_is_said(self):
+        # The public port moves with the server's when it was the server's own (80, written or not); one that differs is a
+        # router's, forwarding it to port 80, and stays (DEP-91; main wrote the new port into every address).
+        self.assertEqual(env.address_after_80("192.168.0.10", 8791), "192.168.0.10:8791")
+        self.assertEqual(env.address_after_80("game.example.com:80", 8791), "game.example.com:8791")
+        self.assertEqual(env.address_after_80("game.example.com:8443", 8791), "game.example.com:8443")
+        with tempfile.TemporaryDirectory() as folder:
+            env.note_move_off_80(folder, "game.example.com:8443", "game.example.com:8443", port=8791)
+            moved = env.move_off_80_unsaid(folder, "status")
+            # The server's own ports, whatever the address says.
+            self.assertEqual((moved["from"], moved["to"], moved["address"]), (80, 8791, "game.example.com:8443"))
+        # The words: the address stays, the router's forward goes to the new port, nothing for the phones.
+        self.assertEqual(env.move_off_80_words({"from": 80, "to": 8791, "address": "game.example.com:8443"}),
+                         ["The server moved from port 80 to 8791; its address stays http://game.example.com:8443/",
+                          "On the router(s), forward TCP 8443 to port 8791 of this PC in place of port 80."])
+        # Its own port moved with it: the router forwards the new one, and phones install the app again.
+        self.assertEqual(env.move_off_80_words({"from": 80, "to": 8791, "address": "game.example.com:8791"}, start=True),
+                         ["The server moved from port 80 to 8791: http://game.example.com:8791/",
+                          "On the router(s), forward TCP 8791 to port 8791 of this PC in place of port 80.",
+                          "Phones install the app again from that address (the site's download page says so), and PCs connect to it."])
+        # On a local network address no router stands between: as before.
+        self.assertEqual(env.move_off_80_words({"from": 80, "to": 8791, "address": "192.168.0.10:8791"}),
+                         ["The server moved from port 80 to 8791: http://192.168.0.10:8791/",
+                          "Phones install the app again from that address, and PCs connect to it."])
+
     def test_with_no_way_out_the_address_comes_from_the_machine_itself(self):
         # A closed network may have no gateway: there is no route to ask about, and the setup must not stop for that.
         output = ("1: lo    inet 127.0.0.1/8 scope host lo\n"
