@@ -430,7 +430,8 @@ def _record_row(app, parent, row, recent):
     words.pack(side="left", fill="x", expand=True)
     title = row["title"] or w("play.records.chart", id=row.get("chart", ""))
     widgets.label(words, ui, title, bg=theme.PANEL, wrap_margin=0).pack(fill="x")
-    sub = [row["chart_name"]] if row["chart_name"] else []
+    # The chart as the launcher names a mode everywhere else ("3 LINE Hard 9", as How to play and Controls say it).
+    sub = [choices.chart_words(row["chart_name"])] if row["chart_name"] else []
     if row["at"]:
         sub.append(w.say(i18n.ago(row["at"])))
     if recent and row["new_record"]:

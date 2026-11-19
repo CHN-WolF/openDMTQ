@@ -100,6 +100,16 @@ class Records(Folder):
             said = i18n.ago(now - seconds, now=now)
             self.assertEqual((i18n.Words("en").say(said), i18n.Words("ko").say(said)), (en, ko))
 
+    def test_a_chart_names_its_mode_as_the_launcher_does(self):
+        # The site writes a chart "3LINE Hard 9"; PLAY's records say "3 LINE Hard 9", as How to play and Controls name a
+        # mode (main showed both spellings on one page).
+        from opendmtq_client import values
+        self.assertEqual(values.chart_words("3LINE Hard 9"), "3 LINE Hard 9")
+        self.assertEqual(values.chart_words("2LINE Normal 5"), values.mode("keys_2line") + " Normal 5")
+        # Already spaced, or no mode at its start: as it is.
+        self.assertEqual(values.chart_words("4 LINE Expert 12"), "4 LINE Expert 12")
+        self.assertEqual(values.chart_words("Chart 7"), "Chart 7")
+
     def test_the_records_place_in_both_languages(self):
         self.assertEqual(i18n.Words("en")("play.records.place", n=2, all=5), "#2 of 5")
         self.assertEqual(i18n.Words("ko")("play.records.place", n=2, all=5), "5명 중 2위")

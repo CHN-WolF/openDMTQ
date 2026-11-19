@@ -212,6 +212,12 @@ def mode(name):
     return "%d LINE" % LANES[name]
 
 
+def chart_words(name):
+    """A chart's name as a server gives it ("3LINE Hard 9", as the site's pages write it) with its mode named as the
+    launcher names one everywhere else (mode: "3 LINE Hard 9"); anything else as it is."""
+    return re.sub(r"^(\d)\s*LINE\b", r"\1 LINE", str(name))
+
+
 def key_name(text):
     """A key's name typed in any case ("leftbracket") as the player takes it ("LeftBracket"); None for one it does not
     take."""

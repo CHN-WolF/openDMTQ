@@ -1345,6 +1345,10 @@ def records_check(app, site, out, tag, problems):
         # Three of each list, no more: the rest is on the site.
         if shown.count("812,300") != 2:
             problems.append("%s: the records' lists do not each show three rows" % name)
+        # A chart's mode as How to play and Controls name it: "3 LINE Hard 9" (main: "3LINE Hard 9" on the same page).
+        glued = [t for t in shown if re.search(r"\dLINE", t)]
+        if glued or not any(t.startswith("3 LINE Hard 9") for t in shown):
+            problems.append("%s: PLAY's records name the charts %r" % (name, glued or shown))
         # The page at its end, where the card is whole.
         app.body.canvas.yview_moveto(1.0)
         settle(app)
