@@ -387,8 +387,9 @@ Three of the launcher's parts reach past its own pages:
 - **The connection test** (`connection.py`; the Online page's Test connection, and `OpenDMTQ-cmd.exe --test-server`)
   follows the way to the server a step at a time: the address, the name's lookup, the port, the answer as an OpenDMTQ
   server (`client.php?about`) and its certificate over HTTPS, the version, the sign-in, the game server's health, the
-  broadcast state, the downloads by their heads, and the round trip. When nothing answers on the port, it looks for a
-  server on 8791 and the ports after it: a server updated to 0.11.0 left port 80.
+  broadcast state, the downloads by their heads, and the round trip. When nothing answers on the port, or another
+  program does, it looks for a server on 8791 and the ports after it (over HTTPS with the old address's own authority):
+  a server updated to 0.11.0 left port 80.
 - **The report** (`report.py`; Help's Save a report, and `--report FILE`) puts the launcher's and the end of the
   player's logs, the settings, the displays, the sound devices, Windows, the graphics cards and the last connection
   test in one zip, with the Windows user's name, every site ID, every server's address and name (by their forms and

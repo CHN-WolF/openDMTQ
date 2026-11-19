@@ -113,7 +113,7 @@ on the clipboard:
 | :--- | :--- |
 | Address | The address as the launcher reads it: its scheme, host and port |
 | Name lookup | The host's name, and the addresses it leads to |
-| Port | A connection to the port: taken, refused, or no answer within 5 seconds |
+| Port | A connection to the port: taken, refused, no answer within 5 seconds, or no way from this PC to it |
 | OpenDMTQ server | Its answer as an OpenDMTQ server: its name and version, and over HTTPS whether Windows or the server's own authority vouches for its certificate |
 | Version | The server's version against the launcher's |
 | Sign-in | Whether the server still takes the launcher's sign-in (asked with it, no password) |
@@ -124,10 +124,12 @@ on the clipboard:
 
 ![The connection test of 192.168.1.10:8791 on the Online page, every step passed: address, name lookup, port, the OpenDMTQ server and its version, sign-in, game server, broadcasts, downloads and round trip, each with its time, with Copy at the card's top](images/client-test.png)
 
-A step after one that did not get through says it was not tried. When nothing answers on the address's port, the test
-also asks the same host on 8791 and the ports a new server takes when that one is taken (to 8799): an OpenDMTQ server
-found there is named, with **Use this address**, which plays on it from then on with the sign-in kept. A server updated
-to 0.11.0 moved from port 80 to 8791, and a launcher set up for port 80 finds it so. The test changes nothing else, and
+A step after one that did not get through says it was not tried. When nothing answers on the address's port, or
+another program answers there (a web server that took the port, or one with a certificate this PC does not trust), the
+test also asks the same host on 8791 and the ports a new server takes when that one is taken (to 8799), over HTTPS
+with the server's own authority the launcher trusts for the old address: an OpenDMTQ server found there is named, with
+**Use this address**, which plays on it from then on with the sign-in and that authority kept. A server updated to
+0.11.0 moved from port 80 to 8791, and a launcher set up for port 80 finds it so. The test changes nothing else, and
 its last result goes into the report. `OpenDMTQ-cmd.exe --test-server` runs the same test on the command line.
 
 ### <a id="a-report-for-whoever-helps"></a>A report for whoever helps

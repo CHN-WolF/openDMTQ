@@ -40,6 +40,36 @@ class Other(socketserver.ThreadingTCPServer):
         threading.Thread(target=self.serve_forever, kwargs={"poll_interval": stub.POLL}, daemon=True).start()
 
 
+class Web(socketserver.ThreadingTCPServer):
+    """Another web server on a port: every page an HTML page, as a web server that took a port after OpenDMTQ left it."""
+
+    allow_reuse_address = True
+
+    def __init__(self):
+        import http.server
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                # Quiet: the test's own output only.
+                pass
+
+            def do_GET(self):
+                data = b"<!doctype html><title>It works</title>"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        super().__init__(("127.0.0.1", 0), Handler)
+        self.url = "http://127.0.0.1:%d" % self.server_address[1]
+        threading.Thread(target=self.serve_forever, kwargs={"poll_interval": stub.POLL}, daemon=True).start()
+
+    def stop(self):
+        self.shutdown()
+        self.server_close()
+
+
 class ConnectionTest(Folder):
     def setUp(self):
         super().setUp()
@@ -208,6 +238,44 @@ class ConnectionTest(Folder):
                          ("bad", "Something answers on the port, and it is no OpenDMTQ server for PCs."))
         self.assertTrue(result.failed())
 
+    def test_another_web_server_on_the_old_port_and_the_server_moved(self):
+        # The server moved to 8791 and a web server took the port the launcher knows it by: the move is looked for all
+        # the same, and the server found there is offered.
+        _host, port = srv.host_port(self.site.url)
+        web = Web()
+        try:
+            with mock.patch.object(connection, "PORTS", (closed_port(), port)):
+                result, steps, _ = self.run_test(web.url, signed=False)
+        finally:
+            web.stop()
+        self.assertEqual(result.moved, self.site.url)
+        self.assertEqual((steps["server"].state, self.said(steps["server"])),
+                         ("bad", "Something answers on the port, and it is no OpenDMTQ server for PCs. An OpenDMTQ server "
+                                 "answers at %s." % self.site.url))
+        self.assertEqual(self.said(steps["server"], KO), "포트에서 응답은 오지만 PC용 OpenDMTQ 서버가 아닙니다. %s에서 "
+                                                         "OpenDMTQ 서버가 응답합니다." % self.site.url)
+        self.assertEqual(EN.say(result.verdict()), "Another server answers at %s. An OpenDMTQ server answers at %s."
+                         % (web.url, self.site.url))
+        self.assertEqual(KO.say(result.verdict()), "%s에서는 다른 서버가 응답하고, %s에서 OpenDMTQ 서버가 응답합니다."
+                         % (web.url, self.site.url))
+        self.assertEqual([steps[k].state for k in connection.STEPS[4:]], ["skip"] * 6)
+
+    def test_a_network_this_pc_cannot_reach(self):
+        # No way from this PC to the address (no route, the network down): said as such at once, not as a wait of 5 s.
+        port, probed = closed_port(), closed_port()
+        unreachable = OSError(101, "Network is unreachable")
+        with mock.patch.object(connection, "PORTS", (probed,)), \
+                mock.patch.object(socket, "create_connection", side_effect=unreachable):
+            result, steps, _ = self.run_test("http://127.0.0.1:%d" % port, signed=False)
+        self.assertEqual(steps["port"].state, "bad")
+        self.assertEqual(self.said(steps["port"]),
+                         "127.0.0.1 cannot be reached from this PC on port %d ([Errno 101] Network is unreachable), and no "
+                         "OpenDMTQ server answers on ports %d to %d either." % (port, probed, probed))
+        self.assertEqual(self.said(steps["port"], KO),
+                         "이 PC에서 127.0.0.1의 %d 포트에 연결할 수 없습니다([Errno 101] Network is unreachable). %d~%d "
+                         "포트에서도 OpenDMTQ 서버가 응답하지 않습니다." % (port, probed, probed))
+        self.assertIsNone(result.moved)
+
     def test_an_opendmtq_too_old_for_pcs(self):
         self.site.old = True
         result, steps, _ = self.run_test(signed=False)
@@ -313,8 +381,8 @@ class ConnectionTest(Folder):
         self.assertIn("No server to test", said)
 
 
-class Certificate(Folder):
-    """Over HTTPS: the server's own authority trusted for it alone, or a certificate this PC does not trust."""
+class Https(Folder):
+    """A server over HTTPS with a certificate of its own authority (test_server.OwnAuthority's), and another authority."""
 
     def setUp(self):
         super().setUp()
@@ -325,6 +393,10 @@ class Certificate(Folder):
     def tearDown(self):
         self.https.tearDown()
         super().tearDown()
+
+
+class Certificate(Https):
+    """Over HTTPS: the server's own authority trusted for it alone, or a certificate this PC does not trust."""
 
     def test_a_certificate_this_pc_does_not_trust(self):
         result = connection.run(self.https.base, None)
@@ -338,3 +410,95 @@ class Certificate(Folder):
         result = connection.run(self.https.base, None)
         self.assertEqual(EN.say(result.step("server").said), "Over HTTPS, OpenDMTQ 0.8.0, over HTTPS with the server's own "
                                                              "certificate, trusted for this server alone.")
+
+
+class MovedOverHttps(Https):
+    """A server over HTTPS with its own authority that moved to another port of the same host (8791 and the ports a new
+    server takes): found with the authority the launcher trusts for its old address, and Use this address takes the
+    authority along to the new one."""
+
+    def setUp(self):
+        super().setUp()
+        # The address the launcher knew it by, before its port moved: nothing there now, its authority trusted there.
+        self.old = "https://127.0.0.1:%d" % closed_port()
+        self.ca = self.https.authority(self.https.mine)
+        srv.trust(self.old, self.ca)
+
+    def test_found_with_the_authority_of_its_old_address(self):
+        with mock.patch.object(connection, "PORTS", (closed_port(), self.https.port)):
+            result = connection.run(self.old, None)
+        self.assertEqual(result.moved, self.https.base)
+        self.assertEqual(EN.say(result.verdict()), "Nothing answers at %s. An OpenDMTQ server answers at %s."
+                         % (self.old, self.https.base))
+        # The authority stays the old address's alone until the move is chosen: the test changes nothing it keeps.
+        self.assertEqual(srv._trusted(), {self.old: self.ca})
+
+    def test_another_servers_authority_finds_nothing(self):
+        # The old address's authority vouches for no other server's certificate on the new port.
+        srv.trust(self.old, self.https.authority(self.https.other))
+        with mock.patch.object(connection, "PORTS", (self.https.port,)):
+            result = connection.run(self.old, None)
+        self.assertIsNone(result.moved)
+
+    def test_use_this_address_takes_the_authority_along(self):
+        from opendmtq_client import actions
+        state = st.LauncherState()
+        state.add_server(self.old, "Over HTTPS")
+        actions.move_server(state, self.old, self.https.base)
+        self.assertEqual(state.current, self.https.base)
+        # Trusted for the address it plays on now, and no longer for the one it left.
+        self.assertEqual(srv._trusted(), {self.https.base: self.ca})
+        self.assertEqual(srv.about(self.https.base)["name"], "Over HTTPS")
+        # A test of the new address afterwards: the server's own certificate, trusted for it.
+        result = connection.run(self.https.base, None)
+        self.assertEqual(result.step("server").said.key, "test.server.ok_https_own")
+
+    def test_another_program_with_its_own_certificate_on_the_old_port(self):
+        # Another program took the old port, answering HTTPS with a certificate of its own authority, which the old
+        # address's (the server's) does not vouch for; the server answers on a port a new server takes: offered there.
+        other = OtherHttps(self.https.other)
+        try:
+            srv.trust(other.base, self.ca)
+            with mock.patch.object(connection, "PORTS", (self.https.port,)):
+                result = connection.run(other.base, None)
+        finally:
+            other.stop()
+        self.assertEqual(result.moved, self.https.base)
+        step = result.step("server")
+        self.assertEqual((step.state, step.said.key), ("bad", "test.server.certificate_moved"))
+        self.assertTrue(EN.say(step.said).endswith("An OpenDMTQ server answers at %s." % self.https.base), EN.say(step.said))
+        self.assertEqual(EN.say(result.verdict()), "Another server answers at %s. An OpenDMTQ server answers at %s."
+                         % (other.base, self.https.base))
+
+
+class OtherHttps:
+    """Another program over HTTPS on a port of its own, with the certificate of the authority in `folder` (tls.ensure's)."""
+
+    def __init__(self, folder):
+        import http.server
+        import ssl
+
+        class About(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                # Quiet: the test's own output only.
+                pass
+
+            def do_GET(self):
+                data = b"<!doctype html><title>It works</title>"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(os.path.join(folder, "serve", "server.crt"), os.path.join(folder, "serve", "server.key"))
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), About)
+        self.httpd.socket = context.wrap_socket(self.httpd.socket, server_side=True)
+        self.port = self.httpd.server_address[1]
+        self.base = "https://127.0.0.1:%d" % self.port
+        threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": stub.POLL}, daemon=True).start()
+
+    def stop(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()

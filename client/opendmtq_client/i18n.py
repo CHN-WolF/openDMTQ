@@ -88,6 +88,14 @@ TEXT = {
                                 "{host}의 {port} 포트가 연결을 거부합니다. {url}에서 OpenDMTQ 서버가 응답합니다."),
     "test.port.timeout_moved": ("No answer from port {port} of {host} in {seconds} s. An OpenDMTQ server answers at {url}.",
                                 "{host}의 {port} 포트가 {seconds}초 안에 응답하지 않습니다. {url}에서 OpenDMTQ 서버가 응답합니다."),
+    "test.port.unreachable_none": ("{host} cannot be reached from this PC on port {port} ({why}), and no OpenDMTQ server "
+                                   "answers on ports {first} to {last} either.",
+                                   "이 PC에서 {host}의 {port} 포트에 연결할 수 없습니다({why}). {first}~{last} 포트에서도 "
+                                   "OpenDMTQ 서버가 응답하지 않습니다."),
+    "test.port.unreachable_moved": ("{host} cannot be reached from this PC on port {port} ({why}). An OpenDMTQ server "
+                                    "answers at {url}.",
+                                    "이 PC에서 {host}의 {port} 포트에 연결할 수 없습니다({why}). {url}에서 OpenDMTQ 서버가 "
+                                    "응답합니다."),
     "test.server.ok": ("{name}, OpenDMTQ {version}.", "{name}, OpenDMTQ {version}."),
     "test.server.ok_https_windows": ("{name}, OpenDMTQ {version}, over HTTPS with a certificate Windows trusts.",
                                      "{name}, OpenDMTQ {version}. HTTPS 인증서는 Windows가 신뢰하는 인증서입니다."),
@@ -95,10 +103,18 @@ TEXT = {
                                  "{name}, OpenDMTQ {version}. HTTPS 인증서는 이 서버에만 신뢰하는 서버 자체 인증서입니다."),
     "test.server.certificate": ("This PC does not trust the certificate the server answers HTTPS with: {why}.",
                                 "서버가 HTTPS에 쓰는 인증서를 이 PC가 신뢰하지 않습니다: {why}."),
+    "test.server.certificate_moved": ("This PC does not trust the certificate the server answers HTTPS with: {why}. An "
+                                      "OpenDMTQ server answers at {url}.",
+                                      "서버가 HTTPS에 쓰는 인증서를 이 PC가 신뢰하지 않습니다: {why}. {url}에서 OpenDMTQ "
+                                      "서버가 응답합니다."),
     "test.server.too_old": ("An OpenDMTQ older than 0.8 answers, without the part for PCs.",
                             "PC 클라이언트를 지원하지 않는 0.8 이전 버전의 OpenDMTQ가 응답합니다."),
     "test.server.not_opendmtq": ("Something answers on the port, and it is no OpenDMTQ server for PCs.",
                                  "포트에서 응답은 오지만 PC용 OpenDMTQ 서버가 아닙니다."),
+    "test.server.not_opendmtq_moved": ("Something answers on the port, and it is no OpenDMTQ server for PCs. An OpenDMTQ "
+                                       "server answers at {url}.",
+                                       "포트에서 응답은 오지만 PC용 OpenDMTQ 서버가 아닙니다. {url}에서 OpenDMTQ 서버가 "
+                                       "응답합니다."),
     "test.server.error": ("{error}", "{error}"),
     "test.version.same": ("{version}, as this launcher.", "이 런처와 같은 {version} 버전입니다."),
     "test.version.older": ("The server runs {server}, older than this launcher's {launcher}.",
@@ -153,6 +169,8 @@ TEXT = {
     "test.verdict.running": ("Testing the connection...", "연결을 테스트하는 중..."),
     "test.verdict.moved": ("Nothing answers at {url}. An OpenDMTQ server answers at {found}.",
                            "{url}에서는 응답이 없고, {found}에서 OpenDMTQ 서버가 응답합니다."),
+    "test.verdict.moved_other": ("Another server answers at {url}. An OpenDMTQ server answers at {found}.",
+                                 "{url}에서는 다른 서버가 응답하고, {found}에서 OpenDMTQ 서버가 응답합니다."),
     "test.verdict.bad": ("{step}: {found}", "{step}: {found}"),
     "test.verdict.warn": ("The server answers. {step}: {found}", "서버가 응답합니다. {step}: {found}"),
     "test.verdict.version.older": ("The server answers; it runs {server}, older than this launcher's {launcher}.",

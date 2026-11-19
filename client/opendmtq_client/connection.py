@@ -4,10 +4,13 @@ long it took.
 
   address     the address as the launcher reads it (server.normalize): its scheme, host and port
   lookup      the host's name looked up: its addresses (nothing to look up for an address given as one)
-  port        a connection to the port: open, refused, or no answer in time. When nothing answers there, the same host on
-              8791 and the ports a new server takes when 8791 is taken (to 8799): an OpenDMTQ server found there is named,
-              with its address to use (a server updated to 0.11.0 moved from port 80 to 8791)
-  server      the answer as an OpenDMTQ server (client.php?about): its name and version, and over HTTPS whose certificate
+  port        a connection to the port: open, refused, no answer in time, or no way from this PC to it (a network it
+              cannot reach). When nothing answers there, the same host on 8791 and the ports a new server takes when 8791
+              is taken (to 8799): an OpenDMTQ server found there is named, with its address to use (a server updated to
+              0.11.0 moved from port 80 to 8791), over HTTPS checked with the authority trusted for the old address
+  server      the answer as an OpenDMTQ server (client.php?about): its name and version, and over HTTPS whose certificate.
+              When another program answers there instead (another web server took the port, or one with a certificate
+              this PC does not trust), the same look for the server on those ports
   version     the server's version against this launcher's
   signin      the sign-in this launcher keeps for the server, still taken (asked with its cookie: no password)
   game        the game server's own answer, as the game asks it at its start (its health page: its patch, maintenance)
@@ -94,7 +97,10 @@ class Result:
         after "the server answers" (in its own words where the step's would say the server again: an older version, no
         sign-in, maintenance), or that everything answers."""
         if self.moved:
-            return i18n.Said("test.verdict.moved", url=self.url, found=self.moved)
+            # Found elsewhere when nothing answered at the address, or when another server answered there instead (the
+            # port took the connection: its step got through).
+            key = "test.verdict.moved_other" if self.step("port").state == "ok" else "test.verdict.moved"
+            return i18n.Said(key, url=self.url, found=self.moved)
         for state in ("bad", "warn"):
             first = next((s for s in self.steps if s.state == state and s.said), None)
             if first is not None:
@@ -229,28 +235,35 @@ def _steps(result, address, server, end, stop, cancel):
         return stop("lookup")
     # 3. The port.
     started = time.perf_counter()
-    answer = _connect(found, port)
+    answer, why = _connect(found, port)
     if answer != "open":
         moved = _moved(parts.scheme, host, port)
         result.moved = moved
         key = answer + ("_moved" if moved else "_none")
         end(result.step("port").done("bad", key, _ms(started), host=host, port=port, url=moved or "",
-                                     first=PORTS[0], last=PORTS[-1], seconds=CONNECT_TIMEOUT))
+                                     first=PORTS[0], last=PORTS[-1], seconds=CONNECT_TIMEOUT, why=why))
         return stop("port")
     end(result.step("port").done("ok", "ok", _ms(started), host=host, port=port))
-    # 4. The answer as an OpenDMTQ server, and over HTTPS whose certificate.
+    # 4. The answer as an OpenDMTQ server, and over HTTPS whose certificate. Another program answering there (a web
+    # server that took the port, one with a certificate this PC does not trust): the server looked for on the ports a
+    # new server takes, as when nothing answers.
     started = time.perf_counter()
     trusted = None
     if parts.scheme == "https":
         trusted = _certificate(url, host, port)
         if isinstance(trusted, Exception):
-            end(result.step("server").done("bad", "certificate", _ms(started), why=_reason(trusted)))
+            moved = _moved(parts.scheme, host, port)
+            result.moved = moved
+            end(result.step("server").done("bad", "certificate_moved" if moved else "certificate", _ms(started),
+                                           why=_reason(trusted), url=moved or ""))
             return stop("server")
     try:
         about = srv.about(url, timeout=srv.TIMEOUT)
     except srv.ServerError as e:
         key = {"error.server.too_old": "too_old", "error.server.not_opendmtq": "not_opendmtq"}.get(e.key, "error")
-        end(result.step("server").done("bad", key, _ms(started), error=e))
+        moved = _moved(parts.scheme, host, port) if key == "not_opendmtq" else None
+        result.moved = moved
+        end(result.step("server").done("bad", key + ("_moved" if moved else ""), _ms(started), error=e, url=moved or ""))
         return stop("server")
     over = {None: "", "windows": "https_windows", "own": "https_own"}[trusted]
     end(result.step("server").done("ok", "ok" + ("_" + over if over else ""), _ms(started), name=about["name"],
@@ -380,32 +393,46 @@ def _is_address(host):
 
 
 def _connect(addresses, port, timeout=CONNECT_TIMEOUT):
-    """A TCP connection to the port at the first of the addresses that takes it: "open", else how the last one answered,
-    "refused" or "timeout"."""
-    answer = "timeout"
+    """A TCP connection to the port at the first of the addresses that takes it: ("open", ""), else how the last one
+    answered and the system's words for it: "refused", "timeout" (no answer in time) or "unreachable" (no way from this
+    PC to it: no route, a network that is down; said at once, never as a wait)."""
+    answer, why = "timeout", ""
     for address in addresses:
         try:
             with socket.create_connection((address, port), timeout=timeout):
-                return "open"
+                return "open", ""
         except ConnectionRefusedError:
-            answer = "refused"
+            answer, why = "refused", ""
         except (socket.timeout, TimeoutError):
-            answer = "timeout"
-        except OSError:
-            # Unreachable, or no route: as no answer.
-            answer = "timeout"
-    return answer
+            answer, why = "timeout", ""
+        except OSError as e:
+            # Unreachable, or no route: its own words, as the system gives them.
+            answer, why = "unreachable", str(e)[:160]
+    return answer, why
+
+
+def _old_authority(scheme, host, port):
+    """The server's own authority as the launcher trusts it for this address (server.trust), however the address was
+    written: with its port, or without it when it is the scheme's own; None when there is none."""
+    shown = "[%s]" % host if ":" in host else host
+    bases = ["%s://%s:%d" % (scheme, shown, port)]
+    if port == (443 if scheme == "https" else 80):
+        bases.append("%s://%s" % (scheme, shown))
+    return next((ca for ca in map(srv.authority, bases) if ca), None)
 
 
 def _moved(scheme, host, port):
     """The address of an OpenDMTQ server on the same host on one of PORTS (the address's own port aside), the lowest
-    that answers as one, or None. The ports are asked together, each for PROBE_TIMEOUT."""
+    that answers as one, or None. The ports are asked together, each for PROBE_TIMEOUT. Over HTTPS each is checked with
+    the authority trusted for the old address as well (the same server on another port of its host has the same
+    certificates: one that moved keeps them)."""
     found = {}
+    ca = _old_authority(scheme, host, port)
 
     def probe(candidate):
         url = "%s://%s:%d" % (scheme, "[%s]" % host if ":" in host else host, candidate)
         try:
-            srv.about(url, timeout=PROBE_TIMEOUT)
+            srv.about(url, timeout=PROBE_TIMEOUT, ca=ca)
             found[candidate] = url
         except srv.ServerError:
             pass

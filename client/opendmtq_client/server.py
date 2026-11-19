@@ -151,11 +151,17 @@ def trust(base, ca):
     os.replace(tmp, _trust_path())
 
 
-def _opener(base):
+def authority(base):
+    """The certificate authority trusted for the server at `base` alone (trust), as PEM text; None when there is none."""
+    return _trusted().get(base) or None
+
+
+def _opener(base, ca=None):
     """What a request to `base` goes through: the plain opener, or for a server over HTTPS with an authority of its own,
     one whose certificate check takes that authority as well as Windows' (ssl.create_default_context), with the same
-    refusal to follow redirects."""
-    ca = _trusted().get(base) if base.startswith("https://") else None
+    refusal to follow redirects. `ca`: the authority to take when `base` has none of its own (a server's at its old
+    address, asked on another port of the same host: the connection test's look for a server that moved)."""
+    ca = (_trusted().get(base) or ca) if base.startswith("https://") else None
     if not ca:
         return _OPENER
     opener = _OWN_OPENERS.get((base, ca))
@@ -200,10 +206,11 @@ def _unreachable(base, e):
     return ServerError("cannot reach %s (%s)" % (base, reason), key, base=base)
 
 
-def _call(base, path, data=None, cookie=None, timeout=TIMEOUT):
-    """One request to the site; (status, its JSON answer, its headers). A status of 400 or more comes back as well."""
+def _call(base, path, data=None, cookie=None, timeout=TIMEOUT, ca=None):
+    """One request to the site; (status, its JSON answer, its headers). A status of 400 or more comes back as well.
+    `ca`: an authority to check its certificate with when `base` has none of its own (_opener)."""
     try:
-        with _opener(base).open(_request(base + path, data, cookie), timeout=timeout) as response:
+        with _opener(base, ca).open(_request(base + path, data, cookie), timeout=timeout) as response:
             body, status, headers = response.read(), response.status, response.headers
     except urllib.error.HTTPError as e:
         body, status, headers = e.read(), e.code, e.headers
@@ -224,14 +231,15 @@ def _call(base, path, data=None, cookie=None, timeout=TIMEOUT):
     return status, answer, headers
 
 
-def about(base, timeout=TIMEOUT):
+def about(base, timeout=TIMEOUT, ca=None):
     """The server's word on itself: {"opendmtq", "name", "address", "app"}; ServerError unless it is an OpenDMTQ server.
-    `timeout`: how long to wait for its answer (the ready check waits less than a connect)."""
-    status, answer, _ = _call(base, "/opendmtq/client.php?about", timeout=timeout)
+    `timeout`: how long to wait for its answer (the ready check waits less than a connect). `ca`: an authority to check
+    its certificate with when `base` has none of its own (the server's at its old address: a server that moved)."""
+    status, answer, _ = _call(base, "/opendmtq/client.php?about", timeout=timeout, ca=ca)
     if status != 200 or not isinstance(answer, dict) or "opendmtq" not in answer:
         # A page that is not the client's answer: an OpenDMTQ from before the PC client (every one since 0.1 answers its
         # health page with its game's patch), or another site.
-        if _older_opendmtq(base):
+        if _older_opendmtq(base, ca):
             raise ServerError("%s runs an OpenDMTQ older than 0.8, without the PC client's part" % base,
                               "error.server.too_old", base=base)
         raise ServerError("%s is not an OpenDMTQ server for PCs" % base, "error.server.not_opendmtq", base=base)
@@ -239,11 +247,11 @@ def about(base, timeout=TIMEOUT):
             "address": str(answer.get("address") or ""), "app": bool(answer.get("app"))}
 
 
-def _older_opendmtq(base):
+def _older_opendmtq(base, ca=None):
     """True when the site answers OpenDMTQ's health page as every OpenDMTQ does (a JSON object with its game's patch):
-    an OpenDMTQ from before the PC client, which has no client.php."""
+    an OpenDMTQ from before the PC client, which has no client.php. `ca` as about() takes it."""
     try:
-        status, answer, _ = _call(base, "/opendmtq/health.php")
+        status, answer, _ = _call(base, "/opendmtq/health.php", ca=ca)
     except ServerError:
         # It answered the first question and not this one: whatever it is, it is no OpenDMTQ for PCs.
         return False
