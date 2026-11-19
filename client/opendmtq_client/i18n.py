@@ -785,6 +785,10 @@ TEXT = {
     "setup.waiting": ("Waiting for the game to close...", "게임이 닫히기를 기다리는 중..."),
     "setup.game.install": ("Installing replaces the game program: it waits until the game is closed.",
                            "설치하면 게임 프로그램이 바뀌므로 게임이 닫힐 때까지 기다립니다."),
+    "setup.game.update": ("Updating replaces the game program: it waits until the game is closed.",
+                          "업데이트하면 게임 프로그램이 바뀌므로 게임이 닫힐 때까지 기다립니다."),
+    "setup.game.repair": ("Repairing puts back the game program's files: it waits until the game is closed.",
+                          "복구하면 게임 프로그램 파일을 되돌리므로 게임이 닫힐 때까지 기다립니다."),
     "setup.game.uninstall": ("Uninstalling removes the game program: it waits until the game is closed.",
                              "제거하면 게임 프로그램도 지워지므로 게임이 닫힐 때까지 기다립니다."),
 

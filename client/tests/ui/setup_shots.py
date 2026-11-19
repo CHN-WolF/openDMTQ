@@ -602,9 +602,22 @@ def main():
 
     with mock.patch.object(installer, "run_setup", setup_fails):
         run("failed", installer.Installer, [lambda made: made.work("repair"), lambda made: settle(made.root, 1.5)])
-    # The game open: the work waits for it.
+    # The game open: the work waits for it, the column at the work's own step and the words its own (main showed
+    # CHOOSE and OPEN, the first choice's, and "Installing replaces the game program" for a repair).
+    def waits_for_the_game(made, action, steps):
+        made.work(action)
+        settle(made.root, 0.6)
+        shown = [w.cget("text") for w in widgets_of(made.root) if w.winfo_class() == "Label" and w.winfo_ismapped()]
+        if made.flow != (steps, 1) or made.words("setup.game." + action) not in shown:
+            problems.append("setup-%s: %s waiting for the game shows %r, saying %r" % (tag, action, made.flow, shown))
+
     with mock.patch.object(installer, "game_running", return_value=True):
-        run("game-open", installer.Installer, [lambda made: made.work("repair")])
+        run("game-open", installer.Installer,
+            [lambda made: waits_for_the_game(made, "repair", ("choose", "repair", "done"))])
+        program("0.0.1")
+        run("game-open-update", installer.Installer,
+            [lambda made: waits_for_the_game(made, "update", ("choose", "update", "done"))])
+        program(__version__)
     # ---- Uninstall: the choice with the sizes, the work, both ends.
     data()
 

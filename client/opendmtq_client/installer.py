@@ -453,6 +453,8 @@ class Installer:
 
         def changed(value):
             chosen["value"] = value
+            # The steps of what is chosen, kept for the pages its work may come to (waiting for the game, a failure).
+            self.flow = (steps_of[value], 0)
             self.window.steps.show([w("setup.step." + key) for key in steps_of[value]], 0)
             main_button.set_text(main_words[value])
             # The launcher's line follows the choice: opening the launcher closes nothing.
@@ -574,11 +576,12 @@ class Installer:
         thread.start()
         self.root.after(POLL, wait)
 
-    def wait_page(self, message, detail, again):
-        """Work that waits for the game to close: what and why; once the game has closed the work goes on by itself
-        (`again`), as the words say. Close leaves it undone."""
+    def wait_page(self, message, detail, again, flow=None):
+        """Work that waits for the game to close: what and why, the column at the work's step (`flow`: (steps, step),
+        else the page's own); once the game has closed the work goes on by itself (`again`), as the words say. Close
+        leaves it undone."""
         w = self.words
-        steps, step = getattr(self, "flow", (("ready",), 0))
+        steps, step = flow or getattr(self, "flow", (("ready",), 0))
         content = self._page(w("setup.title.wait"), message, steps, step)
         card = self.window.card(content)
         self.window.lines(card.body, [("change", detail)])
@@ -658,16 +661,19 @@ class Installer:
         """Install, update, repair or go back: Velopack's setup without a window, its progress on the page."""
         self.action = action
         w = self.words
+        # The column's steps of this work: on a PC without OpenDMTQ READY, INSTALL, DONE; else from the choice.
+        steps = ("ready", "install", "done") if action == "install" else (
+            ("choose", {"back": "install"}.get(action, action), "done"))
         if installed_version(self.folder) is not None and game_running():
-            # Velopack replaces the player's files: the game playing from them would lose them mid-song.
-            self.wait_page(w("setup.game"), w("setup.game.install"), lambda: self.work(action))
+            # Velopack replaces the player's files: the game playing from them would lose them mid-song. Said in the
+            # work's own words (going back to an older version installs it), at the work's step.
+            why = {"update": "setup.game.update", "repair": "setup.game.repair"}.get(action, "setup.game.install")
+            self.wait_page(w("setup.game"), w(why), lambda: self.work(action), flow=(steps, 1))
             return
         # Before the launcher can start: it takes the server at its first start.
         self._hand_over()
         titles = {"install": "setup.title.installing", "back": "setup.title.installing",
                   "update": "setup.title.updating", "repair": "setup.title.repairing"}
-        steps = ("ready", "install", "done") if action == "install" else (
-            ("choose", {"back": "install"}.get(action, action), "done"))
         lead = w("setup.work.%s.line" % action, v=__version__)
         self.progress = self.progress_page(w(titles[action]), lead, steps, 1, [name for name, _s, _m in SETUP_STEPS])
         self.setup_log = SetupLog(self.log_path)
@@ -768,15 +774,17 @@ class Installer:
         from opendmtq_client import removal
         self.action = "uninstall"
         w = self.words
+        # The column's steps of the uninstall, at its own step (from Windows' Apps it starts at YOUR DATA).
+        steps, step = (("data", "uninstall", "done"), 1) if self.from_apps else (("choose", "data", "uninstall", "done"), 2)
         if game_running():
             # The player's files go: the game playing from them would lose them mid-song.
-            self.wait_page(w("setup.game"), w("setup.game.uninstall"), lambda: self.uninstall(choice))
+            self.wait_page(w("setup.game"), w("setup.game.uninstall"), lambda: self.uninstall(choice),
+                           flow=(steps, step))
             return
         if not installed.updater(self.folder):
             self.failed(w("setup.not_installed", folder=self.folder))
             return
         stages = ["remove"] + (["data"] if choice == "all" else []) + ["logs"]
-        steps, step = (("data", "uninstall", "done"), 1) if self.from_apps else (("choose", "data", "uninstall", "done"), 2)
         self.uninstall_steps = steps
         self.progress = self.progress_page(w("setup.title.uninstalling"), w("setup.lead.uninstall"), steps, step, stages)
         self.choice, self.stages = choice, stages
