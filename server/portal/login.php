@@ -15,20 +15,27 @@ if (isset($_GET['logout'])) {
 }
 // The message to show, as a key of STRINGS (in the page's language).
 $error = '';
+// A ban's own words, made with its reason, shown in place of the message's key for a banned player's account.
+$banned = '';
 // A one-time link (the PC client's My page on the site, the admin API's): this browser signed in to its account, once,
 // in the minute after it was made, whoever it was signed in as, then on to its page. Not from another site's page, which
 // would sign a visitor in to an account of its own choosing; an account that is off now signs in nobody.
 if (isset($_GET['once'])) {
     $link = from_another_site() ? null : once_take((string)$_GET['once']);
     $row = $link !== null ? site_account($link['account']) : null;
-    if ($row !== null && !$row['off'] && dl_key() !== '') {
+    // The ban of the player the account is linked to, as the sign-in form checks it (banned since the link was made, or a
+    // link the admin API made for a banned player's account).
+    $ban = $row !== null ? site_ban($row) : null;
+    if ($row !== null && !$row['off'] && dl_key() !== '' && $ban === null) {
         dl_sign_in((string)$row['name']);
         header('Cache-Control: no-store');
         header('Location: ' . $link['next'], true, 303);
         exit;
     }
-    // Used, run out or refused: the sign-in page says so, above its form (signed in already, on to the page as below).
-    $error = 'signin.once_used';
+    // Used, run out or refused: the sign-in page says so, above its form (signed in already, on to the page as below); a
+    // banned player's account says why, in the owner's words, as the form does.
+    $error = $ban !== null && !$row['off'] ? 'signin.banned' : 'signin.once_used';
+    $banned = $ban !== null && !$row['off'] ? site_ban_words($ban) : '';
 }
 // Already signed in (this form sent again, a back button): on to the page, but not into a second
 // download; the install box has the button.
@@ -44,8 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && from_another_site()) {
     exit;
 }
 
-// A ban's own words, made with its reason, shown in place of the message's key for a banned player's account.
-$banned = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // The ID as typed, without the space a phone's keyboard may add after a word.
     $user = trim((string)($_POST['user'] ?? ''));

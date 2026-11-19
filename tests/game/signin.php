@@ -1,10 +1,12 @@
 <?php
 /*
- * The site's sign-in for the owner: tests/game/protocol.sh runs this inside the throwaway server, after the contract, on
- * its database and state folder, at its own address.
+ * The site's sign-in for the owner and a banned player's one-time link: tests/game/protocol.sh runs this inside the
+ * throwaway server, after the contract, on its database and state folder, at its own address.
  *
  *   - the owner's ID, of every length the server takes for it (1 to 40 of A-Z, a-z, 0-9, . _ -, as owner.pass keeps it):
- *     the sign-in form's cookie signs the owner in on the next page.
+ *     the sign-in form's cookie signs the owner in on the next page;
+ *   - a one-time link of an account whose player is banned now signs nobody in, and the sign-in page says why, with the
+ *     owner's reason, as the form does.
  *
  * Usage: php tests/game/signin.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
@@ -75,6 +77,40 @@ foreach (['j', 'jg', 'own', 'admin', str_repeat('o', 20), 'the-owner-of-this-ser
         . ' and stays signed in on the next page',
         $status === 303 && $cookie !== '' && $next === 200, "$status $next " . ($cookie !== '' ? 'cookie' : 'no cookie'));
 }
+
+// ------------------------------------------------------------------ SRV-81: a one-time link of a banned player's account
+
+$db = new SQLite3($path);
+// The server is running on the same database: wait for its writers rather than fail.
+$db->busyTimeout(5000);
+// A player no other check uses, banned with a reason and an end, and an account linked to them as the Accounts page makes
+// one: the table with the player's column the admin pages add (auth.py account_table()).
+$db->exec("INSERT INTO Member (id, nickname, guid, puid, udid, code) VALUES (9411, 'Eve', '9411', '9411', 'signin-9411', 'signincode1')");
+$db->exec("INSERT INTO PlayerBan (guid, reason, since, until, by) VALUES (9411, 'Made-up scores', " . time() . ', ' . (time() + 86400) . ", 'admin')");
+$columns = [];
+$r = $db->query('PRAGMA table_info(SiteUser)');
+while ($row = $r->fetchArray(SQLITE3_ASSOC)) {
+    $columns[] = $row['name'];
+}
+if (!in_array('guid', $columns, true)) {
+    $db->exec('ALTER TABLE SiteUser ADD COLUMN guid INTEGER');
+}
+$salt = bin2hex(random_bytes(16));
+$hash = 'pbkdf2_sha256$1000$' . $salt . '$' . hash_pbkdf2('sha256', 'evepass', (string)hex2bin($salt), 1000, 64);
+$db->exec("INSERT OR REPLACE INTO SiteUser (name, pass, note, admin, created_at, off, guid) VALUES ('evesite', '$hash', '', 0, " . time() . ", 0, 9411)");
+// A link as the PC client's My page on the site asks for one, opened in a browser signed in to nothing.
+$token = once_issue('evesite', '/opendmtq/me.php');
+[$status, $headers, $page] = visit('GET', "$base/opendmtq/login.php?once=" . rawurlencode((string)$token));
+check("SRV-81 a one-time link of a banned player's account signs nobody in",
+    $token !== null && $status === 200 && signin_cookie($headers) === '', "$status " . (signin_cookie($headers) !== '' ? 'cookie set' : 'no cookie'));
+check('SRV-81 and the sign-in page says the account cannot sign in until the end, with the owner\'s reason',
+    strpos($page, 'This account cannot sign in until') !== false && strpos($page, 'Made-up scores') !== false, substr(strip_tags($page), 0, 300));
+// The same link of the account once the ban has ended: signed in, on to its page.
+$db->exec('UPDATE PlayerBan SET until = ' . (time() - 1) . ' WHERE guid = 9411');
+$token = once_issue('evesite', '/opendmtq/me.php');
+[$status, $headers] = visit('GET', "$base/opendmtq/login.php?once=" . rawurlencode((string)$token));
+check('SRV-81 once the ban has ended, a link signs the browser in and goes on to its page',
+    $status === 303 && signin_cookie($headers) !== '', "$status " . (signin_cookie($headers) !== '' ? 'cookie set' : 'no cookie'));
 
 // The owner's sign-in as it was.
 if ($had === false) {
