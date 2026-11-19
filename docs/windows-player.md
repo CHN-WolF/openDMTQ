@@ -25,7 +25,7 @@ then plays against the server as it does on a phone.
    app: **More info**, then **Run anyway**. The installer is not signed by a publisher Windows knows. Windows 11's
    Smart App Control, when it is on, blocks unsigned programs, this one among them, and has no **Run anyway**.
 3. The launcher's first start walks through the server (already filled in), the sign-in with your site ID, the app's
-   download, the picture and the sound, then the ready check and how to play, and **PLAY**. Each step asks its
+   download, the picture and the sound, then the ready check, and **PLAY**. Each step asks its
    question at the top; while **Next** waits, a line under the step says for what.
 
 The installer from the project's [releases](https://github.com/kanggu12/openDMTQ/releases/latest)
@@ -67,10 +67,10 @@ Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, a
 
 | Page | What it has |
 | :--- | :--- |
-| **Play** | The server and the account with **My page on the site**, the checks before a start (the player, the server, the sign-in, the app), one that is not fine with a link to the page that sees to it (a server that does not answer, to its connection test), how to play (keyboard play's keys first, or that it is off, with **CONTROLS** beside them), the last play, **My records** under them, and **PLAY** |
+| **Play** | The server and the account with **My page on the site**, the checks before a start (the player, the server, the sign-in, the app), one that is not fine with a link to the page that sees to it (a server that does not answer, to its connection test), the last play, **My records** under them, and **PLAY** |
 | **Screen** | Full screen or a window, the window's size, VSync, the frame limit, the FPS counter and its position, the render scale and its upscaler, anti-aliasing ([the picture](#the-picture)) |
 | **Sound** | The master, music and effects volumes, the equaliser (a preset or three bands), the device, **Shared** or **Exclusive**, the buffer, and how the last game's sound went ([the sound](#the-sound)) |
-| **Controls** | Keyboard play: on or off, and the keys of each lane of 2, 3 and 4 LINE ([keyboard play](#keyboard-play)); what the touch screen, the mouse and the keyboard do |
+| **Controls** | Keyboard play: on or off, and the keys of each lane of 2, 3 and 4 LINE ([keyboard play](#keyboard-play)); what the touch screen, the mouse and the keyboard do is under [in the game](#in-the-game) |
 | **Online** | The servers, the [connection test](#testing-the-connection), the sign-in, the app on this PC and a check for a newer one |
 | **Help** | The checks, the game's log and the launcher's, [a report](#a-report-for-whoever-helps) to send, and repairing, clearing the game's data, starting over and uninstalling |
 | **Launcher** | The language, the launcher's [updates](#updates), the first-start guide again |
@@ -577,7 +577,7 @@ songs, when it begins, at each new message and when it ends.
   opens the folder.
 - **Windows blocks it with no Run anyway:** Smart App Control is on ([installing](#for-players), step 2).
 - **The videos are black and silent:** see the Media Feature Pack above.
-- **The sound breaks up:** the **Sound** page's **Last game** says whether the last game had gaps; choose the **Normal**
+- **The sound breaks up:** the **Sound** page's **Last game's sound** says whether the last game had gaps; choose the **Normal**
   or **Safe** buffer there, or **Shared** instead of **Exclusive**.
 - **Someone helps with a problem:** **Help**, **Save a report** gives them the logs and this PC's details in one zip
   ([a report](#a-report-for-whoever-helps)).

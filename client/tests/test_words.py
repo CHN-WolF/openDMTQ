@@ -195,7 +195,17 @@ class Wording(unittest.TestCase):
                 self.assertNotIn(phrase, en, key)
             for phrase in ("서버 관리자에게 물어보세요", "서버 관리자에게 알려 주세요", "켜져 있는지 확인하세요", "소리가 끊기면"):
                 self.assertNotIn(phrase, ko, key)
-        self.assertEqual([k for k in i18n.TEXT if k.startswith("help.trouble.")], ["help.trouble.1", "help.trouble.1.none"])
+
+    def test_no_card_or_line_of_usage(self):
+        # A page shows what to do now and the state; how to use the game is in the players' guide (docs/play.md, On a
+        # Windows PC): no How to play on PLAY or the guide's last step, no mouse, touch screen and keyboard cards on
+        # Controls, no card of what to do when the game does not start on Help, no line on Sound about the in-game menu
+        # (main had them all).
+        usage = re.compile(r"(play\.how|help\.trouble|controls\.(mouse|click|drag|wheel|touch|fingers|edges|bar|"
+                           r"keyboard|esc|menu|minimise|alt_f4|typing))\b")
+        self.assertEqual([k for k in i18n.TEXT if usage.match(k)], [])
+        self.assertNotIn("in-game menu", i18n.TEXT["sound.sub"][0])
+        self.assertNotIn("메뉴", i18n.TEXT["sound.sub"][1])
 
     def test_a_setting_says_what_it_does_never_what_may_go_wrong(self):
         # The Screen page's lines say what a choice does (main: VSync off "with possible tearing", no limit "uses the
@@ -266,13 +276,14 @@ class Wording(unittest.TestCase):
 
     def test_the_bar_over_the_game_is_said_as_it_is(self):
         # The bar holds Sound, minimise, full screen and X, and comes down by the pointer, a finger or the mouse drawing
-        # it down: each line about it names the Sound button, in both languages; the PC's needs name the keyboard too.
-        for key in ("play.how.3", "controls.menu"):
-            en, ko = i18n.TEXT[key]
-            self.assertIn("Sound", en, key)
-            self.assertIn("사운드", ko, key)
-            self.assertIn("drawn down", en, key)
-            self.assertIn("끌어내리면", ko, key)
+        # it down: the players' guide says it with the rest of how to play on a PC (the launcher's pages say nothing of
+        # usage), the keys of each LINE mode as the Controls page names them among it; the PC's needs name the keyboard.
+        with open(os.path.join(PACKAGE, "..", "..", "docs", "play.md"), encoding="utf-8") as f:
+            play = " ".join(f.read().split())
+        windows = play[play.index("## On a Windows PC"):play.index("## Updates and other devices")]
+        for words in ("**Sound**", "drawn down", "full screen", "**X**", "**Esc**", "F J in 2 LINE", "D F J in 3 LINE",
+                      "D F J K in 4 LINE", "**Controls**", "a click is a tap"):
+            self.assertIn(words, windows)
         en, ko = i18n.TEXT["guide.power.need.2"]
         self.assertIn("keyboard", en)
         self.assertIn("키보드", ko)

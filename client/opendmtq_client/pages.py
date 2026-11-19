@@ -7,6 +7,7 @@ so nothing changes under a game that is running.
 
 import logging
 import os
+import re
 import threading
 import tkinter as tk
 
@@ -300,35 +301,31 @@ def _server_card(app, parent):
 
 def build_play(app, parent):
     ui, w = app.ui, app.words
-    # The server's card over the two columns, made again only when the server or its sign-in changed.
-    top = Sections(parent, ui)
-    top.add(lambda: _server_key(app), lambda holder: _server_card(app, holder))
-    left, right = _columns(parent, ui, gap_above=CARD_GAP)
-    # Left: the ready check, filled in when the worker thread finishes it, as tall as the column, so that the row's cards
-    # end on one line. Check again stands at its title's right end, as on Help, and its rows from the top: the room the
-    # column gives it lies under them (client/tests/ui/shots.py, play_fits).
-    ready = widgets.Card(left, ui, w("play.ready"))
-    ready.pack(fill="both", expand=True)
-    widgets.Button(ready.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
-    app.check_box = tk.Frame(ready.body, bg=theme.PANEL)
-    app.check_box.pack(fill="x")
-    # Right: how to play, keyboard play first, and how the last game went, the last as tall as what is left of the
-    # column; each made again only when what it says changed (the keys, the game that ended).
-    side = Sections(right, ui)
-    side.add(lambda: tuple(app.state.values[name] for name in ("keyboard",) + tuple(choices.LANES)) + (w.language,),
-             lambda holder: how_to_play(app, _card(holder, ui, w("play.how"))))
-    side.add(lambda: repr(sorted((app.state.last_session or {}).items())), lambda holder: _last_card(app, holder),
-             expand=True)
-    # Under the columns, the signed-in player's records on the server, made when they come (app.refresh_records) and
-    # again when they change; none while not signed in.
-    below = Sections(parent, ui, first_gap=CARD_GAP)
-    below.add(lambda: records_key(app), lambda holder: _records_card(app, holder))
-    app.page_follow = lambda: (top.refresh(), side.refresh(), below.refresh())
+    # The page's cards one under another, each as tall as what it holds (none stretched to fill the page): the server and
+    # its sign-in, the ready check, how the last game went, and the signed-in player's records on the server (none while
+    # not signed in). Each is made again only when what it shows changed, in its own place (Sections).
+    cards = Sections(parent, ui)
+    cards.add(lambda: _server_key(app), lambda holder: _server_card(app, holder))
+    # The ready check is made once: its rows follow each check in place (refresh_checks).
+    cards.add(lambda: None, lambda holder: _ready_card(app, holder))
+    cards.add(lambda: repr(sorted((app.state.last_session or {}).items())), lambda holder: _last_card(app, holder))
+    cards.add(lambda: records_key(app), lambda holder: _records_card(app, holder))
+    app.page_follow = cards.refresh
     # Made again each time the page shows: a sign-in can have ended, or an app come, since the last one. Until it
     # comes back, the box says it is being made.
     app.refresh_checks()
     refresh_checks(app)
     app.refresh_records()
+
+
+def _ready_card(app, holder):
+    """PLAY's ready check: a row a check, filled in when the worker thread finishes it, with Check again at its title's
+    right end, as on Help."""
+    ui, w = app.ui, app.words
+    ready = _card(holder, ui, w("play.ready"))
+    widgets.Button(ready.head, ui, w("help.recheck"), lambda: app.refresh_checks(force=True)).pack(side="right")
+    app.check_box = tk.Frame(ready.body, bg=theme.PANEL)
+    app.check_box.pack(fill="x")
 
 
 def _server_key(app):
@@ -431,7 +428,7 @@ def _record_row(app, parent, row, recent):
     title = row["title"] or w("play.records.chart", id=row.get("chart", ""))
     widgets.label(words, ui, title, bg=theme.PANEL, wrap_margin=0).pack(fill="x")
     # The chart as the launcher names a mode everywhere else ("3 LINE Hard 9", as How to play and Controls say it).
-    sub = [choices.chart_words(row["chart_name"])] if row["chart_name"] else []
+    sub = [whole_modes(choices.chart_words(row["chart_name"]))] if row["chart_name"] else []
     if row["at"]:
         sub.append(w.say(i18n.ago(row["at"])))
     if recent and row["new_record"]:
@@ -447,7 +444,8 @@ def _last_card(app, holder):
     """The PLAY page's Last game: how the last game went, and the player's log one press away after a crash."""
     ui, w = app.ui, app.words
     last = widgets.Card(holder, ui, w("play.last"))
-    last.pack(fill="both", expand=True)
+    # As tall as what it says, under the ready check.
+    last.pack(fill="x")
     record = app.state.last_session or {}
     if record.get("crashed") or record.get("failed_start"):
         # The reason is in the player's log: one press away, on the card's own line at its title's right end (as Help
@@ -456,42 +454,14 @@ def _last_card(app, holder):
     widgets.label(last.body, ui, _last_session(app), fg=theme.MUTED, wrap_margin=0).pack(fill="x")
 
 
-# How to play's lines after keyboard play's: the touch screen and the mouse in one, so that the card and Last game
-# under it end above the bottom bar at the window's own size, then Esc and leaving the game by the bar.
-HOW_TO_PLAY = ("play.how.1", "play.how.3")
-
-
-# A space that never ends a line (Tk breaks its lines at plain spaces only): inside a mode's name ("2 LINE") and a
-# lane's keys ("D F J"), which read as one thing each.
+# A space that never ends a line (Tk breaks its lines at plain spaces only): inside a LINE mode's name ("2 LINE"), which
+# reads as one thing, wherever it shows in a line that wraps (a record's chart, the Controls page's line under the keys).
 NO_BREAK = "\u00a0"
 
 
-def keys_line(w, values):
-    """How to play's first line, keyboard play as the settings have it now (the Controls page or --set): each LINE
-    mode's keys from its top lane ("F J in 2 LINE, ..."), a lane's second key after a /, or that it is off. A mode's
-    name and its keys are each kept on one line (NO_BREAK)."""
-    if values["keyboard"] != "on":
-        # Off: the line says so, and the link at the card's title leads where it is turned on.
-        return w("play.how.keys.off")
-    # Each mode in the game's own order (2, 3, then 4 LINE), with its lanes as the settings file writes them.
-    modes = [w("play.how.keys.mode", keys=values[name].replace(" ", NO_BREAK),
-               mode=choices.mode(name).replace(" ", NO_BREAK)) for name in choices.LANES]
-    return w("play.how.keys", lanes=", ".join(modes))
-
-
-def how_to_play(app, card, link=True):
-    """How to play's lines in its card, on PLAY and on the guide's STAGE START: keyboard play first, as the settings
-    have it, then HOW_TO_PLAY's; the Controls page one press away at the card's title (`link`; the guide has no menu to
-    go to), as Ready check has Check again at its own, so that the keys' line has the card's whole width."""
-    ui, w, body = app.ui, app.words, card.body
-    if link:
-        # The page the keys are set on, by the menu's own name, reached by the mouse or the keyboard.
-        widgets.link(card.head, ui, TITLES["controls"], lambda: app.nav_go("controls")).pack(side="right")
-    widgets.label(body, ui, keys_line(w, app.state.values), wrap_margin=0).pack(fill="x")
-    for key in HOW_TO_PLAY:
-        # One line each, split by the card's faint lines as the ready check's rows are.
-        widgets.divider(body, ui, pady=CHECK_GAP)
-        widgets.label(body, ui, w(key), wrap_margin=0).pack(fill="x")
+def whole_modes(text):
+    """`text` with each LINE mode's name in it kept whole on its line ("2 LINE" with a space that never ends one)."""
+    return re.sub(r"(\d) LINE\b", "\\1" + NO_BREAK + "LINE", text)
 
 
 def _last_session(app):
@@ -1006,21 +976,9 @@ def build_sound(app, parent):
 
 
 def build_controls(app, parent):
-    ui, w = app.ui, app.words
-    # First keyboard play, the page's one card of settings: on or off, and while on, the lanes' keys.
+    # Keyboard play, the page's one card: on or off, and while on, the lanes' keys. What the mouse, a touch screen and
+    # the keyboard do in the game is in the PC client's guide (docs/windows-player.md, In the game), not on a page.
     lanes_card(app, parent)
-    # The game's bar over it in each group by the way it comes: the pointer, a finger, and the keys it does not take.
-    groups = (("controls.mouse", ("controls.click", "controls.drag", "controls.wheel", "controls.menu",
-                                  "controls.minimise")),
-              ("controls.touch", ("controls.fingers", "controls.edges", "controls.bar")),
-              ("controls.keyboard", ("controls.esc", "controls.alt_f4", "controls.typing")))
-    for n, (title, keys) in enumerate(groups):
-        card = _card(parent, ui, w(title), last=n == len(groups) - 1)
-        for i, key in enumerate(keys):
-            # One line each, split by the card's faint lines.
-            if i:
-                widgets.divider(card.body, ui, pady=CHECK_GAP)
-            widgets.label(card.body, ui, w(key), wrap_margin=0).pack(fill="x")
 
 
 def lanes_card(app, parent):
@@ -1028,7 +986,7 @@ def lanes_card(app, parent):
     and Reset keys at the card's title. The lanes are made with the page and shown or hidden in place by the switch, the
     rest of the page as it was."""
     ui, w = app.ui, app.words
-    card = _card(parent, ui, w("controls.keys"))
+    card = _card(parent, ui, w("controls.keys"), last=True)
     on = app.state.values["keyboard"] == "on"
     # The title's line as tall as it is with Reset keys on it, whether that is there or not: the switch stays where it
     # was, under the pointer that switched it.
@@ -1183,7 +1141,8 @@ class LaneKeys:
     def say(self, text, colour):
         """The line under the table, unless the page went meanwhile (a key's FocusOut as the page is drawn again)."""
         if self.line.winfo_exists():
-            self.line.configure(text=text, fg=colour)
+            # A mode's name in it ("Press a key for lane 1 of 2 LINE") never broken over two lines.
+            self.line.configure(text=whole_modes(text), fg=colour)
 
     def prompt(self, box):
         """What a waiting box waits for: a key for its lane (Esc keeps the one there, Delete takes away one the lane has
@@ -1977,8 +1936,7 @@ def build_help(app, parent):
     sections = Sections(parent, ui, after=lambda: widgets.fit_names(parent, ui, rows_that_come("help")))
     # The ready check, its rows made again in place when they change (refresh_checks).
     sections.add(lambda: None, lambda holder: _help_checks(app, holder))
-    # The lines and the tools that follow the player's log (there once the game has run) and the install.
-    sections.add(lambda: _player_log(app)[1], lambda holder: _help_trouble(app, holder))
+    # The tools, which follow the player's log (there once the game has run) and the install.
     sections.add(lambda: (_player_log(app), installed.root()), lambda holder: _help_tools(app, holder))
     sections.add(lambda: (installed.root(), bool(installed.root() and installed.updater(installed.root()))),
                  lambda holder: _help_remove(app, holder))
@@ -1994,27 +1952,6 @@ def _help_checks(app, parent):
     app.check_box.pack(fill="x")
     app.refresh_checks()
     refresh_checks(app)
-
-
-def _help_trouble(app, parent):
-    ui, w = app.ui, app.words
-    card = _card(parent, ui, w("help.trouble"))
-    # Each line with the page it names one press away. The first line points at the player's log below, which is
-    # there once the game has run with the app.
-    _log_file, has_log = _player_log(app)
-    first = "help.trouble.1" if has_log else "help.trouble.1.none"
-    for i, (key, page) in enumerate(((first, None),)):
-        if i:
-            widgets.divider(card.body, ui, pady=CHECK_GAP)
-        line = tk.Frame(card.body, bg=theme.PANEL)
-        line.pack(fill="x")
-        beside = ()
-        if page:
-            # The page the line names, by the menu's own name, reached by the mouse or the keyboard.
-            to = widgets.link(line, ui, TITLES[page], lambda p=page: app.nav_go(p))
-            to.pack(side="right", anchor="n")
-            beside = (to,)
-        widgets.label(line, ui, w(key), wrap_margin=12, beside=beside).pack(side="left", fill="x")
 
 
 def _help_tools(app, parent):

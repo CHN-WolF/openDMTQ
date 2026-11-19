@@ -436,6 +436,10 @@ def guide_check(app, site, out, tag, problems):
                 problems.append("%s: the volume is not in view without scrolling" % name)
         if key == "stage":
             slab_check(app.root, guide.play_slab, seen, name, problems)
+            # The ready check alone before the first song: no card of how to play (usage is in the docs).
+            titles = [card_title(card) for card in page_cards(guide.body)]
+            if titles != [w("play.ready")]:
+                problems.append("%s: the step's cards are %r" % (name, titles))
             # PLAY is the way on from the last step: no Skip beside it.
             if any(isinstance(x, tk.Label) and x.cget("text") == app.words("guide.skip") and x.winfo_ismapped()
                    for x in widgets_of(app.root)):
@@ -468,12 +472,11 @@ def slab_check(root, slab, picture, name, problems):
 def play_fits(app, name, tag, problems):
     """The PLAY page in the state on show, at its top, at the window's own size and larger: every button and link of it
     in view without scrolling (at 1180x760 in English, Check again and Open the game log once went half under the
-    bottom bar after a game that closed by itself). At the smallest window, 960x640, the Last game card begins at the
-    bar with the page's cards as they are, so the page scrolls for its button there."""
+    bottom bar after a game that closed by itself). At the smallest window, 960x640, the page may scroll for the Last
+    game card's button."""
     import tkinter as tk
-    # Its two columns end on one line, at every size (play_fills).
-    play_fills(app, name, problems)
-    how_to_play_check(app, name, problems)
+    # Its cards one under another, none stretched, none of usage (play_cards_check).
+    play_cards_check(app, name, problems)
     area = app.body
     c = area.canvas
     area.to_top()
@@ -499,26 +502,6 @@ def play_fits(app, name, tag, problems):
         problems.append("%s: no button on the PLAY page to look at" % name)
 
 
-def how_to_play_check(app, name, problems):
-    """PLAY's How to play: the keys' line has the card's whole width, its CONTROLS link at the card's title (main put the
-    link beside the line, which squeezed it into a narrow column and broke "2 LINE" and "D F J" over two lines)."""
-    import tkinter as tk
-    from opendmtq_client import pages
-    card = card_titled(app, app.words("play.how"))
-    if card is None:
-        problems.append("%s: no How to play card on the PLAY page" % name)
-        return
-    app.root.update()
-    first = next((x for x in card.body.pack_slaves() if x is not card.head), None)
-    room = card.body.winfo_width() - 2 * int(card.body.cget("padx"))
-    if not isinstance(first, tk.Label) or abs(first.winfo_width() - room) > 1:
-        problems.append("%s: How to play's keys line is %s px wide in a card %d px wide inside" % (
-            name, first.winfo_width() if first is not None else None, room))
-    links = [x for x in widgets_of(card.head) if isinstance(x, tk.Label) and str(x.cget("cursor")) == "hand2"]
-    if [x.cget("text") for x in links] != [pages.TITLES["controls"]]:
-        problems.append("%s: How to play's title has %r, not its CONTROLS link" % (name, [x.cget("text") for x in links]))
-
-
 def card_titled(app, title):
     """The card on the page with this title (the way a person finds it), or None."""
     for widget in widgets_of(app.body.inner):
@@ -528,22 +511,52 @@ def card_titled(app, title):
     return None
 
 
-def play_fills(app, name, problems):
-    """The PLAY page's two columns end on one line: the ready check as tall as How to play and Last game together, never
-    a slab of the page's dark field under it beside them (0.9.6 left one there once the card was only as tall as its
-    rows)."""
+def card_title(card):
+    """A card's title as its head shows it (its first label), or None for a card without one."""
+    if card.head is None:
+        return None
+    return next((x.cget("text") for x in card.head.winfo_children() if x.winfo_class() == "Label"), None)
+
+
+def page_cards(area):
+    """The cards on show in a page area, in their order down the page."""
+    cards = [x for x in widgets_of(area.inner) if isinstance(x, widgets.Card) and x.winfo_ismapped()]
+    return sorted(cards, key=lambda card: card.winfo_rooty())
+
+
+def play_cards_check(app, name, problems):
+    """The PLAY page's cards one under another, each as tall as what it holds (none stretched to fill the page, where
+    the ready check stood as tall as its column beside How to play and Last game): the server's first, then the ready
+    check, the last game, and My records when signed in. No card that only says how to play (the owner's rule: a page
+    shows what to do now and the state; usage is in the docs)."""
     w = app.words
     app.root.update()
-    ready, last = card_titled(app, w("play.ready")), card_titled(app, w("play.last"))
-    if ready is None or last is None:
-        problems.append("%s: no Ready check or Last game card on the PLAY page" % name)
+    cards = page_cards(app.body)
+    titles = [card_title(card) for card in cards]
+    if titles not in ([w("play.server"), w("play.ready"), w("play.last")],
+                      [w("play.server"), w("play.ready"), w("play.last"), w("play.records")]):
+        problems.append("%s: PLAY's cards are %r" % (name, titles))
+    for card in cards:
+        if card.winfo_height() > card.winfo_reqheight() + 1:
+            problems.append("%s: the %r card is stretched %d px past what it holds" % (
+                name, card_title(card), card.winfo_height() - card.winfo_reqheight()))
+    if len({card.winfo_rootx() for card in cards}) > 1:
+        problems.append("%s: PLAY's cards stand side by side" % name)
+
+
+# The cards each page that has only these shows, in their order: what the page does and shows, none that only tells how
+# to use something (main had the mouse, the touch screen and the keyboard on Controls, and what to do when the game does
+# not start on Help).
+PAGE_CARDS = {"controls": ("controls.keys",), "help": ("help.checks", "help.tools", "help.remove")}
+
+
+def cards_check(app, page, name, problems):
+    """The cards of a page in PAGE_CARDS, as it shows them."""
+    if page not in PAGE_CARDS:
         return
-    if ready.winfo_rootx() == last.winfo_rootx():
-        # One under another (the smallest window): the cards in a column, nothing to end on one line.
-        return
-    ends = [card.winfo_rooty() + card.winfo_height() for card in (ready, last)]
-    if abs(ends[0] - ends[1]) > 1:
-        problems.append("%s: the ready check ends %d px above the Last game card" % (name, ends[1] - ends[0]))
+    titles = [card_title(card) for card in page_cards(app.body)]
+    if titles != [app.words(key) for key in PAGE_CARDS[page]]:
+        problems.append("%s: the page's cards are %r" % (name, titles))
 
 
 def sound_last_check(app, out, tag, problems):
@@ -718,6 +731,7 @@ def pages_check(app, out, tag, problems):
         if page == "play":
             slab_check(app.root, app.play_button, seen, name, problems)
             play_fits(app, name, tag, problems)
+        cards_check(app, page, name, problems)
         menu_mark_check(app, page, name, problems)
         if page == "screen":
             # After its shot: the wheel scrolls the page (the header turns into the dark bar).
@@ -1058,7 +1072,10 @@ def keys_check(app, out, tag, problems):
         settle(app)
 
     def said(text, colour, what):
+        from opendmtq_client import pages
         found = line()
+        # Its words as the page sets them: a mode's name in them kept whole on the line (pages.whole_modes).
+        text = pages.whole_modes(text)
         if found is None or found.cget("text") != text or str(found.cget("fg")).lower() != colour.lower():
             problems.append("%s: %s: the line under the keys says %r in %s" % (
                 tag, what, found and found.cget("text"), found and found.cget("fg")))
@@ -1367,8 +1384,10 @@ def records_check(app, site, out, tag, problems):
         if shown.count("812,300") != 2:
             problems.append("%s: the records' lists do not each show three rows" % name)
         # A chart's mode as How to play and Controls name it: "3 LINE Hard 9" (main: "3LINE Hard 9" on the same page).
-        glued = [t for t in shown if re.search(r"\dLINE", t)]
-        if glued or not any(t.startswith("3 LINE Hard 9") for t in shown):
+        # Its name kept whole on its line, with a space that never ends one (pages.whole_modes).
+        from opendmtq_client import pages
+        glued = [t for t in shown if re.search(r"\dLINE|\d LINE", t)]
+        if glued or not any(t.startswith("3" + pages.NO_BREAK + "LINE Hard 9") for t in shown):
             problems.append("%s: PLAY's records name the charts %r" % (name, glued or shown))
         # The page at its end, where the card is whole.
         app.body.canvas.yview_moveto(1.0)
@@ -1874,7 +1893,7 @@ def game_end_check(app, out, tag, problems):
     state, waiting, texts = seen["after"]
     if state == "playing" or not waiting:
         problems.append("%s: when the game ended PLAY was %r (ready check back: %r)" % (tag, state, not waiting))
-    if w("help.trouble.1") not in texts or w("help.player_log") not in texts:
+    if w("help.player_log") not in texts:
         problems.append("%s: when the game ended Help did not show its log: %r" % (tag, [t for t in texts if t][:12]))
     settle(app, 8)
 

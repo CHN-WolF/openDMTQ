@@ -64,9 +64,23 @@ The PC client plays the same app on Windows:
    Then **PLAY**.
 
 The launcher keeps the game and itself up to date, from the server. Its **Play** page opens your [MY PAGE](#my-page)
-on the site, signed in already, and lists your latest plays and best records; a bar over the game has the sound,
-minimise, full screen and quit. [The PC client](windows-player.md) has the rest: the launcher's pages, the controls,
-the picture and the sound, what it keeps, and how it runs on Linux under Wine.
+on the site, signed in already, and lists your latest plays and best records. [The PC client](windows-player.md) has
+the rest: the launcher's pages, the controls, the picture and the sound, what it keeps, and how it runs on Linux under
+Wine.
+
+In the game:
+
+- **Keys** play the lanes from the top while keyboard play is on, as it is at first: F J in 2 LINE, D F J in 3 LINE,
+  D F J K in 4 LINE. The launcher's **Controls** page turns keyboard play on and off and sets the keys, a second key
+  for a lane too.
+- **A touch screen** plays as a phone does, with several fingers at once. With **a mouse**, a click is a tap and a drag
+  a slide, and the wheel scrolls lists (with Shift, sideways).
+- **Esc** goes back: it closes what is open. In a song, the game's pause button pauses.
+- **The bar over the game** comes down with the pointer resting on the handle at the game's top centre or on its top
+  edge, or drawn down from there by a finger, a pen or the mouse; a tap or a long press on the handle brings it too. It
+  holds **Sound**, minimise, full screen and **X**, which asks once before it quits; Alt+F4 does nothing. Minimised,
+  the game holds still, and the taskbar brings it back.
+- **Text** the game asks for comes from the keyboard, Korean too; without a keyboard, Windows' touch keyboard comes up.
 
 On the site, a small keyboard beside a score marks one played with the PC's keys (on a best record, the play that set
 that score), and beside a total says how many such scores it counts; the rankings are one for touch and keys.

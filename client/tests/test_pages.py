@@ -1,5 +1,5 @@
 """What the pages say that needs no window: a ready-check row's state and its link (pages.check_row), the lamp's shape,
-and How to play's keyboard line as the settings have it (pages.keys_line)."""
+and a LINE mode's name kept whole on its line where it shows (pages.whole_modes)."""
 
 import unittest
 
@@ -7,11 +7,6 @@ from opendmtq_client import actions, art, i18n, pages, theme
 from opendmtq_client import values as choices
 
 EN, KO = i18n.Words("en"), i18n.Words("ko")
-
-
-def plain(text):
-    """Words as they read, the spaces that never end a line (pages.NO_BREAK) as plain ones."""
-    return text.replace(pages.NO_BREAK, " ")
 
 
 class CheckRow(unittest.TestCase):
@@ -77,48 +72,20 @@ class Lamp(unittest.TestCase):
         self.assertEqual(ring.size, dot.size)
 
 
-class KeysLine(unittest.TestCase):
-    def test_the_keys_as_the_settings_have_them(self):
-        # Keyboard play on with its defaults: each LINE mode's keys from the top lane, in both languages, the Korean
-        # particle against the mode's name.
-        values = choices.normalize({})
-        self.assertEqual(plain(pages.keys_line(EN, values)),
-                         "Keys play the lanes from the top: F J in 2 LINE, D F J in 3 LINE, D F J K in 4 LINE.")
-        self.assertEqual(plain(pages.keys_line(KO, values)),
-                         "키로 위에서부터 줄을 칩니다: 2 LINE에서 F J, 3 LINE에서 D F J, 4 LINE에서 D F J K.")
-
-    def test_a_modes_name_and_its_keys_never_break_over_two_lines(self):
-        # Tk breaks a line at a plain space: "2 LINE" and "D F J K" each keep theirs as one that never ends a line (main
-        # broke "2 / LINE" and "D F / J" in a narrow card, at every size).
+class WholeModes(unittest.TestCase):
+    def test_a_modes_name_never_breaks_over_two_lines(self):
+        # Tk breaks a line at a plain space: "2 LINE" keeps one that never ends a line wherever it shows in a line that
+        # wraps, a record's chart on PLAY and the Controls page's line under the keys, in both languages (How to play
+        # broke "2 / LINE" in a narrow card, at every size, before it went).
+        self.assertEqual(pages.whole_modes("3 LINE Hard 9  ·  5 min ago"),
+                         "3" + pages.NO_BREAK + "LINE Hard 9  ·  5 min ago")
         for w in (EN, KO):
-            line = pages.keys_line(w, choices.normalize({}))
-            for words in ("2 LINE", "3 LINE", "4 LINE", "F J", "D F J", "D F J K"):
-                self.assertIn(words.replace(" ", pages.NO_BREAK), line, (w.language, words))
-            # The sentence itself still breaks between them.
-            self.assertIn(" ", line)
-
-    def test_keys_set_on_controls_or_by_set_follow(self):
-        # Keys as the Controls page or --set leaves them (a lane's second key after a /): the line says those.
-        values = choices.normalize({"keys_2line": "D/S K", "keys_4line": "A S K L"})
-        self.assertEqual(plain(pages.keys_line(EN, values)),
-                         "Keys play the lanes from the top: D/S K in 2 LINE, D F J in 3 LINE, A S K L in 4 LINE.")
-
-    def test_off_says_it_is_off(self):
-        # Keyboard play off: one line saying so (the link beside it leads to the Controls page).
-        values = choices.normalize({"keyboard": "off"})
-        self.assertEqual(pages.keys_line(EN, values), "Keyboard play is off.")
-        self.assertEqual(pages.keys_line(KO, values), "키보드 플레이가 꺼져 있습니다.")
-
-    def test_the_line_names_no_page_its_link_names(self):
-        # The link at the line's right end says CONTROLS: the line itself never does, as Help's lines keep to.
-        for values in (choices.normalize({}), choices.normalize({"keyboard": "off"})):
-            for w in (EN, KO):
-                self.assertNotIn(pages.TITLES["controls"], pages.keys_line(w, values))
-
-    def test_how_to_play_goes_on_as_before(self):
-        # After the keys: the touch screen and the mouse in one line, then Esc and the bar's X, on PLAY and on STAGE
-        # START alike.
-        self.assertEqual(pages.HOW_TO_PLAY, ("play.how.1", "play.how.3"))
+            for name in choices.LANES:
+                said = pages.whole_modes(w("controls.keys.wait", lane=1, mode=choices.mode(name), keyname="F"))
+                self.assertIn(choices.mode(name).replace(" ", pages.NO_BREAK), said, w.language)
+                self.assertNotIn(choices.mode(name), said, w.language)
+        # Anything else as it is.
+        self.assertEqual(pages.whole_modes("Lane 2 of the song"), "Lane 2 of the song")
 
 
 if __name__ == "__main__":

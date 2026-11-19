@@ -342,7 +342,8 @@ class Table(unittest.TestCase):
             for _ in range(3):
                 self.table.pressed(box, press(36, "Return", "\r"))
         self.assertEqual(self.said[-1], prompt)
-        self.assertIn("Press a key for lane 1 of 3 LINE", prompt)
+        # The mode's name kept whole on the line, with a space that never ends one (pages.whole_modes).
+        self.assertIn("Press a key for lane 1 of 3" + self.pages.NO_BREAK + "LINE", prompt)
 
     def test_a_key_that_went_in_is_not_taken_again_while_held(self):
         # K pressed on a waiting box goes in; held, its repeats reach the page drawn again (the same box, by the
