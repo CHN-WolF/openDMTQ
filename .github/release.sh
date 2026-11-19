@@ -245,8 +245,9 @@ bundle_wine() {
   env NO_BUILD=1 OUT="$OUT/windows" ${APKS[@]+"${APKS[@]}"} tests/windows/wine.sh
 }
 step wine bundle_wine
+# With the release's own runtime for newer phones, which the app built there takes.
 host_debian() {
-  env DISTRO=debian:12 ${APKS[@]+"${APKS[@]}"} tests/host/run.sh
+  env DISTRO=debian:12 ARM32_BUNDLE="$OUT/arm32" ${APKS[@]+"${APKS[@]}"} tests/host/run.sh
 }
 step debian host_debian
 update() {
