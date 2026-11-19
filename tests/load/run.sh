@@ -7,20 +7,23 @@
 #
 # Usage: tests/load/run.sh [OUT_DIR]
 # Environment: CORES (the two cores; default the machine's last two), SEED_PLAYERS (300), SEED_PLAYS (1000000),
-# NO_BUILD=1 (the images already tagged loadtest), SITE_PORT (18611), and load.py's own (PLAYERS, PHASE_S, ...).
+# NO_BUILD=1 (the images already tagged TAG), SITE_PORT (18611), NAME_PREFIX (odq) and TAG (loadtest), and load.py's own
+# (PLAYERS, PHASE_S, ...).
 # REQUESTS=1 measures the game's requests one kind at a time on that server instead of the rounds (the README's chart
 # of them; docs/testing.md, Measurements): OUT_DIR/requests.json.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${1:-$(mktemp -d)}
-TAG=loadtest
-NET=odq-loadtest
-SITE=odq-loadtest-site
-ADMIN=odq-loadtest-admin
-BUILDER=odq-loadtest-builder
+# NAME_PREFIX and TAG keep a run's containers, network and images apart from another run's on the same machine.
+NAME_PREFIX=${NAME_PREFIX:-odq}
+TAG=${TAG:-loadtest}
+NET=$NAME_PREFIX-loadtest
+SITE=$NAME_PREFIX-loadtest-site
+ADMIN=$NAME_PREFIX-loadtest-admin
+BUILDER=$NAME_PREFIX-loadtest-builder
 # A second server whose database's disk is small, for the full disk round.
-SMALL=odq-loadtest-small
+SMALL=$NAME_PREFIX-loadtest-small
 SITE_PORT=${SITE_PORT:-18611}
 # Two cores for everything: the last two, unless asked for others.
 N=$(nproc)
