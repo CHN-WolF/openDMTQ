@@ -36,7 +36,7 @@ const TOASTS = [
 // only as it starts, so a player already in it would hear of none. Turned on, a new message while on (with the message, or
 // the line below when the owner gave none), and ended.
 const MAINT_TOASTS = [
-    'ko' => ['maint_on' => "점검 중이에요\n%s", 'maint_changed' => "점검 안내가 바뀌었어요\n%s",
+    'ko' => ['maint_on' => "점검 중이에요\n%s", 'maint_changed' => "점검 공지가 바뀌었어요\n%s",
              'maint_off' => "점검이 끝났어요\n평소처럼 플레이할 수 있어요"],
     'en' => ['maint_on' => "Under maintenance\n%s", 'maint_changed' => "Maintenance notice updated\n%s",
              'maint_off' => "Maintenance is over\nThe server is open as usual"],

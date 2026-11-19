@@ -207,7 +207,7 @@ class CardTest(unittest.TestCase):
             field, words = ahead(400)
             inst.client.post("/opendmtq/admin/notice", data={"csrf": csrf, "action": "show", "text": "늦게까지 엽니다.", "until": field})
             page = inst.client.get("/opendmtq/admin/maintenance").get_data(as_text=True)
-            self.assertIn("<title>알림 · ", page)
+            self.assertIn("<title>공지 · ", page)
             self.assertIn(f"{words} {admin.notice.zone()}까지 사이트에 보이는 중", page)
             inst.client.post("/opendmtq/admin/notice", data={"csrf": csrf, "action": "clear"})
             changes = inst.client.get("/opendmtq/admin/logs?tab=changes").get_data(as_text=True)

@@ -101,6 +101,18 @@ class AdminStrings(unittest.TestCase):
                 self.assertNotIn(old, text, key)
             self.assertIsNone(re.search(r"(?<!휴대)(?<!아이)폰", text), key)
 
+    def test_the_notices_page_and_its_cards_share_one_word(self):
+        # The menu's word for the Notices page is its cards' (공지), as the game's own toast says it, and the setup goes on
+        # in the words a Korean reader uses (ADM-195).
+        ko = strings.STRINGS["ko"]
+        self.assertEqual(ko["nav.notices"], "공지")
+        for key in ("notices.title", "maint.heading", "notice.heading"):
+            self.assertIn("공지", ko[key], key)
+        for key, text in ko.items():
+            for old in ("점검 안내", "이어 하기"):
+                self.assertNotIn(old, text, key)
+        self.assertEqual(ko["setup.continue"], "설정 계속하기")
+
     def test_a_song_error_reads_in_english_and_keeps_its_key(self):
         e = songs.SongError("song.missing", name="song.fpk")
         self.assertEqual(str(e), "song.fpk is missing")
@@ -130,6 +142,10 @@ class PortalStrings(unittest.TestCase):
             for key, text in table.items():
                 if key.endswith(".one"):
                     self.assertIn("{n}", table.get(key.removesuffix(".one"), ""), key)
+
+    def test_an_account_without_admin_rights_says_so(self):
+        # MY PAGE's row of the admin pages, for an account that has no rights there: said as that (ADM-195).
+        self.assertEqual((self.en["me.rights_no"], self.ko["me.rights_no"]), ("No admin rights", "관리자 권한 없음"))
 
     def test_the_server_name_is_read_from_the_process_environment(self):
         # Under Apache, plain getenv('SERVER_NAME') is the visitor's host name, not the setting.

@@ -1088,7 +1088,7 @@ check("GAME-74: the news waits while the player is in a song", state()["toast"] 
 call("game.savePlayResult", [guid, 1, [0, 0] + [0] * 10 + [50], 50, 0, [0, 0, 0], [0, 0, 0], "smoke"])
 s2 = state("ko")
 check("and comes after it: the new message, numbered higher, in the phone's language",
-      s2.get("toast_kind") == "maint_changed" and s2["toast"] == "점검 안내가 바뀌었어요\nBack at ten."
+      s2.get("toast_kind") == "maint_changed" and s2["toast"] == "점검 공지가 바뀌었어요\nBack at ten."
       and s2.get("toast_id", 0) > s.get("toast_id", 0), s2)
 # GAME-72: ended: the check says so, and the player hears that it is over.
 maintenance_post(action="off")
