@@ -8,6 +8,14 @@
  * Usage: php tests/game/moved.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
 
+// The pages date a move in the server's zone: the entrypoint gives the server's PHP the zone TZ names. This check runs
+// by docker exec, without that setting, so it takes the same zone; else its date and the page's differ for the hours
+// in which the day in UTC and the server's day are not the same (00:00 to 09:00 in Seoul).
+$zone = getenv('TZ');
+if ($zone && in_array($zone, timezone_identifiers_list(), true)) {
+    date_default_timezone_set($zone);
+}
+
 // The server's own code: the image's, or a host install's (OPENDMTQ_APP names its server/ folder).
 $app = getenv('OPENDMTQ_APP') ?: '/opt/opendmtq';
 require_once "$app/game/src/config.php";
