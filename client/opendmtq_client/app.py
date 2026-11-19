@@ -691,7 +691,8 @@ class LauncherApp:
         # The test again, of the new address; said after it starts (its start is the player's doing, which would give the
         # line back to the ready check).
         self.test_connection()
-        self.set_status(i18n.Said("test.used", url=found), "ok", sticky=True)
+        # The server by its name, as the PLAY page's line names it (its address when it has no name of its own).
+        self.set_status(i18n.Said("test.used", name=self.state.server()["name"]), "ok", sticky=True)
 
     def test_from_play(self):
         """PLAY's Server row, when the server does not answer: the Online page, and the test of it."""

@@ -61,7 +61,7 @@ TEXT = {
     "test.copy": ("Copy", "복사"),
     "test.copied": ("Copied the connection test's result.", "연결 테스트 결과를 복사했습니다."),
     "test.use": ("Use this address", "이 주소 쓰기"),
-    "test.used": ("Playing on {url} from now on.", "이제 {url}에서 플레이합니다."),
+    "test.used": ("Playing on {name} from now on.", "이제 {name}에서 플레이합니다."),
     "test.address": ("Address", "주소"),
     "test.lookup": ("Name lookup", "이름 조회"),
     "test.port": ("Port", "포트"),

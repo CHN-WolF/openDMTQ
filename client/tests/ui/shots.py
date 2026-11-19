@@ -1496,7 +1496,8 @@ def test_check(app, site, out, tag, problems):
         button(app, w("test.use")).press()
         settle(app, 12, until=lambda: app.state.current == site.url)
         settle(app, 30, until=lambda: app.connection_test is not None and not app.connection_test["running"])
-        if app.state.current != site.url or app.status_text != w("test.used", url=site.url):
+        # Said with the server's name, as PLAY's line names it (main named its address).
+        if app.state.current != site.url or "Stand-in" not in app.status_text or site.url in app.status_text:
             problems.append("%s: Use this address left PLAY on %s (%r)" % (name, app.state.current, app.status_text))
     finally:
         connection.PORTS = real_ports
