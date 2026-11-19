@@ -261,6 +261,15 @@ def check_restorable(path):
             raise ValueError(tp("bak.not_game")) from e
     con.close()
 
+def has_players(con):
+    """True when the database holds a player of the game (the server's own check account aside); False for none, or for a
+    database without the game's tables (one set up a moment ago, before the game server made them)."""
+    try:
+        return con.execute(f"SELECT 1 FROM ({core.PLAYER_ROWS}) LIMIT 1", (core.CHECK_UDID,)).fetchone() is not None
+    except sqlite3.Error:
+        return False
+
+
 # One restore at a time: the page can be open in two tabs, and the service has one process.
 _restoring = threading.Lock()
 
@@ -555,6 +564,9 @@ def restore_backup(name, path):
                 switches, settings, kept_tokens, kept_accounts, kept_hooks = [], [], [], [], []
                 # The live database's rankings' change number (0 when it is set aside as damaged and cannot be read).
                 live_stamp = 0
+                # Whether today's server has nothing of its own yet: no player and no account (a new PC), or its
+                # database set aside as damaged. It then keeps the backup's webhooks, as it keeps the backup's accounts.
+                empty = True
                 if not kept:
                     with db() as con:
                         live_stamp = board_stamp(con)
@@ -567,6 +579,9 @@ def restore_backup(name, path):
                         auth.account_table(con)
                         kept_accounts = con.execute(f"SELECT {', '.join(auth.ACCOUNT_COLUMNS)} FROM SiteUser").fetchall()
                         kept_hooks = webhooks.kept(con)
+                        # A server with webhooks, accounts or players of its own is no new one: its webhooks as they are
+                        # now, none among them too (the owner deleted them, and their chats hear nothing more from here).
+                        empty = not kept_hooks and not kept_accounts and not has_players(con)
                 # Today's tokens and accounts go into the restored copy while it is still apart from the server: the
                 # database that takes the live one's place has them from its first moment (a damaged one set aside
                 # leaves no tokens).
@@ -575,8 +590,10 @@ def restore_backup(name, path):
                     with copy:
                         tokens.put(copy, kept_tokens)
                         # Today's webhooks, and the loop's memory and queue gone: its next look starts from the restored
-                        # data as it is, sending nothing of it.
-                        webhooks.put(copy, kept_hooks)
+                        # data as it is, sending nothing of it. A server with nothing of its own yet keeps the backup's
+                        # webhooks instead (a move to a new PC keeps the chats the owner set), their queue gone all the
+                        # same.
+                        webhooks.put(copy, webhooks.kept(copy) if empty else kept_hooks)
                         # A server with no account (a new PC, or a damaged database set aside) has none to keep: the
                         # backup's accounts come with it then, or a move to a new PC would leave every player out.
                         if kept_accounts:

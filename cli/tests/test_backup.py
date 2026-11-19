@@ -298,17 +298,41 @@ class RealDatabaseTest(unittest.TestCase):
             self.assertEqual(self.webhooks_in(backup.DB), (["https://chat.example/hooks/added-since"], [0, 0, 0]))
             self.assertEqual(sb.webhooks_kept, 1)
 
-    def test_a_restore_on_a_server_without_webhooks_brings_none_back(self):
+    def backup_with_a_webhook(self, sb):
+        """A backup whose database has a webhook, what its loop knew and a message waiting: the archive's name."""
+        with tempfile_folder() as tmp:
+            old = self.database(os.path.join(tmp, "old.db3"))
+            self.with_webhooks(old, "https://chat.example/hooks/from-the-backup")
+            old.close()
+            with open(os.path.join(tmp, "old.db3"), "rb") as f:
+                return sb.archive("data/backups/opendmtq-20260101-120000-manual.tar.gz", {"dmtq.db3": f.read()})
+
+    def test_a_restore_on_a_server_with_players_and_no_webhooks_brings_none_back(self):
+        # Every webhook deleted since on a server in use: none comes back, its chat hears nothing more from here.
         with Sandbox() as sb:
-            with tempfile_folder() as tmp:
-                old = self.database(os.path.join(tmp, "old.db3"))
-                self.with_webhooks(old, "https://chat.example/hooks/from-the-backup")
-                old.close()
-                with open(os.path.join(tmp, "old.db3"), "rb") as f:
-                    name = sb.archive("data/backups/opendmtq-20260101-120000-manual.tar.gz", {"dmtq.db3": f.read()})
-            self.database(backup.DB).close()
+            name = self.backup_with_a_webhook(sb)
+            live = self.database(backup.DB)
+            live.execute("INSERT INTO Member (id) VALUES (7)")
+            live.commit()
+            live.close()
             self.assertEqual(sb.call(app.cmd_restore, name=name, with_key=False), 0, sb.output())
             self.assertEqual(self.webhooks_in(backup.DB), ([], [0, 0, 0]))
+            self.assertEqual(sb.webhooks_kept, 0)
+
+    def test_a_server_with_nothing_of_its_own_takes_the_backups_webhooks(self):
+        # A move to a new machine (no webhook, account or player yet): the backup's webhooks come with it, as its accounts
+        # do, and nothing it had waiting is sent (ADM-171; main dropped them).
+        with Sandbox() as sb:
+            name = self.backup_with_a_webhook(sb)
+            self.database(backup.DB).close()
+            self.assertEqual(sb.call(app.cmd_restore, name=name, with_key=False), 0, sb.output())
+            self.assertEqual(self.webhooks_in(backup.DB), (["https://chat.example/hooks/from-the-backup"], [0, 0, 0]))
+            self.assertIsNone(sb.webhooks_kept)
+        # Nothing at all yet (no database): the same.
+        with Sandbox() as sb:
+            name = self.backup_with_a_webhook(sb)
+            self.assertEqual(sb.call(app.cmd_restore, name=name, with_key=False), 0, sb.output())
+            self.assertEqual(self.webhooks_in(backup.DB), (["https://chat.example/hooks/from-the-backup"], [0, 0, 0]))
 
     def test_the_webhooks_tables_are_the_ones_the_admin_pages_make(self):
         # Two copies of each statement: the admin pages' (webhooks.py, which makes them) and this restore's.

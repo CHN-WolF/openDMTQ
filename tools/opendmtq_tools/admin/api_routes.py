@@ -1269,7 +1269,8 @@ ROUTES = [
     Route("POST", "/backups/{backup}/restore", "write", "backup_restore", "Backups", "Restores a backup while the server runs.",
           "The current state is backed up first. Who is broadcasting, the site's accounts, the API's tokens and the webhooks "
           "stay as they are now: they are put into the restored database before it takes the current one's place, and nothing "
-          "of the restored data goes to a chat. A server with no account yet takes the backup's accounts.",
+          "of the restored data goes to a chat. A server with no account yet takes the backup's accounts, and one with no webhook, "
+          "account or player yet the backup's webhooks.",
           answer="JobAnswer", status=202,
           errors=[(404, "backup_not_found", "No such backup."), (409, "busy", "Another restore runs.")]),
     Route("DELETE", "/backups/{backup}", "write", "backup_delete", "Backups", "Deletes a backup.", answer="Deleted",

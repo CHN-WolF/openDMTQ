@@ -740,7 +740,7 @@ A host install (`host/install.sh`, then `./opendmtq setup`) and the Windows bund
 | Path | Contents | Backed up |
 | :--- | :--- | :--- |
 | `data/content/` | What was imported: the client data and the song data, read only | No (import again) |
-| `data/state/dmtq.db3` (and its `-wal`, `-shm`) | Accounts and scores; the players' game state (currencies, levels, items, purchases, bans); the players' broadcast switches and the server's broadcast settings (the admin Broadcasts page); the Notices page's webhooks and their queue | Yes (a restore keeps today's accounts, API tokens and webhooks, and on the admin pages today's switches and settings) |
+| `data/state/dmtq.db3` (and its `-wal`, `-shm`) | Accounts and scores; the players' game state (currencies, levels, items, purchases, bans); the players' broadcast switches and the server's broadcast settings (the admin Broadcasts page); the Notices page's webhooks and their queue | Yes (a restore keeps today's accounts, API tokens and webhooks, and on the admin pages today's switches and settings; a server with nothing of its own yet, a new PC, takes the backup's accounts and webhooks) |
 | `data/state/live/` | The live view's window: the last segments of each broadcast. Cleared at start | No |
 | `data/state/live-rec/` | Recordings of broadcasts, up to the limits on the admin Broadcasts page | No |
 | `data/state/logs/` | The request log the admin Logs page reads (three files of 10 MB), and a host install's other logs | No |

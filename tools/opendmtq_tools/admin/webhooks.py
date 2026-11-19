@@ -1069,9 +1069,10 @@ if os.environ.get("OPENDMTQ_WEBHOOK_LOOP", "on") != "off":
 # ------------------------------------------------------------------------------ a restore
 
 def kept(con):
-    """Today's webhooks, for a restore to put back (put())."""
+    """A database's webhooks, for a restore to put back (put()): today's, or the restored copy's own on a server that has
+    none. Each by its column's name, whether or not the connection names its rows' columns (the copy's does not)."""
     tables(con)
-    return con.execute(f"SELECT {', '.join(COLUMNS)} FROM Webhook").fetchall()
+    return [dict(zip(COLUMNS, r)) for r in con.execute(f"SELECT {', '.join(COLUMNS)} FROM Webhook").fetchall()]
 
 
 def put(con, rows):

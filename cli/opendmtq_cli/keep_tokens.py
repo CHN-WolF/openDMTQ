@@ -1,8 +1,9 @@
 """The API's tokens, the site's accounts and the Notices page's webhooks kept across `./opendmtq restore`, as the admin
 pages' restore keeps them: the restored database gets the server's tokens, accounts and webhooks of now, and none of the
 backup's. An old backup must not bring back a token revoked since, an account deleted since, an old password or a webhook
-deleted since, nor end what was made since. A server with no account yet (a new machine) takes the backup's accounts. What
-the webhooks' loop knew and had waiting in the backup goes: it looks at the restored data anew and sends nothing of it.
+deleted since, nor end what was made since. A server with no account yet (a new machine) takes the backup's accounts, and
+one with nothing of its own yet (no webhook, account or player) the backup's webhooks too. What the webhooks' loop knew and
+had waiting in the backup goes: it looks at the restored data anew and sends nothing of it.
 
 The restore runs this in the tools container, beside the database (backup.restore copies it there), before the restored
 database takes the live one's place:
@@ -56,6 +57,9 @@ WEBHOOK_TABLES = (
 
 # What is copied of each webhook, as the admin pages' restore copies it (webhooks.COLUMNS there): its address whole.
 WEBHOOK_COLUMNS = ("id", "url", "kind", "lang", "events", "made_by", "made_at", "ok_at", "fail_at", "fail_code", "fail_status", "gave_up")
+
+# The game player the server's own check plays as (tools/opendmtq_tools/admin/core.py CHECK_UDID): nobody's player.
+CHECK_UDID = "opendmtq-check"
 
 
 def tokens_now(live):
@@ -168,12 +172,37 @@ def webhooks_now(live):
         return []
 
 
+def has_players(live):
+    """True when the live database holds a player of the game (the server's own check aside); False for none, no database
+    yet (a new machine), or one that cannot be read (damaged)."""
+    if not os.path.isfile(live):
+        return False
+    try:
+        con = sqlite3.connect(live)
+        try:
+            try:
+                return con.execute("SELECT 1 FROM Member WHERE udid IS NOT ? AND guid IS NOT NULL LIMIT 1",
+                                   (CHECK_UDID,)).fetchone() is not None
+            except sqlite3.OperationalError:
+                # A table without those columns, from long before them: any row of it is a player.
+                return con.execute("SELECT 1 FROM Member LIMIT 1").fetchone() is not None
+        finally:
+            con.close()
+    except sqlite3.DatabaseError:
+        # No Member table (a server set up a moment ago) or no database to read: no player.
+        return False
+
+
 def keep_webhooks(live, restored):
     """Gives the restored database the live one's webhooks, and only them, as the admin pages' restore does (webhooks.put
     there): the backup's own go (a webhook deleted since must not post to its chat again), and with them what the backup's
     loop knew (who was on air, how far it read) and had waiting, so that the loop looks at the restored data anew and sends
-    nothing of it. Returns how many were kept."""
+    nothing of it. A server with nothing of its own yet (no webhook, account or player: a new machine, or a database too
+    damaged to read) keeps the backup's webhooks instead, as it keeps the backup's accounts: a move to a new machine keeps
+    the chats the owner set; their queue and what their loop knew go all the same. Returns how many were kept, or None
+    when the backup's stay."""
     rows = webhooks_now(live)
+    theirs = not rows and accounts_now(live) is None and not has_players(live)
     try:
         con = sqlite3.connect(restored)
     except sqlite3.Error:
@@ -182,20 +211,22 @@ def keep_webhooks(live, restored):
         with con:
             for statement in WEBHOOK_TABLES:
                 con.execute(statement)
-            for table in ("Webhook", "WebhookMessage", "WebhookState", "WebhookTop"):
+            # The backup's webhooks go too unless they are the ones that stay.
+            for table in ("WebhookMessage", "WebhookState", "WebhookTop") + (() if theirs else ("Webhook",)):
                 con.execute(f"DELETE FROM {table}")
-            con.executemany(f"INSERT INTO Webhook ({', '.join(WEBHOOK_COLUMNS)}) VALUES ({', '.join('?' for _ in WEBHOOK_COLUMNS)})", rows)
+            if not theirs:
+                con.executemany(f"INSERT INTO Webhook ({', '.join(WEBHOOK_COLUMNS)}) VALUES ({', '.join('?' for _ in WEBHOOK_COLUMNS)})", rows)
     except sqlite3.DatabaseError:
         # No database to put them in (the restore's own checks stand before this): nothing kept.
         return 0
     finally:
         con.close()
-    return len(rows)
+    return None if theirs else len(rows)
 
 
 def keep_all(live, restored):
     """All three, as the restore runs this file: (tokens kept, accounts kept or None when the backup's stay, webhooks
-    kept)."""
+    kept or None when the backup's stay)."""
     return keep(live, restored), keep_accounts(live, restored), keep_webhooks(live, restored)
 
 
@@ -205,4 +236,4 @@ if __name__ == "__main__":
     tokens, accounts, hooks = keep_all(sys.argv[1], sys.argv[2])
     print(f"API tokens kept: {tokens}")
     print("accounts: the backup's (this server has none)" if accounts is None else f"accounts kept: {accounts}")
-    print(f"webhooks kept: {hooks}")
+    print("webhooks: the backup's (this server has none of its own yet)" if hooks is None else f"webhooks kept: {hooks}")

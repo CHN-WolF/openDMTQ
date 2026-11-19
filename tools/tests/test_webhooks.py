@@ -822,6 +822,53 @@ class RestoreTest(unittest.TestCase):
             webhooks.run_once()
             self.assertEqual(inst.chat.got, [])
 
+    def backup_then_new_database(self, inst, players=(), hooks=0):
+        """A backup holding a webhook and its waiting message, then the live database made as a new PC's: the game's
+        tables with these players and no account, and `hooks` webhooks of its own (to the stand-in chat). The backup's
+        name."""
+        inst.hook(path="/old")
+        webhooks.detect()
+        admin.songs.set_maintenance(True, "", HOST)
+        webhooks.detect()
+        name = admin.backups.make_backup("manual")
+        admin.songs.set_maintenance(False, "", HOST)
+        for suffix in ("", "-wal", "-shm"):
+            if os.path.exists(admin.core.DB + suffix):
+                os.remove(admin.core.DB + suffix)
+        old_game_database(admin.core.DB, [])
+        member_rows(admin.core.DB, list(players))
+        for n in range(hooks):
+            inst.hook(path=f"/new{n}")
+        return name
+
+    def restore(self, name):
+        with admin.app.test_request_context():
+            said, done = admin.backups.restore_backup(name, os.path.join(admin.core.BACKUPS, name))
+        self.assertTrue(done, said)
+
+    def test_a_server_with_nothing_of_its_own_keeps_the_backups_webhooks(self):
+        # A move to a new PC (no webhook, account or player yet): the backup's webhooks come with it, as its accounts do,
+        # and nothing it had queued is sent (ADM-171; main dropped them).
+        with Server() as inst:
+            name = self.backup_then_new_database(inst)
+            self.restore(name)
+            self.assertEqual([h["address"] for h in webhooks.listing()], [webhooks.masked(inst.chat.url + "/old")])
+            self.assertEqual(inst.queued(), [])
+            webhooks.run_once()
+            self.assertEqual(inst.chat.got, [])
+
+    def test_a_server_with_players_or_webhooks_of_its_own_keeps_its_own(self):
+        # Players of its own, and every webhook deleted since: none comes back (their chats hear nothing more from here).
+        with Server() as inst:
+            name = self.backup_then_new_database(inst, players=[(7, "Sena", "phone-a")])
+            self.restore(name)
+            self.assertEqual(webhooks.listing(), [])
+        # Its own webhook and no player: its own, the backup's gone.
+        with Server() as inst:
+            name = self.backup_then_new_database(inst, hooks=1)
+            self.restore(name)
+            self.assertEqual([h["address"] for h in webhooks.listing()], [webhooks.masked(inst.chat.url + "/new0")])
+
 
 @unittest.skipUnless(HAVE_FLASK, "needs Flask (in the tools image)")
 class CardTest(unittest.TestCase):
