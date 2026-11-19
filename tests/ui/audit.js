@@ -444,6 +444,9 @@ async function self(contexts) {
   await page.setContent(`<!doctype html><style>:root { --gap: 20px; --pad: 24px } body { margin: 0; background: #11151a; color: #eee; font: 14px/1.6 sans-serif }
     main { display: grid; gap: var(--gap); padding: 24px } .card { padding: var(--pad); background: #222 } .line { display: flex; gap: 10px; margin: 14px 0 0 }
     .btn { display: inline-flex; align-items: center; height: 42px; padding: 0 16px; background: #333 } p { margin: 0 0 14px }</style>
+    <div style="position: relative; height: 110px"><div class="said-stack" style="position: absolute; left: 0; right: 0; top: 0; box-shadow: 0 12px 26px -12px rgba(0, 0, 0, 0.8)">
+      <p style="margin: 0; padding: 11px 24px; background: color-mix(in srgb, #8cf23d 13%, #1a1f25)">A message, as the admin pages say one under their bar.</p>
+      <p style="margin: 0; padding: 11px 24px; background: color-mix(in srgb, #8cf23d 13%, #1a1f25); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06)">And the next one, right under it.</p></div></div>
     <div style="padding: 11px 24px; background: color-mix(in srgb, #ffcf3d 12%, #11151a)">A band across the page, as the site's notice under its bar.</div>
     <div style="height: 80px; padding: 0 24px; background: #0b0e12">The page's stage right under it, edge to edge as well.</div>
     <main><div class="card"><p>A panel with words in its padding.</p><div class="line"><span class="btn">One</span><span class="btn">Two</span><span class="btn">Three</span></div></div>

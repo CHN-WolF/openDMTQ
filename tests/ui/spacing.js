@@ -108,9 +108,10 @@ window.spacingAudit = function spacingAudit() {
     return found;
   };
   // Joined on purpose: the cells of a table, a segmented control's buttons, the tabs on their rule, the language switch's
-  // two halves, a menu's or a list's rows with a line between them. Short, and each one a look the game itself has.
+  // two halves, a menu's or a list's rows with a line between them, as the messages stacked under the admin pages' bar
+  // are (their panel's bands, edge to edge of it). Short, and each one a look the game itself has.
   // A gauge's fill runs from its track's edge, and a strip's or a calendar's cells stand a hair apart: they are drawings.
-  const JOINED = 'td, th, tr, thead, tbody, tfoot, caption, .seg > *, .tabs > *, .tabbar > *, .lang-switch > *, [role=tablist] > *, [role=menu] > *, [role=listbox] > *, .meter > *, .tile-meter > *, .strip > *, .daycells > *';
+  const JOINED = 'td, th, tr, thead, tbody, tfoot, caption, .seg > *, .tabs > *, .tabbar > *, .lang-switch > *, [role=tablist] > *, [role=menu] > *, [role=listbox] > *, .said-stack > *, .meter > *, .tile-meter > *, .strip > *, .daycells > *';
   // A drawing's parts: a box with no words and nothing to press in a box with none either (a gauge's track and its fill,
   // a stacked bar's segments) is drawn as one figure.
   const wordless = el => !el.textContent.trim() && !el.querySelector(CONTROL) && !el.matches(CONTROL);
