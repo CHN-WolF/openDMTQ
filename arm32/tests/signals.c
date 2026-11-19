@@ -1,5 +1,7 @@
 // Guest signals: a handler on the same thread, a handler on another thread blocked in a futex,
-// floats surviving a handler, and the suspend/resume handshake Boehm GC uses to stop threads.
+// floats surviving a handler, a thread ID that names no thread, and the suspend/resume handshake
+// Boehm GC uses to stop threads.
+#include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
@@ -70,6 +72,23 @@ int main(void) {
     volatile double f = 3.5;
     raise(SIGUSR1);
     CHECK("floats survive a handler", f * 2 == 7.0 && self_hits == 2);
+
+    // A thread ID of 0 or below names no thread: tgkill and tkill refuse it (EINVAL) and send
+    // nothing. The C library passes 0 on for a thread that has ended and is not joined yet, and
+    // that signal must not go to another thread of the process instead (here the only one).
+    int hits_before = self_hits;
+    long r0 = syscall(__NR_tgkill, getpid(), 0, SIGUSR1);
+    int e0 = errno;
+    long r1 = syscall(__NR_tkill, 0, SIGUSR1);
+    int e1 = errno;
+    long r2 = syscall(__NR_tgkill, getpid(), -1, SIGUSR1);
+    int e2 = errno;
+    // A signal sent to the process anyway would have reached this thread by now.
+    usleep(20000);
+    CHECK("a thread ID of 0 or below names no thread",
+          r0 == -1 && e0 == EINVAL && r1 == -1 && e1 == EINVAL && r2 == -1 && e2 == EINVAL && self_hits == hits_before);
+    // The checks below count the handler's runs from here, whatever this one found.
+    self_hits = hits_before;
 
     struct sigaction alarm_action;
     memset(&alarm_action, 0, sizeof alarm_action);

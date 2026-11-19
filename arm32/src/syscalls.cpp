@@ -1700,6 +1700,10 @@ std::uint32_t do_syscall(Thread& t, std::uint32_t nr) {
     case 268: {  // tgkill(tgid, tid, sig)
         int tid = static_cast<int>(nr == 268 ? a1 : a0);
         int sig = static_cast<int>(nr == 268 ? a2 : a1);
+        // A thread ID of 0 or below names no thread, nor does a group ID of 0 or below: the kernel refuses both. Passed on,
+        // 0 is the whole process to send_signal, and the C library's pthread_kill passes 0 for a thread that has ended and
+        // is not joined yet (the kernel cleared its ID): another thread of the process got that signal.
+        if (tid <= 0 || (nr == 268 && static_cast<int>(a0) <= 0)) return err(EINVAL);
         if (sig == 0) {
             std::lock_guard<std::mutex> g(p.threads_lock);
             return p.threads.count(tid) ? 0 : err(ESRCH);
