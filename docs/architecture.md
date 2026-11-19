@@ -31,7 +31,7 @@ game's files, or a run by hand ([testing](testing.md)).
 | Host install | The same server without containers, and the Windows bundle | `host/`: `get.sh` and `install.sh` for Linux and macOS, `windows/` for the Windows bundle, and the program itself, a package in layers (`paths`, `settings`, `apache`, `server`, `commands`, `setup`): start at `opendmtq_host/server.py` (`Server`) | `tests/host/run.sh`, `tests/windows/wine.sh`, `tests/windows/run.ps1` (CI); `tests/host/update.sh`, `tests/windows/update.sh`, `tests/windows/play_here.sh` (by hand) |
 | Helm chart | The same images on Kubernetes, with a router in front ([kubernetes.md](kubernetes.md)) | `deploy/helm` (`values.yaml`) | the chart against Kubernetes' schemas (CI), `tests/ha/failover.sh` (by hand) |
 | Database | One SQLite file shared by the game server, the site and the admin pages ([below](#the-database)) | `server/game/bin/setup-db.php` | `tests/upgrade/run.sh` (CI) |
-| Releases | The release's files under their names, their checksums and the project's signature over them ([below](#releases-and-their-signature)) | `.github/release_assets.py` (`layout`, `check`), `.github/release_notes.py`, `.github/workflows/release.yml`; the signature in `tools/opendmtq_tools/signing.py` | `cli/tests/test_release.py` (CI); `tests/release/update.sh` and `update_signed.sh` under Wine (by hand) |
+| Releases | The release's files under their names, their checksums and the project's signature over them ([below](#releases-and-their-signature)) | `.github/release.sh` (a release made, checked and published), `.github/release_assets.py` (`layout`, `check`), `.github/release_notes.py`, `.github/workflows/release.yml`; the signature in `tools/opendmtq_tools/signing.py` | `cli/tests/test_release.py` (CI); `tests/release/update.sh` and `update_signed.sh` under Wine (by hand) |
 | The tests | The tests beyond unit tests: the contract, the pages, who reaches the admin pages, an upgrade, the live server, the host install, the Windows bundle, the updates of each kind of install and of the PC client | `tests/` ([testing.md](testing.md)) | [what runs where](testing.md#what-runs-where) |
 
 How each part runs, with Docker Compose and without containers:
@@ -723,8 +723,8 @@ hand.
 ## Releases and their signature
 
 A release is laid out, checked and signed by `.github/release_assets.py` on the machine that holds the project's
-signing key (`OPENDMTQ_SIGNING_KEY` names its file; it never enters the repository or GitHub), and published with
-`release.yml`'s steps ([CONTRIBUTING.md](../CONTRIBUTING.md#releases)). Its files carry what each is, the version, the
+signing key (`OPENDMTQ_SIGNING_KEY` names its file; it never enters the repository or GitHub), and made, checked and
+published there by `.github/release.sh`, with `release.yml`'s steps ([CONTRIBUTING.md](../CONTRIBUTING.md#releases)). Its files carry what each is, the version, the
 system and the architecture in lower case, and `opendmtq-<version>-sha256sums.txt` lists the SHA-256 of every other
 file, the PC client's update feed and its packages among them. `opendmtq-<version>-sha256sums.txt.sig` is the project's
 signature over that file's bytes: 64 bytes of Ed25519 as RFC 8032 defines it (`signing.py`, plain Python, the same
