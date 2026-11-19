@@ -35,7 +35,7 @@ import urllib.request
 from flask import flash, has_request_context, redirect, request, session, url_for
 
 from .. import songs, strings, windows_client
-from . import core, notices, site
+from . import auth, core, notices, site
 from .core import Refused, ago, app, BASE, changed, t, tp
 
 # What a chat can hear of, in the card's order. live_off: a broadcast's end, unticked as a new webhook comes.
@@ -58,10 +58,15 @@ DISCORD_HOSTS = {"discord.com", "discordapp.com", "ptb.discord.com", "canary.dis
 URL_MAX = 1000
 
 # The server itself and its network link's own addresses (loopback, link-local such as a cloud's metadata at
-# 169.254.169.254, the unspecified one) are no chat: a webhook there would let a test's answer say what answers on the
-# server's own ports. Refused when added and found out again when a message would go (a name may lead there). The tests'
-# stand-in chats on the loopback set this (a chat on the local network is one, and needs nothing).
+# 169.254.169.254, the unspecified one, this machine's own on any of its networks, the game server's) are no chat: a webhook
+# there would let a test's answer say what answers on the server's own ports. Refused when added and found out again when a
+# message would go (a name may lead there). The tests' stand-in chats on the loopback set this (a chat on the local network
+# is one, and needs nothing).
 LOOPBACK_OK = False
+
+# An address no machine holds (TEST-NET-1, IPv6's documentation prefix), of each version: a machine that lets a program
+# take one for its end of a connection lets it take any (Linux's ip_nonlocal_bind), and taking one tells nothing there.
+NOBODYS = {4: ipaddress.ip_address("192.0.2.1"), 6: ipaddress.ip_address("2001:db8::1")}
 
 
 def own_address(address):
@@ -75,6 +80,33 @@ def own_address(address):
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
     return ip.is_loopback or ip.is_link_local or ip.is_unspecified
+
+
+def _takes(ip):
+    """True when this machine lets a program take the address (an ipaddress object) for its own end of a connection."""
+    try:
+        with socket.socket(socket.AF_INET6 if ip.version == 6 else socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.bind((str(ip), 0))
+        return True
+    except OSError:
+        return False
+
+
+def this_servers(address):
+    """True for an address (a string) of the server's own beyond the loopback and its network link's (own_address): one of
+    this machine's on any of its networks (a container's own, the LAN's, a public one: it may take it for its end of a
+    connection, where it does not let a program take any), or the game server's (SERVER_URL's, another container's in
+    Docker Compose). The name the machine goes by leads to one of them."""
+    try:
+        ip = ipaddress.ip_address(address.split("%")[0])
+    except ValueError:
+        return False
+    # An IPv4 address written as IPv6 (::ffff:192.168.0.10) is that IPv4 address.
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    if _takes(ip) and not _takes(NOBODYS[ip.version]):
+        return True
+    return str(ip) in auth.server_addresses()
 
 # How often the loop looks, in seconds.
 EVERY = 5
@@ -216,7 +248,7 @@ def check_url(raw):
         raise Refused(400, "bad_url", t("hook.github"))
     # The server itself, by its name (written with its last dot or not) or its numbers, or its network link's own addresses.
     host = host_name(url)
-    if not LOOPBACK_OK and (host == "localhost" or host.endswith(".localhost") or own_address(host)):
+    if not LOOPBACK_OK and (host == "localhost" or host.endswith(".localhost") or own_address(host) or this_servers(host)):
         raise Refused(400, "bad_url", t("hook.local"))
     return url
 
@@ -623,7 +655,7 @@ def post(url, body, timeout=TIMEOUT):
     except (OSError, UnicodeError) as e:
         app.logger.warning("webhook: %s: %s", masked(url), e)
         return {"ok": False, "status": None, "code": "unreachable", "retry_after": None}
-    if not LOOPBACK_OK and any(own_address(str(info[4][0])) for info in found):
+    if not LOOPBACK_OK and any(own_address(str(info[4][0])) or this_servers(str(info[4][0])) for info in found):
         return {"ok": False, "status": None, "code": "local", "retry_after": None}
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST", headers={

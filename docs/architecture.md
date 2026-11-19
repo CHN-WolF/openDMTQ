@@ -659,8 +659,8 @@ hand.
   of its token. A banned player's accounts are refused at the site's and the PC client's sign-in.
 - A webhook's address is a secret, as whoever has it can post to the chat: it stays in the database and leaves it only
   for the chat, and the pages, the API and the log of changes show it masked. One that leads to the server itself or its
-  network link's own addresses (loopback, link-local such as a cloud's metadata address, the unspecified one) is refused
-  when it is added, and not sent to when its name leads there later: the name is looked up once for each message, and the
+  network link's own addresses (loopback, link-local such as a cloud's metadata address, the unspecified one, this
+  machine's own on any of its networks, the game server's) is refused when it is added, and not sent to when its name leads there later: the name is looked up once for each message, and the
   message goes to the address that look found, so that a second answer cannot lead it elsewhere (through a proxy the
   system names, the proxy connects by the name).
 - What comes from the project's releases is checked against the release's checksums, which carry the project's Ed25519

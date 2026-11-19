@@ -184,6 +184,40 @@ class AddressTest(unittest.TestCase):
         with mock.patch.object(webhooks.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 443))]):
             self.assertEqual(webhooks.post("https://chat.example/hook", {})["code"], "local")
 
+    def test_this_machines_own_addresses_and_the_game_servers_are_no_chat(self):
+        # Beyond the loopback: an address of this machine on any of its networks (a container's own, which its name leads
+        # to too) and the game server's, by its numbers when added and by where its name leads when a message would go;
+        # a chat on the local network stays one (ADM-174; main sent to both).
+        try:
+            # This machine's address towards the rest of the network (connecting a UDP socket sends nothing).
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                probe.connect(("192.0.2.1", 9))
+                own = probe.getsockname()[0]
+        except OSError:
+            own = socket.gethostbyname(socket.gethostname())
+        if own.startswith("127."):
+            self.skipTest("this machine has no address but the loopback")
+        with admin.app.test_request_context():
+            for url in (f"http://{own}:8000/hook", f"http://[::ffff:{own}]:8000/hook"):
+                with self.assertRaises(webhooks.Refused, msg=url) as e:
+                    webhooks.check_url(url)
+                self.assertEqual(e.exception.words, admin.core.t("hook.local"), url)
+            with mock.patch.object(admin.auth, "server_addresses", lambda: {"192.168.0.11"}):
+                with self.assertRaises(webhooks.Refused):
+                    webhooks.check_url("http://192.168.0.11:8080/hook")
+                self.assertEqual(webhooks.check_url("http://192.168.1.20:8065/hooks/abc"), "http://192.168.1.20:8065/hooks/abc")
+        # Its name, or any name that leads to one of them: not sent to.
+        real = socket.getaddrinfo
+        for leads_to in (own, "192.168.0.11"):
+            with mock.patch.object(admin.auth, "server_addresses", lambda: {"192.168.0.11"}), \
+                    mock.patch.object(webhooks.socket, "getaddrinfo", lambda host, *a, **k: real(leads_to, *a, **k)):
+                self.assertEqual(webhooks.post("http://chat.example:8000/hook", {}, timeout=1)["code"], "local", leads_to)
+        self.assertEqual(webhooks.post(f"http://{socket.gethostname()}:8000/hook", {}, timeout=1)["code"], "local")
+        # Where the machine lets a program take any address for its end, that tells nothing: the chat on the local network
+        # is sent to as before.
+        with mock.patch.object(webhooks, "_takes", lambda ip: True):
+            self.assertFalse(webhooks.this_servers("192.168.1.20"))
+
     def test_an_address_of_a_webhook_is_taken_and_anything_else_refused(self):
         with admin.app.test_request_context(), mock.patch.object(webhooks, "LOOPBACK_OK", True):
             for url in ("https://discord.com/api/webhooks/1/abc", "http://127.0.0.1:8080/hook", "https://hooks.slack.com/services/T/B/x"):

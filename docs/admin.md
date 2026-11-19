@@ -212,7 +212,7 @@ and links to that page of the site. Discord's are embeds and Slack's blocks, and
 The address is kept in the database and shown masked everywhere, in the API and the log of changes too (Discord's
 token, the secret at the end of Slack's, the whole path of another chat's); a backup holds it whole, as
 it holds the app's signing key. An address of the server itself or of its network link's own (loopback, link-local such
-as a cloud's metadata) is refused, by its numbers when added and by where its name leads when a message goes, which is
+as a cloud's metadata, this machine's own on any of its networks, the game server's) is refused, by its numbers when added and by where its name leads when a message goes, which is
 where the message then goes; a chat on the local network is fine. A message a chat does not take is tried again after a wait, the chat's own when it asks for
 one, and given up after half an hour; the card says the last failure in red with why, how many wait and how many were
 given up, and the status page lists it among the things to look at. A restore keeps today's webhooks and sends nothing
