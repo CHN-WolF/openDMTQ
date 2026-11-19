@@ -8,6 +8,7 @@ Run: gunicorn -w 1 --threads 8 -b 0.0.0.0:8000 opendmtq_tools.admin:app
 import contextlib
 import datetime
 import errno
+import functools
 import hmac
 import html
 import json
@@ -164,6 +165,15 @@ class AdminRequest(Request):
             return tempfile.TemporaryFile(dir=BACKUPS)
         return super()._get_file_stream(total_content_length, content_type, filename, content_length)
 
+    @functools.cached_property
+    def page_lang(self):
+        """This request's page language (lang()), worked out once: a page asks for it for every word it shows, some twenty
+        thousand times on the Players page of a thousand players, and a missing cookie costs an exception each time. The
+        API speaks English to every caller."""
+        if is_api(self.path):
+            return "en"
+        return "ko" if self.cookies.get(LANG_COOKIE) == "ko" else "en"
+
 
 class Refused(Exception):
     """An action that did not happen, and why, for a page and the API alike (each action is one function both call).
@@ -287,9 +297,13 @@ def lang():
     a request otherwise (a test, a command's job), English. The API speaks English to every caller."""
     if getattr(_acting, "lang", None):
         return _acting.lang
-    if not has_request_context() or in_api():
+    if not has_request_context():
         return "en"
-    return "ko" if request.cookies.get(LANG_COOKIE) == "ko" else "en"
+    # The request's own, read once (AdminRequest.page_lang); a request of another kind (none here) as it says.
+    known = getattr(request, "page_lang", None)
+    if known is not None:
+        return known
+    return "en" if in_api() else "ko" if request.cookies.get(LANG_COOKIE) == "ko" else "en"
 
 
 def t(key, **values):

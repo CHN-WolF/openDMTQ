@@ -74,9 +74,10 @@ def players_page():
         return players_csv(rows, activity)
     # The busiest day of anyone in the list: every row's cells are on that one scale.
     busiest = max((n for p in rows for n in activity[p["id"]]["days"]), default=0)
+    # Each row's cells, made once for each run of counts the list has (day_cells()).
+    cells = day_cells(busiest)
     played = {p["id"]: {"last": activity[p["id"]]["last"], "ago": ago(activity[p["id"]]["last"]) if activity[p["id"]]["last"] else "",
-                        "recent": activity[p["id"]]["recent"],
-                        "spark": charts.days(activity[p["id"]]["days"], busiest, day_tips(activity[p["id"]]["days"]), tp("players.days_label"))} for p in rows}
+                        "recent": activity[p["id"]]["recent"], "spark": cells(activity[p["id"]]["days"])} for p in rows}
     # Broadcasts off for the server: the switches are kept, and the page says so above them.
     # And what new players start with, which the page says with how the two switches go together.
     settings = recordings.live_settings()
@@ -97,10 +98,27 @@ def csv_text(value):
     return f'"{text}"'
 
 
-def day_tips(counts):
-    """Each of the last days' words for its cell: its date and how many plays."""
+def day_cells(busiest):
+    """A row's last days as cells (charts.days, on the scale busiest, each cell's words its date and how many plays), for a
+    page of many rows: a day's words made once for each count on that day, and each run of counts once (players who played
+    on the same days, or not at all, share theirs). Made row by row, a list of a thousand players asked for a day's words
+    fourteen thousand times, a third of the page's time."""
+    label, said, made = tp("players.days_label"), {}, {}
     today = datetime.date.today()
-    return [tp("players.day_tip", day=(today - datetime.timedelta(days=len(counts) - 1 - i)).strftime("%m-%d"), n=n) for i, n in enumerate(counts)]
+
+    def tip(back, n):
+        # The words of the day back days before today, with n plays on it.
+        if (back, n) not in said:
+            said[(back, n)] = tp("players.day_tip", day=(today - datetime.timedelta(days=back)).strftime("%m-%d"), n=n)
+        return said[(back, n)]
+
+    def cells(counts):
+        key = tuple(counts)
+        if key not in made:
+            # Oldest first: the last count is today's.
+            made[key] = charts.days(counts, busiest, [tip(len(counts) - 1 - i, n) for i, n in enumerate(counts)], label)
+        return made[key]
+    return cells
 
 
 def players_csv(rows, activity):
