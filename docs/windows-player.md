@@ -135,9 +135,10 @@ its last result goes into the report. `OpenDMTQ-cmd.exe --test-server` runs the 
 **Help**, **Save a report** puts one zip in the Downloads folder (`opendmtq-report-<date>-<time>.zip`) and shows it
 selected in File Explorer: the launcher's logs, the end of the game's log, the settings, the displays, the sound
 devices, Windows and the graphics cards, the launcher's and the player's versions, and the last connection test. Left
-out of every file, each replaced by a word in angle brackets: the Windows user's name in paths, the site IDs, the
-servers' addresses and names, the sign-in cookies, tokens and keys, this PC's player id and what was typed in the game.
-The window says which of those it found; `about.txt` in the zip lists them with how often.
+out of every file, each replaced by a word in angle brackets: the Windows user's name in paths, every site ID, every
+server's address and name (also of servers the settings no longer know: one forgotten since, an address typed, the last
+test of any address), the sign-in cookies, tokens and keys, this PC's player id and what was typed in the game. The
+window says which of those it found; `about.txt` in the zip lists them with how often.
 
 ### Updates
 

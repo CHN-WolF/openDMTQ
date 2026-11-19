@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import zipfile
 from unittest import mock
 
@@ -20,9 +21,19 @@ COOKIE = "1999999999.%s.%s" % (ACCOUNT.encode().hex(), "cd" * 32)
 API_TOKEN = "odq_0123456789ab_" + "A" * 43
 DEVICE = "9f86d081884c7d65"
 PACKAGE = "app.example.stand.in"
+# What today's settings no longer name: a server forgotten since (by its address, its host alone, its name, its app's file
+# and folder here), one on the network by a name without a dot, an address typed that never answered, one tested once,
+# a name's addresses, an ID typed wrong, another ID signed in with once.
+FORGOTTEN, FORGOTTEN_NAME = "http://dmtq.forgotten.test:8791", "Old Place"
+LAN = "http://gamepc:8791"
+TYPED = "10.20.30.40:8791"
+UNKNOWN = "http://198.51.100.9:8791"
+WRONG_ID, ONCE_ID = "sena kim", "mina.k"
 
 
-class Report(Folder):
+class Played(Folder):
+    """A launcher after a day of playing: two servers known, signed in to one, its logs, the game's folder and log."""
+
     def setUp(self):
         super().setUp()
         self.state = st.LauncherState()
@@ -83,6 +94,8 @@ class Report(Folder):
         with zipfile.ZipFile(path) as z:
             return path, left, {name: z.read(name).decode("utf-8") for name in z.namelist()}
 
+
+class Report(Played):
     def test_what_goes_in(self):
         path, _left, files = self.make()
         self.assertEqual(sorted(files), ["about.txt", "launcher/launcher.log", "launcher/launcher.log.1", "player/player.log",
@@ -169,6 +182,29 @@ class Report(Folder):
             code = main.main(args)
         return code, out.getvalue()
 
+    def test_the_saved_connection_test_of_any_address(self):
+        # The last test was of an address this launcher does not know (--test-server ADDRESS), a name it looked up, and
+        # of the known server with the kept ID right before a period ("Signed in as sena. The server is building ...").
+        from opendmtq_client import connection
+        result = connection.Result(UNKNOWN)
+        result.step("address").done("ok", "ok", 1, url=UNKNOWN, scheme="http", host="198.51.100.9", port=8791)
+        result.step("lookup").done("ok", "ok", 1, host="lan.example.test", addresses="203.0.113.77, 2001:db8::77")
+        result.step("server").done("ok", "ok", 4, name="Far Hall", version="0.11.0")
+        result.step("signin").done("ok", "app_building", 5, account=ACCOUNT)
+        result.step("broadcasts").done("bad", "no_answer", 5, error="cannot reach %s (timed out)" % UNKNOWN)
+        result.ended = True
+        connection.save(result)
+        _path, _left, files = self.make()
+        kept = files["system/connection-test.txt"]
+        for private in ("198.51.100.9", "lan.example.test", "203.0.113.77", "2001:db8::77", "Far Hall", ACCOUNT):
+            self.assertNotIn(private, kept, private)
+        # Each in its place, by the word for it: the test reads as before.
+        self.assertIn("Connection test of <server>", kept)
+        self.assertIn("<server> is at <server>, <server>.", kept)
+        self.assertIn("<server name>, OpenDMTQ 0.11.0.", kept)
+        self.assertIn("Signed in as <account>. The server is building its app", kept)
+        self.assertIn("cannot reach <server> (timed out)", kept)
+
     def test_the_command_line(self):
         # A folder: the report's own name in it.
         os.makedirs(os.path.join(self.home, "out"))
@@ -193,3 +229,125 @@ class Report(Folder):
         # In --help, with the jobs of help and upkeep.
         with self.assertRaises(SystemExit):
             self.run_main(["--help"])
+
+
+class EveryForm(Played):
+    """Every site ID and every server's address and name left out by where and how the launcher writes them, whatever they
+    are: also those today's settings no longer know (a server forgotten, an address typed, an ID typed wrong), in the
+    logs before this one too. The lines are as the launcher and the game write them (a real launcher.log and player.log
+    of a run under Wine read for their forms), with made-up values."""
+
+    def logged(self, *lines, name="launcher.log"):
+        """Lines added to one of the launcher's logs, each with the log's own time stamp, level and thread."""
+        with open(os.path.join(os.path.dirname(st.launcher_log()), name), "a", encoding="utf-8") as f:
+            f.write("".join("2026-11-17 07:57:13,%03d %s\n" % (i, line) for i, line in enumerate(lines)))
+
+    def test_ids_by_their_place(self):
+        self.logged(
+            # --sign-in's own line, its ID right before the sentence's period.
+            "INFO MainThread Signed in as %s." % ACCOUNT,
+            # --status: the sign-in, and the ready check's account line (also one that ended).
+            "INFO MainThread signed in: %s" % ACCOUNT,
+            "INFO MainThread signed in: no (%s, ended)" % ONCE_ID,
+            "INFO MainThread   [ok  ] account: %s" % ACCOUNT,
+            "INFO MainThread   [warn] account: not signed in",
+            # A sign-in the window could not make, the ID as typed (a blank in it), on a server forgotten since.
+            "INFO sign-in could not sign in to %s as %s: the ID or the password is wrong" % (FORGOTTEN, WRONG_ID),
+            # An installer's ID, and the command line's arguments as the first line says them.
+            "INFO MainThread the installer brought the ID %s to sign in with" % ONCE_ID,
+            "INFO MainThread OpenDMTQ 0.11.1 started: --server %s --sign-in=%s" % (TYPED, ONCE_ID))
+        self.logged("INFO MainThread an older log, signed in as %s on %s" % (ONCE_ID, FORGOTTEN), name="launcher.log.2")
+        _path, _left, files = self.make()
+        everything = "\n".join(files.values())
+        for private in (ACCOUNT + ".", "signed in: " + ACCOUNT, "account: " + ACCOUNT, ONCE_ID, "sena kim", "as sena"):
+            self.assertNotIn(private, everything, private)
+        log = files["launcher/launcher.log"]
+        for line in ("Signed in as <account>.", "signed in: <account>", "signed in: no (<account>, ended)",
+                     "[ok  ] account: <account>", "[warn] account: not signed in",
+                     "could not sign in to <server> as <account>: the ID or the password is wrong",
+                     "the installer brought the ID <account> to sign in with", "--sign-in=<account>"):
+            self.assertIn(line, log)
+        self.assertIn("signed in as <account> on <server>", files["launcher/launcher.log.2"])
+
+    def test_servers_today_s_settings_do_not_know(self):
+        self.logged(
+            # An address typed in the window that did not answer, and one given to --test-server.
+            "INFO connect could not connect to %s: cannot reach http://%s (timed out)" % (TYPED, TYPED),
+            "INFO MainThread OpenDMTQ 0.11.1 started: --test-server 203.0.113.5:8791",
+            # A name on the network without a dot, an IPv6 address in brackets with its port and one bare.
+            "WARNING update-look could not ask %s for its version: cannot reach %s (timed out)" % (LAN, LAN),
+            "INFO MainThread connection test: [ok  ] Name lookup  gamepc is at 192.168.1.20.",
+            "INFO play started the game for http://[2001:db8::10]:8791 (process 732)",
+            "INFO MainThread connection test: [ok  ] Name lookup  v6.example.test is at 2001:db8::10, fd00::7.")
+        # A server forgotten since, in the oldest log: --server's line, --servers', --status's and its ready check's, its
+        # app's file and folder, a start while it did not answer.
+        self.logged(
+            "INFO MainThread Connected to %s (%s)." % (FORGOTTEN_NAME, FORGOTTEN),
+            "INFO MainThread * %s (%s)" % (FORGOTTEN_NAME, FORGOTTEN),
+            "INFO MainThread server: %s (%s)" % (FORGOTTEN_NAME, FORGOTTEN),
+            "INFO MainThread   [ok  ] server: %s (%s)" % (FORGOTTEN_NAME, FORGOTTEN),
+            "INFO MainThread app: opendmtq-phone-app-2026.11.17-android-dmtq.forgotten.test-8791.apk (2026-11-17T07:52:36)",
+            "INFO MainThread cleared C:\\Users\\x\\AppData\\Local\\OpenDMTQ\\client\\servers\\dmtq.forgotten.test-8791",
+            "INFO MainThread %s did not answer; playing on it as known (%s)." % (FORGOTTEN_NAME, FORGOTTEN),
+            "INFO MainThread connection test: [ok  ] OpenDMTQ server  %s, OpenDMTQ 0.11.0." % FORGOTTEN_NAME,
+            name="launcher.log.2")
+        # The game's own line for its broadcasts' server, as the player writes it.
+        with open(player.log_path(PACKAGE), "a", encoding="utf-8") as f:
+            f.write("player: live: asks dmtq.forgotten.test:8791\n")
+        _path, _left, files = self.make()
+        everything = "\n".join(files.values())
+        for private in ("10.20.30.40", "203.0.113.5", "gamepc", "192.168.1.20", "2001:db8::10", "fd00::7",
+                        "v6.example.test", "dmtq.forgotten.test", FORGOTTEN_NAME):
+            self.assertNotIn(private, everything, private)
+        log, old = files["launcher/launcher.log"], files["launcher/launcher.log.2"]
+        for line in ("could not connect to <server>: cannot reach <server> (timed out)", "--test-server <server>",
+                     "could not ask <server> for its version", "Name lookup  <server> is at <server>.",
+                     "started the game for <server> (process 732)", "<server> is at <server>, <server>."):
+            self.assertIn(line, log)
+        for line in ("Connected to <server name> (<server>).", "* <server name> (<server>)",
+                     "server: <server name> (<server>)", "[ok  ] server: <server name> (<server>)",
+                     "opendmtq-phone-app-2026.11.17-android-<server>.apk", "\\servers\\<server>",
+                     "<server name> did not answer; playing on it as known (<server>).",
+                     "OpenDMTQ server  <server name>, OpenDMTQ 0.11.0."):
+            self.assertIn(line, old)
+        self.assertIn("player: live: asks <server>", files["player/player.log"])
+
+    def test_the_connection_tests_lines_however_they_are_worded(self):
+        # Every line of the test that holds an ID, a server's name or a host, as the window logs it and as --test-server
+        # says it, with values no settings know: each is left out by the words around it, the words as they are now.
+        from opendmtq_client import connection, i18n
+        values = {"account": "zed.k_9", "name": "Hidden Hall", "host": "quiet.example.test"}
+        lines = []
+        for key, (english, _korean) in sorted(i18n.TEXT.items()):
+            fields = set(re.findall(r"\{(\w+)\}", english))
+            if not key.startswith("test.") or not fields & set(values):
+                continue
+            words = english.format(**{f: values.get(f, "1") for f in fields})
+            step = key.split(".")[1]
+            named = i18n.TEXT.get("test." + step, ("",))[0] if step in connection.STEPS else ""
+            lines += ["INFO MainThread connection test: [ok  ] %s  %s" % (named.ljust(16), words),
+                      "INFO MainThread   [ok  ] %s: %s  (12 ms)" % (named, words)]
+        self.assertGreater(len(lines), 20)
+        self.logged(*lines)
+        _path, _left, files = self.make()
+        log = files["launcher/launcher.log"]
+        for private in values.values():
+            self.assertNotIn(private, log, private)
+
+    def test_what_names_no_one_reads_as_before(self):
+        # Times, versions, keys, a sound device's id, file names with dots and the project's own address on GitHub are no
+        # server's: they stay as they were.
+        kept = ["INFO MainThread OpenDMTQ 0.11.1 started",
+                "INFO MainThread settings: keys_2line=F/Semicolon J/Q, keys_3line=D F J",
+                "WARNING update-look could not check for updates: <urlopen error [Errno 11002] getaddrinfo failed>",
+                "WARNING update-look refused the update to 0.11.2 from https://github.com/example/opendmtq: not signed",
+                "INFO MainThread display: \\\\.\\DISPLAY1 (main): 1920 x 1080, now at 59.951 Hz",
+                "INFO MainThread repair: current\\player\\libEGL.dll",
+                "INFO MainThread player: v0.11.0-4f4acaf4 (built 2026-11-17T07:52:36), audio {0.0.0.00000000}.{aaaa}",
+                "INFO MainThread the game ended after 163 s with 0"]
+        self.logged(*kept)
+        _path, _left, files = self.make()
+        log = files["launcher/launcher.log"]
+        for line in kept:
+            self.assertIn(line, log)
+        self.assertIn("2026-11-17 07:57:13,000 INFO", log)

@@ -14,14 +14,19 @@ report, and OpenDMTQ-cmd.exe --report FILE).
     system/connection-test.txt    the last connection test (connection.py), step by step, when there was one
 
 What is left out is replaced by a word in angle brackets wherever it is found, in every file: the Windows user's name
-and every path with it (the home folder, the temporary folder), the site IDs signed in with or filled in, every server's
-address (as written, as host:port, its host, the address its app is built for, its folder's name here) and its own
-name, the sign-in cookies, tokens (an API's, a broadcast's upload key, a one-time sign-in link's), this PC's player id
-(the game's device id), and the words typed in the game. The list of what was left out, by kind and how often, is in
-about.txt and is what the window and the command line say after it is made.
+and every path with it (the home folder, the temporary folder), every site ID where the launcher writes one (signed in
+with, filled in, typed for a sign-in that failed), every server's address (as written, as host:port, its host, the
+address its app is built for, its folder's name here) and its own name, the sign-in cookies, tokens (an API's, a
+broadcast's upload key, a one-time sign-in link's), this PC's player id (the game's device id), and the words typed in
+the game. Servers are left out whether the settings know them or not (a server forgotten since, an address typed that
+never answered, the last connection test of any address): by their forms (web addresses, IP addresses, host:port), by
+where the launcher writes an address or a name, and each one any file names is left out of all of them. The list of
+what was left out, by kind and how often, is in about.txt and is what the window and the command line say after it is
+made.
 """
 
 import getpass
+import ipaddress
 import json
 import logging
 import os
@@ -58,6 +63,129 @@ SECRET_JSON = re.compile(r"(?i)(\"(?:token|once|secret|password)\"\s*:\s*\")[^\"
 # What the player says the game was typed (its text fields: a name, a message), its words left out.
 TYPED = re.compile(r"(typed \")(?:[^\"\\]|\\.)*(\")")
 
+# ------------------------------------------------------------------------------------- servers and site IDs by their form
+# Every server's address and every site ID is left out by how and where it is written, whatever it is: also those the
+# settings no longer know (a server forgotten, an address typed that never answered, an ID typed wrong, the last test of
+# an address no settings name), in the logs before this one too.
+# An address of the web: its scheme and what names the server (a user before an @, the host, its port); the path after it
+# stays, the server's word in the server's place ("<server>/api"). A host's last character is no period (a sentence's).
+URL = re.compile(r"(?i)\b(?:https?|wss?)://(?:[^\s/?#@\"'<>]*@)?(?P<host>\[[0-9a-f:.%a-z]*\]|"
+                 r"[^\s/?#:\"'<>()\[\]\\,;]*[^\s/?#:\"'<>()\[\]\\,;.])(?::\d{1,5})?")
+# An IPv4 address, with its port after a colon (or a dash: an address in a file's or a folder's name); never a part of a
+# longer dotted number (a version of five parts) or of a word.
+_OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+IPV4 = re.compile(r"(?<![\w.])%s(?:\.%s){3}(?:[:-]\d{1,5}(?!\d)|(?!\w|\.\w))" % (_OCTET, _OCTET))
+# What may be an IPv6 address (bare, or in brackets with its port after them): taken only when it is one, so that neither
+# a time of day (07:53:11) nor a name with colons in it is (_ipv6).
+IPV6 = re.compile(r"(?i)(?<![\w:.%])(\[)?((?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4})(%[\w.-]+)?(?(1)\](?::\d{1,5})?)(?![\w:])")
+# A host's name with a dot in it, or localhost, and its port (club.example.test:8443); its last part starts with a letter
+# and has two at least (a domain's), so a C file's line (conf.c:5180) is none.
+HOST_PORT = re.compile(r"(?i)(?<![\w.@/-])(?P<host>(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z][a-z0-9-]*[a-z0-9]|"
+                       r"localhost):\d{1,5}(?!\d)")
+# The project's own addresses, where the launcher looks for its updates: the same on every PC and nobody's server, so
+# they stay as they are (an update's problem reads better with them).
+PUBLIC_HOSTS = ("github.com", "api.github.com", "codeload.github.com", "objects.githubusercontent.com",
+                "release-assets.githubusercontent.com")
+
+
+def _shapes(*patterns):
+    """Places in a line where the launcher writes one thing whatever it is: the words before it (group 1) and the thing
+    (group 2), in any letter case, ^ and $ at each line's start and end."""
+    return tuple(re.compile(p, re.I | re.M) for p in patterns)
+
+
+# Where a server's address stands, whatever is written there: the command line's arguments as the log's first line of a
+# start says them, an address typed in the window that it could not connect to, one an installer brought that is none,
+# the launcher's folder of a server's app (servers\<host>-<port>), the phone app's file names (now's and 0.10.0's) and
+# the PC client's installer set up for a server (now's and 0.10.0's).
+SERVER_AT = _shapes(
+    r"(--(?:server|test-server|forget)[ =])([^\s\"']+)",
+    r"(\bcould not connect to )([^\n]+?)(?=: )",
+    r"(\ban address that is none: )([^\n]+)$",
+    r"([\\/]servers[\\/])([^\\/\s\"',;)]+)",
+    r"(\bopendmtq-phone-app-[\d.]+-android-)([^\s\\/\"']+?)(?=\.apk\b)",
+    r"(\bOpenDMTQ-)([^\s\\/\"']+?)(?=-v[\d.]+\.apk\b)",
+    r"(\bopendmtq-pc-client-[\w.]+-windows-x64-setup-)([^\s\\/\"']+?)(?=\.exe\b)",
+    r"(\bOpenDMTQ-Setup-)([^\s\\/\"']+?)(?=\.exe\b)")
+# Where a server's own name stands: --server's line ("Connected to NAME (address)."), a known server's that did not
+# answer ("NAME did not answer; playing on it as known (address)."), a server as one line names it (state.label, NAME
+# (address)) in --status and its ready check ("server: ...") and in --servers (each line "* " or "  " first, after the
+# log's time, level and thread, the name right after: never a blank or a bracket, which the ready check's lines start
+# with). A name holds no angle brackets: those are the report's own words.
+_IN_BRACKETS = r"(?= \((?:[a-z][a-z0-9+.-]*://|<server>)[^()\n]*\)"
+NAME_AT = _shapes(
+    r"(\bConnected to )([^<>\n]+?)%s)" % _IN_BRACKETS,
+    r"(^\S+ \S+ [A-Z]+ \S+ )([^<>\n]+?)(?= did not answer; playing on it as known \()",
+    r"(\bserver: )([^<>\n]+?)%s$)" % _IN_BRACKETS,
+    r"(^\S+ \S+ [A-Z]+ \S+ [* ] )([^<>\n\[\s][^<>\n]*?)%s$)" % _IN_BRACKETS)
+# A site ID where it stands in a line: up to a blank or a mark no ID has, and never ending on a period (the sentence's).
+_ID = r"[^\s,;:()<>\"']*[^\s,;:()<>\"'.]"
+# Where the launcher writes a site ID, whatever it is: a sign-in that failed, with the ID as typed (to the error after
+# it), a sign-in's line ("Signed in as player1.", "signed in as player1 on ..."), the command line's --sign-in, an
+# installer's ("the ID player1 to sign in with"), --status's ("signed in: player1", "no (player1, ended)"), the ready
+# check's ("[ok  ] account: player1"), and the settings' fields.
+ACCOUNT_AT = _shapes(
+    r"(\bcould not sign in to \S+ as )([^\n]+?)(?=: )",
+    r"(\bsign(?:ed)?[ -]in(?: to \S+)? as )(%s)" % _ID,
+    r"(--sign-in[ =])(%s)" % _ID,
+    r"(\bthe ID )(%s)(?= to sign in with)" % _ID,
+    r"(\bsigned in: no \()(%s)(?=, ended\))" % _ID,
+    r"(\bsigned in: )(?!no(?: \(|$))(%s)" % _ID,
+    r"(\] account: )(?!not signed in$)(%s)" % _ID,
+    r"(\"(?:account|fill)\"\s*:\s*\")([^\"]+)(?=\")")
+# The fields of the connection test's lines that name a server or a sign-in, and what each is (_worded).
+WORDED = {"account": "account", "name": "server_name", "host": "server"}
+# The words that stand for what was left out: never left out again.
+LEFT = frozenset(WORDS.values())
+
+
+def _worded():
+    """The connection test's lines as they are worded now (its English words, which the log and the report's copy of the
+    last test have), for each field of WORDED in them: (pattern, kind), group 1 the words before the field (the step's
+    name and what follows it in the line, when the field opens the words: a colon, or the column's blanks), group 2
+    what stands at the field, the words after it ahead. Made from the words themselves, so new words are covered too."""
+    from opendmtq_client import connection, i18n
+    found = []
+    for key, (english, _korean) in sorted(i18n.TEXT.items()):
+        if not key.startswith("test."):
+            continue
+        # Words and fields by turns: words at the even places, field names at the odd ones.
+        parts = re.split(r"\{(\w+)\}", english)
+        for i in range(1, len(parts), 2):
+            kind = WORDED.get(parts[i])
+            if kind is None:
+                continue
+            # The words before the field as they are, the other fields before it as anything on the line.
+            before = "".join(re.escape(p) if j % 2 == 0 else r"[^\n]*?" for j, p in enumerate(parts[:i]))
+            if not before:
+                step = key.split(".")[1]
+                if step not in connection.STEPS:
+                    # Not a step's line (a verdict): nothing before the field tells where it starts.
+                    continue
+                before = re.escape(i18n.TEXT["test." + step][0]) + r"(?::\s+|\s{2,})"
+            after = parts[i + 1]
+            if not after and i + 2 < len(parts):
+                # Two fields side by side: no words between them tell where one ends.
+                continue
+            # The words after it: a period that ends the sentence (an ID may hold one), its words, or the line's end.
+            ahead = r"\.(?=\s|$)" if after == "." else re.escape(after) if after else "$"
+            # A host has no blank in it; a name or an ID as typed may.
+            value = r"[^\s<>]+?" if kind == "server" else r"[^<>\n]+?"
+            found.append((re.compile(r"(%s)(%s)(?=%s)" % (before, value, ahead), re.M), kind))
+    return found
+
+
+def _ipv6(text):
+    """True when `text` is an IPv6 address as people write one: with "::" or all eight parts, and a digit in it (a name
+    of hex letters alone, such as face::add, is a program's)."""
+    if not ("::" in text or text.count(":") == 7) or not re.search(r"\d", text):
+        return False
+    try:
+        ipaddress.IPv6Address(text)
+        return True
+    except ValueError:
+        return False
+
 
 class Scrub:
     """What is left out of every file of a report, and how often each kind was found."""
@@ -65,15 +193,20 @@ class Scrub:
     def __init__(self):
         # (pattern, its replacement, kind, length): the values found on this PC, the longest first.
         self.found = []
+        # What was made known already (kind, value in lower case, whole): each once, however often a log has it.
+        self.known = set()
         self.counts = dict.fromkeys(KINDS, 0)
+        # The connection test's lines, worded as they are now.
+        self.worded = _worded()
 
     def add(self, kind, value, whole=False):
         """Leave out `value` (a text) as `kind` wherever it is, in any letter case (Windows' paths and names, an
         address's host): as a whole word only with `whole`, neither "a1" in "data1" nor 10.0.0.5 in 110.0.0.5."""
         value = (value or "").strip()
-        if len(value) < 2:
-            # One letter is in every word: nothing that short names anyone.
+        if len(value) < 2 or value in LEFT or (kind, value.lower(), whole) in self.known:
+            # One letter is in every word: nothing that short names anyone; a word of the report's own, or one known.
             return
+        self.known.add((kind, value.lower(), whole))
         pattern = r"(?<![\w.-])%s(?![\w-])" % re.escape(value) if whole else re.escape(value)
         self.pattern(kind, pattern, WORDS[kind], len(value))
 
@@ -84,10 +217,77 @@ class Scrub:
         # The longest first: a server's whole address before its host alone.
         self.found.sort(key=lambda item: -item[3])
 
+    def server(self, value):
+        """A server's address as found written (an address of the web, host:port, a host, host-port as a folder's or a
+        file's name has it, or what was typed for one), left out from now on in every form the launcher writes it: as
+        written, as its address, as host:port and host-port, and as its host alone when that is no plain word (it has a
+        dot, or is an IP address; a name without a dot is left out with its port, and where its places say it is one)."""
+        value = (value or "").strip().strip("'\"").rstrip(".")
+        if len(value) < 2 or "<" in value:
+            # Nothing, or what the report wrote in its place already.
+            return
+        # A folder's or a file's name of it: the host and the port with a dash between (apps.key, the app's file).
+        dashed = re.fullmatch(r"([^:/\s\[\]]+)-(\d{1,5})", value)
+        from opendmtq_client import server as srv
+        try:
+            url = srv.normalize("%s:%s" % dashed.groups() if dashed else value)
+        except srv.ServerError:
+            # No address at all: left out where it stands, by its place's shape.
+            return
+        parts = urllib.parse.urlsplit(url)
+        host = (parts.hostname or "").strip("[]")
+        if not host or host.lower() in PUBLIC_HOSTS:
+            return
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        shown = "[%s]" % host if ":" in host else host
+        forms = {url, "%s:%d" % (shown, port), "%s-%d" % (host, port), apps.key(url)}
+        if "." in host or ":" in host:
+            # A host with a dot, or an IP address: no word of a log's own, left out wherever it is.
+            forms.add(host)
+        if any(mark in value for mark in ".:/"):
+            forms.add(value)
+        for form in forms:
+            self.add("server", form, whole=True)
+
+    def learn(self, text):
+        """What `text` (a file of the report) says of servers by its forms, made known so that it is left out wherever
+        it is, in this file and in the others: each address a web address or a host:port names, what stands where the
+        launcher writes an address or a server's name, and the hosts and names of the connection test's lines. Read
+        with what is known already left out, so that a place holds only what is new (a known name before " at" and an
+        address is no name of its own)."""
+        for pattern, word, _kind, _length in self.found:
+            text = pattern.sub(word, text)
+        for match in URL.finditer(text):
+            self.server(match.group(0))
+        for match in HOST_PORT.finditer(text):
+            self.server(match.group(0))
+        for pattern in SERVER_AT:
+            for match in pattern.finditer(text):
+                self.server(match.group(2))
+        for pattern in NAME_AT:
+            for match in pattern.finditer(text):
+                self.add("server_name", match.group(2), whole=True)
+        for pattern, kind in self.worded:
+            for match in pattern.finditer(text):
+                if kind == "server":
+                    self.server(match.group(2))
+                elif kind == "server_name":
+                    self.add("server_name", match.group(2), whole=True)
+
     def __call__(self, text):
-        """`text` with everything left out, each kind counted."""
+        """`text` with everything left out, each kind counted: what this PC and the files made known, then what stands
+        where an address, a server's name or a site ID is written, then every address by its form, then the secrets."""
         for pattern, word, kind, _length in self.found:
             text = self._sub(pattern, word, kind, text)
+        for kind, shapes in (("server", SERVER_AT), ("server_name", NAME_AT), ("account", ACCOUNT_AT)):
+            for pattern in shapes:
+                text = self._placed(pattern, kind, text)
+        for pattern, kind in self.worded:
+            text = self._placed(pattern, kind, text)
+        text = self._by(URL, lambda m: m.group("host").strip("[]").lower() not in PUBLIC_HOSTS, text)
+        text = self._by(IPV6, lambda m: _ipv6(m.group(2)), text)
+        text = self._sub(IPV4, WORDS["server"], "server", text)
+        text = self._sub(HOST_PORT, WORDS["server"], "server", text)
         text = self._sub(COOKIE_NAMED, r"\1" + WORDS["cookie"], "cookie", text)
         text = self._sub(COOKIE_VALUE, WORDS["cookie"], "cookie", text)
         text = self._sub(API_TOKEN, WORDS["token"], "token", text)
@@ -101,6 +301,25 @@ class Scrub:
         text, n = pattern.subn(word, text)
         self.counts[kind] += n
         return text
+
+    def _placed(self, pattern, kind, text):
+        """What stands in a shape's place (its group 2) replaced by its kind's word, the words before it kept; a place
+        that holds the report's own word already stays as it is, counted once."""
+        def put(match):
+            if match.group(2) in LEFT:
+                return match.group(0)
+            self.counts[kind] += 1
+            return match.group(1) + WORDS[kind]
+        return pattern.sub(put, text)
+
+    def _by(self, pattern, taken, text):
+        """A server's address by its form, replaced where `taken(match)` says it is one, counted as a server's."""
+        def put(match):
+            if not taken(match):
+                return match.group(0)
+            self.counts["server"] += 1
+            return WORDS["server"]
+        return pattern.sub(put, text)
 
     def left(self):
         """What was left out: [(kind, how many times)], the kinds found, in the list's order."""
@@ -141,16 +360,10 @@ def _users(scrub):
         scrub.pattern("user", IN_A_PATH % re.escape(name), WORDS["user"], len(name))
 
 
-# Where the launcher writes a site ID: a sign-in's line ("as player1", "--sign-in player1", "Signed in as player1"), an
-# installer's ("the ID admin"), --status's ("signed in: player1", "no (player1, ended)"), and the settings' fields. A
-# whole word elsewhere may be a word of the logs' own (an ID "player").
-ACCOUNT_AT = (r"((?:\bas|--sign-in|\bthe ID|\bsigned in:|\bno \()[ =])%s(?![\w.-])",
-              r"(\"(?:account|fill)\"\s*:\s*\")%s(?=\")")
-
-
 def _servers(scrub, state):
     """Every server this launcher knows: its address as written, its host and port, its host, the address its app is
-    built for and its folder's name here (host-port), its own name; and the site IDs signed in with or filled in."""
+    built for and its folder's name here (host-port), its own name. Its site IDs are left out where an ID is written,
+    as every ID is (ACCOUNT_AT): a whole word elsewhere may be a word of the logs' own (an ID "player")."""
     for server in state.servers:
         url = server.get("url") or ""
         parts = urllib.parse.urlsplit(url)
@@ -164,9 +377,21 @@ def _servers(scrub, state):
         scrub.add("server", apps.key(url) if url else "", whole=True)
         if st.has_own_name(server):
             scrub.add("server_name", server.get("name") or "")
-        for account in {server.get("account") or "", server.get("fill") or ""} - {""}:
-            for at in ACCOUNT_AT:
-                scrub.pattern("account", at % re.escape(account), r"\1" + WORDS["account"], len(account))
+
+
+def _tested(scrub, tested):
+    """The last connection test's own values, left out wherever they are: the address it tested and the one it found the
+    server moved to, the host and its addresses it looked up, the server's name it was told."""
+    for value in (tested.url, tested.moved):
+        scrub.server(value)
+    for step in tested.steps:
+        params = step.said.params if step.said else {}
+        for key in ("url", "host"):
+            scrub.server(str(params.get(key) or ""))
+        for address in str(params.get("addresses") or "").split(","):
+            scrub.server(address)
+        if step.key == "server" and params.get("name"):
+            scrub.add("server_name", str(params["name"]), whole=True)
 
 
 def _devices(scrub):
@@ -356,6 +581,10 @@ def make(state, path=None, devices=None, now=None):
     tested = connection.last()
     if tested is not None:
         files["system/connection-test.txt"] = tested.text(i18n.Words("en"))
+        _tested(scrub, tested)
+    # What every file says of servers, made known first: an address or a name one file has is left out of all of them.
+    for text in files.values():
+        scrub.learn(text)
     # Every file with what is left out taken out, about.txt last: it says what was.
     written = {name: scrub(text) for name, text in files.items()}
     cards = graphics()
