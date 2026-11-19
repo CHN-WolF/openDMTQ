@@ -2706,6 +2706,20 @@ async function myPage(contexts) {
     check('marked as live', await textOf(page, '#pill-word') === 'LIVE');
     check('both players are listed', (await page.$$('#live-list > *, #live-others li')).length >= 1);
     await page.close();
+    // The home page while players are on air: one lit button, the app's download; the way to the broadcasts is quiet
+    // metal, its light the on-air red, with the count (SRV-92).
+    const lit = await contexts.signed.newPage();
+    await lit.setViewport({ width: 1280, height: 900 });
+    await lit.goto(`${P}/`, { waitUntil: 'domcontentloaded' });
+    await lit.waitForSelector('#watch-live.on', { timeout: 20000 }).catch(() => {});
+    const acts = await lit.$$eval('.stage-acts > *', els => els.map(e => ({ cls: e.className, img: getComputedStyle(e).backgroundImage,
+      dot: e.querySelector('i') ? getComputedStyle(e.querySelector('i')).backgroundColor : '' })));
+    const filled = acts.filter(a => a.img !== 'none');
+    const watch = acts.find(a => /watch-live/.test(a.cls)) || {};
+    check("on air the home page has one lit button, the app's: the way to the broadcasts is plain metal with the red light",
+      filled.length === 1 && /\bbutton\b/.test(filled[0].cls) && /\bon\b/.test(watch.cls || '') && watch.img === 'none' && watch.dot === 'rgb(255, 49, 72)',
+      JSON.stringify(acts));
+    await lit.close();
     // The home page's cards of who is on air: a picture of each broadcast, taken from a whole piece of its stream
     // (thumbs.js), only of the cards on the screen and then not again for minutes (it was every half minute). On a short
     // phone screen the cards start below it (the stage above them is 420 px at least, style.css .stage-in): nothing of the
