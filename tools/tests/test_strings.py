@@ -17,6 +17,8 @@ PORTAL_STRINGS = os.path.join(TOOLS, "..", "server", "portal", "strings.php")
 LOOSE_JOSA = re.compile(r"[A-Za-z0-9})] (?:은|는|이|가|을|를|의|에|에서|에게|로|으로|와|과|도|만)(?![가-힣])")
 HANGUL = re.compile(r"[가-힣]")
 EM_DASH = "—"
+# The site's lines MY PAGE shows the owner alone, of their own account: the only ones of the site that say "owner".
+OWNER_ONLY = ("me.owner_player", "me.rights_owner", "me.owner_line", "me.owner_pw")
 # Quoted file names in the sources look like keys too.
 FILE_ENDINGS = (".html", ".json", ".md", ".fpk", ".webm", ".py", ".css", ".log", ".png", ".jpg", ".zip")
 
@@ -149,7 +151,23 @@ class PortalStrings(unittest.TestCase):
                 self.fail(f"{key}: {text}")
         for key, text in self.en.items():
             self.assertNotIn(EM_DASH, text, key)
-            self.assertNotIn("owner", text, key)
+            # The site names no owner to a player (no "ask the owner"): only the lines MY PAGE shows the owner of their own
+            # account call it the owner's, as the admin pages do.
+            if key not in OWNER_ONLY:
+                self.assertNotIn("owner", text, key)
+
+    def test_the_owner_is_called_the_owner(self):
+        # One word for the owner, the admin pages' (소유자, Owner): MY PAGE's lines for the owner's own account too, never
+        # "the server's own account" (ADM-194).
+        # The table's own text, its quotes escaped as PHP writes them in single quotes.
+        plain = lambda text: text.replace("\\'", "'")
+        for key in OWNER_ONLY:
+            self.assertIn("owner's account", plain(self.en[key]), key)
+            self.assertIn("소유자 계정", self.ko[key], key)
+        for table in (self.en, self.ko):
+            for key, text in table.items():
+                self.assertNotIn("server's own account", plain(text), key)
+                self.assertNotIn("서버 자체의 계정", text, key)
 
 
 if __name__ == "__main__":

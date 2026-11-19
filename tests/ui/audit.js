@@ -2665,14 +2665,33 @@ async function myPage(contexts) {
   check('nothing of MY PAGE for a visitor who has not signed in', door === '/opendmtq/login.php' && twin[0] === 403 && JSON.parse(twin[1]).error.code === 'signin', `${door} ${twin}`);
   await stranger.close();
 
-  // The server's own account (from .env) on the site: its password is the server's, changed on the Server page.
+  // The owner's account (from .env) on the site: its password is the server's, changed on the Server page.
   const owner = await contexts.browser.createBrowserContext();
-  check("the server's own account signs in to the site", await siteSignIn(owner, 'admin', PASSWORD));
+  check("the owner's account signs in to the site", await siteSignIn(owner, 'admin', PASSWORD));
   const own = await owner.newPage();
   await own.setCookie({ name: 'opendmtq_lang', value: 'en', url: P });
   await own.goto(`${P}/me.php?tab=account`, { waitUntil: 'domcontentloaded' });
   check("its account tab says the password is the server's, with the way to the Server page, and no password form",
-    /server's own account/.test(await textOf(own, 'main')) && (await own.$('a[href="/opendmtq/admin/server#password"]')) !== null && (await own.$('#me-current')) === null);
+    /owner's account/.test(await textOf(own, 'main')) && (await own.$('a[href="/opendmtq/admin/server#password"]')) !== null && (await own.$('#me-current')) === null);
+  // Called the owner, as the admin pages call them, in both languages; the way to the Server page named as the admin
+  // pages' menu names that page (ADM-194).
+  const ownerNamed = {};
+  // The admin pages' menu as the admin signed in to them sees it, in each language.
+  const pages = await contexts.signed.newPage();
+  for (const lang of ['en', 'ko']) {
+    await own.setCookie({ name: 'opendmtq_lang', value: lang, url: P });
+    await own.goto(`${P}/me.php?tab=account`, { waitUntil: 'domcontentloaded' });
+    const words = await textOf(own, 'main');
+    const button = await own.$eval('a[href="/opendmtq/admin/server#password"]', a => a.textContent.trim()).catch(() => '');
+    await pages.goto(`${A}/lang?to=${lang}&next=%2Fopendmtq%2Fadmin%2Fserver`, { waitUntil: 'domcontentloaded' });
+    const menu = await pages.$eval('.nav.pages a[href="/opendmtq/admin/server"]', a => a.textContent.trim()).catch(() => '?');
+    ownerNamed[lang] = { owner: lang === 'en' ? /owner's account/.test(words) && !/server's own account/.test(words) : /소유자 계정/.test(words) && !/서버 자체/.test(words), button, menu };
+  }
+  // The language the stages after this one read.
+  await pages.goto(`${A}/lang?to=en&next=%2Fopendmtq%2Fadmin%2F`, { waitUntil: 'domcontentloaded' });
+  await pages.close();
+  check("MY PAGE calls the owner's account the owner's, and names its way to the Server page as the admin pages' menu does",
+    Object.values(ownerNamed).every(n => n.owner && n.button === n.menu), JSON.stringify(ownerNamed));
   await own.close();
   await sweep({ signed: owner, anon: contexts.anon }, [['my page, the owner', `${P}/me.php`], ['my account, the owner', `${P}/me.php?tab=account`]], ALL_WIDTHS);
   await owner.close();
