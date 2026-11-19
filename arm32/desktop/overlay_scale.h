@@ -130,20 +130,80 @@ constexpr float kPauseRight = 73;
 // window resized after the start left the game stretched across, its button 143.7 wide at 2520x1080.
 inline float pause_right(int area_w, int area_h) { return kPauseRight * handle_scale_for(area_w, area_h); }
 
-// Where the counter's glass goes, chip_w by chip_h, in its corner (1 top left, 2 top right, 3 bottom left, 4 bottom
-// right) of an area of area_w by area_h, `inset` in from the area's edges (8 at 720 lines, at the counter's own scale);
-// at the top left `inset` right of the game's pause button instead, so that it covers nothing a song uses; in a top
-// corner below `top_room` (the bar's room while it is down).
+// ---- the menus' header, which the notice and the frame counter stand clear of
+
+// The menus' header at 720 lines, at the game's narrower scale (handle_scale_for): the row across the top of the music
+// list and the result (the player's level badge and name, the equipped items, RANK, Q and MAX with the shop's +) and the
+// downloads' own row (its title and its X), to the foot of the header's slanted edge: its buttons end at row 78, its edge
+// at 100, measured on the game's frames at 16:9, 21:9 and 4:3.
+constexpr float kMenusHeader = 100;
+
+// The top of a piece that stands under the menus' header (the frame counter at the right, the notice in the middle): 8
+// (`inset`) under the header, at the game's scale, or under the bar's whole height (`bar`, at the overlay's own),
+// whichever is lower, so that it stands on none of the header's buttons and words and the bar never reaches it: it stays
+// where it is while the bar comes and goes.
+inline int under_header(int area_w, int area_h, int inset, int bar) {
+    const int header = static_cast<int>(std::lround(kMenusHeader * handle_scale_for(area_w, area_h)));
+    return std::max(header, bar) + inset;
+}
+
+// The room the frame counter keeps from the area's right edge where it stands under the menus' header: 16 at 720 lines,
+// at the counter's own scale, so that it keeps clear of the next page's cards the music list and the downloads show at
+// their right edge (from 12 in at 16:9) as of their grid's last column (to 125 in).
+constexpr float kMenusRight = 16;
+
+// Where the counter's glass goes, chip_w by chip_h, for its corner (1 top left, 2 top right, 3 bottom left, 4 bottom right)
+// in an area of area_w by area_h; `inset` is 8 at 720 lines and `right` kMenusRight, both at the counter's own scale.
+// In a song (`song`): in its corner, 8 in from the area's edges, at the left `inset` right of the game's pause button and
+// of the column under it (its life gauge, FEVER, score, rate and combo), so that it covers nothing a song uses; at the top
+// left below `top_room` (the bar's room while it is down). At the top right of a song, and in the menus whatever its
+// corner (also where the player cannot tell: keyboard play off), under the menus' header at the right (under_header,
+// `bar` the bar's whole height): the one place none of the game's menu screens has a button, a word or its header in (the
+// music list, the downloads, a song's page and its options, the rankings before a song, the result, the loading
+// screens), measured on their frames in each shape, and clear of the Q and MAX a song's own pause screen shows at its
+// top right. Every other place near a corner of the menus has the game's own there on one screen or another: the
+// player's name and level, the music list's tabs and grid button, a song's title and score, SELECT MUSIC, DOWNLOAD.
 struct CounterAt {
     int x, y;
 };
-inline CounterAt counter_at(int corner, int area_w, int area_h, int inset, int chip_w, int chip_h, int top_room) {
-    // Which sides of the area the corner touches.
-    const bool right = corner == 2 || corner == 4, bottom = corner == 3 || corner == 4;
-    // The top left: beside the pause button's right edge, rounded to a whole pixel.
-    const int left = corner == 1 ? static_cast<int>(std::lround(pause_right(area_w, area_h))) + inset : inset;
-    return CounterAt{right ? area_w - inset - chip_w : left, bottom ? area_h - inset - chip_h : inset + top_room};
+inline CounterAt counter_at(int corner, int area_w, int area_h, int inset, int chip_w, int chip_h, int top_room, bool song = true, int bar = 0,
+                            int right = 0) {
+    // The menus (and a song's top right): under the header at the right, as far in as the next page's cards need.
+    if (!song || corner == 2) return CounterAt{area_w - std::max(inset, right) - chip_w, under_header(area_w, area_h, inset, bar)};
+    // In a song: which sides of the area the corner touches.
+    const bool at_right = corner == 4, bottom = corner == 3 || corner == 4;
+    // The left: beside the pause button's right edge, rounded to a whole pixel (the column under it is no wider).
+    const int left = static_cast<int>(std::lround(pause_right(area_w, area_h))) + inset;
+    return CounterAt{at_right ? area_w - inset - chip_w : left, bottom ? area_h - inset - chip_h : inset + top_room};
 }
+
+// Whether the counter in `corner` moves with the bar's foot as the bar comes and goes: only at the top left of a song,
+// where it stands 8 under the top (under the menus' header the bar never reaches it).
+inline bool counter_under_bar(int corner, bool song) { return song && corner == 1; }
+
+// Whether the counter has its place under the menus' header at the right in an area of area_w by area_h at Windows'
+// scale `dpi`: in an area no wider than 16:9 (a pixel's slack: 1366x768), where the music list's grid and the next page's
+// cards at its right edge leave it the room, and drawn at the game's own size there (not at its floor for legibility,
+// where it is larger than that room: a small window at 150 %). Wider (21:9: the music list shows its next page's cards at
+// the right under the header) and in those smallest windows no place on the game's menu screens is clear of their
+// buttons and words for it: there it waits in the menus, and shows in a song.
+inline bool counter_has_menus_place(int area_w, int area_h, float dpi) {
+    const bool narrow = static_cast<long long>(area_w) * 9 <= static_cast<long long>(area_h) * 16 + 9;
+    return narrow && counter_scale_for(area_w, area_h, dpi) <= handle_scale_for(area_w, area_h) + 0.0001f;
+}
+
+// The notice's glass's top: in a song 16 under the top (`sixteen`, at the overlay's scale) and lower by the bar's room while
+// it is down (`top_room`), its card centred over the play field, clear of the pause button and its column at the left;
+// in the menus (and where the player cannot tell), 8 under the menus' header (under_header), as the game's own popups
+// stand clear of it, so that it lies on none of the header's buttons and words, and never moves with the bar.
+inline int notice_top(int area_w, int area_h, int sixteen, int inset, int top_room, int bar, bool song) {
+    return song ? sixteen + top_room : under_header(area_w, area_h, inset, bar);
+}
+
+// The left edge, at 720 lines, of the Q and MAX a song's own pause screen shows at its top right (to row 62), from the
+// area's right edge (measured on the game's frames: 891 of 1280, 389 in from the right): a notice in a song keeps clear of
+// it on both of its sides as it is centred.
+constexpr float kPauseBoxFromRight = 389;
 
 // ---- the handle's tab
 

@@ -208,7 +208,7 @@ applied, so one the launcher does not take changes none of them:
 | `vsync` | `on`, `off` | VSync |
 | `fps` | `auto` (the display's rate), `unlimited`, or any whole number from 30 to 1000; the page offers the rates up to the fastest connected display's (160, 165, 180 Hz and others) | Frame limit |
 | `show_fps` | `off`, `on` (a corner's name, as `fps_position` takes it, is on in that corner) | FPS counter |
-| `fps_position` | `bottom_right` (where it covers the least of the game), `top_left` (beside a song's pause button), `top_right`, `bottom_left`; kept while the counter is off | Position, while the counter is on |
+| `fps_position` | `bottom_right` (a song's play field's corner), `top_left` (beside a song's pause button), `top_right`, `bottom_left`: the corner in a song (in the menus at the right under the game's header); kept while the counter is off | Position, while the counter is on |
 | `render_scale` | `100`, `85`, `75`, `67`, `50` | Render scale |
 | `upscaler` | `fsr1`, `nis`, `bilinear` | Upscaler, below 100 % |
 | `anti_aliasing` | `off`, `cmaa2`, `smaa` | Anti-aliasing |
@@ -269,9 +269,9 @@ A PC has no phone's buttons around the game, so a bar of frosted glass comes dow
   a second each way and in step with the display's refreshes, never over the window's title bar; with Windows' animation
   effects switched off it comes and goes at once. It stays while the pointer is on it and goes up soon after the pointer
   leaves, so it never sits on the game's own controls at the top while they are used; a pointer that comes back while it
-  goes up turns it back from where it is. The broadcast notice and an FPS counter in a top corner move down with the
-  bar's foot and back up with it. It is tall enough to cover the game's own X at the top right of its song and music
-  screens whole.
+  goes up turns it back from where it is. In a song, the broadcast notice and an FPS counter at the top left move down
+  with the bar's foot and back up with it; under the header of the game's menus, where they stand there, the bar never
+  reaches them. It is tall enough to cover the game's own X at the top right of its song and music screens whole.
 - **What is on it:** on its left the OpenDMTQ wordmark as the launcher's menu column draws it; on its right four buttons
   in the launcher's own shape and depth (two corners cut, raised, sunk while held): **Sound** (a speaker and the word),
   **minimise** and **full screen** (or back to a window) as secondary buttons, quiet metal with a lighter plate under
@@ -288,7 +288,8 @@ line, on its tab, or beside the tab within the room the header leaves there (12 
 with it. The handle and the place the pointer rests on are as large as the game's own header leaves room for at its top
 centre (the handle 26 by 19 pixels in a 1280x720 game; both in proportion to that header in a game of any other size or
 shape), so neither covers any of the game's words or buttons on any screen. It shows once the game's picture is up, and
-goes while the bar is down, while a notice or the question is up and while the game holds still.
+goes while the bar is down, while the question or a notice in a song is up (in the menus a notice stands under the game's
+header, well below it) and while the game holds still.
 
 ### The sound panel
 
@@ -408,15 +409,20 @@ off, says why in its log, and the game plays by touch as before.
   as fast as the PC draws without one. A little less delay, and the picture may tear.
 - **The FPS counter**, off by default, is a small glass box like the game's Q and MAX box, faint so that the game shows
   through it: FPS in the game's lime, the frames a second in white and the mean frame time under them, over the last
-  second, twice a second. It sits at the bottom right, 8 pixels in at 720 lines, where it covers the least of the
-  game's labels and buttons: only the end of the result's SELECT MUSIC and of the download list's DOWNLOAD, and the
-  loading screen's version (the bottom left would cover the music list's grid button whole; the top is the bar's). In
-  a song it sits over the play field's corner. **Position** moves it to another corner, kept while the counter is off;
-  at the top left it stands 8 pixels right of a song's pause button. The game stretches its screens to the window's
-  shape (at 21:9 its buttons are wider than tall, at 4:3 narrower), and the counter keeps to its buttons' narrower side:
-  in a window narrower than 16:9 it is a little smaller, so that it covers no more of them there than at 16:9. A top
-  left set by a launcher before 0.9.3, which wrote it whether chosen or not, reads as the default; another corner set
-  then stays. It counts the frames the player shows: a steady 60 reads 60, and only a whole second without a frame
+  second, twice a second. In a song it stands in its corner, 8 pixels in at 720 lines, clear of the song's own
+  controls: at the bottom right by default, over the play field's corner. **Position** moves it to another corner, kept
+  while the counter is off: at the top left and the bottom left it stands 8 pixels right of the pause button and the
+  column under it, at the top right under the row of the Q and MAX the song's pause screen shows there. In the menus
+  every corner holds something of the game's own on one screen or another (the player's name and level, the music
+  list's tabs and grid button, a song's title and score, SELECT MUSIC, DOWNLOAD), so there it stands at the right under
+  the game's header, whatever its corner: the one place where none of the menu screens has a button or a word, measured
+  on each of them at 16:9, 16:10 and 4:3. In a window wider than 16:9 (the music list shows its next page there) or so
+  small that the counter, at its least size, would not fit that room, it waits in the menus and shows in each song.
+  With keyboard play off the player cannot tell a song from the menus, and the counter stands at the right under the
+  game's header throughout. The game stretches its screens to the window's shape (at 21:9 its buttons are wider than
+  tall, at 4:3 narrower), and the counter keeps to its buttons' narrower side: in a window narrower than 16:9 it is a
+  little smaller, so that it covers no more of them there than at 16:9. A top left set by a launcher before 0.9.3, which
+  wrote it whether chosen or not, reads as the default; another corner set then stays. It counts the frames the player shows: a steady 60 reads 60, and only a whole second without a frame
   reads 0. It shows from the game's first frame and hides while the game holds still. Drawn apart from the game's
   picture, it costs the game nothing, and the broadcast does not show it.
 - **The render scale** draws the game at a share of the window's pixels (100 % down to 50 %), stretched to fill it:
@@ -503,9 +509,11 @@ song's own sample against its 1 to 4 kHz, where 0.10.0's was about 35 dB down.
 
 While broadcasts are on for the server and its owner shows a player live, the player broadcasts from the PC as a phone
 does, with Windows' own video and sound encoders, at the quality the owner chose ([live broadcasts](live.md#from-a-pc)).
-A glass card slides down at the top of the game every time the broadcast's switches change, the player's own or the
-server's: on air, off air, switched on while the server's broadcasts are off and the like, as the server words it, each
-once. The player asks the server every 5 seconds, so a switch flipped in the admin pages shows within that, or when the
+A glass card slides down every time the broadcast's switches change, the player's own or the server's: on air, off air
+(with where to watch the replay, or that there is none when nothing of it was recorded), switched on while the server's
+broadcasts are off and the like, as the server words it, each once. In the menus it stands under the game's header,
+where it lies on none of the header's buttons and words, as the game's own windows stand clear of it; in a song at the
+top, centred over the play field, clear of the pause button and of the Q and MAX of the song's pause screen. The player asks the server every 5 seconds, so a switch flipped in the admin pages shows within that, or when the
 song ends for one flipped during a song: the server keeps its notices until then. On air it wears a red LIVE tag like
 the game's own tags; once over, its title says so alone, and it says where the broadcast can be watched. When the server
 stops answering while the PC broadcasts (three asks in a row, 15 seconds), the card says the broadcast has stopped, and

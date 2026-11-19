@@ -110,7 +110,15 @@ struct View {
     float dpi = 1;
     int top_room = 0;
     bool full = false;
+    // Whether a song is going on (keyboard play's word: its first frame to its end): the notice and the frame counter
+    // stand in a song's places then, clear of the menus' header otherwise (also where the player cannot tell). And
+    // whether the game is known to be in its menus (no song, by the same word): the counter waits there in a window shape
+    // whose menus leave it no place.
+    bool song = false, menus = false;
 };
+// What the UI thread last saw of them (view_now), for what it places itself between pictures (the counter's and the
+// notice's ways with the bar, the handle beside the notice, the counter waiting in the menus).
+bool g_song_now = false, g_menus_now = false;
 // The view the thread draws for now (null: the windows' own, on the UI thread).
 thread_local const View* t_view = nullptr;
 
@@ -631,17 +639,25 @@ FpsMetrics fps_metrics() {
     return m;
 }
 
-// The counter's glass's top left in its corner (Settings::ShowFps's order: 1 top left, 2 top right, 3 bottom left, 4
-// bottom right, its own place), 8 pixels in at 720 lines; top left, 8 pixels right of the game's pause button, so that
-// it covers nothing a song uses; in a top corner, under the bar while that is down. At the bottom right, 8 in from the
-// right and the foot, it covers the fewest of the game's labels and buttons: none on most of its screens, the end of
-// the result's SELECT MUSIC and of the download list's DOWNLOAD, and the loading screen's version (measured on the
-// game's frames at 720 and 1080 lines: 9 of 37; the bottom left 13, its music list's grid button whole). The pause
-// button is as wide as the game's width says in every shape (overlay_scale.h's counter_at), so beside it the counter
-// keeps its 8 at 21:9, where the height's scale would put it on the button, and at 4:3. Laid out at the counter's own
-// scale (CounterScale), as its look is.
+// Whether a song is going on for the piece being laid out, and whether the game is known to be in its menus: the painter's
+// view's, the UI thread's last look otherwise.
+bool song_now() { return t_view ? t_view->song : g_song_now; }
+bool menus_now() { return t_view ? t_view->menus : g_menus_now; }
+
+// The bar's whole height at the overlay's own scale, whatever cap a piece is laid out under (the counter's own scale):
+// what stands under the menus' header stands under the bar too.
+int bar_whole() { return static_cast<int>(std::lround(kBarTall * scale_for(area_h(), dpi_scale()))); }
+
+// The counter's glass's top left for its corner (Settings::ShowFps's order: 1 top left, 2 top right, 3 bottom left, 4
+// bottom right), as overlay_scale.h's counter_at places it: in a song in its corner, 8 pixels in at 720 lines, at the
+// left 8 right of the game's pause button and the column under it (it covers nothing a song uses), at the top left under
+// the bar while that is down; at the top right of a song and in the menus whatever the corner, under the menus' header
+// at the right, the one place no menu screen of the game's has a button, a word or its header in (its name and level, a
+// song's title and score, the music list's tabs and grid button, SELECT MUSIC and DOWNLOAD are all in the corners). The
+// pause button is as wide as the game's width says in every shape, so beside it the counter keeps its 8 at 21:9, where the
+// height's scale would put it on the button, and at 4:3. Laid out at the counter's own scale (CounterScale), as its look is.
 POINT fps_place(int corner, int chip_w, int chip_h) {
-    const CounterAt at = counter_at(corner, area_w(), area_h(), px(8), chip_w, chip_h, top_room());
+    const CounterAt at = counter_at(corner, area_w(), area_h(), px(8), chip_w, chip_h, top_room(), song_now(), bar_whole(), px(kMenusRight));
     return POINT{at.x, at.y};
 }
 
@@ -1184,7 +1200,8 @@ void sound_look(Paint& p, const audio::Levels& levels, int hover, int held) {
 
 // The notice's look for "title\ndetail": a glass card with the red LIVE tag on its left while live (once ended, the
 // title says so alone: no tag), the title over where to watch; its window's place goes to the paint, centred at the top
-// of the game's area, clear of a counter in a top corner (`corner`, Settings::ShowFps's order).
+// of the game's area (in a song 16 under its top, in the menus under their header), clear of the frame counter where it
+// stands at the top (`corner`, Settings::ShowFps's order) and, in a song, of the Q and MAX of the song's pause screen.
 void notice_look(Paint& p, const std::string& text, bool live, int corner, int free_right) {
     const std::wstring all = wide(text);
     const std::size_t cut = all.find(L'\n');
@@ -1199,11 +1216,16 @@ void notice_look(Paint& p, const std::string& text, bool live, int corner, int f
     const float slant = badge_h * 0.36f;
     const float badge_w = live ? measure(badge, *badge_font).Width + badge_pad * 2 + fpx(0.66f) * 4 + slant : 0.0f;
     // The words' room: within 560 at 720 lines, and within the game's area however small its window; a long server name
-    // wraps there, into even lines. A counter in a top corner keeps its corner: the card, centred, stays clear of it.
-    // Its room across: the area's width, or up to the sound panel's left edge while that is open (free_right).
+    // wraps there, into even lines. A counter at the top (at the top left of a song; under the menus' header at the right,
+    // where it stands in the menus whatever its corner and at the top right of a song) keeps its place: the card, centred,
+    // stays clear of it. Its room across: the area's width, or up to the sound panel's left edge while that is open
+    // (free_right).
+    const bool song = song_now();
     const int aw = free_right > 0 ? std::min(free_right, area_w()) : area_w();
     float beside = pad + badge_w + gap + after + 2 * px(kRoomSide);
-    if (corner == 1 || corner == 2) {
+    // A counter that waits in the menus (no place for it in this window's shape) is nowhere to keep clear of.
+    const bool counter_waits = menus_now() && !counter_has_menus_place(area_w(), area_h(), dpi_scale());
+    if (!counter_waits && (corner == 1 || corner == 2 || (corner != 0 && !song))) {
         // The counter's size and place as it is drawn, at its own scale; the notice's own lengths at the overlay's.
         FpsMetrics m{};
         POINT at{};
@@ -1212,10 +1234,15 @@ void notice_look(Paint& p, const std::string& text, bool live, int corner, int f
             m = fps_metrics();
             at = fps_place(corner, static_cast<int>(m.w), static_cast<int>(m.h));
         }
-        // How far in from its side the counter reaches, on both sides, with a gap.
-        const float reach = corner == 1 ? static_cast<float>(at.x) + m.w : static_cast<float>(aw - at.x);
+        // How far in from its side the counter reaches, on both sides, with a gap: from the left at the top left of a
+        // song, from the right under the header.
+        const bool on_left = song && corner == 1;
+        const float reach = on_left ? static_cast<float>(at.x) + m.w : static_cast<float>(aw - at.x);
         beside = std::max(beside, pad + badge_w + gap + after + 2.0f * (reach + fpx(8)));
     }
+    // In a song, the Q and MAX its pause screen shows at the top right (at the game's own scale, from the area's right
+    // edge) as a counter there would be: the card, centred, clear of them on both sides.
+    if (song) beside = std::max(beside, pad + badge_w + gap + after + 2.0f * (kPauseBoxFromRight * handle_scale_for(area_w(), area_h()) + fpx(8)));
     const float room = std::max(fpx(160), std::min(fpx(560) - pad - badge_w - gap - after, static_cast<float>(aw) - beside));
     std::vector<std::wstring> title_lines = wrap_even(title, *title_font, room);
     std::vector<std::wstring> detail_lines = detail.empty() ? std::vector<std::wstring>{} : wrap_even(detail, *detail_font, room);
@@ -1228,8 +1255,9 @@ void notice_look(Paint& p, const std::string& text, bool live, int corner, int f
     // The glass: about 64 high for a title and a line under it, a little more for wrapped lines.
     const float glass_w = std::ceil(pad + badge_w + gap + text_w + after);
     const float glass_h = std::ceil(std::max(fpx(64), text_h + fpx(24)));
-    // Its place: centred at the top of the game's area, 16 down, under the bar while that is down.
-    const int gx = (aw - static_cast<int>(glass_w)) / 2, gy = px(16) + top_room();
+    // Its place: centred at the top of the game's area: in a song 16 down, under the bar while that is down; in the menus
+    // under their header (overlay_scale.h's notice_top), lying on none of its buttons, the bar never reaching it.
+    const int gx = (aw - static_cast<int>(glass_w)) / 2, gy = notice_top(area_w(), area_h(), px(16), px(8), top_room(), bar_whole(), song);
     const RECT win = window_around(gx, gy, static_cast<int>(glass_w), static_cast<int>(glass_h));
     p.x = win.left;
     p.y = win.top;
@@ -1577,8 +1605,8 @@ Painted paint_notice(const Order& o, Paint& p) {
     }
     paint_draw(p, *o.shots);
     Painted made{true, p.picture, p.x, p.y, p.have_backdrop, p.made, o.key};
-    // Placed under the room the bar took in this view.
-    made.room = o.view.top_room;
+    // Placed under the room the bar took in this view, in a song; under the menus' header the bar never reaches it.
+    made.room = o.view.song ? o.view.top_room : 0;
     return made;
 }
 
@@ -1592,8 +1620,9 @@ Painted paint_counter(const Order& o, Paint& p) {
     }
     paint_draw(p, *o.shots);
     Painted made{true, p.picture, p.x, p.y, p.have_backdrop, p.made, o.key};
-    // In a top corner it is placed under the room the bar took in this view; at the bottom the bar never moves it.
-    made.room = o.corner == 1 || o.corner == 2 ? o.view.top_room : 0;
+    // At the top left of a song it is placed under the room the bar took in this view; elsewhere (at the bottom, or under
+    // the menus' header, which the bar never reaches) the bar never moves it.
+    made.room = counter_under_bar(o.corner, o.view.song) ? o.view.top_room : 0;
     return made;
 }
 
@@ -1750,6 +1779,13 @@ View view_now() {
     v.dpi = window_dpi();
     v.top_room = top_room();
     v.full = g_hooks.fullscreen && g_hooks.fullscreen();
+    // A song going on, or the menus, as keyboard play's hook follows the game's plays (neither known where it is not
+    // hooked).
+    const int state = g_hooks.song ? g_hooks.song() : -1;
+    v.song = state == 1;
+    v.menus = state == 0;
+    g_song_now = v.song;
+    g_menus_now = v.menus;
     return v;
 }
 
@@ -2666,8 +2702,8 @@ bool g_fps_said_up = false;
 // The counter's look as text: its numbers (the time to a tenth of a millisecond, as it shows), its corner, its view.
 std::string fps_key(const View& v) {
     char key[96];
-    std::snprintf(key, sizeof key, "counter %dx%d %.4f %d %d %d %.1f", v.w, v.h, static_cast<double>(v.dpi), v.top_room, g_fps_corner, g_reading.fps,
-                  static_cast<double>(g_reading.ms));
+    std::snprintf(key, sizeof key, "counter %dx%d %.4f %d %d %d %.1f %d", v.w, v.h, static_cast<double>(v.dpi), v.top_room, g_fps_corner, g_reading.fps,
+                  static_cast<double>(g_reading.ms), v.song ? 1 : 0);
     return key;
 }
 
@@ -2676,7 +2712,7 @@ void counter_show() {
     if (!g_fps.window || !g_fps.picture) return;
     // Only on the screen already: a step never brings it up (counter_place does, once its picture is ready).
     if (!g_fps.up) return;
-    g_fps.down = g_fps_corner == 1 || g_fps_corner == 2 ? under_bar(g_fps) : 0;
+    g_fps.down = counter_under_bar(g_fps_corner, g_song_now) ? under_bar(g_fps) : 0;
     show(g_fps);
 }
 
@@ -2698,9 +2734,24 @@ bool counter_under_panel() {
     return x1 > lay.panel.x && x0 < lay.panel.right() && y1 > lay.panel.y && y0 < lay.panel.bottom();
 }
 
+// Whether the counter waits in the menus now: known to be in them, in a window shape whose menus leave it no place clear
+// of the game's buttons and words (overlay_scale.h's counter_has_menus_place: wider than 16:9, or the smallest windows at
+// a large scale). Said in the log as it starts and stops waiting.
+bool counter_waits() {
+    view_now();
+    const bool waits = g_menus_now && !counter_has_menus_place(area_w(), area_h(), dpi_scale());
+    static bool said = false;
+    if (waits != said) {
+        said = waits;
+        note(waits ? "player: the frame counter waits in the menus: this window's shape leaves it no place clear of the game's own there; it shows in a song"
+                   : "player: the frame counter has its place again");
+    }
+    return waits;
+}
+
 void counter_place() {
     if (!g_fps.window || !g_fps_corner) return;
-    if (!g_reading.shown || counter_under_panel()) {
+    if (!g_reading.shown || counter_under_panel() || counter_waits()) {
         if (g_fps.up) hide(g_fps);
         g_fps.wanted = 0;
         return;
@@ -2723,7 +2774,7 @@ void counter_place() {
     // Its picture for this look on the screen; while a new look is made, the one it shows stays. In a top corner it
     // stands lower by the rows of the bar in sight that its place did not count with.
     if (g_fps.up || (g_fps.key == key && ready(g_fps))) {
-        g_fps.down = g_fps_corner == 1 || g_fps_corner == 2 ? under_bar(g_fps) : 0;
+        g_fps.down = counter_under_bar(g_fps_corner, g_song_now) ? under_bar(g_fps) : 0;
         show(g_fps);
     }
 }
@@ -2791,8 +2842,8 @@ int notice_free_right() {
 
 std::string notice_key(const View& v) {
     char head[112];
-    std::snprintf(head, sizeof head, "notice %dx%d %.4f %d %d %d %d ", v.w, v.h, static_cast<double>(v.dpi), v.top_room, g_fps_corner, g_notice_live ? 1 : 0,
-                  notice_free_right());
+    std::snprintf(head, sizeof head, "notice %dx%d %.4f %d %d %d %d %d ", v.w, v.h, static_cast<double>(v.dpi), v.top_room, g_fps_corner,
+                  g_notice_live ? 1 : 0, notice_free_right(), v.song ? 1 : 0);
     return head + g_notice_text;
 }
 
@@ -2814,7 +2865,7 @@ void notice_show() {
     if (!g_notice_up || !g_notice_shown || !g_notice.picture) return;
     // Its resting place, less its own slide in, and lower by the rows of the bar in sight that its place did not count
     // with: the window moves alone (the blur hides the difference).
-    g_notice.down = under_bar(g_notice) - g_notice_drop;
+    g_notice.down = (g_song_now ? under_bar(g_notice) : 0) - g_notice_drop;
     show(g_notice);
 }
 
@@ -2933,9 +2984,10 @@ std::string g_handle_view, g_handle_ordered;
 constexpr UINT_PTR kHandleTimer = 1;
 constexpr UINT kHandleCheckMs = 100;
 
-// Whether the handle may be on the screen at all: once the game's picture has shown, while no notice sits at the top,
-// no question is up and the game runs. Where the bar is on its way says the rest (handle_update).
-bool handle_allowed() { return g_first_picture && !g_asking && !g_held && !g_minimised_hold && !g_notice_up; }
+// Whether the handle may be on the screen at all: once the game's picture has shown, while no notice sits at the top (a
+// song's notice, 16 under the top; the menus' stands under their header, far below the handle), no question is up and
+// the game runs. Where the bar is on its way says the rest (handle_update).
+bool handle_allowed() { return g_first_picture && !g_asking && !g_held && !g_minimised_hold && !(g_notice_up && g_song_now); }
 
 // Whether the pointer is on the handle's reach now, over the game's window (the handle lets it through), with no
 // button down and the game not pressed.
@@ -3524,7 +3576,7 @@ void take_painted() {
             take(g_fps, got[kCounterPiece]);
             if (g_reading.shown && (g_fps.up || ready(g_fps))) {
                 // Its new picture where the bar has it now (the same place on the screen as the one before it).
-                g_fps.down = g_fps_corner == 1 || g_fps_corner == 2 ? under_bar(g_fps) : 0;
+                g_fps.down = counter_under_bar(g_fps_corner, g_song_now) ? under_bar(g_fps) : 0;
                 show(g_fps);
             }
             if (!placed) glass_wish();

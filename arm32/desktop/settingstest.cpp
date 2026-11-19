@@ -563,6 +563,125 @@ void counter_checks() {
     check(at_16_10 <= at_16_9 && at_4_3 <= at_16_9, "the counter at the bottom right covers no more of the result's SELECT MUSIC at 16:10 and 4:3 than at 16:9");
 }
 
+// Where the frame counter and the notice stand against the game's own header, buttons and words (overlay_scale.h's
+// counter_at, counter_has_menus_place, notice_top), as measured on the game's frames: the music list, the downloads, a
+// song's page and its options, the result, the rankings before a song, and a song with its own pause screen, at 16:9
+// (1280x720) and 4:3 (960x720 at 150 %). In the menus every corner's counter stands under the header at the right, on
+// none of them, in every shape that has that room, and waits where none has; in a song each corner keeps clear of the
+// pause button, the column under it and the pause screen's Q and MAX; the notice stands under the menus' header there and
+// 16 under the top in a song, clear of the pause screen's Q and MAX (WIN-303, WIN-304; main put the top left counter on
+// the player's name and level in every menu and the notice on the header's items and RANK).
+void menus_place_checks() {
+    using namespace player::overlay;
+    // The counter's glass at 720 lines (fps_metrics), its inset and its room from the right under the header.
+    constexpr float kChipW = 88, kChipH = 44, kInset = 8;
+    struct Rect {
+        const char* what;
+        int x0, y0, x1, y1;
+    };
+    auto overlaps = [](const Rect& a, int x, int y, int w, int h) { return x < a.x1 && x + w > a.x0 && y < a.y1 && y + h > a.y0; };
+    // The game's own at 16:9 (1280x720), measured on its frames: what a menu screen has in it, by screen.
+    const Rect menus_16_9[] = {
+        // The music list: its header (the level badge, the name, the items, RANK, Q and MAX, the shop's +, to its slanted
+        // edge), the tabs, the grid, the next page's cards at the right edge, the arrows, the grid button, the page dots.
+        {"the music list's header", 0, 0, 1280, 100}, {"MUSIC LIST", 0, 115, 190, 153}, {"FILTER", 195, 117, 240, 170},
+        {"HOW TO PLAY", 8, 207, 145, 233}, {"the music list's grid", 300, 135, 1157, 648}, {"the next page's cards", 1268, 100, 1280, 720},
+        {"the left arrow", 218, 330, 258, 460}, {"the right arrow", 1215, 330, 1255, 460}, {"the grid button", 0, 615, 100, 720},
+        {"the page dots", 370, 675, 1085, 690},
+        // The downloads: their own top row with the title and the X, the bottom row with Select ALL and DOWNLOAD.
+        {"the downloads' title row", 0, 0, 1280, 100}, {"Select ALL", 35, 665, 210, 702}, {"DOWNLOAD", 987, 640, 1228, 705},
+        // A song's page and its options: the song's title and score, the X, its Q and MAX, the tabs, the charts' cards, the
+        // items, START, the rank row.
+        {"the song's title and score", 40, 30, 470, 230}, {"the song page's X", 1205, 25, 1250, 70}, {"the song page's Q and MAX", 1010, 270, 1240, 360},
+        {"the LINE tabs", 45, 322, 585, 376}, {"the charts' cards", 35, 418, 1255, 624}, {"START", 1028, 413, 1232, 615},
+        {"the items", 68, 385, 967, 647}, {"the rank row", 0, 657, 375, 720},
+        // The result: its header, the chart and title, the figures, the reward, RANKINGS, PLAY AGAIN, SELECT MUSIC.
+        {"the result's header", 0, 0, 1280, 95}, {"the result's chart and title", 44, 110, 450, 195}, {"the result's figures", 45, 245, 585, 575},
+        {"RANKINGS", 272, 632, 455, 698}, {"PLAY AGAIN", 756, 632, 941, 698}, {"SELECT MUSIC", 970, 632, 1232, 698},
+        // The rankings before a song: its title, the list, MY RANK.
+        {"RANKING", 15, 8, 380, 62}, {"the ranking's list", 20, 70, 420, 330}};
+    // A song's own at 16:9: the column of the pause button, the life gauge, FEVER, the score, rate and combo; the pause
+    // screen's Q and MAX, its title and its buttons.
+    const Rect song_16_9[] = {{"the pause button", 13, 10, 73, 70}, {"the column's gauge and figures", 0, 75, 75, 720},
+                              {"the pause screen's Q and MAX", 891, 15, 1264, 62}, {"PAUSE", 430, 150, 850, 250},
+                              {"RESUME, RESTART, SELECT MUSIC", 170, 396, 1110, 540}};
+    // The same of the music list and a song's page at 4:3 (960x720, the game at 0.75): the header, the grid and the next
+    // page's cards, the song page's X and its Q and MAX.
+    const Rect menus_4_3[] = {{"the music list's header", 0, 0, 960, 75}, {"the music list's grid", 222, 190, 868, 575},
+                              {"the next page's cards", 933, 170, 960, 600}, {"the song page's X", 905, 22, 937, 53},
+                              {"the song page's Q and MAX", 757, 385, 930, 450}, {"the song's title and score", 30, 25, 360, 175}};
+    struct Area {
+        int w, h;
+        float dpi;
+        const Rect* menus;
+        int menus_n;
+        bool song;
+    };
+    const Area areas[] = {{1280, 720, 1.0f, menus_16_9, static_cast<int>(sizeof menus_16_9 / sizeof menus_16_9[0]), true},
+                          {960, 720, 1.5f, menus_4_3, static_cast<int>(sizeof menus_4_3 / sizeof menus_4_3[0]), false}};
+    int bad = 0;
+    for (const Area& a : areas) {
+        const float k = counter_scale_for(a.w, a.h, a.dpi);
+        const int inset = static_cast<int>(std::lround(kInset * k)), right = static_cast<int>(std::lround(kMenusRight * k));
+        const int cw = static_cast<int>(std::ceil(kChipW * k)), ch = static_cast<int>(std::ceil(kChipH * k));
+        const int bar = static_cast<int>(std::lround(kBarTall * scale_for(a.h, a.dpi)));
+        for (int corner = 1; corner <= 4; ++corner) {
+            // In the menus, with the bar up and down alike (it never reaches the counter there).
+            for (const int room : {0, bar}) {
+                const CounterAt at = counter_at(corner, a.w, a.h, inset, cw, ch, room, false, bar, right);
+                for (int i = 0; i < a.menus_n; ++i) {
+                    if (overlaps(a.menus[i], at.x, at.y, cw, ch)) {
+                        ++bad;
+                        std::printf("  %dx%d, the menus, corner %d: the counter at %d,%d on %s\n", a.w, a.h, corner, at.x, at.y, a.menus[i].what);
+                    }
+                }
+                if (at.y < bar || at.x + cw > a.w || at.x < 0) {
+                    ++bad;
+                    std::printf("  %dx%d, the menus, corner %d: the counter at %d,%d under the bar or out of the area\n", a.w, a.h, corner, at.x, at.y);
+                }
+            }
+            // In a song (measured at 16:9), the bar up.
+            if (!a.song) continue;
+            const CounterAt at = counter_at(corner, a.w, a.h, inset, cw, ch, 0, true, bar, right);
+            for (const Rect& r : song_16_9) {
+                if (overlaps(r, at.x, at.y, cw, ch)) {
+                    ++bad;
+                    std::printf("  %dx%d, a song, corner %d: the counter at %d,%d on %s\n", a.w, a.h, corner, at.x, at.y, r.what);
+                }
+            }
+        }
+        // The notice's top in the menus: under the header, the bar never reaching it; a card of 64 rows from there lies
+        // on no header's button or word, whatever its width.
+        const int top = notice_top(a.w, a.h, static_cast<int>(std::lround(16 * scale_for(a.h, a.dpi))), static_cast<int>(std::lround(8 * scale_for(a.h, a.dpi))), 0,
+                                   bar, false);
+        for (int i = 0; i < a.menus_n; ++i) {
+            const Rect& r = a.menus[i];
+            const bool header = std::string(r.what).find("header") != std::string::npos || std::string(r.what).find("title row") != std::string::npos;
+            if (header && top < r.y1) {
+                ++bad;
+                std::printf("  %dx%d, the menus: the notice's top at %d, on %s\n", a.w, a.h, top, r.what);
+            }
+        }
+    }
+    check(bad == 0, "the counter in every corner and the notice stand on none of the game's own header, buttons and words, in the menus and in a song, at 16:9 and 4:3");
+    // In a song the notice stands 16 under the top (lower by the bar's room while it is down), and keeps clear of the
+    // pause screen's Q and MAX: a card centred no wider than the room their left edge leaves on both sides.
+    check(notice_top(1280, 720, 16, 8, 0, 74, true) == 16 && notice_top(1280, 720, 16, 8, 74, 74, true) == 90,
+          "the notice in a song: 16 under the top, under the bar while it is down");
+    check(notice_top(1280, 720, 16, 8, 0, 74, false) == 108 && notice_top(1280, 720, 16, 8, 74, 74, false) == 108 && notice_top(960, 720, 16, 8, 0, 74, false) == 83,
+          "the notice in the menus: 8 under their header (100 at 16:9, 75 at 4:3) or under the bar if that is lower, the same with the bar down");
+    check(1280 - 2 * (kPauseBoxFromRight + 8) > 400, "a song's notice keeps 400 at least of room clear of the pause screen's Q and MAX at 16:9");
+    // Where the menus leave the counter its place: up to 16:9 at the game's own size; not wider, nor in the smallest
+    // windows at a large scale, where it waits for a song.
+    check(counter_has_menus_place(1280, 720, 1) && counter_has_menus_place(1920, 1080, 1) && counter_has_menus_place(1366, 768, 1) &&
+              counter_has_menus_place(1920, 1200, 1) && counter_has_menus_place(1024, 768, 1) && counter_has_menus_place(960, 720, 1.5f) &&
+              counter_has_menus_place(640, 360, 1) && counter_has_menus_place(3840, 2160, 2),
+          "the counter has its place in the menus at 16:9, 16:10 and 4:3, and in a 640x360 window at 100 %");
+    check(!counter_has_menus_place(1680, 720, 1) && !counter_has_menus_place(2560, 1080, 1) && !counter_has_menus_place(3440, 1440, 1) &&
+              !counter_has_menus_place(720, 405, 1.5f) && !counter_has_menus_place(480, 270, 1),
+          "the counter waits in the menus at 21:9 and in the smallest windows at their scale's floor");
+}
+
 // The bar's way down and up (overlay_motion.h): its pace, its times, a turn back midway, Windows' animations off; the
 // rows of it in sight; the handle's part; the pieces at the top.
 void overlay_motion_checks() {
@@ -1565,6 +1684,8 @@ int main() {
     // The bar's two ends, and the frame counter's scale and place against the game's buttons in each shape.
     bar_checks();
     counter_checks();
+    // The counter and the notice against the game's own header, buttons and words, in the menus and in a song.
+    menus_place_checks();
     overlay_motion_checks();
     // Keyboard play's rules.
     keyboard_play_checks();
