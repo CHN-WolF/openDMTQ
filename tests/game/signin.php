@@ -8,7 +8,9 @@
  *   - a one-time link of an account whose player is banned now signs nobody in, and the sign-in page says why, with the
  *     owner's reason, as the form does;
  *   - an account switched off on the Accounts page, with the right password, is told so in its own words and the try is
- *     no failure; with a wrong password it is told only that it is wrong.
+ *     no failure; with a wrong password it is told only that it is wrong;
+ *   - the same through the PC client's sign-in (client.php?signin): answered that the account is off after its right
+ *     password, with no cookie and no failure counted, and only that a wrong password is wrong.
  *
  * Usage: php tests/game/signin.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
@@ -137,6 +139,24 @@ check('SRV-82 a wrong password is told only that it is wrong, as for any account
     && strpos($page, 'disabled') === false, substr(strip_tags($page), 0, 200));
 [, , $page] = visit('POST', "$base/opendmtq/login.php", ['user' => 'offsite', 'password' => 'offpass'], 'opendmtq_lang=ko');
 check('SRV-82 in Korean too', strpos($page, '이 계정은 비활성화되어 로그인할 수 없습니다.') !== false, substr(strip_tags($page), 0, 200));
+
+// ------------------------------------------------------------------ WIN-288: the PC client's sign-in of an account switched off
+
+// The launcher signs in through client.php?signin, under the sign-in page's own limit on failures: the account switched
+// off above, its right password more times than one address may fail in ten minutes, each try said as its status, its
+// error word and whether it set the site's cookie; then a wrong password.
+$said = [];
+for ($i = 0; $i <= DL_PER_ADDRESS; $i++) {
+    [$status, $headers, $body] = visit('POST', "$base/opendmtq/client.php?signin", ['user' => 'offsite', 'password' => 'offpass']);
+    $said[] = $status . ' ' . ((json_decode($body, true) ?: [])['error'] ?? '-') . (signin_cookie($headers) !== '' ? ' cookie' : '');
+}
+check("WIN-288 the PC client's sign-in of an account switched off, with the right password, is answered that it is off, "
+    . 'with no sign-in cookie', $said[0] === '403 off', implode(', ', $said));
+check('WIN-288 and the right password is no failure: past as many tries as one address may fail, still answered the same',
+    end($said) === '403 off', implode(', ', $said));
+[$status, , $body] = visit('POST', "$base/opendmtq/client.php?signin", ['user' => 'offsite', 'password' => 'not-its-password']);
+check("WIN-288 the PC client's sign-in with a wrong password is answered only that it is wrong, as for any account",
+    $status === 401 && ((json_decode($body, true) ?: [])['error'] ?? '') === 'wrong', "$status $body");
 
 // The owner's sign-in as it was.
 if ($had === false) {

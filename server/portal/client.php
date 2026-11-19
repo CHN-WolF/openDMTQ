@@ -3,7 +3,9 @@
 
      GET  client.php?about    whether this is an OpenDMTQ server, and its name and address (no sign-in)
      POST client.php?signin   an account's ID and password (user, password): the site's sign-in cookie, as the sign-in
-                              page gives a browser, which the launcher keeps instead of the password
+                              page gives a browser, which the launcher keeps instead of the password; 403 {"error":
+                              "banned", ...} for a banned player's account, 403 {"error": "off"} for an account switched
+                              off on the Accounts page (both said only after the right password)
      GET  client.php?app      the app on offer for this address, to download from /apk (signed in)
      POST client.php?link     a one-time link that signs a browser in to the same account and opens the player's page
                               (My page on the site): {"url", "page", "expires"} (signed in)
@@ -54,7 +56,16 @@ if (isset($_GET['signin'])) {
     if ($attempt === null) {
         answer(429, ['error' => 'throttled']);
     }
-    $who = site_check($user, $password);
+    // The account the ID and the password are right for, on or switched off (site_password_row, as login.php asks it).
+    $row = site_password_row($user, $password);
+    if ($row !== null && $row['off']) {
+        // The right password of an account switched off on the Accounts page: not a guess, and no sign-in; answered in
+        // its own word, to whoever knows the password alone (a wrong one is told only that it is wrong), as the sign-in
+        // page says it. The launcher shows its own line for it (server.py, error.signin.off).
+        dl_attempt_succeeded($attempt);
+        answer(403, ['error' => 'off']);
+    }
+    $who = $row !== null ? (string)$row['name'] : null;
     if ($who === null) {
         // A wrong password takes a second, as on the sign-in page.
         sleep(1);
@@ -62,7 +73,7 @@ if (isset($_GET['signin'])) {
     }
     dl_attempt_succeeded($attempt);
     // A banned player's account: no sign-in, with the owner's reason and the end when there is one (Unix time, or null).
-    $ban = site_ban(site_account($who));
+    $ban = site_ban($row);
     if ($ban !== null) {
         answer(403, ['error' => 'banned', 'reason' => $ban['reason'], 'until' => $ban['until']]);
     }

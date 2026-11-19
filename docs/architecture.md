@@ -74,7 +74,8 @@ server's one port.
 The PC client talks to the site through `/opendmtq/client.php`: `?about` says whether the address is an OpenDMTQ server
 (its version, name and address, and whether its app is built; no sign-in), `?signin` signs in with a site ID and
 password as the sign-in page does (the same throttle, and the site's cookie back; a banned player's accounts are refused
-with the reason), and `?app` describes the app on offer to a signed-in player, which the client then downloads from
+with the reason, and an account switched off is told so once its password is right, a try that counts as no failure),
+and `?app` describes the app on offer to a signed-in player, which the client then downloads from
 `/apk`. With that sign-in, `?link` gives a one-time link that signs a browser in to the same account once, within a
 minute, and opens MY PAGE (`/opendmtq/login.php?once=...`, kept beside the database in `signin-links/` by the SHA-256 of
 its token, which is written nowhere; the admin API makes the same for its token's admin, `POST /site/link`), and
@@ -693,7 +694,8 @@ hand.
   new password, new ID and Sign out everywhere else end the account's other sign-ins on the site and the admin pages
   (`SiteUser.signed_out_at`). A one-time sign-in link works once, within a minute, and the server keeps only the SHA-256
   of its token. A banned player's accounts are refused at the site's and the PC client's sign-in, and a one-time link
-  of one signs nobody in; an account switched off is told so at the site's sign-in, once its password is right.
+  of one signs nobody in; an account switched off is told so at the site's and the PC client's sign-in, once its
+  password is right.
 - A webhook's address is a secret, as whoever has it can post to the chat: it stays in the database and leaves it only
   for the chat, and the pages, the API and the log of changes show it masked. One that leads to the server itself or its
   network link's own addresses (loopback, link-local such as a cloud's metadata address, the unspecified one, this
