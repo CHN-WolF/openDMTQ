@@ -87,7 +87,7 @@ is at `/opendmtq/admin/setup`, and the status page leads there until every step 
    Windows bundle's server PC itself. Players install the app as [playing on a server](play.md) says; the status page's
    **Add a player** card has the code that downloads it.
 
-![The setup's last step on the server PC: the app ready for 192.168.1.10:8791, the QR code and what to do on each phone, and Play on this PC](images/setup-app.jpg)
+![The setup's last step on the server PC: the app ready for 192.168.1.10:8791, newer phones included, Build again, Play on this PC, and the server set up with the way to the status page](images/setup-app.jpg)
 
 With Docker Compose the pages run in a container and cannot see the PC's folders, so the first two steps name the
 commands instead (`./opendmtq import --songs <folder>`, `./opendmtq host <address>`), which restart the containers. The
@@ -227,7 +227,7 @@ of the restored data; a server with no webhook, account or player of its own yet
 The server's own life in one place, a card each:
 
 <p align="center">
-  <img src="images/admin-server.jpg" alt="The Server page of a Windows bundle: running at its one address with the admin pages under it, Restart and Stop the server, the server's port with Move to this port, the owner's password, Check and repair, the server's data part by part with each size and a backup first, and Uninstall with what it removes" width="100%">
+  <img src="images/admin-server.jpg" alt="The Server page of a Windows bundle: running at its one address with the admin pages under it, Restart and Stop the server, the server's port with Move to this port, the app's name with Change the name, the owner's password, Check and repair, the server's data part by part with each size and a backup first, and Uninstall with what it removes" width="100%">
 </p>
 
 - **The server:** its state, its one address (the site, with these pages under `/opendmtq/admin/`), where these pages
