@@ -7,7 +7,7 @@ it runs ([testing.md](testing.md)):
 - `ui`: CI's `contract` and `ui` jobs, on a push to main or a pull request: the game server's contract and an upgrade from the last
   release, then the pages in three parts, on stand-in files (`tests/game/protocol.sh`, `tests/upgrade/run.sh`, `tests/ui/run.sh`)
 - `unit`: another CI job, without the game's files (`changes`, `test`, `images`, `arm32`, `host`, `client`, or a Windows job:
-  `arm32-windows`, `arm32-windows-real`, `client-build`, `client-windows`, `windows-bundle`, `windows`)
+  `arm32-windows`, `arm32-windows-wine`, `arm32-windows-real`, `client-build`, `client-windows`, `windows-bundle`, `windows`)
 - `qa`: on a machine with the game's files (`tests/qa.sh`)
 - `hand`: by a person, on a device
 
