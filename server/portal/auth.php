@@ -187,7 +187,8 @@ function site_user(bool $again = false): ?string
     if ($who === false || $again) {
         $who = null;
         $c = (string)($_COOKIE[DL_COOKIE] ?? '');
-        if (dl_key() !== '' && preg_match('/^(\d{10})\.((?:[0-9a-f]{2}){3,20})\.([0-9a-f]{64})$/', $c, $m) && (int)$m[1] >= time()) {
+        // The ID in hex, of the lengths an ID may have: 3 to 20 for an account, 1 to 40 for the owner's (site_owner()).
+        if (dl_key() !== '' && preg_match('/^(\d{10})\.((?:[0-9a-f]{2}){1,40})\.([0-9a-f]{64})$/', $c, $m) && (int)$m[1] >= time()) {
             $row = site_account((string)hex2bin($m[2]));
             // When this sign-in was made: the cookie's end less its days. One made before Sign out everywhere else was
             // pressed for the account no longer counts.

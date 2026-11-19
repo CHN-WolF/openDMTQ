@@ -4,8 +4,8 @@
 # loopback with an empty database, runs the checks, and removes everything again. Needs nothing but Docker and Python 3.
 #
 # Usage: tests/game/protocol.sh        (PORT, default 18701; KEEP=1 leaves the server up)
-# Also runs tests/game/lock.php, tests/game/names.php, tests/game/keys.php, tests/game/state.php, tests/game/trust.php and
-# tests/game/moved.php on the same database, and fails on any PHP warning in the server's log.
+# Also runs tests/game/lock.php, tests/game/names.php, tests/game/keys.php, tests/game/state.php, tests/game/trust.php,
+# tests/game/moved.php and tests/game/signin.php on the same database, and fails on any PHP warning in the server's log.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -86,6 +86,10 @@ docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/test
 # A server moved to another address: each start notes the move, and the download page says players need the new app
 # (tests/game/moved.php).
 docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/moved.php" || failed=1
+# The site's sign-in (tests/game/signin.php): the owner's ID of any length it may have, a banned player's one-time link, an
+# account switched off, inside the running server, on its database and state folder. After the other sign-ins: its tries
+# count toward the limit on one address's failures.
+docker exec -i "$NAME" php -- /data/dmtq.db3 http://127.0.0.1:8080 < "$ROOT/tests/game/signin.php" || failed=1
 # The monthly rankings read the play log from one index alone (PlayLog_board, setup-db.php), never the table once per
 # play: the plan SQLite makes of the statement the server runs (odq_month_board_sql()), for TOTAL and a line's tab, on
 # the server's own database.
