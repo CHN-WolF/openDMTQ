@@ -366,6 +366,11 @@ SETTLE = 60
 BACKDROP_ROOM = 480
 # How far a press must move before it drags the page rather than taps (logical pixels).
 PAN_START = 8
+# How much taller than its page the column is held (logical pixels): a row or a card that comes is laid out in room the
+# page's frame already has. Tk's packer lays a frame's rows out in the frame's old size when the frame has asked to grow
+# and its own frame has not yet grown it, so the column at its page's height had the page's last cards squeezed or
+# taken off the screen for a moment, and drawn again when they came back (the cards under the keyboard's lanes).
+COLUMN_ROOM = 960
 
 
 class ScrollArea(tk.Frame):
@@ -399,6 +404,12 @@ class ScrollArea(tk.Frame):
         self._cards = []
         px = ui.px
         self._window = self.canvas.create_window((px(self.MARGIN), px(self.TOP)), window=self.inner, anchor="nw")
+        # The column's height as last given to it (_relayout): its page's height and COLUMN_ROOM under it. Its page
+        # frame fills it; the room shows the page's own picture, past the page's end where the view never reaches.
+        self._column_height = 0
+        # Held at that height, the column no longer changes size as its page grows or shrinks: a change of size or
+        # place of anything in it tells the area instead, once a turn (_column_watch).
+        self._watch_line = self._column_watch()
         # The heading's items (the title's picture, the line under it) and where the content starts under them.
         self._heading, self._content_top = [], px(self.TOP)
         self._backdrop_job, self._backdrop_size, self._backdrop_item = None, None, None
@@ -418,9 +429,11 @@ class ScrollArea(tk.Frame):
         # the area loops for ever: the bar narrows the page, the narrower page fits, the bar goes, and back).
         self.bar_room = self.bar.winfo_reqwidth()
         self.canvas.pack(fill="both", expand=True)
-        # The content's height decides how far it scrolls, and how tall the picture behind it is; the field's frames
-        # take their part of that picture where they now stand (a page frame new in the column among them).
-        self.inner.bind("<Configure>", lambda e: (self._relayout(), self._paint_field()))
+        # The content's height decides how far it scrolls, and how tall the picture behind it is. The column changes
+        # size of its own when the window's width does or when _relayout gives it more room; what changes inside it
+        # tells through _column_watch, a frame of the field through _frame_changed, and a new width brings a new
+        # picture, which places every frame's part again (_draw_backdrop).
+        self.inner.bind("<Configure>", lambda e: self._relayout())
         # The column is as wide as the area less its margins, so text wraps instead of running off.
         self.canvas.bind("<Configure>", self._on_resize)
         # The wheel scrolls whatever is under the pointer, so bind only while the pointer is over this area. Each binding
@@ -442,6 +455,8 @@ class ScrollArea(tk.Frame):
         # A shorter page's second look goes with the area: its timer would call a command that went with it.
         self.bind("<Destroy>", lambda e: e.widget is self and self._shrink_job is not None
                   and self.after_cancel(self._shrink_job), add="+")
+        # The column's watch goes from the window's bindings with the area, as the keyboard's line does.
+        self.bind("<Destroy>", lambda e: e.widget is self and self._column_unwatch(), add="+")
 
     def _bar_set(self, first, last):
         """Show the scroll bar only when the content is taller than the area, in the room the strip keeps for it; tell
@@ -533,6 +548,13 @@ class ScrollArea(tk.Frame):
             self._shrink_job = None
         self._region_height = height
         c.configure(scrollregion=(0, 0, width, height))
+        # The column held its page's height and COLUMN_ROOM tall, set again only when less than half the room is left
+        # under the page, or twice the room (a page that got much shorter): a row or a card that comes is laid out in
+        # the room, the cards under it moved down whole.
+        asked, room = self.inner.winfo_reqheight(), self.ui.px(COLUMN_ROOM)
+        if not asked + room // 2 <= self._column_height <= asked + 2 * room:
+            self._column_height = asked + room
+            c.itemconfigure(self._window, height=self._column_height)
         drawn = self._backdrop_size
         if drawn is None or drawn[0] != width or drawn[1] < content:
             # Another width, or a page taller than the picture behind it: drawn once the size settles (a drag fires many
@@ -541,6 +563,55 @@ class ScrollArea(tk.Frame):
             if self._backdrop_job is not None:
                 self.after_cancel(self._backdrop_job)
             self._backdrop_job = self.after(60, self._draw_backdrop)
+
+    # The events by which something in the column tells it changed size or place, or went.
+    COLUMN_EVENTS = ("<Configure>", "<Unmap>", "<Destroy>")
+
+    def _column_watch(self):
+        """A line in the window's bindings: a change of size or place, or a widget gone, inside this area's column
+        has the area lay its page out again (_relayout) once the turn's work is done, once for all of that turn's
+        changes. In Tcl alone until then: a page laid out moves a hundred widgets, and a call into Python for each
+        would slow the very change. Returns what _column_unwatch takes it away with."""
+        top = self.winfo_toplevel()
+        command = self.register(self._column_changed)
+        # Set while a look is asked for and until it has been taken: the turn's other changes, and the ones the look
+        # itself lays out, ask nothing more.
+        flag = "::odq_column_" + command
+        # The look runs caught: one that comes after the area went finds its command gone, and Tk would show an error.
+        line = ("if {[string first {%s.} %%W] == 0 && ![info exists %s]} {set %s 1; after idle {catch %s; "
+                "unset -nocomplain %s}}" % (self.inner, flag, flag, command, flag))
+        for sequence in self.COLUMN_EVENTS:
+            self.tk.call("bind", top._w, sequence, "+" + line)
+        return top, command, line
+
+    def _column_unwatch(self):
+        """This area goes: its line leaves the window's bindings, and its command goes with it (as _focus_gone)."""
+        top, command, line = self._watch_line
+        try:
+            for sequence in self.COLUMN_EVENTS:
+                script = self.tk.call("bind", top._w, sequence)
+                # The binding's lines joined by newlines: this area's out, the others as they were.
+                kept = "\n".join(part for part in str(script).split("\n") if part.strip() != line)
+                self.tk.call("bind", top._w, sequence, kept)
+            self.deletecommand(command)
+        except tk.TclError:
+            # The window went first, its bindings and commands with it.
+            pass
+
+    def _column_changed(self):
+        """Something in the column changed size or place, or went. Once Tk has laid out the rest (its waiting work done
+        now, so that the page's height is the one it settles on: a card that went is taken off the page a step after
+        it tells of it), a page frame new in the column shows the page's picture (a page shown, the guide's next step:
+        its frame made after its heading), and the page's height and the column's room follow (_relayout)."""
+        if not self.canvas.winfo_exists():
+            return
+        self.update_idletasks()
+        for page in self.inner.winfo_children():
+            if page not in self._field:
+                # No picture yet: laid out since it was last looked at (a card on it may have had it watched already,
+                # its last change of size gone by unseen).
+                self._paint_field(page)
+        self._relayout()
 
     def _settle(self):
         """The page measured again once its sizes have settled: as short as it is now, the region follows, and a view

@@ -6,7 +6,7 @@ A change shows at once as the screen after it: the frames that are neither the s
 (a page half drawn, its cards gone for a moment, text wrapped narrow then wide) are the flicker a person sees. Each
 change may make anew only the rows it brings, never the page. Beside the film, what each change does to the page is
 noted, the same on a busy machine: no picture cut for the page's field, no frame of its flat colour put on the screen
-over its picture (FieldWatch).
+over its picture, no card taken off the screen for a moment (FieldWatch).
 
 Run inside the opendmtq-client-ui container only (client/tests/ui/run.sh); it refuses anywhere else, because it opens
 windows. The film is the virtual screen's own pixels, taken as fast as it gives them (a frame every few ms).
@@ -91,11 +91,14 @@ class FieldWatch:
       the screen half drawn while it was made (16 ms and more when the connection test's card came); the field's
       frames show the page's one picture, placed (widgets.ScrollArea._paint_field);
     - a frame in the field's flat colour put on the screen: a card's holder put there before its card was painted flat
-      over the page's picture until the card came; a holder has no colour of its own."""
+      over the page's picture until the card came; a holder has no colour of its own;
+    - a card on the screen before the change taken off it and put back: the page's frame laid out in its old size while
+      it waited to grow squeezed the cards under the change off the screen for a moment, and they were drawn again
+      when they came back (the cards under the keyboard's lanes); the page's column has room for the page to grow."""
 
     def __init__(self, app):
         from PIL import ImageTk
-        self.app, self.on, self.pictures = app, False, []
+        self.app, self.on, self.pictures, self.cards = app, False, [], set()
         real = ImageTk.PhotoImage.__init__
         watch = self
 
@@ -106,19 +109,32 @@ class FieldWatch:
                 watch.pictures.append("%dx%d" % (image.width(), image.height()))
 
         ImageTk.PhotoImage.__init__ = made
-        # The windows Tk puts on the screen, noted in Tcl alone while a change shows (a call into Python for each would
-        # slow the very change the film times).
-        app.root.tk.eval("set ::odq_noting 0; set ::odq_mapped {}")
+        # The windows Tk puts on the screen and takes off it, noted in Tcl alone while a change shows (a call into
+        # Python for each would slow the very change the film times).
+        app.root.tk.eval("set ::odq_noting 0; set ::odq_mapped {}; set ::odq_unmapped {}")
         app.root.tk.eval("bind all <Map> {+if {$::odq_noting} {lappend ::odq_mapped %W}}")
+        app.root.tk.eval("bind all <Unmap> {+if {$::odq_noting} {lappend ::odq_unmapped %W}}")
+
+    def _cards_on_show(self):
+        """The page's cards on the screen now, each by the widget the page lays out: the card, or the holder it is made
+        in (pages.Sections)."""
+        found = set()
+        for widget in shots.widgets_of(self.app.body.inner):
+            if isinstance(widget, widgets.Card) and widget.winfo_ismapped():
+                holder = widget.master
+                found.add(str(holder if getattr(holder, "odq_holder", False) else widget))
+        return found
 
     def start(self):
         """From now until done(): what the change does to the page."""
         self.pictures = []
-        self.app.root.tk.eval("set ::odq_mapped {}; set ::odq_noting 1")
+        self.cards = self._cards_on_show()
+        self.app.root.tk.eval("set ::odq_mapped {}; set ::odq_unmapped {}; set ::odq_noting 1")
         self.on = True
 
     def done(self):
-        """Since start(): the pictures made for the field, and the frames in its flat colour put on the screen."""
+        """Since start(): the pictures made for the field, the frames in its flat colour put on the screen, and the cards
+        on the screen before that were taken off it and are back."""
         self.on = False
         tcl = self.app.root.tk
         tcl.eval("set ::odq_noting 0")
@@ -140,7 +156,10 @@ class FieldWatch:
             if str(widget) not in flat:
                 # Once each (a card's new holder is put on the screen over the old one, then in its place).
                 flat.append(str(widget))
-        return self.pictures, flat
+        # A card there before and after, taken off the screen in between.
+        taken = sorted(set(str(path) for path in tcl.splitlist(tcl.eval("set ::odq_unmapped")))
+                       & self.cards & self._cards_on_show())
+        return self.pictures, flat, taken
 
 
 # The changes filmed, page by page, as a person makes them: (what it is, the control's kind, its row's name, the key
@@ -215,7 +234,7 @@ def measure_change(app, name, act, results, rows_allowed=0, focus=None, moves=Fa
     with Film(box) as film:
         act()
         run_until(app, FILM)
-    pictures, flat = FIELD.done() if FIELD is not None else ([], [])
+    pictures, flat, taken = FIELD.done() if FIELD is not None else ([], [], [])
     after = grab(box)
     after_widgets = all_widgets(app)
     made = len(after_widgets - before_widgets)
@@ -229,7 +248,8 @@ def measure_change(app, name, act, results, rows_allowed=0, focus=None, moves=Fa
     changed = before != after
     results.append({"change": name, "moves": moves, "expect_change": expect_change, "frames_between": len(between),
                     "span": span, "made": made, "gone": gone, "changed": changed,
-                    "rows_allowed": rows_allowed, "field_pictures": pictures, "flat_frames": flat})
+                    "rows_allowed": rows_allowed, "field_pictures": pictures, "flat_frames": flat,
+                    "cards_taken": taken})
     if between and FRAMES_OUT:
         # The frame in the middle of the ones between, as a picture: what a person sees for a moment.
         from PIL import Image
@@ -386,6 +406,9 @@ def main():
         for path in r.get("flat_frames", ()):
             # A frame put on the screen in the field's flat colour, over the page's picture, until what covers it came.
             problems.append("%s: a frame in the field's flat colour put on the screen (%s)" % (r["change"], path))
+        for path in r.get("cards_taken", ()):
+            # A card under the change squeezed off the screen for a moment while the page waited to grow (WIN-241).
+            problems.append("%s: a card taken off the screen for a moment (%s)" % (r["change"], path))
     report = "flicker %s %s: %d changes, %d problems\n" % (args.lang, args.size, len(results), len(problems))
     report += "".join("  %s\n" % line for line in lines)
     report += "".join("  PROBLEM %s\n" % p for p in problems)
