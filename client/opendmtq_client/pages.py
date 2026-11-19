@@ -316,7 +316,7 @@ def build_play(app, parent):
     # column; each made again only when what it says changed (the keys, the game that ended).
     side = Sections(right, ui)
     side.add(lambda: tuple(app.state.values[name] for name in ("keyboard",) + tuple(choices.LANES)) + (w.language,),
-             lambda holder: how_to_play(app, _card(holder, ui, w("play.how")).body))
+             lambda holder: how_to_play(app, _card(holder, ui, w("play.how"))))
     side.add(lambda: repr(sorted((app.state.last_session or {}).items())), lambda holder: _last_card(app, holder),
              expand=True)
     # Under the columns, the signed-in player's records on the server, made when they come (app.refresh_records) and
@@ -461,31 +461,33 @@ def _last_card(app, holder):
 HOW_TO_PLAY = ("play.how.1", "play.how.3")
 
 
+# A space that never ends a line (Tk breaks its lines at plain spaces only): inside a mode's name ("2 LINE") and a
+# lane's keys ("D F J"), which read as one thing each.
+NO_BREAK = "\u00a0"
+
+
 def keys_line(w, values):
     """How to play's first line, keyboard play as the settings have it now (the Controls page or --set): each LINE
-    mode's keys from its top lane ("F J in 2 LINE, ..."), a lane's second key after a /, or that it is off."""
+    mode's keys from its top lane ("F J in 2 LINE, ..."), a lane's second key after a /, or that it is off. A mode's
+    name and its keys are each kept on one line (NO_BREAK)."""
     if values["keyboard"] != "on":
-        # Off: the line says so, and the link beside it leads where it is turned on.
+        # Off: the line says so, and the link at the card's title leads where it is turned on.
         return w("play.how.keys.off")
     # Each mode in the game's own order (2, 3, then 4 LINE), with its lanes as the settings file writes them.
-    modes = [w("play.how.keys.mode", keys=values[name], mode=choices.mode(name)) for name in choices.LANES]
+    modes = [w("play.how.keys.mode", keys=values[name].replace(" ", NO_BREAK),
+               mode=choices.mode(name).replace(" ", NO_BREAK)) for name in choices.LANES]
     return w("play.how.keys", lanes=", ".join(modes))
 
 
-def how_to_play(app, body, link=True):
-    """How to play's lines in a card's body, on PLAY and on the guide's STAGE START: keyboard play first, as the settings
-    have it, with the Controls page one press away (`link`; the guide has no menu to go to), then HOW_TO_PLAY's."""
-    ui, w = app.ui, app.words
-    # Keyboard play's line, its link at the right end as Help's lines have theirs.
-    line = tk.Frame(body, bg=theme.PANEL)
-    line.pack(fill="x")
-    beside = ()
+def how_to_play(app, card, link=True):
+    """How to play's lines in its card, on PLAY and on the guide's STAGE START: keyboard play first, as the settings
+    have it, then HOW_TO_PLAY's; the Controls page one press away at the card's title (`link`; the guide has no menu to
+    go to), as Ready check has Check again at its own, so that the keys' line has the card's whole width."""
+    ui, w, body = app.ui, app.words, card.body
     if link:
         # The page the keys are set on, by the menu's own name, reached by the mouse or the keyboard.
-        to = widgets.link(line, ui, TITLES["controls"], lambda: app.nav_go("controls"))
-        to.pack(side="right", anchor="n")
-        beside = (to,)
-    widgets.label(line, ui, keys_line(w, app.state.values), wrap_margin=12, beside=beside).pack(side="left", fill="x")
+        widgets.link(card.head, ui, TITLES["controls"], lambda: app.nav_go("controls")).pack(side="right")
+    widgets.label(body, ui, keys_line(w, app.state.values), wrap_margin=0).pack(fill="x")
     for key in HOW_TO_PLAY:
         # One line each, split by the card's faint lines as the ready check's rows are.
         widgets.divider(body, ui, pady=CHECK_GAP)

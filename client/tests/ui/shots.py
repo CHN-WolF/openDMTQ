@@ -473,6 +473,7 @@ def play_fits(app, name, tag, problems):
     import tkinter as tk
     # Its two columns end on one line, at every size (play_fills).
     play_fills(app, name, problems)
+    how_to_play_check(app, name, problems)
     area = app.body
     c = area.canvas
     area.to_top()
@@ -496,6 +497,26 @@ def play_fits(app, name, tag, problems):
     if not actions:
         # The check looked at something: PLAY has Check again at least.
         problems.append("%s: no button on the PLAY page to look at" % name)
+
+
+def how_to_play_check(app, name, problems):
+    """PLAY's How to play: the keys' line has the card's whole width, its CONTROLS link at the card's title (main put the
+    link beside the line, which squeezed it into a narrow column and broke "2 LINE" and "D F J" over two lines)."""
+    import tkinter as tk
+    from opendmtq_client import pages
+    card = card_titled(app, app.words("play.how"))
+    if card is None:
+        problems.append("%s: no How to play card on the PLAY page" % name)
+        return
+    app.root.update()
+    first = next((x for x in card.body.pack_slaves() if x is not card.head), None)
+    room = card.body.winfo_width() - 2 * int(card.body.cget("padx"))
+    if not isinstance(first, tk.Label) or abs(first.winfo_width() - room) > 1:
+        problems.append("%s: How to play's keys line is %s px wide in a card %d px wide inside" % (
+            name, first.winfo_width() if first is not None else None, room))
+    links = [x for x in widgets_of(card.head) if isinstance(x, tk.Label) and str(x.cget("cursor")) == "hand2"]
+    if [x.cget("text") for x in links] != [pages.TITLES["controls"]]:
+        problems.append("%s: How to play's title has %r, not its CONTROLS link" % (name, [x.cget("text") for x in links]))
 
 
 def card_titled(app, title):

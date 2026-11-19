@@ -155,7 +155,7 @@ class CommandLine(Folder):
         self.assertEqual(pages.keys_line(i18n.Words("en"), st.LauncherState.load().values), "Keyboard play is off.")
         code, said = self.run_main(["--set", "keyboard=on"])
         self.assertEqual(code, 0, said)
-        self.assertEqual(pages.keys_line(i18n.Words("en"), st.LauncherState.load().values),
+        self.assertEqual(pages.keys_line(i18n.Words("en"), st.LauncherState.load().values).replace(pages.NO_BREAK, " "),
                          "Keys play the lanes from the top: F/G J in 2 LINE, D F J in 3 LINE, 1 2 3 4 in 4 LINE.")
         # PLAY writes them for the player, after the sound's.
         code, said = self.run_main(["--server", self.site.url, "--sign-in", stub.ACCOUNT, "--set", "keyboard=on"],

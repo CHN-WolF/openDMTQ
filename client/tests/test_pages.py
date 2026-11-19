@@ -9,6 +9,11 @@ from opendmtq_client import values as choices
 EN, KO = i18n.Words("en"), i18n.Words("ko")
 
 
+def plain(text):
+    """Words as they read, the spaces that never end a line (pages.NO_BREAK) as plain ones."""
+    return text.replace(pages.NO_BREAK, " ")
+
+
 class CheckRow(unittest.TestCase):
     def test_a_link_is_named_after_the_page_it_opens(self):
         # The sign-in ended (it does not stop PLAY) and the app is missing (it does): each row's link is the menu's own
@@ -77,15 +82,25 @@ class KeysLine(unittest.TestCase):
         # Keyboard play on with its defaults: each LINE mode's keys from the top lane, in both languages, the Korean
         # particle against the mode's name.
         values = choices.normalize({})
-        self.assertEqual(pages.keys_line(EN, values),
+        self.assertEqual(plain(pages.keys_line(EN, values)),
                          "Keys play the lanes from the top: F J in 2 LINE, D F J in 3 LINE, D F J K in 4 LINE.")
-        self.assertEqual(pages.keys_line(KO, values),
+        self.assertEqual(plain(pages.keys_line(KO, values)),
                          "키로 위에서부터 줄을 칩니다: 2 LINE에서 F J, 3 LINE에서 D F J, 4 LINE에서 D F J K.")
+
+    def test_a_modes_name_and_its_keys_never_break_over_two_lines(self):
+        # Tk breaks a line at a plain space: "2 LINE" and "D F J K" each keep theirs as one that never ends a line (main
+        # broke "2 / LINE" and "D F / J" in a narrow card, at every size).
+        for w in (EN, KO):
+            line = pages.keys_line(w, choices.normalize({}))
+            for words in ("2 LINE", "3 LINE", "4 LINE", "F J", "D F J", "D F J K"):
+                self.assertIn(words.replace(" ", pages.NO_BREAK), line, (w.language, words))
+            # The sentence itself still breaks between them.
+            self.assertIn(" ", line)
 
     def test_keys_set_on_controls_or_by_set_follow(self):
         # Keys as the Controls page or --set leaves them (a lane's second key after a /): the line says those.
         values = choices.normalize({"keys_2line": "D/S K", "keys_4line": "A S K L"})
-        self.assertEqual(pages.keys_line(EN, values),
+        self.assertEqual(plain(pages.keys_line(EN, values)),
                          "Keys play the lanes from the top: D/S K in 2 LINE, D F J in 3 LINE, A S K L in 4 LINE.")
 
     def test_off_says_it_is_off(self):

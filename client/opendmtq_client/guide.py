@@ -296,7 +296,7 @@ class Guide:
         # How to play, as the PLAY page has it, before the first song: the keys, and how to leave the game, which starts
         # in full screen with no buttons of Windows'. No link: the guide has no menu to go to.
         how = pages._card(parent, ui, w("play.how"), last=True)
-        pages.how_to_play(app, how.body, link=False)
+        pages.how_to_play(app, how, link=False)
 
     def checks_changed(self):
         """The ready check came back (app._checked): the last step's PLAY follows it."""
