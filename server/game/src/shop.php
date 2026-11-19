@@ -44,8 +44,8 @@ function odq_shop_buy_with_points(array $p)
 
 /*
  * One purchase, all of it or nothing: the price taken unless the player's currency is unlimited (or it is free), then what
- * the product gives: a pack of MAX POINT its amount, a level unlock the product it unlocks (extra, the product's id when
- * it names none), anything else its item. Noted in PlayerPurchase with what was paid. The currency is the product's, as
+ * the product gives: a pack of MAX POINT its amount (none while unlimited, which leaves the player's own balance as it
+ * was), a level unlock the product it unlocks (extra, the product's id when it names none), anything else its item. Noted in PlayerPurchase with what was paid. The currency is the product's, as
  * the client decides it (MAX POINT when it has a MAX POINT cost, else Q), whichever of the two calls it came through: a
  * call sent to the other one takes the same price. False when nothing was bought: no such product, no account, a price
  * the player cannot pay, or a database that did not take it.
@@ -82,8 +82,9 @@ function odq_shop_buy(int $guid, int $product_id, $extra): bool
             return false;
         }
         // A pack of MAX POINT gives its amount when it has a price: the free ones in the tables were the publisher's gifts,
-        // which the shop never sells.
-        $amount = $kind === 'M' && $price > 0 ? max(0, (int)($product['amount'] ?? 0)) : 0;
+        // which the shop never sells. Nothing while the player's currency is unlimited: nothing is paid then, and their own
+        // balance stays as it was (player.php), so a pack never adds to it for free.
+        $amount = $kind === 'M' && $price > 0 && !$state['unlimited'] ? max(0, (int)($product['amount'] ?? 0)) : 0;
         // The price out, and a pack's MAX POINT in, in one change.
         odq_state_add($db, $guid, ($currency === 'max' ? -$paid : 0) + $amount, $currency === 'q' ? -$paid : 0, 0);
         $item = (int)($product['item'] ?? 0);

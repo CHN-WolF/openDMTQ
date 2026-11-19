@@ -6,7 +6,8 @@
  * as the game does (the platform's login by the phone's device id, then the game's own login) and signs its requests with
  * the key that login gave it:
  *
- *   - a banned player's call is refused whatever form its id takes ("9402x", " 9402", 9402.0), nothing bought.
+ *   - a banned player's call is refused whatever form its id takes ("9402x", " 9402", 9402.0), nothing bought;
+ *   - unlimited currency: a pack of MAX POINT bought with Q gives nothing, as it takes nothing.
  *
  * Usage: php tests/game/trust.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
@@ -114,5 +115,22 @@ foreach (['9402x', ' 9402', 9402.0, '9402'] as $form) {
 check('GAME-100 nothing was bought for the banned player and nothing was paid', kept($db, 9402) === '1000/1000'
     && (int)$db->querySingle('SELECT COUNT(*) FROM PlayerPurchase WHERE guid = 9402') === 0,
     kept($db, 9402) . ' ' . $db->querySingle('SELECT COUNT(*) FROM PlayerPurchase WHERE guid = 9402'));
+
+// ------------------------------------------------------------------ GAME-101: unlimited currency and a pack of MAX POINT
+
+keep($db, 9403, 1000, 1000, 0, 1);
+for ($i = 0; $i < 3; $i++) {
+    call($base, $keys[9403], 'shop.buyProductByQPoint', [9403, 50001, 0]);
+}
+check('GAME-101 unlimited: a pack of MAX POINT bought with Q takes nothing and gives nothing, each purchase kept with nothing paid',
+    kept($db, 9403) === '1000/1000' && $db->querySingle("SELECT COUNT(*) || ' ' || SUM(paid) FROM PlayerPurchase WHERE guid = 9403") === '3 0',
+    kept($db, 9403) . ' ' . $db->querySingle("SELECT COUNT(*) || ' ' || SUM(paid) FROM PlayerPurchase WHERE guid = 9403"));
+$db->exec('UPDATE PlayerState SET unlimited = 0 WHERE guid = 9403');
+$asset = call($base, $keys[9403], 'game.getUserAsset', [9403])['result'] ?? [];
+check('GAME-101 unlimited off again: the game is told the balance the player had before',
+    ($asset['mpoint'] ?? null) === 1000 && ($asset['amt_total'] ?? null) === '1000', json_encode($asset));
+// Without unlimited the pack is paid for and gives its amount, as before.
+call($base, $keys[9403], 'shop.buyProductByQPoint', [9403, 50001, 0]);
+check('GAME-101 without unlimited the pack takes its 10 Q and gives its 2,500 MAX POINT', kept($db, 9403) === '3500/990', kept($db, 9403));
 
 exit($failures ? 1 : 0);
