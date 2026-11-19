@@ -5,6 +5,7 @@ setup's last step and the API.
 Flask is installed in the tools image only; outside it these tests are skipped (CI runs them there).
 """
 
+import errno
 import json
 import os
 import re
@@ -184,6 +185,31 @@ class PlayHereTest(unittest.TestCase):
         self.server(code=this_pc.GAME_OPEN)
         _, said = self.press()
         self.assertIn("The game is open on this PC, and the installer installs nothing under it.", said)
+
+    def test_a_program_that_cannot_start_is_said_in_the_pages_words(self):
+        # The system's own words are in its language, which may not be the page's: the usual reasons are said in the
+        # page's words, in both languages, and any other as the system says it (ADM-192).
+        def refused(error):
+            def start(command, cwd):
+                raise error
+            return start
+        windows = OSError(errno.EINVAL, "%1 is not a valid Win32 application")
+        windows.winerror = 193
+        for error, words in ((PermissionError(errno.EACCES, "Permission denied"), "this PC did not let it run"),
+                             (FileNotFoundError(errno.ENOENT, "No such file or directory"), "its file is not there"),
+                             (OSError(errno.ENOSPC, "No space left on device"), "the disk is full"),
+                             (windows, "its file is damaged"),
+                             (OSError(errno.EIO, "Input/output error"), "Input/output error")):
+            self.server()
+            with mock.patch.object(this_pc, "start_program", refused(error)):
+                _, said = self.press()
+            self.assertIn("The PC client did not start: " + words, said)
+        self.server(installed="0.11.0")
+        self.inst.client.set_cookie("opendmtq_lang", "ko", path="/")
+        with mock.patch.object(this_pc, "start_program", refused(PermissionError(errno.EACCES, "Permission denied"))):
+            _, said = self.press()
+        self.assertIn("PC 클라이언트를 시작하지 못했습니다: 이 PC에서 실행이 허용되지 않았습니다", said)
+        self.assertNotIn("Permission denied", said)
 
     def test_linux_and_macos_say_how_to_play_from_a_windows_pc(self):
         for kind in ("host", "docker"):

@@ -13,6 +13,7 @@ A visit from another PC never sees it, and the API refuses it there: what it run
 Windows user the server runs as.
 """
 
+import errno
 import ipaddress
 import json
 import os
@@ -44,6 +45,15 @@ INSTALLER_LOG = "OpenDMTQ-setup.log"
 INSTALL_LIMIT = 420
 # The installer's own codes (installer.py main()): 3 while a game is open (it installs nothing then).
 GAME_OPEN = 3
+# The usual reasons a program does not start, in the page's words: the system's own are in its language, which may not be
+# the page's ("Permission denied" in a Korean sentence). Windows' error number first, where it gives one, then the kind of
+# error: refused (an antivirus, the file's rights), gone, not a program this PC runs, the disk full, a question of
+# Windows' answered No.
+WINDOWS_WHY = {5: "here.why_denied", 740: "here.why_denied", 1260: "here.why_denied", 2: "here.why_missing",
+               3: "here.why_missing", 193: "here.why_damaged", 216: "here.why_damaged", 112: "err.disk_full",
+               39: "err.disk_full", 1223: "here.why_cancelled"}
+ERRNO_WHY = {errno.EACCES: "here.why_denied", errno.EPERM: "here.why_denied", errno.ENOENT: "here.why_missing",
+             errno.ENOEXEC: "here.why_damaged", errno.ENOSPC: "err.disk_full"}
 # This PC's own addresses, looked up again after a minute: a visit to the server by one of them is the server PC's own.
 _own = {"at": 0.0, "addresses": frozenset()}
 _own_lock = threading.Lock()
@@ -249,7 +259,7 @@ def open_launcher(details, say):
         hand_over(details)
         start_program([launcher_path()], cwd=os.path.dirname(launcher_path()))
     except OSError as e:
-        return [("bad", t("here.not_started", why=e.strerror or str(e)))], False
+        return [("bad", not_started(e))], False
     return [("ok", t("here.opened", id=details["account"]))], True
 
 
@@ -293,7 +303,7 @@ def install(details, say):
             process.kill()
             code = None
     except OSError as e:
-        return [("bad", t("here.not_started", why=e.strerror or str(e)))], False
+        return [("bad", not_started(e))], False
     finally:
         # The copy has done its work (or could not): the installer keeps what it installs elsewhere.
         shutil.rmtree(folder, ignore_errors=True)
@@ -303,6 +313,13 @@ def install(details, say):
         return [("bad", t("here.game_open"))], False
     return [("bad", t("here.failed", code="?" if code is None else code,
                       log=os.path.join(tempfile.gettempdir(), INSTALLER_LOG)))], False
+
+
+def not_started(e):
+    """Why the PC client did not start, as the page says it: the usual reasons in its own words (WINDOWS_WHY, ERRNO_WHY),
+    any other in the system's."""
+    key = WINDOWS_WHY.get(getattr(e, "winerror", None)) or ERRNO_WHY.get(e.errno)
+    return t("here.not_started", why=t(key) if key else (e.strerror or str(e)))
 
 
 def start_program(command, cwd):
