@@ -1073,6 +1073,9 @@ td.actions { width: 1%; text-align: right; }
 /* In a list (unlike a table, whose cells have padding) the words run to the row's ends: the row reaches 10px past
    them on each side, so that the wash and its rim do not touch them. The words stay where they were. */
 .feed li.me, .past-top li.me { margin-inline: -10px; padding-inline: 10px; }
+/* The hall of fame's rows stand close, with no room above or below their words (a feed's row has its own): the row
+   reaches 3px past them there too, half the gap to the next row, so that the rim does not sit on the place's figure. */
+.past-top li.me { margin-block: -3px; padding-block: 3px; }
 /* The podium's card is cut at its top right, which clips a ring drawn inside it: a stroke laid across that corner's
    square, from its top left to its bottom right (where the cut runs), just inside the cut, closes the ring. */
 .pod.me {
