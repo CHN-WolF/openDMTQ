@@ -152,11 +152,13 @@ fi
 # ---- 2. the runtime, the player, the PC client
 D=$OUT/dist
 mkdir -p "$D"
+# The runtime for newer phones from this source, with the NDK CI tests with, as a release's zip (licences in it).
 runtime() {
   arm32/bundle.sh "$OUT/arm32"
   python3 tools/opendmtq_tools/runtime.py --pack "$OUT/arm32" "$D/opendmtq-arm32-runtime.zip"
 }
 step runtime runtime
+# The player for Windows, from the same guest system and Dynarmic, packed as the PC client's installer carries it.
 player() {
   arm32/build_windows.sh player
   arm32/bundle_windows.sh "$D/opendmtq-player-windows.zip"
@@ -198,6 +200,8 @@ previous() {
 step previous previous
 # (Each step runs in a shell of its own: what one leaves for the next is in OUT.)
 PREVIOUS=$(cat "$OUT/previous.path")
+# The PC client's installer and its update packages, updating from this repository's releases, the delta from the last
+# release's full package.
 client() {
   OPENDMTQ_PREVIOUS_RELEASE=$PREVIOUS OPENDMTQ_UPDATE_SOURCE=$SOURCE PLAYER_ZIP="$D/opendmtq-player-windows.zip" \
     client/packaging/windows/build.sh "$OUT/client"
@@ -211,6 +215,7 @@ step client client
 
 # ---- 3. the Windows bundle, with the runtime and the installer as a release has them beside the tools' code
 windows() {
+  # Beside the tools' code, as the bundle and the tools image carry them (git-ignored; unstage takes them away).
   cp "$D/opendmtq-arm32-runtime.zip" "$T/"
   cp "$D/client/OpenDMTQ-Setup.exe" "$D/client/OpenDMTQ-Setup.exe.version" "$T/"
   chmod a-x "$T/OpenDMTQ-Setup.exe"
