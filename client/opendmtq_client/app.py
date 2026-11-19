@@ -52,6 +52,12 @@ class LauncherApp:
         # Fonts must be registered before Tk measures any text.
         theme.register_fonts()
         self.root = root or tk.Tk()
+        from opendmtq_client import frameless, titlebar
+        # On Windows out of sight until Windows' title bar is drawn dark (titlebar.py, after the first page below):
+        # nothing shows in Windows' light bar first.
+        self.hidden_first = root is None and frameless.supported()
+        if self.hidden_first:
+            self.root.withdraw()
         self.root.title("OpenDMTQ")
         self.root.configure(bg=theme.BG)
         # The mark in the title bar and on the taskbar, in place of Tk's feather.
@@ -121,6 +127,12 @@ class LauncherApp:
             log.info("display: %s", line)
         self.root.after(50, self._pump)
         self.show()
+        if self.hidden_first:
+            # Laid out out of sight, which makes Tk's wrapper round the window; its title bar dark, then shown and in
+            # front (Tk's deiconify brings a window to the front on Windows).
+            self.root.update_idletasks()
+            titlebar.dark(self.root)
+            self.root.deiconify()
         self._update_outcome()
         # At the start, then every UPDATE_EVERY: whether a newer launcher is on offer, said on the Launcher page and the
         # status line when it is.

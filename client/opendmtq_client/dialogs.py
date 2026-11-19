@@ -465,14 +465,14 @@ def tell(app, kind, title, message, detail=None, ok=None):
 
 def window_root(title="OpenDMTQ", language="en", frameless=False):
     """A window of its own for dialogs, when there is no launcher window to draw over: (root, ui). `frameless`: one the
-    installer opens, which comes without Windows' title bar as the installer's own window does (window() shows it once
-    the title bar is gone)."""
+    installer opens, which comes without Windows' title bar as the installer's own window does; else Windows' title bar
+    drawn dark, as the launcher's window has it (window() shows it either way once its title bar is done)."""
     safety.refuse_windows_in_tests("a dialog window")
     from opendmtq_client import frameless as bare, i18n, widgets
     theme.register_fonts()
     root = tk.Tk()
-    # Out of sight until Windows' title bar is gone, where there is one to take off: nothing flashes.
-    hidden = frameless and bare.supported()
+    # Out of sight until Windows' title bar is gone or drawn dark, on Windows: nothing flashes, nothing shows light.
+    hidden = bare.supported()
     if hidden:
         root.withdraw()
     root.title(title)
@@ -523,7 +523,21 @@ def window(kind, title, message, detail=None, buttons=(), default=0, cancel=None
     root.protocol("WM_DELETE_WINDOW", lambda: dialog.close(cancel))
     if frameless:
         _without_title_bar(root, dialog)
+    else:
+        _dark_title_bar(root)
     return root, dialog
+
+
+def _dark_title_bar(root):
+    """A dialog window of the launcher's with Windows' title bar drawn dark, as the launcher's own window has it
+    (titlebar.py): on Windows done before the window shows (it was laid out out of sight), then shown."""
+    from opendmtq_client import frameless as bare, titlebar
+    if bare.supported():
+        root.update_idletasks()
+        titlebar.dark(root)
+        root.deiconify()
+        # The person just met it: it takes the keyboard, so Enter and Esc answer it at once.
+        root.focus_force()
 
 
 def _without_title_bar(root, dialog):
