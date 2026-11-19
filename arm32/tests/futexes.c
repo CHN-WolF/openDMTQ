@@ -12,7 +12,8 @@
 //   pthread   semaphores in a ring, a mutex and condition variables with and without timeouts
 //   lostsignal  the handshake of a game's video decoder (seek and its worker): a signal that comes before the wait it was
 //             meant for is lost, as a condition variable's is, and the worker's wait has to end on its own (a spurious
-//             wake-up, which the standard allows a condition variable) for the worker to look at its flag again
+//             wake-up, which the standard allows a condition variable) for the worker to look at its flag again; it runs
+//             only where a wait without a timeout ends by itself (the Windows layer), and says so where it is skipped
 #include <errno.h>
 #include <limits.h>
 #include <linux/futex.h>
@@ -534,6 +535,33 @@ static void run_lostsignal(void) {
     }
     pthread_join(w, NULL);
 }
+// Whether a futex wait without a timeout ends here by itself, which the phase needs: the Windows layer ends one every
+// 100 ms. The Linux kernel never does, on a phone and under the runtime on a Linux host, which passes the wait on to it:
+// there a wait ends only with a wake, as the game's own code has it on a phone, and the phase is skipped. A wait on a word
+// that only a helper wakes, a second later, finds out: back before the helper with 0, it ended by itself.
+static word alone_word;
+static atomic_int alone_woken;
+static void* alone_helper(void* arg) {
+    (void)arg;
+    usleep(1000000);
+    // Noted before the wake, so that a wait it ends cannot pass for one that ended by itself.
+    atomic_store(&alone_woken, 1);
+    // The word changes first, so that a wait that starts late does not sleep for good.
+    atomic_store(&alone_word, 1);
+    futex(&alone_word, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    return NULL;
+}
+static int waits_end_by_themselves(void) {
+    pthread_t t;
+    pthread_create(&t, NULL, alone_helper, NULL);
+    long r;
+    // A signal's interruption (EINTR) is no end by itself: the wait goes on.
+    do r = futex(&alone_word, FUTEX_WAIT, 0, NULL, NULL, 0);
+    while (r == -1 && errno == EINTR);
+    int by_itself = r == 0 && !atomic_load(&alone_woken);
+    pthread_join(t, NULL);
+    return by_itself;
+}
 
 // ----------------------------------------------------------------------------------------------------- driver
 
@@ -666,6 +694,12 @@ skip_wakeop:;
     phase_name = "lostsignal";
     if (only && !strstr("lostsignal", only)) goto skip_lostsignal;
     t0 = now_ns(CLOCK_MONOTONIC);
+    // Only where a wait ends by itself; elsewhere the line says why the phase does not run, and the program goes on.
+    if (!waits_end_by_themselves()) {
+        printf("skip lostsignal: a wait without a timeout ends here only with a wake, as on the Linux kernel, and this "
+               "phase needs one that ends by itself\n");
+        goto skip_lostsignal;
+    }
     // The phase loses its signal on purpose: stuck, it is the worker's wait that never ended by itself (a wait without a
     // timeout on the Linux kernel ends only with a wake; the Windows layer ends one every 100 ms).
     phase_stuck = "the worker's wait did not end on its own";
