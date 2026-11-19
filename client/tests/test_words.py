@@ -197,6 +197,30 @@ class Wording(unittest.TestCase):
                 self.assertNotIn(phrase, ko, key)
         self.assertEqual([k for k in i18n.TEXT if k.startswith("help.trouble.")], ["help.trouble.1", "help.trouble.1.none"])
 
+    def test_a_setting_says_what_it_does_never_what_may_go_wrong(self):
+        # The Screen page's lines say what a choice does (main: VSync off "with possible tearing", no limit "uses the
+        # processor in full", cautions the owner's rules leave out of the product); no limit says what it does.
+        for key in [k for k in i18n.TEXT if k.startswith(("screen.", "sound."))]:
+            en, ko = i18n.TEXT[key]
+            # "no tearing" is what VSync on does; tearing that may come is a caution.
+            self.assertIsNone(re.search(r"(?i)tearing|processor|in full", en.replace("no tearing", "")), key)
+            for phrase in ("찢어질 수", "프로세서", "최대로 씁니다"):
+                self.assertNotIn(phrase, ko, key)
+        self.assertIn("screen.fps.hint.free.unlimited", i18n.TEXT)
+
+    def test_one_title_for_one_thing(self):
+        # The Sound page's card of the last game's sound and PLAY's Last game are two things, with two titles (main
+        # called both Last game, 지난 플레이).
+        for i in (0, 1):
+            self.assertNotEqual(i18n.TEXT["sound.last"][i], i18n.TEXT["play.last"][i])
+
+    def test_the_uninstall_says_what_it_removes(self):
+        # The installer's and the uninstall's lines say what they do, as a person writes it: "Removes OpenDMTQ from this
+        # PC", never "OpenDMTQ goes from this PC" or "they go too" (main).
+        for key, (en, _ko) in i18n.TEXT.items():
+            self.assertIsNone(re.search(r"\bgoes (back )?from\b|\bgo too\b|\bgo\.|^Gone:|only the program goes|"
+                                        r"\{size\} goes", en), (key, en))
+
     def test_the_korean_vsync_hints_say_the_state_they_show_in(self):
         # Shown while VSync is on (or off): "켜면" (once turned on) would say it is off.
         for key in ("screen.fps.hint.vsync", "screen.fps.hint.vsync.above", "screen.fps.hint.vsync_rate"):
@@ -266,6 +290,16 @@ class KoreanParticles(unittest.TestCase):
         particle = re.compile(r"[/A-Za-z0-9}] (로|으로|를|을|와|과|에서|에게|에|은|는|이|가)(?=[ .,)]|$)")
         for key, (_en, ko) in i18n.TEXT.items():
             self.assertIsNone(particle.search(ko), key)
+
+    def test_a_server_responds_and_a_sound_plays(self):
+        # As a Korean product says it: a server 응답합니다, the game's sound 재생합니다 or 들려줍니다, frames are drawn
+        # (화면을 그립니다), a file is 선택해 두었습니다 (main: 답합니다, 답함, 소리를 냅니다, 프레임을 내보냅니다, 선택되어
+        # 있습니다, read as translated).
+        for key, (_en, ko) in i18n.TEXT.items():
+            # 답 alone for an answer, never inside 응답.
+            self.assertIsNone(re.search(r"(?<!응)답(합니다|하지|이 없|함|한 것)", ko), key)
+            for old in ("어느 질문에도", "무언가 답", "냅니다", "낼 장치", "선택되어 있습니다", "PC용 부분"):
+                self.assertNotIn(old, ko, key)
 
     def test_no_mechanical_particles(self):
         # "(으)로", "을(를)" and the like read as a form being filled in: the words are put so that none is needed.

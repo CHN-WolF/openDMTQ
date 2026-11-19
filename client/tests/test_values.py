@@ -201,6 +201,8 @@ class Values(unittest.TestCase):
         self.assertEqual(pages.fps_hint(w, True, "240", 144), w("screen.fps.hint.vsync.above", hz=144))
         self.assertEqual(pages.fps_hint(w, True, "auto", 144), w("screen.fps.hint.vsync_rate"))
         self.assertEqual(pages.fps_hint(w, False, "240", 144), w("screen.fps.hint.free"))
+        # No limit without VSync says what it does (main: that it uses the processor in full).
+        self.assertEqual(pages.fps_hint(w, False, "unlimited", 144), w("screen.fps.hint.free.unlimited"))
         self.assertNotIn("240", pages.fps_hint(w, True, "120", None))
         # The drop-down's words: the display's rate by its number when there is one rate.
         options = dict(pages.fps_options(w, found[:1], 165, "auto"))

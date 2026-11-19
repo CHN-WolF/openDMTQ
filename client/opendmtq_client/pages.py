@@ -769,7 +769,8 @@ def fps_hint(w, vsync, fps, hz):
     rate, or on a display whose rate is known, what this limit gives there (exactly, very nearly, or held at the rate:
     values.vsync_refreshes, as the player paces the frames)."""
     if not vsync:
-        return w("screen.fps.hint.free")
+        # The game holds the limit itself; with no limit, it draws its frames without one.
+        return w("screen.fps.hint.free.unlimited" if fps == "unlimited" else "screen.fps.hint.free")
     if fps == "auto":
         return w("screen.fps.hint.vsync_rate")
     if not hz:

@@ -371,7 +371,7 @@ writes it at every change, and the player reads it at its start. The player's so
 back into it (only the keys it changed, in their places, as a new file renamed over the old), and the launcher takes them
 back when the game ends and when its window comes to the front. `last-game-sound.txt` is what the player measured of the
 game's sound (shared or exclusive, the device's period, the time to the device's output, any gaps), written every five
-seconds and at the end: the Sound page's Last game card and `--status` read it.
+seconds and at the end: the Sound page's Last game's sound card and `--status` read it.
 
 On the PC the game's sound goes the way a phone's does. The game's OpenAL Soft would mix at 22,050 Hz on the only
 device it can open there (Android's AudioTrack, as Windows has no OpenSL ES), so the player gives the game's context the
