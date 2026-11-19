@@ -3,6 +3,7 @@
 
 feed.py record       closed recordings: with songs, without, under a long name. Turns broadcasts on for the server first.
 feed.py air <secs>   two players on air until the time is up: one in a song, one between songs. Ends both broadcasts.
+                     Says "on air" once each has sent three pieces, enough for a player to start (run.sh waits for it).
 feed.py quiet        broadcasts off for the server again, with one player's switch on underneath (held for then).
 
 Reads SITE_URL, ADMIN_URL, ADMIN_PASSWORD, SITE_CONTAINER and SEGMENTS (a folder of 0.ts, 1.ts ... two seconds each).
@@ -159,6 +160,9 @@ def air(seconds):
             for guid in who:
                 upload(guid, tokens[guid], seq, body)
             seq += 1
+            # Three pieces each: what a player needs before it plays (run.sh's stage waits for this line, not a time).
+            if seq == 3:
+                print("on air", flush=True)
             time.sleep(SEGMENT_MS / 1000)
     finally:
         song_over(1)

@@ -308,9 +308,13 @@ stage keys
 
 # Two players on air while the pages that change are looked at; told to stop, the feed ends both broadcasts.
 if wanted air; then
-  python3 "$UI/feed.py" air 420 &
+  python3 "$UI/feed.py" air 420 > "$DATA/feed-air.txt" &
   FEED_PID=$!
-  sleep 6
+  # Until both have sent enough to play (feed.py says so), a minute at most.
+  for _ in $(seq 1 120); do
+    grep -q "^on air" "$DATA/feed-air.txt" 2>/dev/null && break
+    sleep 0.5
+  done
   stage air
   kill "$FEED_PID" 2>/dev/null || true
   wait "$FEED_PID" 2>/dev/null || true
