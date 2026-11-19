@@ -89,6 +89,15 @@ class CommandLine(Folder):
         self.assertEqual(code, 2)
         self.assertIn("wrong", said)
 
+    def test_a_disabled_account(self):
+        # Switched off on the server's Accounts page: said in the window's English words, exit 2, no sign-in kept.
+        self.run_main(["--server", self.site.url])
+        code, said = self.run_main(["--sign-in", stub.OFF], stdin=stub.PASSWORD + "\n")
+        self.assertEqual(code, 2, said)
+        self.assertIn("this account is disabled and cannot sign in", said)
+        self.assertNotIn("wrong", said)
+        self.assertFalse(st.LauncherState.load().server().get("cookie"))
+
     def test_an_address_that_is_none(self):
         # The window's check and words: refused before anything is asked, exit 2, no traceback, nothing kept.
         from opendmtq_client import i18n

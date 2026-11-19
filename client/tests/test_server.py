@@ -133,6 +133,21 @@ class Talking(Folder):
             srv.sign_in(self.site.url, "banned2", stub.PASSWORD)
         self.assertEqual((caught.exception.key, caught.exception.params), ("error.signin.banned", {"reason": "Made-up scores"}))
 
+    def test_a_disabled_account_is_told_so_after_its_right_password(self):
+        # An account the owner switched off on the Accounts page: told so in the launcher's own words, as the site's
+        # sign-in page says it, once its password is right; a wrong password is only wrong, as for any account.
+        from opendmtq_client import i18n
+        with self.assertRaises(srv.ServerError) as caught:
+            srv.sign_in(self.site.url, stub.OFF, stub.PASSWORD)
+        self.assertEqual(caught.exception.key, "error.signin.off")
+        self.assertEqual(i18n.Words("en").error(caught.exception), "This account is disabled and cannot sign in.")
+        self.assertEqual(i18n.Words("ko").error(caught.exception), "이 계정은 비활성화되어 로그인할 수 없습니다.")
+        # The command line's sentence, as the window's English words say it.
+        self.assertEqual(str(caught.exception), "this account is disabled and cannot sign in")
+        with self.assertRaises(srv.ServerError) as caught:
+            srv.sign_in(self.site.url, stub.OFF, "wrong")
+        self.assertEqual(caught.exception.key, "error.signin.wrong")
+
     def test_app_needs_the_sign_in(self):
         with self.assertRaises(srv.SignedOut):
             srv.app_info(self.site.url, "not-a-cookie")

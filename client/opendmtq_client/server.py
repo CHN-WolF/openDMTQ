@@ -4,7 +4,9 @@ What the server answers is its site's client.php (server/portal/client.php) and 
 
   GET  /opendmtq/client.php?about    {"opendmtq", "name", "address", "app"}, no sign-in
   POST /opendmtq/client.php?signin   user, password -> {"account", "expires"} and the site's sign-in cookie; 403
-                                     {"error": "banned", "reason", "until"} for an account whose player is banned
+                                     {"error": "banned", "reason", "until"} for an account whose player is banned, 403
+                                     {"error": "off"} for one switched off on the Accounts page (from 0.11.1), each
+                                     after the right password alone
   GET  /opendmtq/client.php?app      the app on offer: {"file", "sha256", "size", "built_at", "label", "package",
                                      "address"} (signed in)
   GET  /apk                          the app (signed in)
@@ -280,6 +282,10 @@ def sign_in(base, user, password):
             raise ServerError("this account cannot sign in until %s: %s" % (when, reason), "error.signin.banned_until",
                               when=when, reason=reason)
         raise ServerError("this account cannot sign in: %s" % reason, "error.signin.banned", reason=reason)
+    if status == 403 and code == "off":
+        # The account is switched off on the server's Accounts page, said after its right password alone (client.php),
+        # as the site's sign-in page says it.
+        raise ServerError("this account is disabled and cannot sign in", "error.signin.off")
     if status != 200 or not isinstance(answer, dict) or not answer.get("account"):
         raise ServerError("the server answered %s%s" % (status, " (%s)" % code if code else ""), "error.server.answered",
                           status=status)

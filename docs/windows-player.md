@@ -570,7 +570,7 @@ songs, when it begins, at each new message and when it ends.
 - **The launcher says the server runs an older OpenDMTQ:** the PC client needs a server of 0.8 or newer.
 - **The sign-in is refused:** the ID and password are the site's. Too many wrong passwords make the server wait a while
   before the next try. A banned player's account is refused with the reason and the ban's end, as the server's owner
-  set them.
+  set them, and an account the owner disabled on the Accounts page is told so, as the site's sign-in says it.
 - **An update is refused:** the launcher installs only a release the OpenDMTQ project signed, and says so when one is
   not; the program stays as it was. The installer from the server's site installs the server's own version.
 - **The player is missing or a file of the program is damaged:** **Help**, **Repair** puts the program's files back

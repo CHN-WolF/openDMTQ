@@ -844,6 +844,7 @@ TEXT = {
     "error.signin.banned": ("This account cannot sign in: {reason}", "이 계정은 로그인할 수 없습니다: {reason}"),
     "error.signin.banned_until": ("This account cannot sign in until {when}: {reason}",
                                   "이 계정은 {when}까지 로그인할 수 없습니다: {reason}"),
+    "error.signin.off": ("This account is disabled and cannot sign in.", "이 계정은 비활성화되어 로그인할 수 없습니다."),
     "error.signin.throttled": ("Too many tries: wait a minute and try again.", "시도가 너무 많습니다. 1분 뒤에 다시 해 보세요."),
     "error.signin.down": ("The server cannot sign anyone in right now.", "서버가 지금 로그인을 받지 못합니다."),
     "error.signin.ended": ("Your sign-in ended (it ran out, or the password changed). Sign in again.",
