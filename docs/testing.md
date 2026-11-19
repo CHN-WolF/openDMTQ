@@ -197,10 +197,11 @@ It takes the newest release in CHANGELOG.md whose images there are: pulled from 
 
 **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request. Its jobs run side by side: the
 pages' tests in three parts, each a server of its own taken through its stages in their order; the contract, admin
-access and upgrade as a job of their own; the PC client's suite one language in each job. A newer push stops the older
-run of the same branch or pull request (a tag's run is never stopped), and a change to the guides alone (README.md,
-CONTRIBUTING.md, docs/ but the guide the launcher's tests read: `.github/changes.py`) runs the test job, whose
-repository checks read them, and skips the others.
+access and upgrade as a job of their own; the PC client's suite one language in each job; the Windows programs' tests
+under Wine beside the PC client's build and the tests on Windows itself, which take the programs as soon as they are
+built. A newer push stops the older run of the same branch or pull request (a tag's run is never stopped), and a change
+to the guides alone (README.md, CONTRIBUTING.md, docs/ but the guide the launcher's tests read: `.github/changes.py`)
+runs the test job, whose repository checks read them, and skips the others.
 
 **Before a push to main**, `python3 .github/ci_local.py` runs CI's jobs on this computer the way GitHub runs them: each in a
 container that stands in for GitHub's runner (`.github/ci-runner.Dockerfile`: Ubuntu 24.04, as a user who is not root),
