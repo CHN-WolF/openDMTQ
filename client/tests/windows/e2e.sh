@@ -13,7 +13,9 @@
 #      restore as Windows makes them, the window's pop-ups hidden and shown again (the bar stays gone); the bar's X
 #      pressed while the bar slides down (it asks all the same); the bar's X asking (the game held still), Keep playing,
 #      then the X and Quit the game, the launcher back; its Screen, Sound and Controls pages by the keyboard alone, two
-#      keys for keyboard play taken on Controls by their places, on a US and on a French layout
+#      keys for keyboard play taken on Controls by their places, on a US and on a French layout; the connection test on
+#      the command line, of the server and of an address no network leads to, then a report whose files keep none of
+#      the server's address, the site ID or the address tested
 #   5. Repair from the command line: a file of the player and one of the launcher put back as they were installed
 #   6. Clear game data: the id alone stays; the FPS counter switched on and 4 LINE's keys set from the command line (the
 #      launcher's window closed for it, then opened again), and the game starts again with the same id and gets to its
@@ -62,6 +64,8 @@ docker image inspect opendmtq-arm32-windows >/dev/null 2>&1 \
 docker run --rm --network none -u "$(id -u):$(id -g)" -v "$ROOT/client/tests/windows:/src:ro" -v "$OUT:/out" opendmtq-arm32-windows \
   x86_64-w64-mingw32-clang -O2 -Wall -o /out/taskbar.exe /src/taskbar.c -luser32 \
   || { echo "FAIL: the taskbar's helper did not build" >&2; exit 1; }
+# A Windows program, never run as one here: WSL would hand it to Windows if it stayed executable.
+chmod a-x "$OUT/taskbar.exe"
 
 # ---- 1. the installer on the server, and back from its /windows as a player downloads it
 cp "$BUILD/releases/OpenDMTQ-Setup.exe" "$BUILD/releases/OpenDMTQ-Setup.exe.version" "$APK/"
@@ -86,8 +90,8 @@ print('downloaded', name, len(data), 'bytes; it brings', preset.read('/out/' + n
 SETUP=$(cd "$OUT" && ls opendmtq-pc-client-*-setup-*.exe OpenDMTQ-Setup-*.exe 2>/dev/null | head -n 1)
 [ -n "$SETUP" ] || { echo "FAIL: no installer came" >&2; exit 1; }
 
-# ---- 2 to 4 under Wine, on the virtual screen
-docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -v "$ROOT/arm32/wine_gpu.sh:/wine_gpu.sh:ro" -w /out \
+# ---- 2 to 4 under Wine, on the virtual screen (its container named by E2E_NAME, as setup_e2e.sh's)
+docker run --rm --name "${E2E_NAME:-odq-client-e2e-$$}" --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -v "$ROOT/arm32/wine_gpu.sh:/wine_gpu.sh:ro" -w /out \
   -e WINEPREFIX=/tmp/wine -e WINEDEBUG=-all -e TZ=Asia/Seoul -e PLAYER_SHOTS=@50 -e PLAYER_TRACE_INPUT=1 -e PLAYER_TRACE_MOTION=1 \
   "${WINE_GPU_ARGS[@]}" "$E2E_IMAGE" bash -c "
   set -u
@@ -423,6 +427,14 @@ docker run --rm --network "$NET" -v "$OUT:/out" -v "$ACCOUNT_FILE:/account:ro" -
   cat /out/status.txt
   CUR=\"\$LOCAL/OpenDMTQ.Client/current\"
   CMD() { wine \"\$CUR/OpenDMTQ-cmd.exe\" \"\$@\" 2>&1 | tr -d '\r'; }
+  # The connection test from the command line, of the server and of an address no network here leads to, then a
+  # report for whoever helps, into OUT_DIR (Wine's Z: drive): its files are checked once this run is over.
+  CMD --test-server | tee /out/test-server.txt
+  grep -q 'Game server: The game server answers' /out/test-server.txt \\
+    || { echo 'FAIL: --test-server did not test the server'; exit 1; }
+  CMD --test-server 192.0.2.1:8791 | tee -a /out/test-server.txt
+  CMD --report 'Z:\\out\\report.zip' | tee /out/report.txt
+  grep -q 'Saved the report' /out/report.txt || { echo 'FAIL: --report saved no report'; exit 1; }
   # 5. Repair: a file of the player and one of the launcher's own gone, put back from the installed package as they were.
   damaged='player/libEGL.dll _internal/opendmtq_client/assets/fonts/DMTQWide-ExtraBoldItalic.ttf'
   sums=\$(cd \"\$CUR\" && md5sum \$damaged)
@@ -523,6 +535,42 @@ status=$?
 if [ "$status" = 0 ] && [ ! -f "$OUT/e2e-done" ]; then
   echo "FAIL: the run inside ended before its last step"
   status=1
+fi
+# The report the launcher saved (--report, above): none of its files keeps the server's address in any of its forms,
+# the site ID it signed in with or the address it tested, each left out by its word. The ID is read inside the
+# container from the account file and never printed.
+if [ "$status" = 0 ]; then
+  # -i: the check below is the container's standard input.
+  docker run -i --rm --network none -e PYTHONDONTWRITEBYTECODE=1 -v "$OUT:/out:ro" -v "$ACCOUNT_FILE:/account:ro" \
+    opendmtq-client-ui:local python3 - "$SITE" <<'PY' || status=1
+import re, sys, urllib.parse, zipfile
+site = urllib.parse.urlsplit(sys.argv[1])
+port = site.port or (443 if site.scheme == "https" else 80)
+user = open("/account", encoding="utf-8").read().splitlines()[0].strip()
+with zipfile.ZipFile("/out/report.zip") as z:
+    files = {name: z.read(name).decode("utf-8", "replace") for name in z.namelist()}
+# Each as a whole word: the host alone, with its port, and as a folder's or a file's name has it; the ID; the address.
+private = {"the server's address": [site.hostname, "%s:%d" % (site.hostname, port), "%s-%d" % (site.hostname, port)],
+           "the site ID": [user], "the address tested": ["192.0.2.1"]}
+failed = False
+for what, values in private.items():
+    found = sorted({name for name, text in files.items() for value in values
+                    if re.search(r"(?<![\w.-])%s(?![\w-])" % re.escape(value), text, re.I)})
+    if found:
+        print("FAIL: the report keeps %s in %s" % (what, ", ".join(found)))
+        failed = True
+log = files.get("launcher/launcher.log", "")
+for word in ("<server>", "<account>"):
+    if word not in log:
+        print("FAIL: the report's launcher.log says no %s where the server or the ID was" % word)
+        failed = True
+if "system/connection-test.txt" not in files:
+    print("FAIL: the report has no connection test")
+    failed = True
+if not failed:
+    print("report: none of the server's address, the site ID or the address tested in its %d files" % len(files))
+sys.exit(1 if failed else 0)
+PY
 fi
 echo "screens and logs in $OUT"
 # The run inside says FAIL and ends with 1 at the step that failed: this script ends the same way.
