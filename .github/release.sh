@@ -87,11 +87,13 @@ unstage() {
 }
 trap unstage EXIT
 # A Windows program left executable here would run on the host's Windows under WSL: none stays so.
+# (An if, not an &&: the loop's status is its last command's, and a step stops at the first that fails.)
 quiet_programs() {
   find "$@" -type f -perm /111 -print0 2>/dev/null | while IFS= read -r -d '' f; do
-    [ "$(head -c 2 "$f" | tr -d '\0')" = MZ ] && chmod a-x "$f"
+    if [ "$(head -c 2 "$f" | tr -d '\0')" = MZ ]; then
+      chmod a-x "$f"
+    fi
   done
-  return 0
 }
 
 # ---- 1. gates
