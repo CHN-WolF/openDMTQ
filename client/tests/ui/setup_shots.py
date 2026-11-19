@@ -538,10 +538,19 @@ def main():
             problems.append("setup-%s: the notice that the %s is open %s after it %s" % (
                 tag, what, "did not show" if expect else "stayed", "opened" if on else "closed"))
 
+    def choose(made, value):
+        """A choice made on the page, as the arrow keys or a click make it."""
+        from opendmtq_client import setup_window
+        options = next(x for x in widgets_of(made.root) if isinstance(x, setup_window.Options))
+        options.choose(value)
+
     with mock.patch.object(installer, "launcher_open", lambda: notice["launcher"]), \
             mock.patch.object(installer, "game_running", lambda: notice["game"]):
+        # Opening OpenDMTQ closes nothing: the launcher's line is not there while it is chosen, open or not (main said
+        # "The launcher is open: it closes first." then too); Repair closes it, and the line comes and goes with it.
         run("choose-notices", installer.Installer,
-            [lambda made: flip(made, "launcher", True, True), lambda made: flip(made, "launcher", False, False),
+            [lambda made: flip(made, "launcher", True, False), lambda made: choose(made, "repair"),
+             lambda made: flip(made, "launcher", True, True), lambda made: flip(made, "launcher", False, False),
              lambda made: flip(made, "launcher", True, True), lambda made: flip(made, "game", True, True)])
         notice.update(launcher=False, game=False)
         # Waiting for the game: once it closes, the work goes on by itself.

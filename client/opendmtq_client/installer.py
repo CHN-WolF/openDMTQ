@@ -314,9 +314,11 @@ class Installer:
         if self.root.winfo_exists():
             self.root.after(WATCH, self._tick)
 
-    def _notices(self, parent):
+    def _notices(self, parent, closes=lambda: True):
         """The lines at a choice page's foot that say what is open now (the launcher, the game), kept up to date every
-        second: shown each time it opens, gone each time it closes. Returns the function that brings them up to date."""
+        second: shown each time it opens, gone each time it closes. The launcher's line only while what is chosen closes
+        it (`closes()`: repairing, updating, uninstalling; never opening it). Returns the function that brings them up
+        to date, which a change of the choice calls too."""
         import tkinter as tk
         from opendmtq_client import theme
         frame = tk.Frame(parent, bg=theme.PANEL)
@@ -326,7 +328,7 @@ class Installer:
 
         def update():
             rows = []
-            if launcher_open():
+            if closes() and launcher_open():
                 rows.append(("change", w("setup.closing")))
             if game_running():
                 rows.append(("change", w("setup.notice.game")))
@@ -425,6 +427,8 @@ class Installer:
             chosen["value"] = value
             self.window.steps.show([w("setup.step." + key) for key in steps_of[value]], 0)
             main_button.set_text(main_words[value])
+            # The launcher's line follows the choice: opening the launcher closes nothing.
+            notices()
 
         def go():
             value = chosen["value"]
@@ -438,8 +442,9 @@ class Installer:
         options_list = setup_window.Options(card.body, self.ui, options, options[0][0], changed, go)
         options_list.pack(fill="x")
         # Repairing, updating and uninstalling close the launcher's window first (Velopack ends what runs from the
-        # program's folder), and wait for the game: said where the choice is made, each time either opens or closes.
-        notices = self._notices(card.body)
+        # program's folder), and wait for the game: said where the choice is made, each time either opens or closes,
+        # the launcher's line while what is chosen closes it.
+        notices = self._notices(card.body, closes=lambda: chosen["value"] != "open")
 
         def look():
             if installed_version(self.folder) != have:
