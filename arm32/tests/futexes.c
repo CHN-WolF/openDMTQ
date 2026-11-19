@@ -33,6 +33,8 @@ typedef _Atomic unsigned word;
 
 static atomic_long progress;
 static const char* volatile phase_name = "start";
+// What a phase without progress means, for the watchdog's line: a lost wake, except where the phase loses one on purpose.
+static const char* volatile phase_stuck = "a wake was lost";
 static atomic_int failures;
 
 static long futex(word* addr, int op, unsigned val, const struct timespec* timeout, word* addr2, unsigned val3) {
@@ -90,6 +92,8 @@ struct pair {
     char pad2[60];
 } pairs[kPairs];
 static atomic_int flood_on;
+// The mailbox's threads that are through their rounds: the signals phase stops its flooder when all are, before it joins one.
+static atomic_int mailbox_done;
 
 static void* mailbox_server(void* arg) {
     struct pair* p = arg;
@@ -102,6 +106,7 @@ static void* mailbox_server(void* arg) {
         wake_some(&p->ack, 1, &s);
         tick();
     }
+    atomic_fetch_add(&mailbox_done, 1);
     return NULL;
 }
 static void* mailbox_client(void* arg) {
@@ -115,12 +120,14 @@ static void* mailbox_client(void* arg) {
         while ((cur = atomic_load(&p->ack)) < i) wait_while(&p->ack, cur, &s);
         tick();
     }
+    atomic_fetch_add(&mailbox_done, 1);
     return NULL;
 }
 
 static pthread_t mailbox_threads[2 * kPairs];
 static void run_mailbox(int pair_count) {
     memset(pairs, 0, sizeof pairs);
+    atomic_store(&mailbox_done, 0);
     for (int i = 0; i < pair_count; i++) {
         pthread_create(&mailbox_threads[2 * i], NULL, mailbox_server, &pairs[i]);
         pthread_create(&mailbox_threads[2 * i + 1], NULL, mailbox_client, &pairs[i]);
@@ -530,21 +537,25 @@ static void run_lostsignal(void) {
 
 // ----------------------------------------------------------------------------------------------------- driver
 
-// The watchdog: every thread of a phase ticks as it goes; four seconds without one is a lost wake.
+// The watchdog: every thread of a phase ticks as it goes; four seconds without one is a lost wake. The seconds are the
+// monotonic clock's, not a count of its sleeps: a signal for the process can land on this thread and end a sleep early,
+// and forty short sleeps made a few milliseconds without a tick look like four seconds.
 static void* watchdog(void* arg) {
     (void)arg;
     long last = -1;
-    int still = 0;
+    long long since = now_ns(CLOCK_MONOTONIC);
     for (;;) {
         usleep(100000);
         long p = atomic_load(&progress);
+        long long now = now_ns(CLOCK_MONOTONIC);
+        // A tick since the last look: the four seconds start again.
         if (p != last) {
             last = p;
-            still = 0;
+            since = now;
             continue;
         }
-        if (++still >= 40) {
-            printf("FAIL phase %s: no progress for 4 seconds after %ld steps: a wake was lost\n", phase_name, p);
+        if (now - since >= 4000000000LL) {
+            printf("FAIL phase %s: no progress for 4 seconds after %ld steps: %s\n", phase_name, p, phase_stuck);
             printf("SOME CHECKS FAILED\n");
             _exit(1);
         }
@@ -610,9 +621,13 @@ skip_timed:;
         mailbox_rounds = 800;
         run_mailbox(kPairs);
         pthread_create(&f, NULL, flooder, NULL);
-        join_mailbox(kPairs);
+        // The flooder names the threads by their pthread_t, which is a thread only until it is joined: the join frees it,
+        // and a pthread_kill on it reads freed memory. The flooder stops once every thread is through its rounds, before
+        // the first join; one that has ended by then is still there to name (its ID is 0 then, which the kernel refuses).
+        while (atomic_load(&mailbox_done) < 2 * kPairs) usleep(1000);
         atomic_store(&flood_on, 0);
         pthread_join(f, NULL);
+        join_mailbox(kPairs);
     }
     report("signals", t0);
 skip_signals:;
@@ -651,7 +666,11 @@ skip_wakeop:;
     phase_name = "lostsignal";
     if (only && !strstr("lostsignal", only)) goto skip_lostsignal;
     t0 = now_ns(CLOCK_MONOTONIC);
+    // The phase loses its signal on purpose: stuck, it is the worker's wait that never ended by itself (a wait without a
+    // timeout on the Linux kernel ends only with a wake; the Windows layer ends one every 100 ms).
+    phase_stuck = "the worker's wait did not end on its own";
     run_lostsignal();
+    phase_stuck = "a wake was lost";
     report("lostsignal", t0);
 skip_lostsignal:;
 
