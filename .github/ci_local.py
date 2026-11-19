@@ -716,8 +716,10 @@ def main():
     run.say(f"ci_local: {len(run.instances)} jobs of ci.yml at {run.short}, changes since {run.before[:7] or '(everything runs)'}; "
             f"logs in {run.folder}")
     began = time.time()
-    # The jobs still to start, in the workflow's order, and those running with their port blocks.
-    pending = list(run.instances)
+    # The jobs still to start, those that others wait for first (the longest chains start soonest; else the workflow's
+    # order), and those running with their port blocks.
+    waited_for = {i.job: sum(i.job in needs_of(j.spec) for j in run.instances) for i in run.instances}
+    pending = sorted(run.instances, key=lambda i: -waited_for[i.job])
     running = {}
     try:
         schedule(run, pending, running)
