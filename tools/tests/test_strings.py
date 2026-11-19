@@ -113,6 +113,18 @@ class AdminStrings(unittest.TestCase):
                 self.assertNotIn(old, text, key)
         self.assertEqual(ko["setup.continue"], "설정 계속하기")
 
+    def test_the_pages_carry_no_usage_text(self):
+        # A screen shows what to do now and the state; how to use something is the docs' (ADM-201): no steps of how to
+        # install and play on a phone in the setup, no card of how to play from a Windows PC, nothing of how the game
+        # earns and spends a currency, nothing of how a program sends an API token.
+        for lang, table in strings.STRINGS.items():
+            for key in ("setup.phone_title", "setup.phone_open", "setup.phone_open_url", "setup.phone_signin",
+                        "setup.phone_install", "setup.phone_play", "setup.qr_alt", "here.elsewhere_title", "game.max_how",
+                        "game.q_how"):
+                self.assertNotIn(key, table, f"{lang} {key}")
+            self.assertNotIn("Authorization", table["tok.lead"], lang)
+            self.assertNotIn("EXP", table["game.level_lead"], lang)
+
     def test_a_song_error_reads_in_english_and_keeps_its_key(self):
         e = songs.SongError("song.missing", name="song.fpk")
         self.assertEqual(str(e), "song.fpk is missing")

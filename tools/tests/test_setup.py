@@ -1271,20 +1271,19 @@ class AppStepTest(unittest.TestCase):
             self.assertNotIn("No Android app of the game yet", page)
             self.assertIn("The app above still works", page)
 
-    def test_with_the_app_ready_the_page_shows_the_phones_steps_and_the_code(self):
+    def test_with_the_app_ready_the_step_says_so_and_no_steps_of_how_to_play(self):
+        # The step's state and its button; how players install the app and play is the docs' (install.md, play.md), not
+        # a list on the page, with or without the code the build made (the Status page's Add a player card has that)
+        # (ADM-201).
         with HostInstall() as inst:
             inst.write("apk/base/client.apk", "PK")
             inst.app_for(HOST)
+            inst.write("apk/out/download-qr.svg", "<svg/>")
             inst.sign_in()
             page = inst.page(BASE + "/setup?step=app")
-            self.assertIn(f"Open http://{HOST}/ in the browser.", page)
-            self.assertNotIn("<img", page.split('class="setup-phone"')[1].split("</div>")[0])
-            # With the code the build made: the code too.
-            inst.write("apk/out/download-qr.svg", "<svg/>")
-            page = inst.page(BASE + "/setup?step=app")
-            self.assertIn(f"Open http://{HOST}/ in the browser, or scan this code to download the app.", page)
-            # What the code is: the app's download itself (/apk), not the Download page.
-            self.assertIn('alt="QR code of the app\'s download"', page)
+            self.assertIn(f"The app for {HOST} is ready.", page)
+            for gone in ("On each phone", "in the browser", "Sign in with the player's account", "Start the game", 'class="setup-phone"'):
+                self.assertNotIn(gone, page)
 
 
 if __name__ == "__main__":

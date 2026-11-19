@@ -841,15 +841,12 @@ table.sortable :is(th.r, th.rank)[data-sort]::after { position: absolute; margin
 .setup-address { margin: 12px 0 4px; }
 .setup-address code { font: 700 20px/1.3 var(--mono); color: #fff; background: none; overflow-wrap: anywhere; }
 .setup-state { display: flex; align-items: center; gap: 8px; margin: 10px 0 12px; color: #fff; }
-.setup-phone { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; margin: 10px 0 16px; }
-.setup-phone img { flex: none; width: 168px; height: 168px; padding: 8px; background: #fff; }
-.setup-phone ol { flex: 1 1 260px; display: grid; gap: 6px; margin: 0; padding-left: 20px; color: var(--chalk); }
 /* The setup's app step: the question about newer phones above its button. */
 /* The build's button a line's room under what stands above it: the lead, the app's state, or the red box that says why it
    waits (it sat against that box's edge). */
 .setup-build { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 12px 0 0; }
-/* The setup's last step on the server PC itself: the PC client here (this_pc.html), under what to do on each phone. */
-.setup-here { margin: 0 0 16px; }
+/* The setup's last step on the Windows bundle's own PC: the PC client here (this_pc.html), a line's room under the build. */
+.setup-here { margin: 16px 0; }
 .setup-here .lead { margin: 0; }
 
 /* The Server page (server.html): its state as a table of facts, the commands where the page cannot act, the data part by
@@ -928,7 +925,6 @@ table.data-parts .runtime { font-weight: 400; }
 .purse-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
 .purse-form .input { flex: 1 1 130px; min-width: 0; font-variant-numeric: tabular-nums; }
 .purse-form .btns { flex: none; }
-.purse-how { margin: 10px 0 0; }
 /* The switch under the two currencies, as the Broadcasts page's: the state, what it does, the one button. */
 .game-switch { margin: 0; padding-top: 4px; }
 .game-switch .auto-line { margin: 0; }

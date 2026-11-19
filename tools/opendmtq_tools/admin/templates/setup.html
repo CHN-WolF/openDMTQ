@@ -200,20 +200,9 @@
      seconds (data-reload, admin.js). #}
   <p class="meta" data-reload="5000">{{ t('setup.app_running') }}</p>
   {% endif %}
-  {% if done.app %}
-  <h3>{{ t('setup.phone_title') }}</h3>
-  <div class="setup-phone">
-    {% if qr %}<img src="{{ url_for('invite_qr') }}" alt="{{ t('setup.qr_alt') }}" width="168" height="168">{% endif %}
-    <ol>
-      <li>{{ t('setup.phone_open' if qr else 'setup.phone_open_url', url='http://' ~ public_host ~ '/') }}</li>
-      <li>{{ t('setup.phone_signin') }}</li>
-      <li>{{ t('setup.phone_install') }}</li>
-      <li>{{ t('setup.phone_play') }}</li>
-    </ol>
-  </div>
-  {# On the server PC itself: the PC client here, or how to play from a Windows PC (this_pc.py). #}
-  {% if here %}<div class="setup-here" id="this-pc">{{ play_here(here, here_job, 'setup', level=3) }}</div>{% endif %}
-  {% endif %}
+  {# On the Windows bundle's own PC: the PC client here (this_pc.py). How players install the app and play is the docs'
+     (install.md, play.md), not a step's. #}
+  {% if done.app and here and here.kind == 'windows' %}<div class="setup-here" id="this-pc">{{ play_here(here, here_job, 'setup', level=3) }}</div>{% endif %}
   {% if done.files and done.players and done.app %}
   <p class="flash ok" role="status">{{ t('setup.all_done') }}</p>
   <div class="btn-line"><a class="btn btn-primary" href="{{ url_for('dashboard') }}">{{ t('setup.to_status') }}</a></div>

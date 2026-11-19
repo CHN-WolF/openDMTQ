@@ -863,8 +863,6 @@ def setup_page():
         refused = core.refusal(failed)
         view["runtime_failed"] = refused.rstrip(".") if refused is not None else failed
         view["has_apk"] = has_base_apk()
-        # The QR code of the download page, made with the app (an app from before it has none).
-        view["qr"] = os.path.isfile(os.path.join(core.APK, "out", "download-qr.svg"))
         # Play on this PC, for a visit from the server PC (this_pc.py), and its press while it runs.
         from . import this_pc
         view["here"] = this_pc.offer()

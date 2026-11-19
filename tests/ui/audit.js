@@ -2421,8 +2421,9 @@ async function adminFlows(contexts) {
 
 // The admin pages from the server PC itself (the browser on the admin service's own network: its loopback): Play on this
 // PC on the App page and the setup's last step, as the Windows bundle shows it (WINDOWS=1: the button that installs the PC
-// client here) or a host install on Linux (how to play from a Windows PC), swept at every width in both languages; on the
-// bundle, pressed, its job followed on the page to its end, which says what came of it (no Windows program runs here).
+// client here); a host install on Linux shows nothing for it (how to play from a Windows PC is the docs', ADM-201). Swept
+// at every width in both languages; on the bundle, pressed, its job followed on the page to its end, which says what came
+// of it (no Windows program runs here).
 async function thisPc(contexts) {
   const windows = process.env.WINDOWS === '1';
   const kind = windows ? 'the Windows bundle' : 'a host install on Linux';
@@ -2430,9 +2431,13 @@ async function thisPc(contexts) {
   for (const [where, url] of [['the App page', `${A}/app`], ["the setup's last step", `${A}/setup?step=app`]]) {
     await page.goto(url, { waitUntil: 'networkidle2' });
     const words = await textOf(page, '#this-pc');
-    check(`${kind}: ${where}, from the server PC, has Play on this PC`, windows
-      ? (await page.$('#this-pc button')) !== null && /Installs the PC client on this PC/.test(words)
-      : /Play on a Windows PC/.test(words) && /download\.php/.test(words) && (await page.$('#this-pc button')) === null, words.slice(0, 200));
+    if (windows) {
+      check(`${kind}: ${where}, from the server PC, has Play on this PC`,
+        (await page.$('#this-pc button')) !== null && /Installs the PC client on this PC/.test(words), words.slice(0, 200));
+    } else {
+      check(`${kind}: ${where}, from the server PC, has no card of how to play from a Windows PC`,
+        (await page.$('#this-pc')) === null && !/Play on a Windows PC/.test(await textOf(page, 'main')), words.slice(0, 200));
+    }
   }
   await page.close();
   const variant = windows ? 'windows' : 'linux';

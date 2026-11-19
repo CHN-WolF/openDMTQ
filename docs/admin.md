@@ -83,8 +83,9 @@ is at `/opendmtq/admin/setup`, and the status page leads there until every step 
    port. A PC with several (wired and Wi-Fi) offers each. A new one is written to `.env`, and the server starts again
    for it.
 3. **Players.** An account for each player, its password shown once with the message to send.
-4. **App.** The app, built for that address; then what to do on each phone, with the QR code, and
-   [**Play on this PC**](#play-on-this-pc) when the setup is open on the server PC itself.
+4. **App.** The app, built for that address, and [**Play on this PC**](#play-on-this-pc) when the setup is open on the
+   Windows bundle's server PC itself. Players install the app as [playing on a server](play.md) says; the status page's
+   **Add a player** card has the code that downloads it.
 
 ![The setup's last step on the server PC: the app ready for 192.168.1.10:8791, the QR code and what to do on each phone, and Play on this PC](images/setup-app.jpg)
 
@@ -169,7 +170,7 @@ at the top of every page, for the site and the admin pages alike, and a cookie r
 | :--- | :--- |
 | Setup | The four steps above: the game's files, the address, the players and the app. Reached from the status page while a step is left, and from the Songs page to import songs. |
 | Status | Things to look at first when there are any (no app, no backup, little disk, a failed build, a chat that does not take its messages). Game server health, players, plays in the last 24 hours, players broadcasting now (or that broadcasts are off), disk space, current app, last backup, maintenance. An "Add a player" card that leads to the Accounts page, where each account comes with the message to send its player, and the code that downloads the app. Plays over the last 30 days, when people play by weekday and hour, who plays most, the most played songs, what takes the disk, best records by grade, recent plays (one played with the keyboard marked as on the site). Resources: this machine's processors, uptime, memory, swap, disk and load, with CPU, memory in use and the game server's answers over the last 24 hours. |
-| App | The app's name on phones, `TECHNIKA Q (<name>)`: the server's name, set on the Server page, or its address while it has none. Build the app (about 20 seconds, output shown live), download any build, delete one, or all the old ones at once. A build for another address is kept for download and does not replace the one the site offers. The PC client's installer for Windows, its size and its own download, set up for this server, and to which version the server updates the PC clients that play on it ([the PC client's installer](#the-pc-clients-installer)); an installer or updates the server did not take, each with why. Opened on the server PC itself, [**Play on this PC**](#play-on-this-pc). |
+| App | The app's name on phones, `TECHNIKA Q (<name>)`: the server's name, set on the Server page, or its address while it has none. Build the app (about 20 seconds, output shown live), download any build, delete one, or all the old ones at once. A build for another address is kept for download and does not replace the one the site offers. The PC client's installer for Windows, its size and its own download, set up for this server, and to which version the server updates the PC clients that play on it ([the PC client's installer](#the-pc-clients-installer)); an installer or updates the server did not take, each with why. Opened on the Windows bundle's server PC itself, [**Play on this PC**](#play-on-this-pc). |
 | Songs | Add a song package, remove added songs, hide or show any song; what takes more than a few seconds shows its progress until it ends. Each song's plays over the last 30 days, against the most played, and when it was last played. Says so when the server has no client data or no songs yet. See [songs.md](songs.md). |
 | Players | Search by name, sort by any column, when each last played, and a row of 14 small cells, one per day of the last two weeks, darker on days with more plays. A spreadsheet of them all. A name leads to [the player's own page](#a-players-page), a banned player's marked. On each row whether their broadcast is on, with its switch (while broadcasts are off for the server, the page says so and a switch that is on is held for then); under More: rename, reset scores, delete (those two ask first and make a backup first, and take the player's achievements with their scores; a deletion takes their game state and ban too) ([live.md](live.md)). Under the list, while anyone is banned, the banned players with the reason, the end and the way to lift each ban; then the game for every player: unlimited currency for all of them, and what a new player starts with. |
 | Accounts | The site's accounts, the only way into it: make one (an ID, a password typed or made, whom it is for, the game player it is, admin rights to these pages too), and its password shows once with the message to send; a new password, disable or enable, delete. Each with when it was made and last signed in. Under them the API's tokens: make one (a name and a scope, read or write), shown once; each with whose it is, when it was last used and whether it works; revoke ([api.md](api.md)). |
@@ -359,9 +360,10 @@ opened in a browser on the server PC itself, have **Play on this PC**.
   launcher opens the same way, and an open launcher takes the server and comes to the front. The page follows the
   install until it is done and says what came of it; a game open on the PC holds it until the game closes. The
   installer is the site's copy once the app is built, and before that the one the bundle brings.
-- **Linux and macOS:** the PC client is a Windows program, and the page says how to play from a Windows PC instead:
-  open the site's download page there, sign in, and download the installer, set up for this server. Nothing runs on the
-  server for it. Docker Compose on Linux says the same on the server PC.
+- **Linux and macOS:** the PC client is a Windows program, and the pages show nothing for it: a Windows PC plays as
+  [on a Windows PC](play.md#on-a-windows-pc) says, its installer from the site's download page, set up for this server.
+  A press through the API is refused with those words, and nothing runs on the server for it. Docker Compose on Linux is
+  the same.
 
 A visit from another PC never sees it, and is refused it: what it runs, it runs on the server PC. The server PC is a
 visit from loopback (`http://localhost:<port>/`), from one of the PC's own addresses, or, with Docker Engine on Linux,

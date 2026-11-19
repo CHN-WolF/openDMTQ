@@ -1,13 +1,11 @@
-{# Play on this PC (admin/this_pc.py), for a visit from the server PC alone: the App page's card and a part of the setup's
-   last step say it alike. `here` is this_pc.offer(), `job` the press still running (?here=), `back` where its form returns
-   (app or setup), `level` its heading's. On the Windows bundle the button (plain: each page's lime button is its own main
-   action) installs the PC client here and opens it, or opens it when it is installed; on Linux and macOS the words say how
-   to play from a Windows PC. #}
+{# Play on this PC (admin/this_pc.py), for a visit from the Windows bundle's own PC alone: the App page's card and a part of
+   the setup's last step say it alike. `here` is this_pc.offer(), `job` the press still running (?here=), `back` where its
+   form returns (app or setup), `level` its heading's. The button (plain: each page's lime button is its own main action)
+   installs the PC client here and opens it, or opens it when it is installed. #}
 {% macro play_here(here, job, back, level=2) %}
 {% set done = url_for('setup_page', step='app', here=job) if back == 'setup' else url_for('app_page', here=job) %}
 {% set gone = url_for('setup_page', step='app') if back == 'setup' else url_for('app_page') %}
-<h{{ level }}>{{ t('here.title') if here.kind == 'windows' else t('here.elsewhere_title') }}</h{{ level }}>
-{% if here.kind == 'windows' %}
+<h{{ level }}>{{ t('here.title') }}</h{{ level }}>
   {% if here.installed is not none %}
   <p class="lead">{{ t('here.lead_installed', v=here.installed, id=here.id) if here.installed else t('here.lead_installed_plain', id=here.id) }}</p>
   {% elif here.installer %}
@@ -25,7 +23,4 @@
   {# The installer at work: what it is doing until it ends, then the page again with what came of it (followJob in
      admin.js); gone with a restart of these pages, the page as it is now. #}
   {% if job %}<pre class="log" id="here-log" aria-live="polite" data-job="{{ url_for('job_status', job_id=job) }}" data-done="{{ done }}" data-failed="{{ done }}" data-gone="{{ gone }}">{{ t('app.starting') }}</pre>{% endif %}
-{% else %}
-  <p class="lead">{{ t('here.elsewhere', url=here.url ~ '/opendmtq/download.php', id=here.id) }}</p>
-{% endif %}
 {% endmacro %}

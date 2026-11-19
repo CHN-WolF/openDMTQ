@@ -211,13 +211,15 @@ class PlayHereTest(unittest.TestCase):
         self.assertIn("PC 클라이언트를 시작하지 못했습니다: 이 PC에서 실행이 허용되지 않았습니다", said)
         self.assertNotIn("Permission denied", said)
 
-    def test_linux_and_macos_say_how_to_play_from_a_windows_pc(self):
+    def test_linux_and_macos_show_nothing_and_the_api_says_why(self):
+        # No card of how to play from a Windows PC on the pages (the docs say it, play.md): nothing on the App page or the
+        # setup's last step; a press through the form or the API is refused with the words of where to play (ADM-201).
         for kind in ("host", "docker"):
             self.server(kind=kind)
-            shown = self.page("/app")
-            self.assertIn("Play on a Windows PC", shown)
-            self.assertIn("<code>http://%s/opendmtq/download.php</code>" % HOST, shown)
-            self.assertNotRegex(shown, r'>Play on this PC</button>')
+            for path in ("/app", "/setup?step=app"):
+                shown = self.page(path)
+                self.assertNotIn('id="this-pc"', shown)
+                self.assertNotIn("Play on a Windows PC", shown)
             _, said = self.press()
             self.assertIn("The PC client runs on Windows.", said)
             self.assertEqual(self.started, [])
@@ -245,6 +247,14 @@ class PlayHereTest(unittest.TestCase):
                    "X-Forwarded-Server": HOST, "X-Forwarded-Proto": "http", **more}
         return self.inst.client.get(BASE + "/app", environ_base={"REMOTE_ADDR": "172.18.0.2"}, headers=headers).get_data(as_text=True)
 
+    def kind_through_the_server(self, real_ip):
+        """What Play on this PC is for a visit the server's Apache passes on as through_the_server() does: "windows",
+        "elsewhere" (the server PC of another install) or None (another PC)."""
+        headers = {"X-Real-IP": real_ip, "X-Forwarded-For": real_ip, "X-Forwarded-Host": "localhost:8791",
+                   "X-Forwarded-Server": HOST, "X-Forwarded-Proto": "http"}
+        with admin.app.test_request_context(BASE + "/app", environ_base={"REMOTE_ADDR": "172.18.0.2"}, headers=headers):
+            return this_pc.here_kind()
+
     def test_with_docker_engine_a_visit_from_the_stack_gateway_is_this_pcs(self):
         # Docker Compose on Linux: a browser on the server PC reaches the server from the stack network's gateway, which
         # the server takes for the server PC's (ADMIN_LOCAL=gateway): Play on this PC shows, with how to play from a
@@ -253,11 +263,11 @@ class PlayHereTest(unittest.TestCase):
         with mock.patch.object(admin.auth, "server_addresses", lambda: {"172.18.0.2"}), \
                 mock.patch.object(admin.auth, "stack_gateway", lambda: "172.18.0.1"):
             with mock.patch.dict(os.environ, {"ADMIN_LOCAL": "gateway"}):
-                page = self.through_the_server("172.18.0.1")
-                self.assertIn('id="this-pc"', page)
-                self.assertIn("Play on a Windows PC", page)
+                # The server PC's visit counts as the server PC's (the page has no card of how to play from a Windows PC
+                # to show it with, ADM-201: the server's own word for the visit says it).
+                self.assertEqual(self.kind_through_the_server("172.18.0.1"), "elsewhere")
                 # Another address of the network: not the server PC.
-                self.assertNotIn('id="this-pc"', self.through_the_server("192.168.0.50"))
+                self.assertIsNone(self.kind_through_the_server("192.168.0.50"))
             # Docker Desktop and rootless Docker pass every visit from such an address: none counts there.
             with mock.patch.dict(os.environ, {"ADMIN_LOCAL": "none"}):
                 self.assertNotIn('id="this-pc"', self.through_the_server("172.18.0.1"))

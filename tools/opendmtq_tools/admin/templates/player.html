@@ -32,7 +32,7 @@
   <section class="card" id="game-currency" data-region aria-labelledby="currency-title">
     <h2 id="currency-title">{{ t('game.currency') }}</h2>
     <p class="lead">{{ t('game.currency_lead') }}</p>
-    {% for cur, name, shown, own, how in [('max', 'game.max', s.shown_mpoint, s.mpoint, 'game.max_how'), ('q', 'game.q', s.shown_qpoint, s.qpoint, 'game.q_how')] %}
+    {% for cur, name, shown, own in [('max', 'game.max', s.shown_mpoint, s.mpoint), ('q', 'game.q', s.shown_qpoint, s.qpoint)] %}
     <div class="purse">
       <div class="purse-head">
         <span class="purse-mark">{{ 'MAX' if cur == 'max' else 'Q' }}</span>
@@ -45,7 +45,6 @@
         <input class="input input-sm" name="amount" inputmode="numeric" pattern="[0-9,]*" maxlength="11" required autocomplete="off" placeholder="0" aria-label="{{ t('game.amount_of', what=t(name)) }}" data-bad="{{ tp('game.bad_amount') }}">
         <div class="btns"><button class="btn btn-sm" name="how" value="set">{{ t('game.set') }}</button><button class="btn btn-sm" name="how" value="add">{{ t('game.add') }}</button><button class="btn btn-sm" name="how" value="take">{{ t('game.take') }}</button></div>
       </form>
-      <p class="meta purse-how">{{ t(how) }}</p>
     </div>
     {% endfor %}
     {# The player's own unlimited switch, as the Broadcasts page's: the state and what it does, then the one button. #}
