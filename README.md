@@ -142,7 +142,7 @@ choose for each lane); a bar over the game has its sound, minimise, full screen 
 ([the PC client](docs/windows-player.md)).
 
 <p align="center">
-  <img src="docs/images/client-play.png" alt="The launcher's PLAY page signed in on 192.168.1.10:8791: the server with My page on the site, the ready check, how to play, the last game, and PLAY" width="100%">
+  <img src="docs/images/client-play.png" alt="The launcher's PLAY page signed in on 192.168.1.10:8791: the server's address at its head with the signed-in player and My page on the site, the ready check and the last game side by side, My records under them, and PLAY" width="100%">
 </p>
 
 ### Newer phones

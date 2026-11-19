@@ -63,7 +63,7 @@ Not tried yet: a Linux desktop's own graphics driver and sound, touch screens, a
 
 ## The launcher
 
-![The launcher's PLAY page signed in as sena on 192.168.1.10:8791: the server with My page on the site, the ready check, how to play with the keys and the bar over the game, the last game, the start of My records, and PLAY](images/client-play.png)
+![The launcher's PLAY page signed in as sena on 192.168.1.10:8791: the server's address at its head with the signed-in player and My page on the site, the ready check and the last game side by side, My records under them, and PLAY](images/client-play.png)
 
 | Page | What it has |
 | :--- | :--- |
@@ -100,7 +100,7 @@ best records from the server, each with the song, the chart, when, the score (wi
 keyboard played it) and the place on that chart (#2 of 5); it is asked for when the page shows and again after a game.
 An account the server's owner has not linked to a game player says so instead, and signed out the card is not there.
 
-![My records at the foot of the PLAY page: three recent plays and three best records, each with its song, chart and when, the score with the keyboard's mark before those a keyboard played, and the place on the chart; under them what the keyboard's mark means](images/client-records.png)
+![My records, the PLAY page's last card: three recent plays and three best records, each with its song, chart and when, the score with the keyboard's mark before those a keyboard played, and the place on the chart; at its top right what the keyboard's mark means](images/client-records.png)
 
 ### <a id="testing-the-connection"></a>Testing the connection
 
@@ -460,7 +460,7 @@ within 4.5 ms of their time; no limit, 733 to 965. How the passes draw: [the pic
 
 ## The sound
 
-![The Sound page: the equaliser on Bass with its three bands, the output on Windows' default device, Shared, with the Low buffer, and the Last game card: shared with low latency, a 7 ms period, 29 ms out, no gaps](images/client-sound.png)
+![The Sound page: the volumes and the output side by side, the output on Windows' default device, Shared, with the Low buffer, and under it the last game's sound: shared with low latency, a 7 ms period, 29 ms out, no gaps; the equaliser under them on Bass, its three bands side by side](images/client-sound.png)
 
 The launcher's **Sound** page and the game's [sound panel](#the-sound-panel) set the same settings: a change in either
 is the other's next time it looks.
@@ -494,10 +494,10 @@ is the other's next time it looks.
   behind. Before that, the game's OpenAL mixes 20 ms at a time into a buffer of 20 ms, which adds 20 to 40 ms. Where
   the notes and their sounds do not meet, the game's own calibration in its options moves one against the other; the
   player adds no offset of its own.
-- **Last game**, at the page's foot: how the last game's sound went as the player measured it, how it had the device
-  (shared, shared at Windows' shortest period, or exclusive), the device's period, the time from the game's sound to
-  the device's output, and the gaps (the device running dry, or the game's own sound falling behind), with a lime light
-  when there were none and a yellow ring when there were. The player writes it beside the settings file
+- **Last game's sound**, under the output's choices: how the last game's sound went as the player measured it, how it
+  had the device (shared, shared at Windows' shortest period, or exclusive), the device's period, the time from the
+  game's sound to the device's output, and the gaps (the device running dry, or the game's own sound falling behind),
+  with a lime light when there were none and a yellow ring when there were. The player writes it beside the settings file
   (`last-game-sound.txt`) every five seconds and when the game ends; `--status` prints the same line.
 
 The game mixes its sound at 44.1 kHz, as on every phone. On a phone the game's OpenAL opens its OpenSL ES device, which
