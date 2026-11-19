@@ -181,7 +181,16 @@ window.layoutAudit = function layoutAudit() {
   }
 
   // Text that cannot be read: its colour against what is behind it (solid colours only; over a picture nothing is said).
-  const parse = c => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return null; const v = m[1].split(/[ ,/]+/).map(Number); return { r: v[0], g: v[1], b: v[2], a: v.length > 3 ? v[3] : 1 }; };
+  const parse = c => {
+    const m = /rgba?\(([^)]+)\)/.exec(c);
+    if (m) { const v = m[1].split(/[ ,/]+/).map(Number); return { r: v[0], g: v[1], b: v[2], a: v.length > 3 ? v[3] : 1 }; }
+    // A colour the stylesheet mixes (color-mix in srgb) reads back as color(srgb r g b / a), each part from 0 to 1: read
+    // in the rgb() scale, so that text on such a box is held to that box and not to what lies under it.
+    const mixed = /color\(srgb ([^)]+)\)/.exec(c);
+    if (!mixed) return null;
+    const v = mixed[1].split(/[ /]+/).map(Number);
+    return { r: v[0] * 255, g: v[1] * 255, b: v[2] * 255, a: v.length > 3 ? v[3] : 1 };
+  };
   const lum = c => { const f = x => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
   const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
   // Every colour that may be behind the element's text: a gradient counts with each of its stops. Over a picture, nothing.
@@ -190,7 +199,9 @@ window.layoutAudit = function layoutAudit() {
     for (let a = el; a; a = a.parentElement) {
       const st = getComputedStyle(a);
       if (a.matches('.stage, .song-pic, .thumb-pic, .past-pic, .live-stage, .songhead') || /url\(|conic|radial/.test(st.backgroundImage)) return [];
-      if (st.backgroundImage !== 'none') layers.push([...st.backgroundImage.matchAll(/rgba?\([^)]+\)/g)].map(m => parse(m[0])));
+      // Each stop of a gradient, a mixed colour's among them (a layer with none read is no layer).
+      const stops = st.backgroundImage === 'none' ? [] : [...st.backgroundImage.matchAll(/(?:rgba?|color)\([^)]+\)/g)].map(m => parse(m[0])).filter(Boolean);
+      if (stops.length) layers.push(stops);
       const c = parse(st.backgroundColor);
       if (c && c.a > 0) { layers.push([c]); if (c.a >= 1) break; }
     }

@@ -401,11 +401,17 @@ async function self(contexts) {
   const page = await contexts.anon.newPage();
   await page.setViewport({ width: 800, height: 600 });
   await page.goto(`file://${path.join(__dirname, 'defects.html')}`, { waitUntil: 'load' });
-  const kinds = new Set((await audit(page)).map(f => f.kind));
+  const seenOnPage = await audit(page);
+  const kinds = new Set(seenOnPage.map(f => f.kind));
   for (const kind of ['clipped', 'sticks-out', 'overlap', 'rows', 'columns', 'past-screen', 'page-wide', 'covered', 'contrast', 'default-control', 'no-style', 'small-target', 'broken-image', 'side-scroll', 'broken-word', 'split-sentence',
     'touching', 'edge-touch', 'tight-padding', 'uneven-gaps', 'off-scale']) {
     check(`the checker sees ${kind}`, kinds.has(kind));
   }
+  // A box filled with a colour the stylesheet mixes (color-mix, as the pages' red and green message boxes are): the browser
+  // reads it back as color(srgb ...), and a button right under it touches it all the same.
+  check('the checker sees a box with a mixed colour touching the button under it',
+    seenOnPage.some(f => f.kind === 'touching' && /#mixed-box/.test(f.detail) && /#mixed-under/.test(f.detail)),
+    seenOnPage.filter(f => /mixed/.test(`${f.at} ${f.detail}`)).map(f => `${f.kind} ${f.detail}`).join(' ; '));
   // And the room between things laid out as the site lays them out (panels a gap apart, buttons in a row, words inside
   // their padding) is no finding: the checker sees faults, not every box.
   await page.setContent(`<!doctype html><style>:root { --gap: 20px; --pad: 24px } body { margin: 0; background: #11151a; color: #eee; font: 14px/1.6 sans-serif }

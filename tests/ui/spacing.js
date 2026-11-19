@@ -38,7 +38,17 @@ window.spacingAudit = function spacingAudit() {
   const decoration = el => !!el.closest('[aria-hidden="true"], .chart-tip, script, style, option, .page-title, .logo, [data-spacing-ok]');
 
   // A colour as numbers; null when there is none to read.
-  const parse = c => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; const v = m[1].split(/[ ,/]+/).map(Number); return { r: v[0], g: v[1], b: v[2], a: v.length > 3 ? v[3] : 1 }; };
+  const parse = c => {
+    const m = /rgba?\(([^)]+)\)/.exec(c || '');
+    if (m) { const v = m[1].split(/[ ,/]+/).map(Number); return { r: v[0], g: v[1], b: v[2], a: v.length > 3 ? v[3] : 1 }; }
+    // A colour the stylesheet mixes (color-mix in srgb: a message's red or green box, a danger button) reads back as
+    // color(srgb r g b / a), each part from 0 to 1: read as well, or such a box would be no box at all to this checker.
+    const mixed = /color\(srgb ([^)]+)\)/.exec(c || '');
+    if (!mixed) return null;
+    const v = mixed[1].split(/[ /]+/).map(Number);
+    // In the rgb() scale, as the rest of this file reads colours.
+    return { r: v[0] * 255, g: v[1] * 255, b: v[2] * 255, a: v.length > 3 ? v[3] : 1 };
+  };
   // The sides of a box that a border is drawn on (at least a pixel wide and not see-through).
   const borderSides = s => ['Top', 'Right', 'Bottom', 'Left'].filter(k => px(s[`border${k}Width`]) >= 1 && !['none', 'hidden'].includes(s[`border${k}Style`]) && (parse(s[`border${k}Color`]) || { a: 0 }).a > 0.15);
   // An outer shadow (not one drawn inside the box, as the glass's rim is): it shows the box's outline too.

@@ -43,6 +43,9 @@
     <div style="margin-top: 16px; display: flex"><span style="padding: 4px 8px; margin-right: 4px; background: #333">a</span><span style="padding: 4px 8px; margin-right: 16px; background: #333">b</span><span style="padding: 4px 8px; background: #333">c</span></div>
     <div style="margin-top: 16px"><span style="display: inline-block; padding: 4px 8px; background: #333">Spaced</span> <span style="display: inline-block; padding: 4px 8px; background: #333">by the markup</span></div>
     <div style="margin-top: 16px; display: grid"><div style="width: 220px; padding: 12px; background: #2a2a2a">A panel</div><div style="width: 220px; padding: 12px; margin-top: 33px; background: #2a2a2a">Too far below</div></div>
+    <!-- A box whose fill the stylesheet mixes (as the pages' red message boxes are), a button right under it: the browser
+         reads that fill back as color(srgb ...), which the checker must read too. -->
+    <div style="margin-top: 16px; width: 240px"><p id="mixed-box" style="margin: 0; padding: 8px; background: color-mix(in srgb, #ff5f72 15%, #1a1f25)">A mixed red box</p><button id="mixed-under" style="height: 30px; padding: 0 12px; border: 0; color: #eee; background: #272e36">Under it</button></div>
   </section>
 </main>
 </body>
