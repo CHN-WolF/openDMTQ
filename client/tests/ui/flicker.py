@@ -4,7 +4,9 @@ the screen before and the screen after is counted, with the widgets the change m
 
 A change shows at once as the screen after it: the frames that are neither the screen before nor the one after
 (a page half drawn, its cards gone for a moment, text wrapped narrow then wide) are the flicker a person sees. Each
-change may make anew only the rows it brings, never the page.
+change may make anew only the rows it brings, never the page. Beside the film, what each change does to the page is
+noted, the same on a busy machine: no picture cut for the page's field, no frame of its flat colour put on the screen
+over its picture (FieldWatch).
 
 Run inside the opendmtq-client-ui container only (client/tests/ui/run.sh); it refuses anywhere else, because it opens
 windows. The film is the virtual screen's own pixels, taken as fast as it gives them (a frame every few ms).
@@ -49,6 +51,8 @@ MOVING_FRAMES, MOVING_MS = 2, 50
 CARD_FRAMES, CARD_MS = 8, 250
 # Where a frame between is saved as a picture for each change that has one (--frames), or None.
 FRAMES_OUT = None
+# What the changes do to the page beside the film (FieldWatch), once main() has made it.
+FIELD = None
 
 
 class Film:
@@ -78,6 +82,65 @@ class Film:
     def __exit__(self, *exc):
         self._stop.set()
         self._thread.join()
+
+
+class FieldWatch:
+    """What a change does to the page beside the film's timing, noted while it shows (and unlike the timing, the same on
+    a busy machine):
+    - a picture made for a frame of the page's field: the page's picture cut again for a frame that moved or grew kept
+      the screen half drawn while it was made (16 ms and more when the connection test's card came); the field's
+      frames show the page's one picture, placed (widgets.ScrollArea._paint_field);
+    - a frame in the field's flat colour put on the screen: a card's holder put there before its card was painted flat
+      over the page's picture until the card came; a holder has no colour of its own."""
+
+    def __init__(self, app):
+        from PIL import ImageTk
+        self.app, self.on, self.pictures = app, False, []
+        real = ImageTk.PhotoImage.__init__
+        watch = self
+
+        def made(image, *args, **kwargs):
+            # Each Tk image the launcher makes: noted when made for a canvas of the page's field.
+            real(image, *args, **kwargs)
+            if watch.on and getattr(kwargs.get("master"), "odq_field", False):
+                watch.pictures.append("%dx%d" % (image.width(), image.height()))
+
+        ImageTk.PhotoImage.__init__ = made
+        # The windows Tk puts on the screen, noted in Tcl alone while a change shows (a call into Python for each would
+        # slow the very change the film times).
+        app.root.tk.eval("set ::odq_noting 0; set ::odq_mapped {}")
+        app.root.tk.eval("bind all <Map> {+if {$::odq_noting} {lappend ::odq_mapped %W}}")
+
+    def start(self):
+        """From now until done(): what the change does to the page."""
+        self.pictures = []
+        self.app.root.tk.eval("set ::odq_mapped {}; set ::odq_noting 1")
+        self.on = True
+
+    def done(self):
+        """Since start(): the pictures made for the field, and the frames in its flat colour put on the screen."""
+        self.on = False
+        tcl = self.app.root.tk
+        tcl.eval("set ::odq_noting 0")
+        flat = []
+        area = self.app.body
+        field = str(area.cget("bg")).lower()
+        for path in tcl.splitlist(tcl.eval("set ::odq_mapped")):
+            try:
+                widget = self.app.root.nametowidget(str(path))
+            except KeyError:
+                # Gone again before the change ended.
+                continue
+            if (not widget.winfo_exists() or widget.winfo_class() != "Frame" or not str(widget).startswith(str(area))
+                    or isinstance(widget, widgets.Card) or str(widget.cget("bg")).lower() != field):
+                continue
+            if any(isinstance(round_it, widgets.Card) for round_it in shots._ancestors_of(widget, area)):
+                # Inside a card, in the field's colour by chance: the card's own, not the field.
+                continue
+            if str(widget) not in flat:
+                # Once each (a card's new holder is put on the screen over the old one, then in its place).
+                flat.append(str(widget))
+        return self.pictures, flat
 
 
 # The changes filmed, page by page, as a person makes them: (what it is, the control's kind, its row's name, the key
@@ -147,9 +210,12 @@ def measure_change(app, name, act, results, rows_allowed=0, focus=None, moves=Fa
     box = window_box(app)
     before_widgets = all_widgets(app)
     before = grab(box)
+    if FIELD is not None:
+        FIELD.start()
     with Film(box) as film:
         act()
         run_until(app, FILM)
+    pictures, flat = FIELD.done() if FIELD is not None else ([], [])
     after = grab(box)
     after_widgets = all_widgets(app)
     made = len(after_widgets - before_widgets)
@@ -163,7 +229,7 @@ def measure_change(app, name, act, results, rows_allowed=0, focus=None, moves=Fa
     changed = before != after
     results.append({"change": name, "moves": moves, "expect_change": expect_change, "frames_between": len(between),
                     "span": span, "made": made, "gone": gone, "changed": changed,
-                    "rows_allowed": rows_allowed})
+                    "rows_allowed": rows_allowed, "field_pictures": pictures, "flat_frames": flat})
     if between and FRAMES_OUT:
         # The frame in the middle of the ones between, as a picture: what a person sees for a moment.
         from PIL import Image
@@ -226,6 +292,9 @@ def main():
     shots.settle(app)
     w = app.words
     results = []
+    # What each change does to the page, noted from the first change on (FieldWatch).
+    global FIELD
+    FIELD = FieldWatch(app)
 
     find = lambda kind, key: control(app, app.body, kind, w(key))  # noqa: E731
     for page, changes in CHANGES:
@@ -311,6 +380,12 @@ def main():
                                                                                          r["rows_allowed"]))
         if not r["changed"] and r.get("expect_change", True):
             problems.append("%s: the screen did not change" % r["change"])
+        for size in r.get("field_pictures", ()):
+            # The page's picture cut again for a frame of its field while the change shows (WIN-240).
+            problems.append("%s: a picture made for the page's field while it changed (%s)" % (r["change"], size))
+        for path in r.get("flat_frames", ()):
+            # A frame put on the screen in the field's flat colour, over the page's picture, until what covers it came.
+            problems.append("%s: a frame in the field's flat colour put on the screen (%s)" % (r["change"], path))
     report = "flicker %s %s: %d changes, %d problems\n" % (args.lang, args.size, len(results), len(problems))
     report += "".join("  %s\n" % line for line in lines)
     report += "".join("  PROBLEM %s\n" % p for p in problems)

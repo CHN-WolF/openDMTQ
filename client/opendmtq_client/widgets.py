@@ -391,9 +391,9 @@ class ScrollArea(tk.Frame):
         # A card or a frame of the page finds the page's picture through the column (Card, _paint_field).
         self.inner.odq_area = self
         # The page's own field between and round the cards: Tk's frames are opaque, so each frame of the field (the
-        # column, its rows, the gaps between cards) shows its part of the page's picture, a picture of its own laid
-        # under what it holds (_paint_field). Frame -> (the canvas the picture is on, the place, width and picture it
-        # was cut for, and how tall it was cut).
+        # column, its rows, the gaps between cards) shows its part of the page's picture on a canvas of its own laid
+        # under what it holds, the page's one picture placed on it so that the frame's part is under the frame
+        # (_paint_field). Frame -> that canvas.
         self._field = {}
         # The cards on the page whose cut corner shows the page's picture beyond it (Card._cut_over_field).
         self._cards = []
@@ -419,7 +419,7 @@ class ScrollArea(tk.Frame):
         self.bar_room = self.bar.winfo_reqwidth()
         self.canvas.pack(fill="both", expand=True)
         # The content's height decides how far it scrolls, and how tall the picture behind it is; the field's frames
-        # take their part of that picture where they now stand.
+        # take their part of that picture where they now stand (a page frame new in the column among them).
         self.inner.bind("<Configure>", lambda e: (self._relayout(), self._paint_field()))
         # The column is as wide as the area less its margins, so text wraps instead of running off.
         self.canvas.bind("<Configure>", self._on_resize)
@@ -566,6 +566,9 @@ class ScrollArea(tk.Frame):
         height = (height + step - 1) // step * step
         self._backdrop_size = (width, height)
         picture = art.backdrop(width, height, self.ui.scale, offset=self.offset, top=self.light)
+        # The picture shown until now, kept until every canvas of the field shows the new one: Tk empties an image the
+        # moment Python forgets it, and a canvas still showing it would be drawn empty.
+        before = getattr(self, "_backdrop_image", None)
         self._backdrop_image = ImageTk.PhotoImage(picture, master=c)
         # A dialog draws the window from the widgets (snapshot.py): the page's picture, its title put on it then.
         self._backdrop_picture = picture
@@ -576,6 +579,8 @@ class ScrollArea(tk.Frame):
         c.tag_lower(self._backdrop_item)
         # The field's frames and the cards' cut corners show their part of the new picture.
         self._paint_field()
+        # Shown nowhere now.
+        del before
 
     def _picture_on_show(self):
         """The picture a dialog draws for this area (snapshot.py), made when one asks: the part of the page's picture
@@ -631,8 +636,9 @@ class ScrollArea(tk.Frame):
     def _field_frames(self, under):
         """The frames of the page's field from `under` down (the column, or a frame of the field): it and each frame
         under it in the field's colour that is no card and no part of one, each with whether it may show the picture (a
-        card's own holder, pages.Sections, may not: its card covers it, and it is told apart by what it holds)."""
-        found, stack = [(under, under is self.inner or not getattr(under, "odq_holder", False))], [under]
+        card's own holder, pages.Sections, may not: its card covers it, and it is told apart by what it holds; nor the
+        column, which has no colour of its own and is covered by its page's frame whole)."""
+        found, stack = [(under, under is not self.inner and not getattr(under, "odq_holder", False))], [under]
         field = str(self.cget("bg")).lower()
         while stack:
             widget = stack.pop()
@@ -658,63 +664,99 @@ class ScrollArea(tk.Frame):
         return False
 
     def watch(self, frame):
-        """`frame` of the field tells when it moves or changes size: what it holds moved on the page, and its part of
-        the picture is cut again then, as Tk lays the page out (the column's own changes come through _relayout's
-        binding). Once for each frame."""
+        """`frame` of the field tells when it moves or changes size (_frame_changed), as Tk lays the page out (the
+        column's own changes come through _relayout's binding). Once for each frame."""
         if frame is self.inner or getattr(frame, "odq_watched", False):
             return
         frame.odq_watched = True
-        frame.bind("<Configure>", lambda e: e.widget is frame and self._paint_field(frame), add="+")
+        frame.bind("<Configure>", lambda e: e.widget is frame and self._frame_changed(frame), add="+")
+
+    def _frame_changed(self, frame):
+        """A frame of the field moved or changed size. Only a move moves what it holds on the page: its picture and
+        the cards' corners in it are placed again then (_paint_field). One that grew or shrank where it stands keeps
+        everything in it where it was on the page, and its canvas, as tall as the page's picture, shows its new foot
+        as it is: nothing to do, so that a row that comes costs the page no work at each frame it grows (a card's own
+        holder alike; a card that moves in it tells of its own move). A frame with no picture yet is looked at again
+        (laid out at last, or no longer covered by the one thing it holds)."""
+        if not frame.winfo_exists():
+            return
+        place = self.page_box(frame)
+        pictured = frame in self._field or getattr(frame, "odq_holder", False)
+        if pictured and place is not None and place == getattr(frame, "odq_place", None):
+            return
+        self._paint_field(frame)
 
     def _paint_field(self, under=None):
         """Each frame of the page's field shows its part of the page's picture where it now stands, and each card's
         cut corner the picture beyond it: everything on the page when the picture is drawn again or the column moves,
         what is under a frame of the field when it moves or changes size (its own <Configure>, which Tk sends while it
-        lays the page out, so the new part shows with the frame's new place, never a moment later)."""
-        from PIL import ImageTk
-        behind = getattr(self, "_backdrop_picture", None)
-        if behind is None or not self.inner.winfo_exists():
+        lays the page out, so the new part shows with the frame's new place, never a moment later).
+
+        A frame's canvas shows the page's own picture, the one Tk image this area draws behind the page, placed so that
+        the frame's part of it lies under the frame, and the canvas is as wide as the frame and as tall as that
+        picture: a frame that grows down shows more of what its canvas already holds, and one that moves only moves the
+        picture on its canvas. Nothing is cut or made for it. (A picture cut for each frame had to be cut again, and
+        made into a new Tk image the screen copies whole, each time its frame moved or grew past it: 16 ms when the
+        connection test's card came, the page half drawn on the screen all that while; and a canvas as tall as its
+        frame was drawn again whole at each change of the page's height.)"""
+        image = getattr(self, "_backdrop_image", None)
+        if image is None or not self.inner.winfo_exists():
             return
         under = under if under is not None and under.winfo_exists() else self.inner
         drawn = self._backdrop_size
         if drawn is not None and drawn[0] != max(1, self.canvas.winfo_width()):
             # The window is being made wider or narrower: the page's picture is drawn again for the new width once the
-            # sizes stop changing (_relayout), and that cuts every picture again; a cut of the old picture for each step
-            # of a drag would only slow the drag.
+            # sizes stop changing (_relayout), and that places every picture again; placing the old picture for each
+            # step of a drag would only slow the drag.
             return
         for frame, shows in self._field_frames(under):
             self.watch(frame)
             if not shows:
+                # A card's holder (or the column): where it stands, for its next <Configure> to tell a move.
+                frame.odq_place = self.page_box(frame)
                 continue
             width, height = frame.winfo_width(), frame.winfo_height()
-            known = self._field.get(frame)
-            holder = known[0] if known is not None and known[0].winfo_exists() else None
+            holder = self._field.get(frame)
+            if holder is not None and not holder.winfo_exists():
+                # Its canvas went with what it held (a frame emptied and filled again): a new one is made.
+                holder = None
             if width <= 1 or height <= 1 or (holder is None and self._covered(frame, width, height)):
                 # Not laid out yet, or nothing of it shows: no picture (one made before stays, under what covers it).
                 continue
             place = self.page_box(frame)
-            if holder is not None and known[1] == (place, width, id(behind)) and height <= known[2]:
-                # Where it was, and no taller than its picture: the picture shows its new foot as it is.
-                continue
-            # Cut taller than the frame, by as much as the frame is tall up to the picture's own room (BACKDROP_ROOM):
-            # a page that grows by a row shows the field under it without a picture cut again.
-            tall = height + min(height, self.ui.px(BACKDROP_ROOM))
-            picture = self.picture_at(frame, 0, 0, width, tall)
             if holder is None:
-                # Laid under everything the frame holds, as large as the frame, its picture from its top-left corner: a
-                # canvas, which draws again only the part a moved card uncovers. Nothing of the page's own (no words,
-                # no keyboard); a press on it moves the page as the field does (_pannable).
+                # Laid under everything the frame holds, from its top-left corner: a canvas, which draws again only
+                # the part a moved card uncovers. Nothing of the page's own (no words, no keyboard); a press on it
+                # moves the page as the field does (_pannable).
                 holder = tk.Canvas(frame, bd=0, highlightthickness=0, bg=self.cget("bg"), takefocus=0)
                 holder.odq_field = True
-                holder.place(x=0, y=0, relwidth=1.0, relheight=1.0, bordermode="outside")
                 # Under its siblings: Misc's lower, as a canvas's own lower() moves its items, not the canvas.
                 tk.Misc.lower(holder)
                 holder.odq_item = holder.create_image(0, 0, anchor="nw")
-            image = ImageTk.PhotoImage(picture, master=holder)
-            holder.itemconfigure(holder.odq_item, image=image)
-            # Kept on the canvas: Tk drops a picture the moment Python forgets it. A dialog draws the window from it.
-            holder.odq_image, holder.odq_picture = image, picture
-            self._field[frame] = (holder, (place, width, id(behind)), tall)
+                # The picture it shows, where, and its own size, as last set (each set again only when it changed).
+                holder.odq_shown = holder.odq_place = holder.odq_size = None
+                # A dialog draws the window from the widgets (snapshot.py): the frame's part of the page's picture,
+                # cut when a dialog asks for it.
+                holder.odq_picture = lambda frame=frame: self.picture_at(frame, 0, 0, frame.winfo_width(),
+                                                                         frame.winfo_height())
+                self._field[frame] = holder
+            if holder.odq_size != drawn[1]:
+                # As tall as the page's picture, whatever the frame's height: the frame shows the part of it under it,
+                # and a frame that grows (a row that comes) shows more of it without the canvas changing size, which
+                # would have Tk draw all of it again. As wide as the frame, which changes only with the window's width
+                # (the page's picture is then drawn again anyway).
+                holder.place(x=0, y=0, relwidth=1.0, height=drawn[1], bordermode="outside")
+                holder.odq_size = drawn[1]
+            if holder.odq_shown is not image:
+                # The page's picture drawn again (another width, a page grown past it): the new one.
+                holder.itemconfigure(holder.odq_item, image=image)
+                holder.odq_shown = image
+            if holder.odq_place != place:
+                # The picture's own corner as far up and left of the frame as the frame is from the page's corner.
+                holder.coords(holder.odq_item, -place[0], -place[1])
+                holder.odq_place = place
+            # Where it stands, for its next <Configure> to tell a move from a change of size (_frame_changed).
+            frame.odq_place = place
         # The frames gone with a page that went, and their pictures with them.
         self._field = {f: v for f, v in self._field.items() if f.winfo_exists()}
         self._cards = [card for card in self._cards if card.winfo_exists()]
@@ -1795,7 +1837,12 @@ class Card(tk.Frame):
     CUT = 16
 
     def __init__(self, parent, ui, title=None, pad=24):
-        outside = parent.cget("bg")
+        # What lies beyond the cut: the colour of the nearest frame round the card that has one (a card's holder on a
+        # page has none of its own, pages._holder: the page's field round it shows).
+        round_it, outside = parent, parent.cget("bg")
+        while not str(outside) and round_it.master is not None:
+            round_it = round_it.master
+            outside = round_it.cget("bg")
         # The edge's width: a pixel at 100 %, two at 200 %, as the site's 1 px line is on a screen of that density.
         edge = max(1, ui.px(1))
         super().__init__(parent, bg=theme.PANEL, highlightthickness=edge, highlightbackground=theme.HAIRLINE,

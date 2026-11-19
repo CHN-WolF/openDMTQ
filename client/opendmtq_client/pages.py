@@ -53,6 +53,17 @@ def _card(parent, ui, title, last=False):
 CARD_GAP = 16
 
 
+def _holder(parent):
+    """The frame a card of Sections is made in: no colour of its own, as its card covers it whole. A frame in the
+    field's colour was put on the screen a moment before its card and painted flat over the page's picture until the
+    card came (a dark slab where the connection test's card was about to show); with none, the screen paints nothing
+    for it and the page shows under it until its card does. Told apart by what it holds (widgets.ScrollArea's field,
+    widgets.Card's cut)."""
+    holder = tk.Frame(parent, bg="")
+    holder.odq_holder = True
+    return holder
+
+
 class Sections:
     """A page's cards, each made by its own builder from what it shows (its key, a function of the launcher's state):
     refresh() makes again only the cards whose key changed, each in its own place, the others as they were. An answer
@@ -71,10 +82,7 @@ class Sections:
     def add(self, key, build, expand=False):
         """A card at the end, made now: `build(holder)` makes it in its holder, `key()` says what it shows. `expand`:
         the holder takes the height left to its column (the PLAY page's Last game)."""
-        holder = tk.Frame(self.parent, bg=self.parent.cget("bg"))
-        # Its card covers it: it shows none of the page's picture (widgets.ScrollArea._paint_field), and it is told
-        # apart by what it holds.
-        holder.odq_holder = True
+        holder = _holder(self.parent)
         item = {"holder": holder, "key": key, "build": build, "made": object(), "gap": None, "expand": expand}
         self.items.append(item)
         self._make(item)
@@ -120,8 +128,7 @@ class Sections:
         """The new card for `item` made in a holder of its own laid over the old one (as wide as it, as tall as it asks),
         so that it is laid out and drawn while the old one is still under it. Returns (item, the new holder)."""
         old = item["holder"]
-        fresh = tk.Frame(self.parent, bg=self.parent.cget("bg"))
-        fresh.odq_holder = True
+        fresh = _holder(self.parent)
         fresh.place(in_=old, x=0, y=0, relwidth=1.0)
         item["build"](fresh)
         for child in fresh.pack_slaves():
