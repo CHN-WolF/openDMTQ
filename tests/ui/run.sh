@@ -225,7 +225,9 @@ fi
 cat "$REPORT/account.txt" >> "$REPORT/results.txt"
 grep '^FAIL' "$REPORT/account.txt" || true
 echo "stage account: $(grep -c '^PASS' "$REPORT/account.txt") passed, $(grep -c '^FAIL' "$REPORT/account.txt") failed"
-APP=OpenDMTQ-127.0.0.1-$SITE_PORT-v2026.11.02.apk
+# Named as the builder names it (patch_apk.app_file_name): what it is, the day's stamp, the system and the address, in
+# lower case.
+APP=opendmtq-phone-app-2026.11.02-android-127.0.0.1-$SITE_PORT.apk
 head -c 1048576 /dev/zero > "$DATA/apk/out/$APP"
 # With its SHA-256, as the builder writes it: the site tags the download with it, for a broken download to go on.
 APP_SHA=$(sha256sum "$DATA/apk/out/$APP" | cut -d' ' -f1)
@@ -238,7 +240,7 @@ printf '{"file": "%s", "host": "%s", "built_at": "2026-11-02T09:28:08", "sha256"
 printf '{"file": "OpenDMTQ-Setup.exe", "size": 2097152, "sha256": "0", "version": "0.8.0", "copied_at": "2026-11-02T09:29:00"}' \
   > "$DATA/apk/out/windows.json"
 # And one for another address, kept for download: the App page lists it with why players do not get it.
-OTHER=OpenDMTQ-10.0.0.5-8080-v2026.11.01.apk
+OTHER=opendmtq-phone-app-2026.11.01-android-10.0.0.5-8080.apk
 head -c 524288 /dev/zero > "$DATA/apk/out/$OTHER"
 printf '{"file": "%s", "host": "10.0.0.5:8080", "built_at": "2026-11-01T21:10:00", "sha256": "0", "size": 524288, "patcher": "1.8.0", "runtime": "test", "label": "TECHNIKA Q (10.0.0.5:8080)", "package": "com.test.opendmtq"}' \
   "$OTHER" > "$DATA/apk/out/$OTHER.json"
