@@ -1,6 +1,7 @@
 // Plays a recording on the portal's live page in a real browser window, its sound going to the test's sound card.
 // Usage: node play.js <site port> <guid-id>
 const puppeteer = require('puppeteer');
+const fs = require('fs');
 
 const [port, key] = process.argv.slice(2);
 const SITE = `http://127.0.0.1:${port}`;
@@ -49,6 +50,9 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
   // A video that did not play would make this a test of silence.
   const state = await page.$eval('#live-video', v => ({ t: v.currentTime, muted: v.muted, paused: v.paused }));
   console.log(`played ${JSON.stringify(state)}`);
+  // How far the recording had played before the browser begins to close: what the card hears after that is the closing
+  // (the sound cut short, then silence), however long a busy machine takes to end it. compare.py stops before it.
+  fs.writeFileSync('/sock/played', String(state.t));
   if (state.t < SECONDS / 2 || state.muted || state.paused) process.exitCode = 1;
   // The gap at the start was filled (the test's sound has one, as a phone's does), and only with AAC-LC silence.
   const silence = await page.evaluate(() => window.__silence);

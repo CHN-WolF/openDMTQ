@@ -7,7 +7,8 @@ port=$1
 key=${2/\//-}
 media=$3
 image=opendmtq-sound:test
-card=opendmtq-sound-card
+# The card's container: this run's own (NAME_PREFIX keeps another run's apart; a second run would remove the first's).
+card=${NAME_PREFIX:-odq}-sound-card
 work=$(mktemp -d)
 cleanup() {
   docker rm -f "$card" >/dev/null 2>&1 || true
@@ -37,4 +38,7 @@ docker run --rm --network host --cpus 2 --memory 2g --shm-size 1g -e PULSE_SERVE
   2> >(grep -v -E "dbus|ERROR:|WARNING:|INFO:" >&2)
 touch "$work/sock/stop"
 docker wait "$card" >/dev/null
-docker run --rm --network none -v "$here:/x:ro" -v "$work/out:/out:ro" --entrypoint python3 "$image" /x/compare.py /out/heard.raw /out/reference.raw
+# Compared up to where the recording had played when the browser began to close (play.js wrote it): nothing after it is the
+# playback's.
+played=$(cat "$work/sock/played" 2>/dev/null || true)
+docker run --rm --network none -v "$here:/x:ro" -v "$work/out:/out:ro" --entrypoint python3 "$image" /x/compare.py /out/heard.raw /out/reference.raw ${played:+"$played"}

@@ -3,7 +3,8 @@
 Walks the captured sound in small steps and asks of each short block where in the recording it came from. A clean playback
 has one constant offset and matches almost to the bit, since the browser decodes with the same decoder as the reference.
 Anything else is a fault with a time: a jump (samples skipped or repeated), a hole (silence where the recording has sound),
-garbage (nothing in the recording looks like it). Usage: compare.py <heard.raw> <reference.raw> (16-bit stereo, 48 kHz).
+garbage (nothing in the recording looks like it). Usage: compare.py <heard.raw> <reference.raw> [played] (16-bit stereo,
+48 kHz; played: the seconds of the recording the browser had played when it began to close, where the comparison ends).
 """
 
 import sys
@@ -19,8 +20,14 @@ SILENT = 30
 # A block this much alike is the same sound: decoding differences are far smaller, and any real fault far larger.
 SAME = 0.97
 # The last moments of the capture hold the browser closing, not the playback: on a busy machine the close took longer than
-# a second, and the silence after it was read as a hole in the playback.
+# a second, and the silence after it was read as a hole in the playback. Without the time played, the last three seconds
+# are left out.
 TAIL = 3 * RATE
+# With it, the comparison ends this long before that time: what the browser had played was still on its way to the card
+# (its own buffer and the card's), and the close cuts it short there. However long the close then takes, the capture
+# goes on, and none of it after the time played is compared (on a busy machine the close took over three seconds, and
+# the cut and the silence after it were read as faults).
+OUT_LATENCY = 0.5
 
 
 def load(path):
@@ -50,8 +57,9 @@ def best_place(block, reference, low, high):
     return low + place, float(score[place])
 
 
-def faults_in(heard, reference):
-    """(faults, median likeness, seconds compared). A fault is (seconds after the first sound, kind, detail)."""
+def faults_in(heard, reference, played=None):
+    """(faults, median likeness, seconds compared). A fault is (seconds after the first sound, kind, detail). played: the
+    recording's seconds the browser had played when it began to close, past which nothing heard is compared."""
     sounding = np.nonzero(np.abs(heard) > SILENT)[0]
     if not len(sounding):
         return [(0.0, "nothing heard", 0)], 0.0, 0.0
@@ -64,12 +72,17 @@ def faults_in(heard, reference):
     offset = place - probe
     faults, alike = [], []
     position = first
-    end = len(heard) - TAIL
+    # Up to the time played when it is known (the capture may go on for seconds after it), else short of the capture's end.
+    end = len(heard) if played is not None else len(heard) - TAIL
+    last = None if played is None else int((played - OUT_LATENCY) * RATE)
     while position + BLOCK <= end:
         block = heard[position: position + BLOCK]
         there = position + offset
         # Past the end of the recording: nothing to compare with.
         if there < 0 or there + BLOCK > len(reference):
+            break
+        # Past what the browser had played before it began to close.
+        if last is not None and there + BLOCK > last:
             break
         expected = reference[there: there + BLOCK]
         block_level = np.sqrt((block ** 2).mean())
@@ -122,16 +135,31 @@ def self_test(reference):
     kinds = {f[1] for f in found}
     if not {"jump", "hole"} <= kinds or not any(k in kinds for k in ("garbage", "jump")) or len(found) < 3:
         return f"it misses damage made on purpose: {found}"
+    # The same damage with the time played known (12 s of the copy, which starts a second into the recording): found too.
+    found = faults_in(damaged, reference, played=start / RATE + 12)[0]
+    if len(found) < 3:
+        return f"it misses damage made on purpose before the time played: {found}"
+    # A browser that began to close 10 s into the copy: its sound cut short there (a burst, then silence), and the capture
+    # going on for five seconds more, as on a busy machine. Nothing of that is the playback's.
+    closed = clean.copy()
+    closed[10 * RATE: 10 * RATE + 1440] = np.random.default_rng(2).normal(0, 3000, 1440)
+    closed[10 * RATE + 1440:] = 0
+    closed = np.concatenate((closed, np.zeros(5 * RATE)))
+    found = faults_in(closed, reference, played=start / RATE + 10)[0]
+    if found:
+        return f"it takes the browser's closing for faults of the playback: {found}"
     return None
 
 
 def main():
     heard, reference = load(sys.argv[1]), load(sys.argv[2])
+    # The seconds of the recording played when the browser began to close (play.js writes them), when given.
+    played = float(sys.argv[3]) if len(sys.argv) > 3 else None
     problem = self_test(reference)
     if problem:
         print(f"FAIL the sound comparison itself: {problem}")
         return 1
-    faults, likeness, seconds = faults_in(heard, reference)
+    faults, likeness, seconds = faults_in(heard, reference, played)
     good = not faults and likeness > 0.999 and seconds >= 10
     print(f"{'PASS' if good else 'FAIL'} what a viewer hears is the recording | {seconds:.1f} s after the first sound, "
           f"likeness {likeness:.4f}, {len(faults)} faults {faults[:12]}")
