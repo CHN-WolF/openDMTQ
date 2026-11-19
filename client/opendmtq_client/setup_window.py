@@ -202,8 +202,9 @@ class SetupWindow:
         return card
 
     def set_buttons(self, buttons, default=None, escape=None):
-        """The strip's buttons from the left: [(words, command, kind)], kind "primary" (lime), "danger" (red) or
-        "secondary" (quiet); the one at `default` takes the keyboard (Enter presses it); `escape` is what Esc does."""
+        """The strip's buttons from the left: [(words, command, kind)], kind "primary" (lime), "remove" (filled red: the
+        main button when it removes for good), "danger" (quiet red) or "secondary" (quiet); the one at `default` takes
+        the keyboard (Enter presses it); `escape` is what Esc does."""
         for button in self.buttons:
             button.destroy()
         self.buttons = []

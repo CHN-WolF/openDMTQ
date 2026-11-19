@@ -1006,13 +1006,14 @@ def lamp(parent, ui, colour, bg=theme.PANEL, hollow=False):
 class Button(tk.Canvas):
     """A button cut at two corners like PLAY. kind: 'primary' (filled with the site's lime, the page's main action),
     'secondary' (quiet metal that lights up under the pointer), 'danger' (metal tinted red, filled red under the
-    pointer: removing or starting over).
+    pointer: removing or starting over, beside the page's own main action), 'remove' (filled red: the screen's main
+    action when it removes for good, as the installer's Uninstall, the way a dialog's Delete all is drawn).
 
     The face is a picture (art.button_face); the words stay Tk text, so they are drawn as crisply as every other label.
     """
 
     # Each kind's look in art.BUTTON_LOOKS.
-    LOOKS = {"primary": "home", "secondary": "neutral", "danger": "danger_quiet"}
+    LOOKS = {"primary": "home", "secondary": "neutral", "danger": "danger_quiet", "remove": "danger"}
     # The site's control height for buttons in a page (between its 34 px and 42 px ones).
     HEIGHT = 36
 

@@ -520,7 +520,7 @@ class Installer:
         self.watch = look
         back = (w("setup.cancel"), self.root.destroy) if self.from_apps else (w("setup.previous"), self.ask)
         self.window.set_buttons([(back[0], back[1], "secondary"),
-                                 (w("setup.do.uninstall"), lambda: self.uninstall(choice["value"]), "danger")],
+                                 (w("setup.do.uninstall"), lambda: self.uninstall(choice["value"]), "remove")],
                                 escape=back[1])
         # The keyboard on the choices first, as on the page before it.
         self.window.focus_later(options_list)

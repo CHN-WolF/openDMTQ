@@ -164,8 +164,10 @@ def header_problems(window, name):
     hover = [b.face("hover", False).getpixel((size // 4, size * 5 // 8)) for b in buttons]
     if near(hover[0], theme.BAD, 40) or not near(hover[1], theme.BAD, 8):
         found.append("%s: under the pointer minimise is %s and close %s" % (name, hover[0], hover[1]))
-    # The screen keeps its one main button: never more than one lime button anywhere in the window.
-    lime = [w for w in widgets_of(root) if isinstance(w, widgets.Button) and w.look == "home" and w.winfo_ismapped()]
+    # The screen keeps its one main button: never more than one lime button anywhere in the window, nor a lime one
+    # beside the filled red of removing for good.
+    lime = [w for w in widgets_of(root) if isinstance(w, widgets.Button) and w.look in ("home", "danger")
+            and w.winfo_ismapped()]
     if len(lime) > 1:
         found.append("%s: %d main buttons" % (name, len(lime)))
     return found
@@ -609,7 +611,15 @@ def main():
     def to_uninstall(made):
         made.uninstall_page()
 
-    run("uninstall", installer.Installer, [to_uninstall, lambda made: settle(made.root, 1.5)])
+    def red_main_button(made):
+        """The uninstall's main button, Uninstall, filled red as a dialog's Delete all (main drew it in the quiet
+        red-tinted metal, which read as off beside the quiet Cancel: a page with no main button)."""
+        last = made.window.buttons[-1]
+        # The look a dialog's Delete all has (art.BUTTON_LOOKS["danger"]), the quiet one being danger_quiet.
+        if last.words != made.words("setup.do.uninstall") or last.look != "danger":
+            problems.append("setup-%s: the uninstall page's %r is drawn %s, not filled red" % (tag, last.words, last.look))
+
+    run("uninstall", installer.Installer, [to_uninstall, lambda made: settle(made.root, 1.5), red_main_button])
 
     def uninstaller(seconds):
         def started(root_folder):
@@ -635,7 +645,7 @@ def main():
     # Windows' Settings, Apps: the uninstall alone.
     program(__version__)
     run("apps-uninstall", lambda: installer.Installer(start="uninstall", folder=folder),
-        [lambda made: settle(made.root, 1.5)])
+        [lambda made: settle(made.root, 1.5), red_main_button])
     for patch in patches:
         patch.stop()
     stopped_window(args, tag, problems)
