@@ -27,6 +27,8 @@
 #   delta package starts from it and the update check installs it. Without it they come from the latest release on GitHub.
 # APK: the game's client (an APK file), for the checks that build the phone app (the bundle under Wine, the host install);
 #   without it those checks go without the app, as CI's do.
+# NAME_PREFIX, PORT and SUBNET: the checks' own Docker names, port and network, as the tests take them (a run beside
+#   another); the images' builder is NAME_PREFIX-release.
 # Needs Docker with buildx, git, gh (signed in, for the gates, the last release's files and the publishing), Helm and
 # Python 3.
 set -euo pipefail
@@ -43,6 +45,8 @@ esac
 [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "not a version: $VERSION" >&2; exit 2; }
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
+# Buildx's builder for the images of every platform, by this run's names.
+BUILDER=${NAME_PREFIX:-odq}-release
 OUT=$(realpath -m "${2:-$ROOT/_work/release/$VERSION}")
 LOGS=$OUT/logs
 T=$ROOT/tools/opendmtq_tools
@@ -276,17 +280,17 @@ fi
 images() {
   local push=()
   [ -n "$DRY" ] || push=(--push)
-  docker buildx inspect opendmtq-release >/dev/null 2>&1 || docker buildx create --name opendmtq-release --driver docker-container
-  docker buildx build --builder opendmtq-release --platform linux/amd64,linux/arm64 ${push[@]+"${push[@]}"} \
+  docker buildx inspect "$BUILDER" >/dev/null 2>&1 || docker buildx create --name "$BUILDER" --driver docker-container
+  docker buildx build --builder "$BUILDER" --platform linux/amd64,linux/arm64 ${push[@]+"${push[@]}"} \
     --label "org.opencontainers.image.source=$SOURCE" --build-arg "OPENDMTQ_VERSION=$VERSION" \
     -t "$REGISTRY/opendmtq-server:$VERSION" -t "$REGISTRY/opendmtq-server:latest" server
-  docker buildx build --builder opendmtq-release --platform linux/amd64 ${push[@]+"${push[@]}"} \
+  docker buildx build --builder "$BUILDER" --platform linux/amd64 ${push[@]+"${push[@]}"} \
     --label "org.opencontainers.image.source=$SOURCE" --build-arg "OPENDMTQ_VERSION=$VERSION" \
     -t "$REGISTRY/opendmtq-tools:$VERSION" -t "$REGISTRY/opendmtq-tools:latest" tools
 }
 if [ -n "$DRY" ]; then
   step images images
-  docker buildx rm opendmtq-release >/dev/null 2>&1 || true
+  docker buildx rm "$BUILDER" >/dev/null 2>&1 || true
   echo "dry run of $VERSION done: the release's files in $D/release$([ "${#SIGN[@]}" -eq 0 ] || echo ' (unsigned: a rehearsal)'); nothing was pushed or published"
   exit 0
 fi
@@ -305,7 +309,7 @@ publish() {
   # folder alone, as layout made and checked it.
   gh release create "v$VERSION" -R "$REPO" "$D"/release/* --notes-file "$OUT/release-notes.md" --generate-notes --verify-tag
   gh workflow enable release -R "$REPO"
-  docker buildx rm opendmtq-release || true
+  docker buildx rm "$BUILDER" || true
   docker logout ghcr.io || true
   helm registry logout ghcr.io || true
 }
