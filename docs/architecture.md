@@ -616,7 +616,7 @@ erDiagram
   }
   WebhookState {
     TEXT name PK
-    TEXT value "what the loop knew at its last look"
+    TEXT value "what the loop knew at its last look that found something"
   }
   WebhookTop {
     INTEGER pattern_id PK
@@ -639,7 +639,7 @@ erDiagram
 | `PlayerState`, `PlayerItem`, `PlayerUnlock`, `PlayerPurchase`, `PlayerBan` | Each player's game state beyond their scores: the currencies, the experience, their own unlimited switch, the items given, taken and bought, what a level unlock opened, a year of purchases, a ban |
 | `GameSetting` | The server's game settings: unlimited currency for everyone, and what a new player starts with |
 | `SignIn` | The game's sign-ins, each account's newest eight: the SHA-256 of the access token the platform login handed out, the key the game's login gave for it, the player, and the play that game started last |
-| `Webhook`, `WebhookMessage`, `WebhookState`, `WebhookTop` | The Notices page's Discord and Slack webhooks, the queue of their messages, and what the sending loop knew at its last look (each chart's #1 among it) |
+| `Webhook`, `WebhookMessage`, `WebhookState`, `WebhookTop` | The Notices page's Discord and Slack webhooks, the queue of their messages, and what the sending loop knew at its last look that found something new (each chart's #1 among it): a look that finds nothing writes nothing |
 
 `Member` and `Play` keep the names and types of the tables earlier DMTQ servers used, so their databases open
 unchanged; `Play`'s one column more, `keys`, comes last, with 0 for every row that was there. The
