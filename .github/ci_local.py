@@ -395,6 +395,10 @@ class Job:
         docker("run", "-d", "--name", self.container, "--network", "host", "--group-add", socket_group,
                "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{self.dir}:{self.dir}",
                "-w", self.work, RUNNER_IMAGE, "sleep", "infinity")
+        # The folders above the job's, inside the runner (its own, not this computer's: /root is closed to others
+        # there), open to its user on the way down.
+        docker("exec", "-u", "0", self.container, "sh", "-c",
+               'p=$1; while [ "$p" != / ]; do p=$(dirname "$p"); chmod o+x "$p"; done', "sh", self.dir)
 
     def shell(self, script, env, timeout):
         """A script in the runner as the job's user, with bash -e as GitHub runs a step: (exit status, output)."""
