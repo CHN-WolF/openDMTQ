@@ -70,10 +70,35 @@ def own_addresses():
     return _own["addresses"]
 
 
+def passed_on_by_a_proxy():
+    """True when a proxy other than the server's own passed the visit on, whatever address it comes from (a reverse proxy
+    or a tunnel on the server PC passes on visits from elsewhere from loopback): Forwarded or Via, or X-Forwarded-For or
+    X-Forwarded-Host naming more hops than the server's own Apache adds to a visit through it (one; none to a visit that
+    did not come through it). A browser sends none of these."""
+    if request.headers.get("Forwarded") or request.headers.get("Via"):
+        return True
+    own = 1 if request.remote_addr in auth.server_addresses() else 0
+    # Apache adds the address it took the visit from, and the Host it was sent with, after any a proxy before it gave.
+    return any(len([hop for hop in request.headers.get(name, "").split(",") if hop.strip()]) > own
+               for name in ("X-Forwarded-For", "X-Forwarded-Host"))
+
+
+def from_the_stack_gateway(ip):
+    """True for a visit Docker Engine passes on from the server PC: through the server, from the stack network's gateway,
+    as the server's own rule for the admin pages takes it (server/entrypoint.sh LOCAL_FROM) where the command line says
+    that is how this PC's visits come (ADMIN_LOCAL=gateway; under Docker Desktop and rootless Docker every visit comes
+    from such an address, and none counts)."""
+    if os.environ.get("ADMIN_LOCAL") != "gateway" or setup.HOST_INSTALL or setup.IN_KUBERNETES:
+        return False
+    return request.remote_addr in auth.server_addresses() and ip == auth.stack_gateway()
+
+
 def from_this_pc():
-    """True when the visit (a page, or an API call) comes from the server PC itself: from loopback, from one of this
-    computer's own addresses (a browser on it that opened the server's address on the network), or, with Docker on Linux,
-    from what the server says is the server PC (X-Server-PC, which the server always sets itself)."""
+    """True when the visit (a page, or an API call) comes from the server PC itself, and no proxy passed it on: from
+    loopback, from one of this computer's own addresses (a browser on it that opened the server's address on the
+    network), or, with Docker Engine, through the server from the stack network's gateway."""
+    if passed_on_by_a_proxy():
+        return False
     ip = auth.client_ip()
     try:
         address = ipaddress.ip_address(ip.split("%", 1)[0])
@@ -84,8 +109,7 @@ def from_this_pc():
     if setup.HOST_INSTALL and ip in own_addresses():
         # The server runs on this computer, and the visitor's address is one of its own: the visitor is on it too.
         return True
-    # Through the server, which drops whatever a visitor sent in it and sets it for the server PC's own visits alone.
-    return request.remote_addr in auth.server_addresses() and request.headers.get("X-Server-PC") == "yes"
+    return from_the_stack_gateway(ip)
 
 
 def here_kind():

@@ -207,14 +207,67 @@ class PlayHereTest(unittest.TestCase):
         with mock.patch.object(this_pc, "own_addresses", lambda: frozenset({HOST})):
             self.assertIn('id="this-pc"', self.page("/app", remote=HOST))
             self.assertNotIn('id="this-pc"', self.page("/app", remote=ELSEWHERE))
-        # Docker on Linux: through the server, which says the visit is the server PC's (and drops what a visitor sent).
-        with mock.patch.object(admin.auth, "server_addresses", lambda: {"172.18.0.2"}):
-            r = self.inst.client.get(BASE + "/app", environ_base={"REMOTE_ADDR": "172.18.0.2"},
-                                     headers={"X-Real-IP": "172.18.0.1", "X-Server-PC": "yes"})
-            self.assertIn('id="this-pc"', r.get_data(as_text=True))
-            # The same header from a visitor of its own, not through the server: nobody's word.
-            r = self.inst.client.get(BASE + "/app", environ_base={"REMOTE_ADDR": ELSEWHERE}, headers={"X-Server-PC": "yes"})
-            self.assertNotIn('id="this-pc"', r.get_data(as_text=True))
+        # The same header from a visitor of its own, not through the server: nobody's word (the server sets it no more).
+        r = self.inst.client.get(BASE + "/app", environ_base={"REMOTE_ADDR": ELSEWHERE}, headers={"X-Server-PC": "yes"})
+        self.assertNotIn('id="this-pc"', r.get_data(as_text=True))
+
+    def through_the_server(self, real_ip, forwarded_for=None, **more):
+        """The App page as the server's Apache passes a visit on to these pages (read from the real server image: the
+        address it took the visit from as X-Real-IP, added to X-Forwarded-For after any a proxy before it gave, and the
+        Host it came with as X-Forwarded-Host), from the server's own address 172.18.0.2."""
+        headers = {"X-Real-IP": real_ip, "X-Forwarded-For": forwarded_for or real_ip, "X-Forwarded-Host": "localhost:8791",
+                   "X-Forwarded-Server": HOST, "X-Forwarded-Proto": "http", **more}
+        return self.inst.client.get(BASE + "/app", environ_base={"REMOTE_ADDR": "172.18.0.2"}, headers=headers).get_data(as_text=True)
+
+    def test_with_docker_engine_a_visit_from_the_stack_gateway_is_this_pcs(self):
+        # Docker Compose on Linux: a browser on the server PC reaches the server from the stack network's gateway, which
+        # the server takes for the server PC's (ADMIN_LOCAL=gateway): Play on this PC shows, with how to play from a
+        # Windows PC (ADM-177; main waited for a header the server no longer sets, and never showed it there).
+        self.server(kind="docker")
+        with mock.patch.object(admin.auth, "server_addresses", lambda: {"172.18.0.2"}), \
+                mock.patch.object(admin.auth, "stack_gateway", lambda: "172.18.0.1"):
+            with mock.patch.dict(os.environ, {"ADMIN_LOCAL": "gateway"}):
+                page = self.through_the_server("172.18.0.1")
+                self.assertIn('id="this-pc"', page)
+                self.assertIn("Play on a Windows PC", page)
+                # Another address of the network: not the server PC.
+                self.assertNotIn('id="this-pc"', self.through_the_server("192.168.0.50"))
+            # Docker Desktop and rootless Docker pass every visit from such an address: none counts there.
+            with mock.patch.dict(os.environ, {"ADMIN_LOCAL": "none"}):
+                self.assertNotIn('id="this-pc"', self.through_the_server("172.18.0.1"))
+
+    def test_a_visit_a_proxy_on_the_server_pc_passes_on_is_from_elsewhere(self):
+        # A reverse proxy or tunnel on the server PC passes on visits from elsewhere from loopback or the gateway: with
+        # the hop it adds to X-Forwarded-For before the server's own, or with Forwarded or Via, the visit is not this PC's
+        # (ADM-178; main showed Play on this PC through it on a local network address). Headers as the real Apache passes
+        # them, the proxy's in front.
+        self.server()
+        with mock.patch.object(admin.auth, "server_addresses", lambda: {"127.0.0.1"}):
+            def host_visit(**headers):
+                return self.inst.client.get(BASE + "/app", environ_base={"REMOTE_ADDR": "127.0.0.1"},
+                                            headers={"X-Real-IP": "127.0.0.1", "X-Forwarded-For": "127.0.0.1",
+                                                     "X-Forwarded-Host": "127.0.0.1:8791", **headers}).get_data(as_text=True)
+            # The browser on the server PC, through the server's Apache alone.
+            self.assertIn('id="this-pc"', host_visit())
+            for headers in ({"X-Forwarded-For": "203.0.113.9, 127.0.0.1"}, {"Via": "1.1 proxy"}, {"Forwarded": "for=203.0.113.9"},
+                            {"X-Forwarded-Host": "game.example.com, 127.0.0.1:8791"}):
+                self.assertNotIn('id="this-pc"', host_visit(**headers), headers)
+            # Pressed all the same: refused in words, nothing run.
+            page = self.inst.client.get(BASE + "/app", environ_base={"REMOTE_ADDR": "127.0.0.1"}).get_data(as_text=True)
+            csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+            r = self.inst.client.post(BASE + "/app/play-here", data={"csrf": csrf, "back": "app"},
+                                      environ_base={"REMOTE_ADDR": "127.0.0.1"},
+                                      headers={"X-Real-IP": "127.0.0.1", "X-Forwarded-For": "203.0.113.9, 127.0.0.1"})
+            said = self.inst.client.get(r.headers["Location"], environ_base={"REMOTE_ADDR": "127.0.0.1"}).get_data(as_text=True)
+            self.assertIn("Play on this PC works from the server PC itself, in its own browser.", said)
+            self.assertEqual(self.started, [])
+        # Docker Engine: the same through a proxy in front of the gateway.
+        self.server(kind="docker")
+        with mock.patch.object(admin.auth, "server_addresses", lambda: {"172.18.0.2"}), \
+                mock.patch.object(admin.auth, "stack_gateway", lambda: "172.18.0.1"), \
+                mock.patch.dict(os.environ, {"ADMIN_LOCAL": "gateway"}):
+            self.assertNotIn('id="this-pc"', self.through_the_server("172.18.0.1", "203.0.113.9, 172.18.0.1"))
+            self.assertNotIn('id="this-pc"', self.through_the_server("172.18.0.1", Via="1.1 proxy"))
 
     def test_a_second_press_while_the_first_runs_waits(self):
         self.server()

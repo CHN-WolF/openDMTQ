@@ -66,6 +66,32 @@ def server_addresses():
     return _server_addresses[1]
 
 
+_stack_gateway = (0.0, None)
+
+
+def stack_gateway():
+    """The gateway of this service's own network (its default route's, from the kernel's table), looked up again after a
+    minute: in Docker Compose the stack network's, the address Docker Engine passes the server PC's own visits on from (the
+    server takes them so too: server/entrypoint.sh LOCAL_FROM). None where the system has no such table (Windows, macOS)
+    or no default route."""
+    global _stack_gateway
+    if time.time() - _stack_gateway[0] > 60:
+        found = None
+        try:
+            with open("/proc/net/route", encoding="ascii") as f:
+                for line in f.read().splitlines()[1:]:
+                    fields = line.split()
+                    # The default route (destination 0) through a gateway: its address in hexadecimal, its bytes in
+                    # reverse order, as the entrypoint reads it.
+                    if len(fields) > 2 and fields[1] == "00000000" and fields[2] != "00000000":
+                        found = socket.inet_ntoa(bytes.fromhex(fields[2])[::-1])
+                        break
+        except (OSError, ValueError):
+            found = None
+        _stack_gateway = (time.time(), found)
+    return _stack_gateway[1]
+
+
 def client_ip():
     """The visitor's address. Through the game server, X-Real-IP: Apache sets it from the
     connection (the edge passes the visitor's address on) and overwrites whatever the client sent.

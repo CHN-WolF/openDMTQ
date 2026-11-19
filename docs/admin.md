@@ -352,9 +352,11 @@ opened in a browser on the server PC itself, have **Play on this PC**.
   server for it. Docker Compose on Linux says the same on the server PC.
 
 A visit from another PC never sees it, and is refused it: what it runs, it runs on the server PC. The server PC is a
-visit from loopback (`http://localhost:<port>/`), from one of the PC's own addresses, or, with Docker Compose on Linux,
-one the server marks as the server PC's own. Through the API it is `POST /app/play-here`, from the server PC too
-([api.md](api.md)).
+visit from loopback (`http://localhost:<port>/`), from one of the PC's own addresses, or, with Docker Engine on Linux,
+one that reaches the server from the stack network's gateway, as the server takes the server PC's own visits to an
+exposed server's admin pages. A visit that another proxy passed on (`Forwarded`, `Via`, or another hop in
+`X-Forwarded-For` before the server's own) is one from elsewhere, whatever address it comes from. Through the API it is
+`POST /app/play-here`, from the server PC too ([api.md](api.md)).
 
 The owner's account is the server's own and no game player: MY PAGE says so, and the PC client's My records has nothing
 to list for it.
