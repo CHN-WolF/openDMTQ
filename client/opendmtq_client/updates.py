@@ -324,7 +324,12 @@ def _check(state):
             # An older server: the project's releases, up to its own version. Asked as the ready check asks it.
             from opendmtq_client import server as srv
             try:
-                cap = srv.about(server["url"]).get("opendmtq") or None
+                said = srv.about(server["url"]).get("opendmtq") or ""
+                # The release its version names, by its numbers: a copy past a release says its commit after a dash
+                # (0.11.2-29a49e4, as the command line names a clone's), one still to come its pre-release, and GitHub
+                # has the release's tag alone (the servers' own tools read it so: windows_client.own_release).
+                named = re.match(r"\d+\.\d+\.\d+", said)
+                cap = named.group(0) if named else None
             except srv.ServerError as e:
                 log.warning("could not ask %s for its version: %s", server["url"], e)
                 return Result("failed", error=str(e), source=source)

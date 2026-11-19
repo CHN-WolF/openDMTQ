@@ -254,6 +254,22 @@ class WhereFrom(Updates):
         self.stand.server_version = "0.11.0"
         self.assertEqual(updates.check(self.state).kind, "uptodate")
 
+    def test_a_server_past_its_release_lets_github_in_up_to_that_release(self):
+        # A server run from a copy past a release says the release and its commit (0.11.2-29a49e4, as the command line
+        # names a clone's version), or a release still to come (0.11.2-rc.1), with no updates of its own: GitHub's
+        # release of those numbers, a tag that is there, never one named after the commit.
+        self.stand.releases = {"0.11.1": made_release("0.11.1", base="0.11.0"),
+                               "0.11.2": made_release("0.11.2", base="0.11.1")}
+        for said in ("0.11.2-29a49e4", "0.11.2-rc.1", "0.11.2+build.5"):
+            self.stand.server_version = said
+            result = updates.check(self.state)
+            self.assertEqual((result.kind, result.version, result.source.kind), ("available", "0.11.2", "github"), said)
+        self.assertNotIn(REPO + "/releases/download/v0.11.2-29a49e4/releases.win.json", self.stand.requests)
+        # Past an older release than GitHub's latest: that release, not the latest.
+        self.stand.server_version = "0.11.1-29a49e4"
+        result = updates.check(self.state)
+        self.assertEqual((result.kind, result.version, result.source.kind), ("available", "0.11.1", "github"))
+
     def test_without_a_server_githubs_latest(self):
         self.state.remove_server(self.stand.base)
         self.stand.releases = {"0.11.1": made_release("0.11.1", base="0.11.0"),
