@@ -191,6 +191,39 @@ else
   echo "FAIL the batch after a sign-in asks the same of a player more than once: $once"
   failed=1
 fi
+# Phones signing in at the same moment: the game's login of one, with another phone's sign-in written between its look at
+# its sign-in and its write of the key (an authorizer of the server's own handle writes through a second handle as the
+# login's write is made), gets its key once the other's write is done, where it failed at once ("database is locked").
+# shellcheck disable=SC2016  # PHP code: its $variables are PHP's, not the shell's.
+crowd=$(docker exec "$NAME" php -r '
+  require "/opt/opendmtq/game/src/rpc.php";
+  $db = odq_db();
+  odq_sign_in_table($db);
+  $w = $db->prepare("INSERT OR REPLACE INTO SignIn (access, puid, at) VALUES (:a, :p, :t)");
+  $w->bindValue(":a", hash("sha256", "9311|576|ANDROID|KR|crowd|1"));
+  $w->bindValue(":p", "9311");
+  $w->bindValue(":t", time());
+  $w->execute();
+  $w->close();
+  $other = new SQLite3(odq_db_path());
+  $other->busyTimeout(5000);
+  $wrote = false;
+  $db->setAuthorizer(function (int $action, ...$what) use ($other, &$wrote) {
+      if (!$wrote && $action === SQLite3::UPDATE && $what[0] === "SignIn") {
+          $wrote = true;
+          // Another phone'"'"'s sign-in, committed through its own handle.
+          $other->exec("INSERT INTO SignIn (access, puid, at) VALUES (lower(hex(randomblob(16))), 9312, " . time() . ")");
+      }
+      return SQLite3::OK;
+  });
+  $key = odq_sign_in_key("9311|576|ANDROID|KR|crowd|1", 9311);
+  echo $wrote ? "" : "no write between ", $key === null ? "refused" : (strlen($key) === 32 ? "key" : "odd key");' 2>&1) || true
+if [ "$crowd" = "key" ]; then
+  echo "PASS a sign-in with another phone's sign-in written meanwhile gets its key"
+else
+  echo "FAIL a sign-in with another phone's sign-in written meanwhile: $crowd"
+  failed=1
+fi
 # A page of the site opens the database once and works out the signed-in player's figures once, whoever asks: the header
 # (the name and place at the top of every page) and MY PAGE (its profile, its account, its places) asked three times each.
 # The reads SQLite makes of the best scores' table, as an authorizer sees each statement made, on the server's database.

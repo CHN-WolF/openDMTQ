@@ -102,6 +102,12 @@ function odq_sign_in_key(string $access, int $guid): ?string
     $q->bindValue(':a', hash('sha256', $access), SQLITE3_TEXT);
     $r = @$q->execute();
     $row = $r ? $r->fetchArray(SQLITE3_ASSOC) : false;
+    // The read ended before the write below: a read still open holds this handle's view of the database from its start,
+    // and its write then fails at once ("database is locked") whenever another phone's sign-in wrote meanwhile, where it
+    // would wait its turn (eight phones signing in at once lost some of their sign-ins).
+    if ($r) {
+        $r->finalize();
+    }
     if (!$row) {
         return null;
     }
