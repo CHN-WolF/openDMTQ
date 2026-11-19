@@ -201,7 +201,8 @@ def grab(box):
 
 
 def window_box(app):
-    root = app.root
+    # The launcher (its app) or another window of the client's (its Tk root: the installer's).
+    root = getattr(app, "root", app)
     root.update()
     x, y = root.winfo_rootx(), root.winfo_rooty()
     return (x, y, x + root.winfo_width(), y + root.winfo_height())
@@ -212,9 +213,11 @@ def all_widgets(app):
 
 
 def run_until(app, seconds):
+    # The launcher (its app) or another window's Tk root, as window_box takes either.
+    root = getattr(app, "root", app)
     end = time.time() + seconds
     while time.time() < end:
-        app.root.update()
+        root.update()
         time.sleep(0.005)
 
 
@@ -296,40 +299,39 @@ def change(app, name, results, find, kind, key, act, rows_allowed=0, canvas=Fals
 SWITCHES = ("help", "about", "play", "screen", "sound", "controls", "online")
 
 
-def switch_page(app, page, results):
-    """A page switch from the menu, filmed (WIN-242): the frames that showed while the click's own work ran (the next
-    page made), which must be none, the page before staying whole on the screen meanwhile (0.11.0 showed its frame flat
-    under the old title for as long as the next page took to make: 0.8 s at 150 % on Windows for HELP); whether the
-    page before left the screen whole before its widgets went (tkinter takes a frame's widgets away one by one, each
-    leaving the page's flat frame where it was); and the frames between the page before and the page after."""
-    shots.settle(app)
-    run_until(app, 0.3)
-    box = window_box(app)
+def note_order(root):
+    """From now on, while ::odq_ordering is set, the order in which the windows of `root`'s window leave the screen and
+    go is noted (::odq_order), in Tcl alone: a call into Python for each would slow the very switch filmed. Bound once a
+    window (each of the installer's runs has a window of its own)."""
+    tcl = root.tk
+    if tcl.eval("info exists ::odq_order_bound") == "1":
+        return
+    tcl.eval("set ::odq_order_bound 1; set ::odq_ordering 0; set ::odq_order {}")
+    tcl.eval("bind all <Unmap> {+if {$::odq_ordering} {lappend ::odq_order [list unmap %W]}}")
+    tcl.eval("bind all <Destroy> {+if {$::odq_ordering} {lappend ::odq_order [list destroy %W]}}")
+
+
+def film_switch(root, area, act):
+    """A page switch filmed (WIN-242): `act()` makes the next page of the window `root` in its page area `area` (a
+    widgets.ScrollArea) as a click on the menu or a page's button does. The frames that showed while act() ran (the
+    next page made), which must be none, the page before staying whole on the screen meanwhile (0.11.0 showed its frame
+    flat under the old title for as long as the next page took to make: 0.8 s at 150 % on Windows for HELP); the page
+    frames of the page before whose widgets went while it was still on the screen (tkinter takes a frame's widgets away
+    one by one, each leaving the page's flat frame where it was); the frames between the page before and the page
+    after; whether the screen changed. The window is settled first, as a person sees it before the click."""
+    run_until(root, 0.3)
+    box = window_box(root)
     before = grab(box)
-    old = [str(child) for child in app.body.inner.winfo_children()]
-    tcl = app.root.tk
-    # The order the windows leave the screen and go in, noted in Tcl alone.
+    old = [str(child) for child in area.inner.winfo_children()]
+    tcl = root.tk
+    note_order(root)
     tcl.eval("set ::odq_order {}; set ::odq_ordering 1")
-    # The buttons' faces drawn meanwhile (art draws them in _button_face; button_face hands out the ones it keeps).
-    drawn = [0]
-    name = "_button_face" if hasattr(art, "_button_face") else "button_face"
-    real = getattr(art, name)
-
-    def counted(*args, **kwargs):
-        drawn[0] += 1
-        return real(*args, **kwargs)
-
-    setattr(art, name, counted)
-    try:
-        with Film(box) as film:
-            app.nav_go(page)
-            # The click's own work done: the frames seen by now showed the page while the next one was made.
-            made = time.monotonic()
-            run_until(app, FILM)
-    finally:
-        setattr(art, name, real)
+    with Film(box) as film:
+        act()
+        # The click's own work done: the frames seen by now showed the page while the next one was made.
+        made = time.monotonic()
+        run_until(root, FILM)
     tcl.eval("set ::odq_ordering 0")
-    buttons = sum(1 for widget in shots.widgets_of(app.body.inner) if isinstance(widget, widgets.Button))
     after = grab(box)
     during = [f for f, t in zip(film.frames, film.times) if t < made and f != before]
     between = [f for f in film.frames if f != before and f != after]
@@ -341,10 +343,80 @@ def switch_page(app, page, results):
         if went and (not left or went[0] < left[0]):
             # Its widgets went while it was still on the screen.
             torn.append(frame)
-    results.append({"change": "menu: %s" % page.upper(), "switch": True, "during": len(during), "torn": torn,
-                    "faces": drawn[0], "buttons": buttons,
-                    "frames_between": len(between), "span": 0, "made": 0, "gone": 0, "changed": before != after,
-                    "moves": "switch", "rows_allowed": 0})
+    return {"during": len(during), "torn": torn, "frames_between": len(between), "changed": before != after}
+
+
+# The faces of the page's controls (WIN-243): each kind's name, the function of art's that draws it (the version before
+# kept none and drew in the function the widgets call), and how many of that kind a widget shows at a time (a row of
+# tabs one a tab, a slider its track and its knob).
+FACES = (
+    ("buttons", ("_button_face", "button_face"), lambda w: int(isinstance(w, widgets.Button))),
+    ("tabs", ("_tab_face", "tab_face"), lambda w: len(w.keys) if isinstance(w, widgets.Segmented) else 0),
+    ("fields", ("_field_face", "field_face"), lambda w: int(isinstance(w, (widgets.Field, widgets.KeyBox)))),
+    ("switches", ("_toggle", "toggle"), lambda w: int(isinstance(w, widgets.Toggle))),
+    ("knobs", ("_knob", "knob"), lambda w: int(isinstance(w, widgets.Slider))),
+    ("tracks", ("_slider_track", "slider_track"), lambda w: int(isinstance(w, widgets.Slider))),
+)
+
+
+def count_faces():
+    """From now until restore() is called: each face art draws, counted by its kind (FACES). Returns (the counts, the
+    kind's name -> how many drawn, and restore)."""
+    drawn, kept = {kind: 0 for kind, _names, _shows in FACES}, []
+    for kind, names, _shows in FACES:
+        # The function that draws: the kept faces' own drawing where art has one, else the one the widgets call.
+        name = names[0] if hasattr(art, names[0]) else names[1]
+        real = getattr(art, name)
+
+        def counted(*args, _real=real, _kind=kind, **kwargs):
+            # Counted, then drawn as it would have been.
+            drawn[_kind] += 1
+            return _real(*args, **kwargs)
+
+        setattr(art, name, counted)
+        kept.append((name, real))
+
+    def restore():
+        for name, real in kept:
+            setattr(art, name, real)
+
+    return drawn, restore
+
+
+def faces_shown(inner):
+    """The faces the controls of the page in `inner` show, by kind (FACES)."""
+    shown = {kind: 0 for kind, _names, _shows in FACES}
+    for widget in shots.widgets_of(inner):
+        for kind, _names, shows in FACES:
+            shown[kind] += shows(widget)
+    return shown
+
+
+def switch_problems(name, filmed):
+    """What film_switch saw that a person must not: frames while the page was made, a page taken apart on the screen,
+    a screen that did not change."""
+    problems = []
+    if filmed["during"]:
+        problems.append("%s: %d frames between showed while the page was made" % (name, filmed["during"]))
+    for path in filmed["torn"]:
+        problems.append("%s: the page before was taken apart on the screen (%s)" % (name, path))
+    if not filmed["changed"]:
+        problems.append("%s: the screen did not change" % name)
+    return problems
+
+
+def switch_page(app, page, results):
+    """A page switch from the menu, filmed (film_switch, WIN-242), with the faces the launcher draws meanwhile counted
+    for each kind of control (FACES, WIN-243)."""
+    shots.settle(app)
+    drawn, restore = count_faces()
+    try:
+        filmed = film_switch(app.root, app.body, lambda: app.nav_go(page))
+    finally:
+        restore()
+    shown = faces_shown(app.body.inner)
+    results.append(dict(filmed, change="menu: %s" % page.upper(), switch=True, drawn=drawn, shown=shown, span=0,
+                        made=0, gone=0, moves="switch", rows_allowed=0))
 
 
 def main():
@@ -429,10 +501,7 @@ def main():
     finally:
         connection.run = real_run
 
-    # ---- Page switches from the menu, every page in turn (switch_page).
-    app.root.tk.eval("set ::odq_ordering 0; set ::odq_order {}")
-    app.root.tk.eval("bind all <Unmap> {+if {$::odq_ordering} {lappend ::odq_order [list unmap %W]}}")
-    app.root.tk.eval("bind all <Destroy> {+if {$::odq_ordering} {lappend ::odq_order [list destroy %W]}}")
+    # ---- Page switches from the menu, every page in turn (switch_page; film_switch notes the windows' order).
     for page in SWITCHES:
         switch_page(app, page, results)
 
@@ -450,18 +519,16 @@ def main():
             continue
         if r.get("switch"):
             # A page switch (switch_page): none of its frames while the next page is made, the page before whole.
-            lines.append("%-48s frames while the page was made %2d, frames between %2d, button faces drawn %d for %d"
-                         % (r["change"], r["during"], r["frames_between"], r["faces"], r["buttons"]))
-            if r["faces"] > r["buttons"]:
-                # Each button's other faces wait until it shows them, and a face drawn before is kept (WIN-243).
-                problems.append("%s: %d button faces drawn for %d buttons (one each at most)" % (
-                    r["change"], r["faces"], r["buttons"]))
-            if r["during"]:
-                problems.append("%s: %d frames between showed while the page was made" % (r["change"], r["during"]))
-            for path in r["torn"]:
-                problems.append("%s: the page before was taken apart on the screen (%s)" % (r["change"], path))
-            if not r["changed"]:
-                problems.append("%s: the screen did not change" % r["change"])
+            faces = ", ".join("%s %d/%d" % (kind, r["drawn"][kind], r["shown"][kind]) for kind, _n, _s in FACES
+                              if r["drawn"][kind] or r["shown"][kind])
+            lines.append("%-48s frames while the page was made %2d, frames between %2d, faces drawn/shown: %s"
+                         % (r["change"], r["during"], r["frames_between"], faces or "none"))
+            for kind, _names, _shows in FACES:
+                if r["drawn"][kind] > r["shown"][kind]:
+                    # Each control's other faces wait until it shows them, and a face drawn before is kept (WIN-243).
+                    problems.append("%s: %d faces drawn for %d %s (one each at most)" % (
+                        r["change"], r["drawn"][kind], r["shown"][kind], kind))
+            problems.extend(switch_problems(r["change"], r))
             continue
         lines.append("%-48s frames between %2d over %3d ms, widgets made %3d, gone %3d" % (
             r["change"], r["frames_between"], r["span"], r["made"], r["gone"]))

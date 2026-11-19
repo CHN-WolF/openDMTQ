@@ -1332,12 +1332,12 @@ class Toggle(tk.Label):
     def __init__(self, parent, ui, value, command, bg=None):
         bg = bg or parent.cget("bg")
         super().__init__(parent, bg=bg, cursor="hand2", bd=0)
-        self.ui, self.value, self.command = ui, bool(value), command
-        size = (ui.px(40), ui.px(22))
-        # Both pictures are made once; a click only swaps them.
-        self.pictures = {on: art.toggle(on, *size, bg=bg) for on in (True, False)}
-        self.images = {on: ImageTk.PhotoImage(p, master=parent) for on, p in self.pictures.items()}
-        self.configure(image=self.images[self.value])
+        self.ui, self.value, self.command, self.bg = ui, bool(value), command, bg
+        self.face_size = (ui.px(40), ui.px(22))
+        # Each value's picture made the first time the switch shows it (_picture), then kept: a click only swaps them,
+        # and a page that makes its switches each time it is shown draws only the one each shows.
+        self.pictures, self.images = {}, {}
+        self.configure(image=self._picture(self.value))
         # A dialog draws the window behind it from the widgets (snapshot.py): this is the switch's part.
         self.odq_picture = self.pictures[self.value]
         self.bind("<Button-1>", lambda e: self.set(not self.value, notify=True))
@@ -1349,9 +1349,16 @@ class Toggle(tk.Label):
         self.bind("<Return>", lambda e: self.set(not self.value, notify=True))
         self.bind("<space>", lambda e: self.set(not self.value, notify=True))
 
+    def _picture(self, on):
+        """The switch's picture for `on` as a Tk image, made when first asked (art keeps the pictures it drew)."""
+        if on not in self.images:
+            self.pictures[on] = art.toggle(on, *self.face_size, bg=self.bg)
+            self.images[on] = ImageTk.PhotoImage(self.pictures[on], master=self)
+        return self.images[on]
+
     def set(self, value, notify=False):
         self.value = bool(value)
-        self.configure(image=self.images[self.value])
+        self.configure(image=self._picture(self.value))
         self.odq_picture = self.pictures[self.value]
         if notify:
             self.command(self.value)
@@ -1380,13 +1387,14 @@ class Segmented(tk.Frame):
         height = px(self.HEIGHT) + px(self.RULE)
         self.canvas = tk.Canvas(self, width=total, height=height, bg=bg, highlightthickness=0, bd=0, cursor="hand2")
         self.canvas.pack()
-        # The faces for each tab and state, made once: a click only swaps them.
-        self.faces = {(i, state): art.tab_face(w, px(self.HEIGHT), state, ui.scale, bg=bg)
-                      for i, (_x, w) in enumerate(self.boxes) for state in ("normal", "hover", "on")}
-        self.images = {key: ImageTk.PhotoImage(face, master=self) for key, face in self.faces.items()}
+        # Each tab's face in a state made the first time the tab shows it (_face), then kept: the pointer and a click
+        # only swap them, and a page that makes its rows of tabs each time it is shown draws only the one each tab
+        # shows (art keeps the faces it drew).
+        self.faces, self.images = {}, {}
         self.items, self.words, self.hover = [], [], None
         for i, ((x0, w), (_key, text)) in enumerate(zip(self.boxes, self.options)):
-            self.items.append(self.canvas.create_image(x0, 0, image=self.images[(i, "normal")], anchor="nw"))
+            # Its face comes with the row's first look (set, below).
+            self.items.append(self.canvas.create_image(x0, 0, anchor="nw"))
             self.words.append(self.canvas.create_text(x0 + w // 2, px(self.HEIGHT) // 2, text=text, font=ui.fonts.tab))
             for item in (self.items[-1], self.words[-1]):
                 self.canvas.tag_bind(item, "<Button-1>", lambda e, k=self.keys[i]: self.set(k, notify=True))
@@ -1400,29 +1408,47 @@ class Segmented(tk.Frame):
         self.odq_inset = int(self.cget("highlightthickness"))
         self.bind("<Left>", lambda e: self._step(-1))
         self.bind("<Right>", lambda e: self._step(1))
+        # A dialog draws the window behind it from the widgets (snapshot.py): the row as it looks then, put together
+        # only when one asks (_picture).
+        self.canvas.odq_picture = self._picture
         self.set(value)
 
     def _hover(self, i):
         self.hover = i
         self._paint()
 
+    def _state(self, i):
+        """The look tab `i` has now: on when chosen, hover under the pointer, else normal."""
+        return "on" if self.keys[i] == self.value else ("hover" if i == self.hover else "normal")
+
+    def _face(self, i, state):
+        """Tab `i`'s face in `state` as a Tk image, made when first asked."""
+        if (i, state) not in self.images:
+            self.faces[(i, state)] = art.tab_face(self.boxes[i][1], self.ui.px(self.HEIGHT), state, self.ui.scale,
+                                                  bg=self.bg)
+            self.images[(i, state)] = ImageTk.PhotoImage(self.faces[(i, state)], master=self)
+        return self.images[(i, state)]
+
     def _paint(self):
         """Each tab's face and words: the chosen one lime with dark words, the one under the pointer lighter."""
-        for i, key in enumerate(self.keys):
-            state = "on" if key == self.value else ("hover" if i == self.hover else "normal")
-            self.canvas.itemconfigure(self.items[i], image=self.images[(i, state)])
+        for i in range(len(self.keys)):
+            state = self._state(i)
+            self.canvas.itemconfigure(self.items[i], image=self._face(i, state))
             self.canvas.itemconfigure(self.words[i], fill=theme.OK_INK if state == "on" else
                                       (theme.TEXT if state == "hover" else theme.MUTED))
-        # A dialog draws the window behind it from the widgets (snapshot.py): the row as it looks now.
+
+    def _picture(self):
+        """The row as it looks now, for a dialog (snapshot.py): each tab's face where it is, the rule under them."""
         from PIL import Image
         px = self.ui.px
         picture = Image.new("RGB", (int(self.canvas.cget("width")), int(self.canvas.cget("height"))),
                             art._rgb(self.bg))
-        for i, key in enumerate(self.keys):
-            state = "on" if key == self.value else ("hover" if i == self.hover else "normal")
-            picture.paste(self.faces[(i, state)], (self.boxes[i][0], 0))
+        for i in range(len(self.keys)):
+            # The faces on show, each drawn when the tab first showed it.
+            self._face(i, self._state(i))
+            picture.paste(self.faces[(i, self._state(i))], (self.boxes[i][0], 0))
         picture.paste(art._rgb(theme.OK), (0, px(self.HEIGHT), picture.width, picture.height))
-        self.canvas.odq_picture = picture
+        return picture
 
     def set(self, value, notify=False):
         self.value = value
@@ -1456,7 +1482,9 @@ class Slider(tk.Frame):
         self.w, self.h = ui.px(width), ui.px(26)
         self.colour = theme.OK
         self.knob_size = ui.px(18)
-        self.knob_img = ImageTk.PhotoImage(art.knob(self.knob_size, ring=self.colour, scale=ui.scale), master=parent)
+        # The knob's picture, drawn once (art keeps it for every slider), for the canvas and for a dialog's picture.
+        self.knob_picture = art.knob(self.knob_size, ring=self.colour, scale=ui.scale)
+        self.knob_img = ImageTk.PhotoImage(self.knob_picture, master=parent)
         self.canvas = tk.Canvas(self, width=self.w, height=self.h, bg=bg, highlightthickness=0, cursor="hand2")
         self.canvas.pack(side="left")
         # As wide as the longest words any slider says ("-12 dB"), so that the slider never moves as its number changes and
@@ -1477,6 +1505,9 @@ class Slider(tk.Frame):
                         ("<Home>", lambda v: self.least), ("<End>", lambda v: self.most)):
             # "break": the key is the slider's, never the page's too (Home and End move the page elsewhere).
             self.canvas.bind(key, lambda e, to=to: self._key(to) or "break")
+        # A dialog draws the window behind it from the widgets (snapshot.py): the canvas as it looks then, the track
+        # and the knob where they are, put together only when one asks (_picture).
+        self.canvas.odq_picture = self._picture
         self._draw()
 
     def _fraction(self, value):
@@ -1522,17 +1553,22 @@ class Slider(tk.Frame):
         origin = (self._x(0) - inset) / float(self.w) if self.least < 0 < self.most else 0.0
         picture = art.slider_track(self.w, thick, fraction, self.colour, self.ui.scale, bg=self.bg, origin=origin)
         self._track_img = ImageTk.PhotoImage(picture, master=c)
+        # The track as it is now, for a dialog's picture.
+        self.track_picture = picture
         c.create_image(inset, mid, image=self._track_img, anchor="w")
         c.create_image(self._x(self.value), mid, image=self.knob_img)
-        # A dialog draws the window behind it from the widgets (snapshot.py): the canvas as it looks now, the track and
-        # the knob where they are.
-        from PIL import Image
-        whole = Image.new("RGB", (self.w + 2 * inset, self.h + 2 * inset), art._rgb(self.bg))
-        whole.paste(picture, (inset, mid - thick // 2))
-        knob = art.knob(self.knob_size, ring=self.colour, scale=self.ui.scale)
-        whole.paste(knob, (int(self._x(self.value) - self.knob_size / 2.0), mid - self.knob_size // 2), knob)
-        c.odq_picture = whole
         self.number.configure(text=self.say(self.value))
+
+    def _picture(self):
+        """The canvas as it looks now, for a dialog (snapshot.py): the track and the knob where they are."""
+        from PIL import Image
+        inset, thick = getattr(self, "inset", 0), max(4, self.ui.px(6))
+        mid = inset + self.h // 2
+        whole = Image.new("RGB", (self.w + 2 * inset, self.h + 2 * inset), art._rgb(self.bg))
+        whole.paste(self.track_picture, (inset, mid - thick // 2))
+        knob = self.knob_picture
+        whole.paste(knob, (int(self._x(self.value) - self.knob_size / 2.0), mid - self.knob_size // 2), knob)
+        return whole
 
 
 class Select(ttk.Combobox):
@@ -2146,6 +2182,15 @@ def entry(parent, ui, width=18, secret=False):
     return field
 
 
+def box_face(box, state):
+    """The face of a text field or a key's box (`box`: its face_size and bg, its faces and images by state) in `state`,
+    as a Tk image made the first time the box shows it (art.field_face, which keeps the faces it drew)."""
+    if state not in box.images:
+        box.faces[state] = art.field_face(box.face_size[0], box.face_size[1], state, box.ui.scale, bg=box.bg)
+        box.images[state] = ImageTk.PhotoImage(box.faces[state], master=box)
+    return box.images[state]
+
+
 class Field(tk.Canvas):
     """A text field as the launcher's pages have it: the site's dark field sunk into its card (art.field_face: dark
     edges along its top and left, the light along its foot), the accent round it while it is typed in, brighter edges
@@ -2170,10 +2215,12 @@ class Field(tk.Canvas):
         self.pad = px(10)
         width_px, height_px = self.entry.winfo_reqwidth() + 2 * self.pad, px(Button.HEIGHT)
         self.configure(width=width_px, height=height_px)
-        self.faces = {state: art.field_face(width_px, height_px, state, ui.scale, bg=bg)
-                      for state in ("normal", "hover", "focus", "error")}
-        self.images = {state: ImageTk.PhotoImage(face, master=self) for state, face in self.faces.items()}
-        self.face = self.create_image(0, 0, image=self.images["normal"], anchor="nw")
+        # Each state's face made the first time the field shows it (box_face), then kept: the pointer and the keyboard
+        # only swap them, and a page that makes its fields each time it is shown draws only the one each shows (art
+        # keeps the faces it drew).
+        self.face_size, self.bg, self.faces, self.images = (width_px, height_px), bg, {}, {}
+        # Its face comes with the field's first look (_paint, below).
+        self.face = self.create_image(0, 0, anchor="nw")
         # Show and Hide at the right end, in the field's own colours: the typing's room ends before them.
         self.reveal_words, self.toggle, room = reveal, None, 0
         if reveal:
@@ -2242,7 +2289,7 @@ class Field(tk.Canvas):
         if not self.winfo_exists():
             return
         state = "error" if self.error else "focus" if self.focused else ("hover" if self.under else "normal")
-        self.itemconfigure(self.face, image=self.images[state])
+        self.itemconfigure(self.face, image=box_face(self, state))
         # A dialog draws the window behind it from the widgets (snapshot.py): the face as it looks now.
         self.odq_picture = self.faces[state]
         if self.hint is not None:
@@ -2318,11 +2365,15 @@ class KeyBox(tk.Canvas):
         # A key of one letter is a square box, as a key's cap; a longer name widens it.
         width = max(height, words_width + 2 * px(self.PAD))
         self.configure(width=width, height=height)
-        # Each state's face, made once: the pointer and the wait only swap them.
-        self.faces = {state: art.field_face(width, height, state, ui.scale, bg=self.bg)
-                      for state in ("normal", "hover", "focus")}
-        self.images = {state: ImageTk.PhotoImage(face, master=self) for state, face in self.faces.items()}
-        self.face = self.create_image(self.inset, self.inset, image=self.images["normal"], anchor="nw")
+        # Each state's face made the first time the box shows it (box_face), then kept: the pointer and the wait only
+        # swap them, and the Controls page, which makes its lanes' boxes each time it is shown, draws only the one
+        # each shows (art keeps the faces it drew).
+        self.face_size, self.faces, self.images = (width, height), {}, {}
+        # Its face comes with the box's first look (_paint, below).
+        self.face = self.create_image(self.inset, self.inset, anchor="nw")
+        # A dialog draws the window behind it from the widgets (snapshot.py): the box as it looks then, put together
+        # only when one asks (_picture).
+        self.odq_picture = self._picture
         # The words in the box's middle, the name in the labels' face, the print smaller and grey.
         x, middle = self.inset + (width - words_width) // 2, self.inset + height // 2
         self.create_text(x, middle, text=words, font=name_font, fill=theme.TEXT if key else theme.MUTED, anchor="w")
@@ -2343,15 +2394,17 @@ class KeyBox(tk.Canvas):
         """The face for the box's state: the accent while it waits, brighter edges under the pointer, else normal."""
         if under is not None:
             self.under = under
-        state = "focus" if self.waiting else ("hover" if self.under else "normal")
-        self.itemconfigure(self.face, image=self.images[state])
-        # A dialog draws the window behind it from the widgets (snapshot.py): the face where it shows, inside the ring's
-        # room in the card's colour.
+        self.state = "focus" if self.waiting else ("hover" if self.under else "normal")
+        self.itemconfigure(self.face, image=box_face(self, self.state))
+
+    def _picture(self):
+        """The box as it looks now, for a dialog (snapshot.py): the face where it shows, inside the ring's room in the
+        card's colour."""
         from PIL import Image
-        face = self.faces[state]
+        face = self.faces[self.state]
         whole = Image.new("RGB", (face.width + 2 * self.inset, face.height + 2 * self.inset), art._rgb(self.bg))
         whole.paste(face, (self.inset, self.inset))
-        self.odq_picture = whole
+        return whole
 
 
 class Progress(tk.Frame):

@@ -445,9 +445,37 @@ def keys_mark(colour=theme.MUTED, scale=1.0, bg=theme.PANEL):
     return img
 
 
+# The faces of the page's controls drawn on a plain colour (buttons, tabs, fields and keys' boxes, switches, the
+# sliders' knobs), by what they are, the one used longest ago going first past FACES_KEPT: a page shown again makes the
+# same controls, each face a picture drawn three times over and smoothed (2 ms at 150 %), and a control draws a state's
+# face the first time it shows it. The sliders' tracks are kept apart (_tracks): one for each value a drag passes.
+FACES_KEPT, TRACKS_KEPT = 256, 64
+_faces, _tracks = collections.OrderedDict(), collections.OrderedDict()
+
+
+def kept_face(key, draw, store=None, kept=FACES_KEPT):
+    """The face `key` names, drawn by draw() the first time it is asked for and kept in `store` (the faces' store,
+    _faces, by default) with the `kept` used last; each caller is given its own copy, to draw on or keep."""
+    store = _faces if store is None else store
+    found = store.pop(key, None)
+    if found is None:
+        found = draw()
+    # Put back last: the one used longest ago goes first.
+    store[key] = found
+    while len(store) > kept:
+        store.popitem(last=False)
+    return found.copy()
+
+
 def tab_face(width, height, state, scale=1.0, bg=theme.PANEL):
     """One choice of a row of tabs, as the site's (.tabs a): a trapezoid, its top 11 px shorter at each end, in rail
-    metal, lighter under the pointer, filled with the accent when chosen. On `bg` around its slanted sides."""
+    metal, lighter under the pointer, filled with the accent when chosen. On `bg` around its slanted sides. Drawn once
+    for what it is and kept (kept_face)."""
+    return kept_face(("tab", width, height, state, scale, bg), lambda: _tab_face(width, height, state, scale, bg))
+
+
+def _tab_face(width, height, state, scale, bg):
+    """tab_face's picture, drawn."""
     k = SS
     w, h = width * k, height * k
     slant = 11 * scale * k
@@ -504,7 +532,13 @@ TOGGLE_HALO = 3
 def toggle(on, width, height, enabled=True, colour=None, knob=None, bg=theme.BG):
     """An on/off switch as the site's (.screen-switch): a pill in the accent, a dark knob at its right end; off, rail
     metal with a light knob at its left end. The lime track says on: no ring of it round the pill. The picture keeps
-    3 px of `bg` on every side (TOGGLE_HALO)."""
+    3 px of `bg` on every side (TOGGLE_HALO). Drawn once for what it is and kept (kept_face)."""
+    return kept_face(("toggle", bool(on), width, height, enabled, colour, knob, bg),
+                     lambda: _toggle(on, width, height, enabled, colour, knob, bg))
+
+
+def _toggle(on, width, height, enabled, colour, knob, bg):
+    """toggle's picture, drawn."""
     k = SS
     ring = TOGGLE_HALO
     w, h = (width + 2 * ring) * k, (height + 2 * ring) * k
@@ -535,7 +569,12 @@ def toggle(on, width, height, enabled=True, colour=None, knob=None, bg=theme.BG)
 
 def knob(size, colour=theme.TEXT, ring=theme.OK, scale=None):
     """A slider knob: a light disc with a ring in the accent (the site's lime), raised off the track. `scale`: the
-    screen's (its 18 logical pixels by default)."""
+    screen's (its 18 logical pixels by default). Drawn once for what it is and kept (kept_face)."""
+    return kept_face(("knob", size, colour, ring, scale), lambda: _knob(size, colour, ring, scale))
+
+
+def _knob(size, colour, ring, scale):
+    """knob's picture, drawn."""
     scale = scale or size / 18.0
     s = size * SS
     disc = Image.new("L", (s, s), 0)
@@ -552,7 +591,14 @@ def knob(size, colour=theme.TEXT, ring=theme.OK, scale=None):
 def slider_track(width, height, fraction, colour, scale=1.0, bg=theme.PANEL, origin=0.0):
     """A slider's track, let into the card it lies on: a rounded groove in rail metal, its part from `origin` to
     `fraction` in `colour` (from its left end for a volume, from its middle for an equaliser's band, either way), a soft
-    shadow inside its top. On `bg`."""
+    shadow inside its top. On `bg`. Drawn once for what it is and kept, in a store of its own (TRACKS_KEPT): a drag
+    goes through a track for each value it passes, which would push every other face out of the faces' store."""
+    return kept_face(("track", width, height, fraction, colour, scale, bg, origin),
+                     lambda: _slider_track(width, height, fraction, colour, scale, bg, origin), _tracks, TRACKS_KEPT)
+
+
+def _slider_track(width, height, fraction, colour, scale, bg, origin):
+    """slider_track's picture, drawn."""
     k = SS
     w, h = width * k, height * k
     img = Image.new("RGB", (w, h), _rgb(bg))
@@ -589,7 +635,13 @@ FIELD_EDGES = {"normal": ("#06080b", "#3d4651"), "hover": ("#06080b", "#55606c")
 def field_face(width, height, state="normal", scale=1.0, bg=theme.PANEL):
     """A text field's (or a drop-down's) face: the site's dark field let into its card, one pixel of edge round it
     (FIELD_EDGES), darker at its top, with a soft shadow inside its top and left edges. `state`: normal, hover, focus,
-    disabled, or error (what was typed there was refused: the error's colour all round)."""
+    disabled, or error (what was typed there was refused: the error's colour all round). Drawn once for what it is and
+    kept (kept_face)."""
+    return kept_face(("field", width, height, state, scale, bg), lambda: _field_face(width, height, state, scale, bg))
+
+
+def _field_face(width, height, state, scale, bg):
+    """field_face's picture, drawn."""
     k = SS
     w, h = width * k, height * k
     # The well in the field's own colour (the entry's words sit on the same colour in its middle), its shadow inside
@@ -819,32 +871,20 @@ def _fill(size, colours):
     return _vertical(size, ((0.0, colours[0]), (0.55, colours[1]), (1.0, colours[2])))
 
 
-# The faces button_face drew on a plain colour, by what they are, the one used longest ago going first past FACES_KEPT:
-# a page shown again makes the same buttons, each face a picture drawn three times over and smoothed (2 ms at 150 %).
-FACES_KEPT = 256
-_faces = collections.OrderedDict()
-
-
 def button_face(size, margin, look, state, focused, scale, under=None, bg=None):
     """A button's picture, cut at two corners as the site's buttons: quiet metal, or lit in a colour.
 
     `under` is what lies beneath (a dialog's panel pixels) or `bg` a plain colour; `margin` pixels on every side hold
     the focus ring when the button has the keyboard. With no margin (a page's button, which keeps its size) the ring
     runs just inside the outline instead: cyan on metal, the words' dark ink on a coloured fill, where cyan would not
-    show. A face on a plain colour is drawn once and kept (_faces), each caller given its own copy (the installer's
+    show. A face on a plain colour is drawn once and kept (kept_face), each caller given its own copy (the installer's
     window buttons draw their glyph on theirs).
     """
-    key = None if under is not None else (tuple(size), margin, look, state, bool(focused), scale, bg)
-    found = _faces.pop(key, None) if key is not None else None
-    if found is None:
-        found = _button_face(size, margin, look, state, focused, scale, under, bg)
-        if key is None:
-            return found
-    # Put back last: the one used longest ago goes first.
-    _faces[key] = found
-    while len(_faces) > FACES_KEPT:
-        _faces.popitem(last=False)
-    return found.copy()
+    if under is not None:
+        # Drawn over the pixels under it, which are a dialog's own: nothing to keep it by.
+        return _button_face(size, margin, look, state, focused, scale, under, bg)
+    return kept_face(("button", tuple(size), margin, look, state, bool(focused), scale, bg),
+                     lambda: _button_face(size, margin, look, state, focused, scale, under, bg))
 
 
 def _button_face(size, margin, look, state, focused, scale, under, bg):
