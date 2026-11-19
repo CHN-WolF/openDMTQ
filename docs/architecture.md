@@ -87,7 +87,7 @@ under [The PC client](#the-pc-client).
 A game request on its way to the database and back:
 
 <p align="center">
-  <img src="images/fig-request-flow.svg" alt="A game request on its way: a signed batch of calls to /DMQ/rpc from a phone or a PC passes the edge (with Docker Compose) and Apache's site.conf to index.php and src/rpc.php, which checks its size and signature and runs each call's handler against the SQLite database; the results go back in order as JSON, gzip-compressed when asked, and a method it does not know answers SVC.05008" width="100%">
+  <img src="images/fig-request-flow.svg" alt="A game request on its way: a signed batch of calls to /DMQ/rpc from a phone or a PC passes the edge (with Docker Compose) and Apache's site.conf to index.php and src/rpc.php, which checks its size and that a chart's start, a save or a shop call is signed by its player, and runs each call's handler against the SQLite database; the results go back in order as JSON, gzip-compressed when asked, and a method it does not know answers SVC.05008" width="100%">
 </p>
 
 `server/apache/site.conf` is the whole site. Each of the server's doors includes it (`server/apache/opendmtq.conf`), and

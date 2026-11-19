@@ -1,31 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 860" width="956" height="860" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="Testing. A push or a pull request runs ci.yml on GitHub, without the game's files: the arm32 build, the unit tests and checks, a host install on Ubuntu and Debian, the images, who reaches the admin pages and the API of an exposed server, the contract, an upgrade from the last release and the pages, the PC client's tests and screens, and three builds for Windows checked on a Windows runner: the player for Windows and the Windows bundle, each under Wine first, and the PC client's installer. tests/qa.sh runs on a machine with the game's files: shell, tools, cli, client, access, game, live, load, ui, upgrade and host, and the tour on an emulator with EMULATOR=1; it sets the commit status qa/local. With both passed, a tag v* runs release.yml, and ./opendmtq deploy updates a server">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 956 860" width="956" height="860" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Helvetica, Arial, sans-serif" role="img" aria-label="Testing. A push or a pull request runs ci.yml on GitHub, without the game's files: the arm32 build, the unit tests and checks, who reaches the admin pages and the API of an exposed server, the contract and an upgrade from the last release, the pages, the PC client's tests and screens, a host install on Ubuntu and Debian, the images, and three builds for Windows checked on a Windows runner: the player for Windows and the Windows bundle, each under Wine first, and the PC client's installer. tests/qa.sh runs on a machine with the game's files: shell, tools, cli, client, access, game, live, load, ui, upgrade and host, and the tour on an emulator with EMULATOR=1; it sets the commit status qa/local. With both passed, a tag v* runs release.yml, and ./opendmtq deploy updates a server">
 <rect x="-28" y="-28" width="956" height="860" rx="16" fill="#11151a"/>
 <path d="M0,0 H208 L220,12 V60 H0 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
 <text x="14" y="25.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="14,206">git push</text>
 <text x="14" y="44.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="14,206">or a pull request</text>
 <rect x="0" y="100" width="420" height="554" rx="8" fill="#11151a" stroke="#3a434d" stroke-width="1" stroke-dasharray="5 4"/>
 <text x="14" y="122" font-size="13" font-weight="600" fill="#aeb8c3" text-anchor="start" data-box="14,406">ci.yml on GitHub, without the game's files</text>
-<path d="M14,134 H394 L406,146 V178 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="160.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">arm32: the runtime, the shim</text>
-<path d="M14,188 H394 L406,200 V232 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="214.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">test: CLI, scripts, PHP, Helm</text>
-<path d="M14,242 H394 L406,254 V286 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="268.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">host: Ubuntu and Debian</text>
-<path d="M14,296 H394 L406,308 V340 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="322.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">images: tools' tests, the edge</text>
-<path d="M14,350 H394 L406,362 V394 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="376.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">ui: access, contract, upgrade, pages</text>
-<path d="M14,404 H394 L406,416 V448 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="430.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">client: the PC client, its screens</text>
-<path d="M14,458 H394 L406,470 V512 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="480.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">arm32-windows, arm32-windows-real</text>
-<text x="28" y="499.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,392">the player for Windows: under Wine, then on Windows</text>
-<path d="M14,522 H394 L406,534 V576 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="544.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">client-build, client-windows</text>
-<text x="28" y="563.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,392">the PC client's installer: built, then installed on Windows</text>
-<path d="M14,586 H394 L406,598 V640 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
-<text x="28" y="608.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">windows-bundle, windows</text>
-<text x="28" y="627.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,392">the Windows bundle: under Wine, then on Windows</text>
+<path d="M14,134 H394 L406,146 V170 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="156.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">arm32: the runtime, the shim</text>
+<path d="M14,180 H394 L406,192 V216 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="202.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">test: CLI, scripts, PHP, Helm</text>
+<path d="M14,226 H394 L406,238 V262 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="248.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">contract: access, contract, upgrade</text>
+<path d="M14,272 H394 L406,284 V308 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="294.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">ui: the pages</text>
+<path d="M14,318 H394 L406,330 V354 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="340.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">client: the PC client, its screens</text>
+<path d="M14,364 H394 L406,376 V400 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="386.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">host: Ubuntu and Debian</text>
+<path d="M14,410 H394 L406,422 V446 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="432.5" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">images: tools' tests, the edge</text>
+<path d="M14,456 H394 L406,468 V510 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="478.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">arm32-windows, -wine, -real</text>
+<text x="28" y="497.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,392">the player for Windows: under Wine, then on Windows</text>
+<path d="M14,520 H394 L406,532 V574 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="542.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">client-build, client-windows</text>
+<text x="28" y="561.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,392">the PC client's installer: built, then installed on Windows</text>
+<path d="M14,584 H394 L406,596 V638 H14 Z" fill="#1a1f25" stroke="#3a434d" stroke-width="1" stroke-linejoin="round"/>
+<text x="28" y="606.25" font-size="15" font-weight="600" fill="#eef2f6" text-anchor="start" data-box="28,392">windows-bundle, windows</text>
+<text x="28" y="625.25" font-size="12.5" fill="#aeb8c3" text-anchor="start" data-box="28,392">the Windows bundle: under Wine, then on Windows</text>
 <path d="M110,60.5 L110,92" fill="none" stroke="#7b8794" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="M110,99 L105.5,90.0 L114.5,90.0 Z" fill="#7b8794" data-tip="110,99"/>
 <rect x="480" y="0" width="420" height="654" rx="8" fill="#11151a" stroke="#3a434d" stroke-width="1" stroke-dasharray="5 4"/>

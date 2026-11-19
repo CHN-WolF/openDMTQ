@@ -8,7 +8,7 @@ in CI on every push, without them, and what runs on a machine that has them (`te
 both.
 
 <p align="center">
-  <img src="images/fig-testing-gates.svg" alt="Testing. A push or a pull request runs ci.yml on GitHub, without the game's files: the arm32 build, the unit tests and checks, a host install on Ubuntu and Debian, the images, who reaches the admin pages, the contract, an upgrade from the last release and the pages, the PC client's tests and screens, and three builds for Windows checked on a Windows runner: the player for Windows and the Windows bundle, each under Wine first, and the PC client's installer. tests/qa.sh runs on a machine with the game's files: shell, tools, cli, client, access, game, live, load, ui, upgrade and host, and the tour on an emulator with EMULATOR=1; it sets the commit status qa/local. With both passed, a tag v* runs release.yml, and ./opendmtq deploy updates a server" width="100%">
+  <img src="images/fig-testing-gates.svg" alt="Testing. A push or a pull request runs ci.yml on GitHub, without the game's files: the arm32 build, the unit tests and checks, who reaches the admin pages, the contract and an upgrade from the last release, the pages, the PC client's tests and screens, a host install on Ubuntu and Debian, the images, and three builds for Windows checked on a Windows runner: the player for Windows and the Windows bundle, each under Wine first, and the PC client's installer. tests/qa.sh runs on a machine with the game's files: shell, tools, cli, client, access, game, live, load, ui, upgrade and host, and the tour on an emulator with EMULATOR=1; it sets the commit status qa/local. With both passed, a tag v* runs release.yml, and ./opendmtq deploy updates a server" width="100%">
 </p>
 
 ## What runs where
