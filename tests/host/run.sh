@@ -18,6 +18,13 @@ ADMIN=$((PORT + 1))
 # NAME_PREFIX keeps this run's container apart from another run's on the same machine.
 NAME=${NAME_PREFIX:-odq}-hosttest
 IMAGE=opendmtqtest:$(echo "$DISTRO" | tr ':/' '--')
+# The system's packages from a mirror near the machine when one is named (APT_MIRROR, an Ubuntu archive's URL): on GitHub's
+# runners Azure's own copy of the Ubuntu archive, where the public archive answered at times so slowly that the one
+# command's packages took longer than its time limit (the install itself is the same from any mirror).
+APT_MIRROR=${APT_MIRROR:-}
+if [ -z "$APT_MIRROR" ] && [ "${GITHUB_ACTIONS:-}" = true ] && [ "${DISTRO%%:*}" = ubuntu ]; then
+  APT_MIRROR=http://azure.archive.ubuntu.com/ubuntu
+fi
 failures=0
 
 pass() { echo "PASS $*"; }
@@ -55,6 +62,8 @@ fi
 # The computer: the system, sudo, and a user who may use it without a password (install.sh asks for nothing else).
 docker build -q -t "$IMAGE" - >/dev/null <<EOF
 FROM $DISTRO
+RUN if [ -n "$APT_MIRROR" ]; then sed -i -e 's|http://archive.ubuntu.com/ubuntu|$APT_MIRROR|g' \
+      -e 's|http://security.ubuntu.com/ubuntu|$APT_MIRROR|g' /etc/apt/sources.list.d/ubuntu.sources; fi
 RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq sudo ca-certificates curl >/dev/null \
     && useradd -m -s /bin/bash player && echo 'player ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/player
 EOF
@@ -454,12 +463,16 @@ went=$(web "$admin" -o /tmp/$NAME-uninstall.html -w '%{http_code}' --data-urlenc
   -d keep=yes -d confirm=uninstall "$A/server/uninstall")
 expect "Uninstall on the Server page is asked for ($went) (DEP-48)" test "$went" = 200
 expect "and its page follows the stop" grep -q 'id="stop-wait"' /tmp/$NAME-uninstall.html
+# The uninstall goes on after the server has stopped, file by file: the folder is read once it holds only what stays
+# (a minute at most), and what is still there is said if it never does.
+left=
 for _ in $(seq 60); do
-  inside "test ! -e OpenDMTQ/opendmtq" && break
+  left=$(inside "ls -A OpenDMTQ | tr '\n' ' '")
+  [ "$left" = ".env data " ] && break
   sleep 1
 done
 expect "nothing answers afterwards" is 000 "http://127.0.0.1:$PORT/opendmtq/health.php"
-expect "the folder keeps only the data and .env" test "$(inside "ls -A OpenDMTQ | tr '\n' ' '")" = ".env data "
+expect "the folder keeps only the data and .env ($left)" test "$left" = ".env data "
 expect "the command on the PATH is gone (${link:-none})" inside "test -n '$link' && test ! -e '$link'"
 # Installed again over the data: the same server, which the command line then removes whole.
 if timeout 600 docker exec -u player -w /home/player "$NAME" bash -lc \
