@@ -1,9 +1,10 @@
-"""The API's tokens, the site's accounts and the Notices page's webhooks kept across `./opendmtq restore`, as the admin
-pages' restore keeps them: the restored database gets the server's tokens, accounts and webhooks of now, and none of the
-backup's. An old backup must not bring back a token revoked since, an account deleted since, an old password or a webhook
-deleted since, nor end what was made since. A server with no account yet (a new machine) takes the backup's accounts, and
-one with nothing of its own yet (no webhook, account or player) the backup's webhooks too. What the webhooks' loop knew and
-had waiting in the backup goes: it looks at the restored data anew and sends nothing of it.
+"""The API's tokens, the site's accounts, the Notices page's webhooks and the game's sign-ins kept across `./opendmtq
+restore`, as the admin pages' restore keeps them: the restored database gets the server's tokens, accounts, webhooks and
+sign-ins of now, and none of the backup's. An old backup must not bring back a token revoked since, an account deleted
+since, an old password or a webhook deleted since, nor end what was made since, nor the sign-in of a game playing now. A
+server with no account yet (a new machine) takes the backup's accounts, and one with nothing of its own yet (no webhook,
+account or player) the backup's webhooks too. What the webhooks' loop knew and had waiting in the backup goes: it looks at
+the restored data anew and sends nothing of it.
 
 The restore runs this in the tools container, beside the database (backup.restore copies it there), before the restored
 database takes the live one's place:
@@ -60,6 +61,18 @@ WEBHOOK_COLUMNS = ("id", "url", "kind", "lang", "events", "made_by", "made_at", 
 
 # The game player the server's own check plays as (tools/opendmtq_tools/admin/core.py CHECK_UDID): nobody's player.
 CHECK_UDID = "opendmtq-check"
+
+# The game's sign-ins, as the server makes them (server/game/src/signin.php): the access token each platform login handed
+# out, as its SHA-256, and the key the game's login gave for it, which a player's own game signs with. A restore keeps
+# today's, as the admin pages' restore does (backups.put_sign_ins there): every game signed in goes on as it was.
+SIGN_IN_TABLE = (
+    """CREATE TABLE IF NOT EXISTS SignIn (access TEXT PRIMARY KEY, puid TEXT NOT NULL, at INTEGER NOT NULL, key TEXT,
+       guid INTEGER, play_token TEXT, play_pattern INTEGER, play_at INTEGER)""",
+    "CREATE INDEX IF NOT EXISTS SignIn_puid ON SignIn (puid, at)",
+    "CREATE INDEX IF NOT EXISTS SignIn_guid ON SignIn (guid)",
+)
+# What is copied of each sign-in.
+SIGN_IN_COLUMNS = ("access", "puid", "at", "key", "guid", "play_token", "play_pattern", "play_at")
 
 
 def tokens_now(live):
@@ -224,10 +237,51 @@ def keep_webhooks(live, restored):
     return None if theirs else len(rows)
 
 
+def sign_ins_now(live):
+    """The live database's game sign-ins, as rows of SIGN_IN_COLUMNS: none when there is no database yet (a new machine),
+    no table (a server from before them), or one that cannot be read (damaged)."""
+    if not os.path.isfile(live):
+        return []
+    try:
+        con = sqlite3.connect(live)
+        try:
+            if not con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'SignIn'").fetchone():
+                return []
+            return con.execute(f"SELECT {', '.join(SIGN_IN_COLUMNS)} FROM SignIn").fetchall()
+        finally:
+            con.close()
+    except sqlite3.DatabaseError:
+        return []
+
+
+def keep_sign_ins(live, restored):
+    """Gives the restored database the live one's game sign-ins, and only them: the table made when it has none, the
+    backup's own gone (no game signs with them now). Returns how many were kept."""
+    rows = sign_ins_now(live)
+    try:
+        con = sqlite3.connect(restored)
+    except sqlite3.Error:
+        return 0
+    try:
+        with con:
+            for statement in SIGN_IN_TABLE:
+                con.execute(statement)
+            con.execute("DELETE FROM SignIn")
+            con.executemany(f"INSERT INTO SignIn ({', '.join(SIGN_IN_COLUMNS)}) VALUES ({', '.join('?' for _ in SIGN_IN_COLUMNS)})", rows)
+    except sqlite3.DatabaseError:
+        # No database to put them in (the restore's own checks stand before this): nothing kept.
+        return 0
+    finally:
+        con.close()
+    return len(rows)
+
+
 def keep_all(live, restored):
     """All three, as the restore runs this file: (tokens kept, accounts kept or None when the backup's stay, webhooks
-    kept or None when the backup's stay)."""
-    return keep(live, restored), keep_accounts(live, restored), keep_webhooks(live, restored)
+    kept or None when the backup's stay). The game's sign-ins of now go with them (keep_sign_ins())."""
+    kept = keep(live, restored), keep_accounts(live, restored), keep_webhooks(live, restored)
+    keep_sign_ins(live, restored)
+    return kept
 
 
 if __name__ == "__main__":

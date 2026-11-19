@@ -176,6 +176,31 @@ class RealDatabaseTest(unittest.TestCase):
             # Nothing of the job is left beside the database.
             self.assertFalse(os.path.exists(os.path.join(sb.data, "state", ".restoring.db3")))
 
+    def test_a_restore_keeps_todays_game_sign_ins(self):
+        # A game signed in now goes on signing after the restore with the key its login gave it; the backup's sign-ins
+        # sign nothing: as the admin pages' restore does.
+        with Sandbox() as sb:
+            live = self.database(backup.DB)
+            for statement in keep_tokens.SIGN_IN_TABLE:
+                live.execute(statement)
+            live.execute("INSERT INTO SignIn (access, puid, at, key, guid) VALUES ('today', '7', 2, 'k2', 7)")
+            live.commit()
+            live.close()
+            with tempfile_folder() as tmp:
+                old = self.database(os.path.join(tmp, "old.db3"))
+                for statement in keep_tokens.SIGN_IN_TABLE:
+                    old.execute(statement)
+                old.execute("INSERT INTO SignIn (access, puid, at, key, guid) VALUES ('from_the_backup', '7', 1, 'k1', 7)")
+                old.commit()
+                old.close()
+                with open(os.path.join(tmp, "old.db3"), "rb") as f:
+                    content = f.read()
+            name = sb.archive("data/backups/opendmtq-20260101-120000-manual.tar.gz", {"dmtq.db3": content})
+            self.assertEqual(sb.call(app.cmd_restore, name=name, with_key=False), 0, sb.output())
+            con = sqlite3.connect(backup.DB)
+            self.assertEqual(con.execute("SELECT access, key, guid FROM SignIn").fetchall(), [("today", "k2", 7)])
+            con.close()
+
     def test_a_backup_from_before_the_tokens_gets_their_table(self):
         with Sandbox() as sb:
             live = self.database(backup.DB)

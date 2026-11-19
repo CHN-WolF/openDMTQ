@@ -1404,6 +1404,26 @@ class JobTest(unittest.TestCase):
             self.assertTrue(admin.auth.account_pass_ok(admin.auth.account_find("friend")["pass"], new))
             self.assertFalse(admin.auth.account_pass_ok(admin.auth.account_find("friend")["pass"], "hunter22"))
 
+    def test_a_restore_keeps_todays_game_sign_ins(self):
+        # A game signed in now goes on signing with the key its login gave it; the backup's sign-ins sign nothing (the server
+        # makes them, server/game/src/signin.php: written here as it writes them).
+        with Server() as inst:
+            with sqlite3.connect(admin.core.DB) as con:
+                for sql in admin.backups.SIGN_IN_TABLE:
+                    con.execute(sql)
+                con.execute("INSERT INTO SignIn (access, puid, at, key, guid) VALUES ('from_the_backup', '7', 1, 'k1', 7)")
+            name = inst.ask("POST", "/backups").get_json()["backup"]["name"]
+            with sqlite3.connect(admin.core.DB) as con:
+                con.execute("DELETE FROM SignIn")
+                con.execute("INSERT INTO SignIn (access, puid, at, key, guid, play_token, play_pattern, play_at) "
+                            "VALUES ('today', '7', 2, 'k2', 7, 'started', 61, 2)")
+            r = inst.ask("POST", f"/backups/{name}/restore")
+            done = wait_job(inst, r.get_json()["job"]["id"])
+            self.assertEqual(done["state"], "done", done)
+            with sqlite3.connect(admin.core.DB) as con:
+                self.assertEqual(con.execute("SELECT access, key, guid, play_token, play_pattern FROM SignIn").fetchall(),
+                                 [("today", "k2", 7, "started", 61)])
+
     def test_a_server_with_no_account_yet_takes_the_backups(self):
         # A move to a new PC: no account of its own yet, and every player of the backup still signs in.
         with Server() as inst:

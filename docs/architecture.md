@@ -167,7 +167,7 @@ What the replies rely on, as the client behaves:
   takes the chart's price), a save or a shop call that names a player is taken only signed with the key of a sign-in of
   that player (`403` otherwise); such a call that names nobody runs as any call. The game also sends the key and an API
   token in headers named with an underscore (`SECRET_KEY`, `API_TOKEN`), which nothing reads: a proxy drops such headers.
-  An account keeps its newest eight sign-ins (a phone signs in at every start).
+  An account keeps its newest eight sign-ins (a phone signs in at every start), and a restore keeps the sign-ins of now.
 - **Size.** A request holds at most 64 calls (the game's largest batch, right after its login, has 14) and a body of at
   most 2 MB, as the Helm chart's router lets through: a larger one is refused whole (`413`) before any call runs.
 - **Saving a play.** The score, the accuracy and the grade are worked out from the counts of each judgement, as the

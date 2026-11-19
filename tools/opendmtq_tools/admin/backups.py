@@ -85,6 +85,33 @@ GAME_TABLES = (
     "CREATE TABLE IF NOT EXISTS GameSetting (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
 )
 
+# The game's sign-ins (server/game/src/signin.php, the same statements): the access token each platform login handed out,
+# as its SHA-256, and the key the game's login gave for it, which a player's own game signs with. A restore keeps today's,
+# as it keeps the API's tokens: every game signed in goes on as it was, and none the backup held signs anything now.
+SIGN_IN_TABLE = (
+    "CREATE TABLE IF NOT EXISTS SignIn (access TEXT PRIMARY KEY, puid TEXT NOT NULL, at INTEGER NOT NULL, key TEXT, "
+    "guid INTEGER, play_token TEXT, play_pattern INTEGER, play_at INTEGER)",
+    "CREATE INDEX IF NOT EXISTS SignIn_puid ON SignIn (puid, at)",
+    "CREATE INDEX IF NOT EXISTS SignIn_guid ON SignIn (guid)",
+)
+# Its columns, in order: what a restore copies of each sign-in.
+SIGN_IN_COLUMNS = ("access", "puid", "at", "key", "guid", "play_token", "play_pattern", "play_at")
+
+
+def sign_ins(con):
+    """con's game sign-ins, as tuples of SIGN_IN_COLUMNS (none from a database from before them)."""
+    if not con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'SignIn'").fetchone():
+        return []
+    return [tuple(r) for r in con.execute(f"SELECT {', '.join(SIGN_IN_COLUMNS)} FROM SignIn")]
+
+
+def put_sign_ins(con, rows):
+    """con's game sign-ins made exactly rows (another database's): the table made where it is not, its own gone."""
+    for sql in SIGN_IN_TABLE:
+        con.execute(sql)
+    con.execute("DELETE FROM SignIn")
+    con.executemany(f"INSERT INTO SignIn ({', '.join(SIGN_IN_COLUMNS)}) VALUES ({', '.join('?' for _ in SIGN_IN_COLUMNS)})", rows)
+
 SCHEMA = """CREATE TABLE IF NOT EXISTS PlayLog (id INTEGER PRIMARY KEY, user_id INTEGER, pattern_id INTEGER,
         score INTEGER, grade TEXT, judgement INTEGER, is_record INTEGER, played_at INTEGER,
         keys INTEGER NOT NULL DEFAULT 0);
@@ -562,6 +589,8 @@ def restore_backup(name, path):
             # the restored database's queue holds is sent again (webhooks.put).
             with tokens.LOCK, webhooks.LOCK:
                 switches, settings, kept_tokens, kept_accounts, kept_hooks = [], [], [], [], []
+                # The game's sign-ins of now (none from a live database set aside as damaged).
+                kept_sign_ins = []
                 # The live database's rankings' change number (0 when it is set aside as damaged and cannot be read).
                 live_stamp = 0
                 # Whether today's server has nothing of its own yet: no player and no account (a new PC), or its
@@ -569,6 +598,7 @@ def restore_backup(name, path):
                 empty = True
                 if not kept:
                     with db() as con:
+                        kept_sign_ins = sign_ins(con)
                         live_stamp = board_stamp(con)
                         recordings.live_table(con)
                         switches = con.execute("SELECT * FROM LiveSwitch").fetchall()
@@ -589,6 +619,8 @@ def restore_backup(name, path):
                 try:
                     with copy:
                         tokens.put(copy, kept_tokens)
+                        # Today's game sign-ins: every game signed in goes on signing as it did.
+                        put_sign_ins(copy, kept_sign_ins)
                         # Today's webhooks, and the loop's memory and queue gone: its next look starts from the restored
                         # data as it is, sending nothing of it. A server with nothing of its own yet keeps the backup's
                         # webhooks instead (a move to a new PC keeps the chats the owner set), their queue gone all the
