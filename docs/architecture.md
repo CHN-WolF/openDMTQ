@@ -691,7 +691,7 @@ hand.
   new password, new ID and Sign out everywhere else end the account's other sign-ins on the site and the admin pages
   (`SiteUser.signed_out_at`). A one-time sign-in link works once, within a minute, and the server keeps only the SHA-256
   of its token. A banned player's accounts are refused at the site's and the PC client's sign-in, and a one-time link
-  of one signs nobody in.
+  of one signs nobody in; an account switched off is told so at the site's sign-in, once its password is right.
 - A webhook's address is a secret, as whoever has it can post to the chat: it stays in the database and leaves it only
   for the chat, and the pages, the API and the log of changes show it masked. One that leads to the server itself or its
   network link's own addresses (loopback, link-local such as a cloud's metadata address, the unspecified one, this

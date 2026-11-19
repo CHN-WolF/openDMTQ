@@ -1,12 +1,14 @@
 <?php
 /*
- * The site's sign-in for the owner and a banned player's one-time link: tests/game/protocol.sh runs this inside the
- * throwaway server, after the contract, on its database and state folder, at its own address.
+ * The site's sign-in for the owner, a banned player's one-time link and an account switched off: tests/game/protocol.sh
+ * runs this inside the throwaway server, after the contract, on its database and state folder, at its own address.
  *
  *   - the owner's ID, of every length the server takes for it (1 to 40 of A-Z, a-z, 0-9, . _ -, as owner.pass keeps it):
  *     the sign-in form's cookie signs the owner in on the next page;
  *   - a one-time link of an account whose player is banned now signs nobody in, and the sign-in page says why, with the
- *     owner's reason, as the form does.
+ *     owner's reason, as the form does;
+ *   - an account switched off on the Accounts page, with the right password, is told so in its own words and the try is
+ *     no failure; with a wrong password it is told only that it is wrong.
  *
  * Usage: php tests/game/signin.php <database file> <base address of the server>      (exit status 0 when every check passed)
  */
@@ -111,6 +113,30 @@ $token = once_issue('evesite', '/opendmtq/me.php');
 [$status, $headers] = visit('GET', "$base/opendmtq/login.php?once=" . rawurlencode((string)$token));
 check('SRV-81 once the ban has ended, a link signs the browser in and goes on to its page',
     $status === 303 && signin_cookie($headers) !== '', "$status " . (signin_cookie($headers) !== '' ? 'cookie set' : 'no cookie'));
+
+// ------------------------------------------------------------------ SRV-82: an account switched off on the Accounts page
+
+// An account as the Accounts page leaves one it switched off (off 1), with its password as the site keeps it.
+$salt = bin2hex(random_bytes(16));
+$hash = 'pbkdf2_sha256$1000$' . $salt . '$' . hash_pbkdf2('sha256', 'offpass', (string)hex2bin($salt), 1000, 64);
+$db->exec("INSERT OR REPLACE INTO SiteUser (name, pass, note, admin, created_at, off) VALUES ('offsite', '$hash', '', 0, " . time() . ', 1)');
+// More tries with the right password than the sign-in lets one address fail in ten minutes (DL_PER_ADDRESS): none of
+// them is a failure, so the last is answered as the first.
+$said = [];
+for ($i = 0; $i <= DL_PER_ADDRESS; $i++) {
+    [$status, $headers, $page] = visit('POST', "$base/opendmtq/login.php", ['user' => 'offsite', 'password' => 'offpass']);
+    $said[] = strpos($page, 'This account is disabled and cannot sign in.') !== false ? 'off'
+        : (strpos($page, 'Too many failed sign-ins') !== false ? 'throttled' : (strpos($page, 'Wrong ID or password.') !== false ? 'wrong' : "$status"));
+}
+check('SRV-82 an account switched off, with the right password, is told so in its own words and signed in nowhere',
+    $said[0] === 'off' && $status === 200 && signin_cookie($headers) === '', implode(' ', $said));
+check('SRV-82 and the right password is no failure: past as many tries as one address may fail, still told the same',
+    end($said) === 'off', implode(' ', $said));
+[, , $page] = visit('POST', "$base/opendmtq/login.php", ['user' => 'offsite', 'password' => 'not-its-password']);
+check('SRV-82 a wrong password is told only that it is wrong, as for any account', strpos($page, 'Wrong ID or password.') !== false
+    && strpos($page, 'disabled') === false, substr(strip_tags($page), 0, 200));
+[, , $page] = visit('POST', "$base/opendmtq/login.php", ['user' => 'offsite', 'password' => 'offpass'], 'opendmtq_lang=ko');
+check('SRV-82 in Korean too', strpos($page, '이 계정은 비활성화되어 로그인할 수 없습니다.') !== false, substr(strip_tags($page), 0, 200));
 
 // The owner's sign-in as it was.
 if ($had === false) {

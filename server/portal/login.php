@@ -66,7 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Counted before the password is compared, so a burst of guesses cannot pass the limit together; for the account
         // typed, whose admin rights put it under a limit for the whole server too.
         $error = 'signin.throttled';
-    } elseif (($who = site_check($user, $password)) !== null && ($ban = site_ban(site_account($who))) !== null) {
+    } elseif (($row = site_password_row($user, $password)) !== null && $row['off']) {
+        // The right password of an account switched off on the Accounts page: not a guess, and no sign-in; said in its own
+        // words, to whoever knows the password alone (a wrong one is told only that it is wrong).
+        dl_attempt_succeeded($attempt);
+        $error = 'signin.off';
+    } elseif (($who = $row !== null ? (string)$row['name'] : null) !== null && ($ban = site_ban($row)) !== null) {
         // The right password of a banned player's account: not a guess, and no sign-in; the owner's reason says why.
         dl_attempt_succeeded($attempt);
         $error = 'signin.banned';

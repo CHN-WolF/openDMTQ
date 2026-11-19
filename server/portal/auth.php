@@ -139,13 +139,20 @@ function site_pass_ok(string $stored, string $password): bool
     return hash_equals($p[3], hash_pbkdf2('sha256', $password, (string)hex2bin($p[2]), (int)$p[1], 64));
 }
 
-/* The account an ID and a password sign in as (its ID as kept), or null. As slow for an ID that is not there as for one
-   that is, so that the time taken does not tell which IDs there are. */
-function site_check(string $name, string $password): ?string
+/* The account an ID and a password are right for, as site_account() gives it, whether it is on or switched off, or null.
+   As slow for an ID that is not there as for one that is, so that the time taken does not tell which IDs there are. */
+function site_password_row(string $name, string $password): ?array
 {
     $row = site_account($name);
     $ok = site_pass_ok($row ? (string)$row['pass'] : 'pbkdf2_sha256$' . SITE_ROUNDS . '$' . str_repeat('0', 32) . '$' . str_repeat('0', 64), $password);
-    return $row && $ok && !$row['off'] && dl_key() !== '' ? (string)$row['name'] : null;
+    return $row && $ok ? $row : null;
+}
+
+/* The account an ID and a password sign in as (its ID as kept), or null: the password right and the account on. */
+function site_check(string $name, string $password): ?string
+{
+    $row = site_password_row($name, $password);
+    return $row && !$row['off'] && dl_key() !== '' ? (string)$row['name'] : null;
 }
 
 /*
