@@ -2082,11 +2082,14 @@ def maintenance_check(app, out, tag, problems):
         problems.extend(dialog_problems(dialog, "%s_dialog-%s" % (tag, key)))
         dialog.close(None)
     # Repair with a file of the launcher missing: put back, and said to need a restart. The page at its foot first, where
-    # the tools are: the ready check that comes back after the repair leaves it there.
+    # the tools are: the ready check that comes back after the repair leaves it there. Help taller than the window has a
+    # foot below its top; at 1600x1000 it shows whole, and stays at its top.
     os.remove(os.path.join(install, "current", "OpenDMTQ.exe"))
     app.body.canvas.yview_moveto(1.0)
     settle(app)
     before = app.body.canvas.canvasy(0)
+    # Whether the page reaches past its view (the page area's scroll region is the page, or the view when it is shorter).
+    tall = float(str(app.body.canvas.cget("scrollregion")).split()[3]) > app.body.canvas.winfo_height() + 1
     done = next_dialog(app, out, "%s_dialog-repaired" % tag, problems, lambda d: not d.progress,
                        lambda d: d.canvas.event_generate("<Return>"))
     button(app, w("help.repair")).press()
@@ -2097,7 +2100,7 @@ def maintenance_check(app, out, tag, problems):
         problems.append("%s: the repair said %r" % (tag, dialog and dialog.detail))
     if not os.path.isfile(os.path.join(install, "current", "OpenDMTQ.exe")):
         problems.append("%s: the repair did not put the launcher's file back" % tag)
-    if before <= 0 or abs(app.body.canvas.canvasy(0) - before) > 1:
+    if (tall and before <= 0) or abs(app.body.canvas.canvasy(0) - before) > 1:
         problems.append("%s: closing the repair's answer moved Help from %d px to %d" % (tag, before,
                                                                                          app.body.canvas.canvasy(0)))
     page_shorter_check(app, tag, problems)
