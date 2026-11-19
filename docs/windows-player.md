@@ -319,8 +319,11 @@ every window size and scale. [The sound](#the-sound) says what each control chan
 - **Quitting**: the X asks first, in a glass card over the game dimmed and blurred behind it: **Keep playing** as the
   launcher's main button, or **Quit the game** as its secondary, red under the pointer; so a click by mistake does not
   end a song. Its buttons too act only when let go where they were pressed; Left, Right and Tab move the choice (marked
-  with the launcher's cyan keyboard ring), Enter takes it and Esc keeps playing. The card keeps within three quarters
-  of the game's width and nine tenths of its height. The taskbar's Close window asks the same; on a minimised game it
+  with the launcher's cyan keyboard ring), Enter takes it and Esc keeps playing. Asked mid-song (a song's first frame
+  to its end, its own pause screen too), a line under the question says that quitting mid-song loses the song's record;
+  in the menus, a song's loading screen among them, it asks without that line (with keyboard play off, the player cannot
+  tell a song from the menus, and it asks without it). The card keeps within three quarters of the game's width and nine
+  tenths of its height. The taskbar's Close window asks the same; on a minimised game it
   first brings the window back and lets the game draw itself again, so that the question stands over the game. The game
   holds still while it asks, as a phone's game does when its owner leaves it and as it does minimised: a song stops
   where it was, with the game's own pause screen after.

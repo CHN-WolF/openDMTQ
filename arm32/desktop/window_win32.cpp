@@ -1888,6 +1888,9 @@ bool open_window(const std::string& title) {
     hooks.stats = arm32::g_stats;
     // The display's refresh interval, as the frames are paced by it (watch_display): a motion's steps fall back on it.
     hooks.refresh_ns = [] { return static_cast<long long>(arm32::g_display_interval.load()); };
+    // Whether a song is going on, as keyboard play's hook follows the game's plays: the question's words and where the
+    // notice and the counter stand.
+    hooks.song = [] { return keyplay_in_song(); };
     overlay::start(g_frame, g_window, hooks, host_locale().first == "ko");
     // A finger on the bar's buttons, the sound panel's sliders and the question's buttons is a click and a drag as on the
     // game: no circle, no press and hold that would turn a held finger into a right click.

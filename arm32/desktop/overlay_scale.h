@@ -60,6 +60,29 @@ inline float handle_scale_for(int area_w, int area_h) {
     return std::min(static_cast<float>(area_w) / kGameWide, static_cast<float>(area_h) / kGameLines);
 }
 
+// ---- the question before quitting
+
+// The question's card at 720 lines: 520 wide; its title 36 from its top and 28 high, the game's green line at 74. Mid-song
+// a line of words about the song's record 12 under the green line (86, 20 high); the buttons 34 under what is above them,
+// 48 high, and 40 under the buttons. Asked in the menus no song's record is at stake: no line of words, the buttons 34
+// under the green line, the card shorter by the line's row and the gap above it (32).
+struct AskRows {
+    float card_h, text_top, text_h, buttons_top;
+};
+constexpr float kAskWide = 520, kAskTitleTop = 36, kAskTitleTall = 28, kAskGameLine = 74, kAskTextGap = 12, kAskTextTall = 20, kAskButtonsGap = 34,
+                kAskButtonTall = 48, kAskFoot = 40;
+constexpr AskRows ask_rows(bool song) {
+    // The line of words under the game's line, mid-song only; none in the menus (no height, where it would start).
+    const float text_top = song ? kAskGameLine + kAskTextGap : kAskGameLine, text_h = song ? kAskTextTall : 0;
+    // The buttons under the line of words (or the game's line), and the card's foot under them.
+    const float buttons_top = text_top + text_h + kAskButtonsGap;
+    return AskRows{buttons_top + kAskButtonTall + kAskFoot, text_top, text_h, buttons_top};
+}
+
+// Whether the question is asked mid-song, from keyboard play's word (1 a song going on, from its first frame to its end;
+// 0 none; -1 not known, keyboard play not hooked): only a song known to go on has a record that quitting would lose.
+constexpr bool ask_mid_song(int song) { return song == 1; }
+
 // ---- the bar
 
 // The bar at 720 lines: 74 high (the game's own X at the top right of its song and music screens reaches row 70: the

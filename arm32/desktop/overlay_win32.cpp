@@ -211,17 +211,20 @@ float scale() {
     return t_scale_cap > 0 ? std::min(s, t_scale_cap) : s;
 }
 
-// The question's card at 720 lines: its width and its height.
-constexpr float kCardWidth = 520, kCardHeight = 228;
+// The question's card at 720 lines: its width, and its height mid-song (`song`, with the line about the song's record
+// under the title) or in the menus (without it: shorter by the line's row, its buttons that much higher), as
+// overlay_scale.h's ask_rows lays them out.
+constexpr float kCardWidth = kAskWide;
+constexpr float card_height(bool song) { return ask_rows(song).card_h; }
 
 // The question's card at most three quarters of the game's area wide and nine tenths of it high, everything in it scaled
 // with it. The overlay's own scale keeps it well within that (at most 54 % of the area's width, in a 4:3 one, and 42 % of
 // its height, in the smallest the window holds): a guard, so that no scale can ever set the card past the game's edges.
-// Held while the card is laid out or drawn.
+// Held while the card is laid out or drawn, for the card asked mid-song (`song`) or not.
 struct AskScale {
     float before;
-    AskScale() : before(t_scale_cap) {
-        t_scale_cap = std::min(0.75f * static_cast<float>(area_w()) / kCardWidth, 0.9f * static_cast<float>(area_h()) / kCardHeight);
+    explicit AskScale(bool song) : before(t_scale_cap) {
+        t_scale_cap = std::min(0.75f * static_cast<float>(area_w()) / kCardWidth, 0.9f * static_cast<float>(area_h()) / card_height(song));
     }
     ~AskScale() { t_scale_cap = before; }
     AskScale(const AskScale&) = delete;
@@ -910,34 +913,37 @@ struct AskLayout {
     // The game's line under the title: from x0 to x1 at row y.
     float line_x0 = 0, line_x1 = 0, line_y = 0;
 };
-AskLayout ask_layout() {
+// The layout asked mid-song (`song`: with the line about the song's record) or in the menus (without it).
+AskLayout ask_layout(bool song) {
     // Within the game's area whatever the scale (AskScale's cap, a guard).
-    const AskScale cap;
+    const AskScale cap(song);
     AskLayout l;
     const float w = static_cast<float>(area_w()), h = static_cast<float>(area_h());
-    const float width = fpx(kCardWidth), height = fpx(kCardHeight);
-    l.card = RectF(std::floor((w - width) / 2), std::floor((h - height) / 2), static_cast<REAL>(px(kCardWidth)), static_cast<REAL>(px(kCardHeight)));
+    const float width = fpx(kCardWidth), height = fpx(card_height(song));
+    l.card = RectF(std::floor((w - width) / 2), std::floor((h - height) / 2), static_cast<REAL>(px(kCardWidth)), static_cast<REAL>(px(card_height(song))));
     const float x = l.card.X, y = l.card.Y, cw = l.card.Width;
-    // At 720 lines: the title centred 36 from the top, 28 high; the game's line 10 under it (300 wide, fading to its
-    // ends); the line of words 12 under that, 20 high; the buttons, 210 by 48 side by side with 16 between, centred 34
-    // under them; 40 under the buttons.
-    l.title = RectF(x + fpx(56), y + fpx(36), cw - fpx(112), fpx(28));
+    // At 720 lines (overlay_scale.h's ask_rows): the title centred 36 from the top, 28 high; the game's line 10 under it
+    // (300 wide, fading to its ends); mid-song, the line of words 12 under that, 20 high (in the menus none: an empty box
+    // where it would start); the buttons, 210 by 48 side by side with 16 between, centred 34 under the line of words (in
+    // the menus, 34 under the game's line); 40 under the buttons.
+    const AskRows rows = ask_rows(song);
+    l.title = RectF(x + fpx(56), y + fpx(kAskTitleTop), cw - fpx(112), fpx(kAskTitleTall));
     l.line_x0 = x + (cw - fpx(300)) / 2;
     l.line_x1 = l.line_x0 + fpx(300);
-    l.line_y = y + fpx(74);
-    l.text = RectF(x + fpx(28), y + fpx(86), cw - fpx(56), fpx(20));
+    l.line_y = y + fpx(kAskGameLine);
+    l.text = RectF(x + fpx(28), y + fpx(rows.text_top), cw - fpx(56), fpx(rows.text_h));
     // The thin X's square at the card's right, 40 to press with the glyph in its middle, on the title's middle: the
     // two read as one row.
     l.close = RectF(x + cw - fpx(52), l.title.Y + l.title.Height / 2 - fpx(20), fpx(40), fpx(40));
     const float each = static_cast<float>(px(210)), tall = static_cast<float>(px(48)), gap = static_cast<float>(px(16));
-    l.keep = RectF(std::floor(x + (cw - each * 2 - gap) / 2), std::floor(y + fpx(140)), each, tall);
+    l.keep = RectF(std::floor(x + (cw - each * 2 - gap) / 2), std::floor(y + fpx(rows.buttons_top)), each, tall);
     l.quit = RectF(l.keep.X + each + gap, l.keep.Y, each, tall);
     return l;
 }
 
 // The question's words in the language of the PC.
 const wchar_t* ask_title() { return g_korean ? L"게임을 끝낼까요?" : L"Quit the game?"; }
-// What quitting loses, true on any screen: the player cannot tell whether a song is going on.
+// What quitting loses mid-song, said only when it is asked mid-song (the menus have no song's record to lose).
 const wchar_t* ask_text() { return g_korean ? L"곡 도중에 끝내면 기록이 남지 않아요." : L"Quitting mid-song loses the song's record."; }
 const wchar_t* keep_label() { return g_korean ? L"계속하기" : L"Keep playing"; }
 const wchar_t* quit_label() { return g_korean ? L"게임 끝내기" : L"Quit the game"; }
@@ -947,9 +953,9 @@ const wchar_t* quit_label() { return g_korean ? L"게임 끝내기" : L"Quit the
 // regular; its buttons the launcher's, as its dialogs draw them: Keep playing its main button (the lime, dark words),
 // Quit the game its secondary (quiet metal, chalk words) that fills red under the pointer as its buttons that remove do
 // (dark words then), each sunk while held, the keys' choice in its keyboard ring; the thin X a plain glyph, ash and white
-// under the pointer, as the launcher's menu names.
-void card_look(Look& card_look_out, const AskLayout& l, int choice, int hover, int pressed) {
-    const AskScale cap;
+// under the pointer, as the launcher's menu names. Mid-song (`song`) the line about the song's record under the title.
+void card_look(Look& card_look_out, const AskLayout& l, int choice, int hover, int pressed, bool song) {
+    const AskScale cap(song);
     // The card's window: the card with its shadow's room, within the game's area.
     const RECT win = window_around(static_cast<int>(l.card.X), static_cast<int>(l.card.Y), static_cast<int>(l.card.Width), static_cast<int>(l.card.Height));
     const int w = win.right - win.left, h = win.bottom - win.top;
@@ -970,7 +976,7 @@ void card_look(Look& card_look_out, const AskLayout& l, int choice, int hover, i
     auto title_font = font(Weight::kBold, fpx(19), g_korean);
     auto text_font = font(Weight::kRegular, fpx(15), g_korean);
     say_centred(*g, ask_title(), *title_font, tone::kPrimary, at(l.title));
-    say_centred(*g, ask_text(), *text_font, tone::kSecondary, at(l.text));
+    if (song) say_centred(*g, ask_text(), *text_font, tone::kSecondary, at(l.text));
     // The thin X: the launcher's ash (#AEB8C3), white under the pointer.
     const RectF close = at(l.close);
     Pen thin(hover == kClose ? Color(255, 255, 255, 255) : Color(255, 0xAE, 0xB8, 0xC3), fpx(1.5f));
@@ -992,22 +998,29 @@ void card_look(Look& card_look_out, const AskLayout& l, int choice, int hover, i
     auto label = font(Weight::kBold, fpx(16), g_korean);
     say_centred(*g, keep_label(), *label, launcher::kMainInk, keep);
     say_centred(*g, quit_label(), *label, quit_lit ? launcher::kRedInk : launcher::kMetalInk, quit);
-    // The words' zone: the title and the line, as dark as the quiet line needs (the buttons are solid).
+    // The words' zone: the title and the line, as dark as the quiet line needs (the buttons are solid); the title alone
+    // in the menus, as dark as its bold words need.
     const RectF title = at(l.title), text = at(l.text);
-    look.zones = {Look::Zone{text.X - fpx(4), title.Y - fpx(4), text.X + text.Width + fpx(4), text.Y + text.Height + fpx(4), kUnderSecondary}};
+    look.zones = {Look::Zone{text.X - fpx(4), title.Y - fpx(4), text.X + text.Width + fpx(4), (song ? text.Y + text.Height : title.Y + title.Height) + fpx(4),
+                             song ? kUnderSecondary : kUnderPrimary}};
     look.feather = fpx(20);
 }
 
+// Whether the question up now was asked mid-song (the UI thread's, set as it is asked, from keyboard play's hook: a song
+// going on, its own pause screen too): its line about the song's record and its taller card. Its order carries it to
+// the painter.
+bool g_ask_song = false;
+
 // What is under a point of the question's window: a button, the thin X, or kNone.
 int ask_at(int x, int y) {
-    const AskLayout l = ask_layout();
+    const AskLayout l = ask_layout(g_ask_song);
     const auto fx = static_cast<REAL>(x), fy = static_cast<REAL>(y);
     if (l.keep.Contains(fx, fy)) return kKeep;
     if (l.quit.Contains(fx, fy)) return kQuit;
     if (l.close.Contains(fx, fy)) return kClose;
     return kNone;
 }
-bool in_card(int x, int y) { return ask_layout().card.Contains(static_cast<REAL>(x), static_cast<REAL>(y)); }
+bool in_card(int x, int y) { return ask_layout(g_ask_song).card.Contains(static_cast<REAL>(x), static_cast<REAL>(y)); }
 
 // ---- the sound panel's look (its layout both threads', its picture the painter's)
 
@@ -1470,8 +1483,10 @@ struct Order {
     bool wanted = false;
     View view;
     std::shared_ptr<const std::vector<glass::Shot>> shots;
-    // The bar's chip under the pointer and the one held; the question's choice, what is under its pointer and held.
+    // The bar's chip under the pointer and the one held; the question's choice, what is under its pointer and held, and
+    // whether it was asked mid-song (its line about the song's record).
     int hover = kNone, pressed = kNone, choice = kKeep;
+    bool song = false;
     // Whether the sound panel is open (the bar's Sound button sunk); the panel's levels, the control under the pointer
     // and the one held.
     bool sound_open = false;
@@ -1612,7 +1627,7 @@ Painted paint_sound(const Order& o, Paint& p) {
 Painted paint_question(const Order& o, QuestionPaint& q) {
     const Drawing d(o.view);
     const int w = area_w(), h = area_h();
-    const AskScale cap;
+    const AskScale cap(o.song);
     // The dim: made again for another read, another size or another notice under it.
     Backdrop whole;
     const bool have = backdrop_from(*o.shots, glass::Rect{0, 0, w, h}, 0, whole);
@@ -1645,8 +1660,8 @@ Painted paint_question(const Order& o, QuestionPaint& q) {
     if (!c->bits || !q.dim || !q.dim->bits) return Painted{};
     // The dim, then the card over it, in its window.
     std::memcpy(c->bits, q.dim->bits, static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4);
-    const AskLayout l = ask_layout();
-    card_look(q.card, l, o.choice, o.hover, o.pressed);
+    const AskLayout l = ask_layout(o.song);
+    card_look(q.card, l, o.choice, o.hover, o.pressed, o.song);
     const RECT win = window_around(static_cast<int>(l.card.X), static_cast<int>(l.card.Y), static_cast<int>(l.card.Width), static_cast<int>(l.card.Height));
     compose(*c, win.left, win.top, q.card, q.card_have ? &q.card_backdrop : nullptr, win.left, win.top);
     q.spare = std::move(q.picture);
@@ -2482,6 +2497,7 @@ void order_question() {
     o.choice = g_choice;
     o.hover = g_ask_hover;
     o.pressed = g_ask_pressed;
+    o.song = g_ask_song;
     if (g_notice_up && g_notice.up && g_notice.picture) {
         o.under = g_notice.picture;
         o.under_x = g_notice.x;
@@ -2489,7 +2505,8 @@ void order_question() {
         o.under_y = g_notice.y + g_notice.down;
     }
     char key[96];
-    std::snprintf(key, sizeof key, "question %dx%d %.4f %d %d %d", o.view.w, o.view.h, static_cast<double>(o.view.dpi), g_choice, g_ask_hover, g_ask_pressed);
+    std::snprintf(key, sizeof key, "question %dx%d %.4f %d %d %d %d", o.view.w, o.view.h, static_cast<double>(o.view.dpi), g_choice, g_ask_hover, g_ask_pressed,
+                  g_ask_song ? 1 : 0);
     o.key = key;
     order(kQuestionPiece, std::move(o));
 }
@@ -2524,9 +2541,10 @@ void show_ask() {
     if (g_ask_restoring && g_hooks.frames) {
         std::snprintf(frames, sizeof frames, ", %llu frames shown since it was asked", g_hooks.frames().count - g_ask_frames);
     }
-    char line[260];
-    std::snprintf(line, sizeof line, "player: glass: the question over %s, shown %llu ms after it was asked%s", over,
-                  static_cast<unsigned long long>(GetTickCount64() - g_ask_asked), frames);
+    char line[320];
+    std::snprintf(line, sizeof line, "player: glass: the question over %s, shown %llu ms after it was asked%s, %s", over,
+                  static_cast<unsigned long long>(GetTickCount64() - g_ask_asked), frames,
+                  g_ask_song ? "mid-song (with the line about the song's record)" : "with no song going on (no line about a song's record)");
     note(line);
     if (showing()) {
         // Above everything else of the overlay: the notice stays under its dim.
@@ -4063,6 +4081,10 @@ void ask_quit() {
     g_asking = true;
     // The keys pressed on the game let go now, while the game may still go on for a few frames before it is held.
     if (g_hooks.question) g_hooks.question();
+    // Mid-song or not, as it is asked: the song's line comes only with a song's record at stake (keyboard play's hook says;
+    // where it cannot, no song is known to go on and the line stays out). Fixed for the question's life: the game holds
+    // still once it is up.
+    g_ask_song = g_hooks.song && ask_mid_song(g_hooks.song());
     // Keep playing chosen first, so that Enter at once goes on; nothing lit until the pointer moves over it.
     g_choice = kKeep;
     g_ask_hover = kNone;
@@ -4543,15 +4565,18 @@ void test_save(const std::wstring& prefix, const std::wstring& frame_png, bool w
     };
     QuestionPaint question;
     bool dim_saved = false;
+    // Asked mid-song (with the line about the song's record), in each state; and once asked in the menus (without it).
     for (const Ask& a : {Ask{kKeep, kNone, kNone, "ask-keep"}, Ask{kQuit, kNone, kNone, "ask-quit"}, Ask{kKeep, kKeep, kNone, "ask-hover-keep"},
                          Ask{kKeep, kQuit, kNone, "ask-hover-quit"}, Ask{kKeep, kClose, kNone, "ask-hover-close"},
-                         Ask{kKeep, kKeep, kKeep, "ask-pressed-keep"}, Ask{kKeep, kQuit, kQuit, "ask-pressed-quit"}}) {
+                         Ask{kKeep, kKeep, kKeep, "ask-pressed-keep"}, Ask{kKeep, kQuit, kQuit, "ask-pressed-quit"}, Ask{kKeep, kNone, kNone, "ask-menus-keep"}}) {
+        const bool song = std::string(a.name) != "ask-menus-keep";
         Order o;
         o.view = base;
         o.shots = shots;
         o.choice = a.choice;
         o.hover = a.hover;
         o.pressed = a.pressed;
+        o.song = song;
         o.key = std::string("probe ") + a.name;
         g_test_texts = &g_test_words;
         Painted got = paint_question(o, question);
@@ -4562,8 +4587,8 @@ void test_save(const std::wstring& prefix, const std::wstring& frame_png, bool w
             if (layout) std::fprintf(layout, "glass ask %d\n", got.glass ? 1 : 0);
         }
         // The card's window cut out of the whole picture: the rest is the dim.
-        const AskScale cap;
-        const AskLayout l = ask_layout();
+        const AskScale cap(song);
+        const AskLayout l = ask_layout(song);
         const RECT win = window_around(static_cast<int>(l.card.X), static_cast<int>(l.card.Y), static_cast<int>(l.card.Width), static_cast<int>(l.card.Height));
         Canvas part(win.right - win.left, win.bottom - win.top);
         if (part.bits && got.picture && got.picture->bits) {
@@ -4586,6 +4611,7 @@ void test_save(const std::wstring& prefix, const std::wstring& frame_png, bool w
         Order o;
         o.view = base;
         o.shots = shots;
+        o.song = true;
         o.key = "probe ask-time";
         QueryPerformanceCounter(&a);
         paint_question(o, fresh);
@@ -4600,9 +4626,9 @@ void test_save(const std::wstring& prefix, const std::wstring& frame_png, bool w
         if (layout) std::fprintf(layout, "time ask-hover %.3f\n", static_cast<double>(b.QuadPart - a.QuadPart) * 1000.0 / static_cast<double>(f.QuadPart));
     }
     {
-        // Where the card, its buttons and its X are, for the checks' clicks and the overlaps.
-        const AskScale cap;
-        const AskLayout l = ask_layout();
+        // Where the card, its buttons and its X are, for the checks' clicks and the overlaps (asked mid-song).
+        const AskScale cap(true);
+        const AskLayout l = ask_layout(true);
         if (layout) {
             std::fprintf(layout, "card %.0f %.0f %.0f %.0f\n", l.card.X, l.card.Y, l.card.Width, l.card.Height);
             std::fprintf(layout, "keep %.0f %.0f %.0f %.0f\nquit %.0f %.0f %.0f %.0f\nclose %.0f %.0f %.0f %.0f\n", l.keep.X, l.keep.Y, l.keep.Width,

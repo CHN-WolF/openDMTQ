@@ -1341,6 +1341,27 @@ void live_notice_checks() {
     check(reach_notice(false, false, true, m3, l3, true).text.rfind("\xeb\xb0\xa9\xec\x86\xa1", 0) == 0, "reach: in Korean when the player speaks it");
 }
 
+// The question before quitting (overlay_scale.h's ask_rows, ask_mid_song): its line about the song's record only when
+// asked mid-song, the card without that line's row in the menus and its buttons 34 under the game's line there, as they
+// are 34 under the line mid-song (WIN-300; main said the song's line on every screen, the menus' too).
+void question_checks() {
+    using player::overlay::ask_mid_song;
+    using player::overlay::ask_rows;
+    using player::overlay::AskRows;
+    // Mid-song, as before: the line 12 under the game's line (74), 20 high; the buttons 34 under it, 48 high; 40 under them.
+    const AskRows song = ask_rows(true);
+    check(song.text_top == 86 && song.text_h == 20 && song.buttons_top == 140 && song.card_h == 228,
+          "question: asked mid-song, the line about the song's record under the game's line and the card as before (228 high)");
+    // In the menus: no line, the buttons 34 under the game's line, the card shorter by the line's row and its gap.
+    const AskRows menus = ask_rows(false);
+    check(menus.text_h == 0 && menus.buttons_top == 74 + 34 && menus.card_h == 228 - 32,
+          "question: asked in the menus, no line about a song's record, the buttons 34 under the game's line, the card 196 high");
+    check(menus.buttons_top - (menus.text_top + menus.text_h) == song.buttons_top - (song.text_top + song.text_h),
+          "question: the buttons as far under what is above them in the menus as mid-song");
+    // Only a song known to go on (keyboard play's word: 1) has a record at stake; none (0) or not known (-1) has not.
+    check(ask_mid_song(1) && !ask_mid_song(0) && !ask_mid_song(-1), "question: the song's line only while a song is known to go on");
+}
+
 // A ban's notice as the PC player keeps it up (live_notice.h ban_of, hold_of): the server's "ban" read as a key with its
 // JSON escapes, the notice held while every answer carries it and taken again when its words change, let go at the first
 // answer with "" and the player's own words then, an older server or no answer changing nothing (WIN-301; main showed the
@@ -1559,6 +1580,8 @@ int main() {
     live_notice_checks();
     // A ban's notice that stays.
     ban_hold_checks();
+    // The question before quitting's line about a song's record.
+    question_checks();
     if (g_failed) {
         std::printf("%d of %d checks FAILED\n", g_failed, g_checks);
         return 1;

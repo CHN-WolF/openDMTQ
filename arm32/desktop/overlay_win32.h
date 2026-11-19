@@ -39,6 +39,10 @@ struct Hooks {
     // The display's refresh interval in nanoseconds as the window knows it (0: not known): the pace of a motion's steps
     // where the compositor gives none.
     long long (*refresh_ns)() = nullptr;
+    // Whether a song is going on (keyplay_in_song: 1 from its play's first frame to its end, its pause screen too; 0 in
+    // the menus; -1 not known): the question says the song's record is lost only mid-song, and the notice and the frame
+    // counter stand clear of the menus' header there and of a song's own controls in a song.
+    int (*song)() = nullptr;
 };
 
 // Once the frame and the game's window are made; `korean` for the words.

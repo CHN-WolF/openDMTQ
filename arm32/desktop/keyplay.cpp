@@ -179,6 +179,9 @@ gaddr g_set_press = 0, g_tick_to_real = 0, g_drag_pos = 0, g_tick_to_time = 0, g
 keys::LaneState g_lanes;
 // What the game's thread last said of the song: being played, when its last frame was (steady_ms), how many lanes it has.
 std::atomic<bool> g_playing{false};
+// Whether a song is going on: from its play's first frame to its end (it ended, was over, stopped or left), its own pause
+// screen and a hold of the window's included, as keyplay_in_song says it to the overlay.
+std::atomic<bool> g_in_song{false};
 std::atomic<long long> g_frame_ms{0};
 std::atomic<int> g_lane_count{0};
 // The game held still by the window (the question, minimised).
@@ -271,6 +274,8 @@ void drag_pos(Thread& t, gaddr player, gaddr note, float& x, float& y) {
 void finish(Play& p, const char* how) {
     if (p.ended || !p.player) return;
     p.ended = true;
+    // The song is over for the overlay too: its question asks without the song's line, its pieces go to the menus' places.
+    g_in_song.store(false, std::memory_order_release);
     const std::string why = std::string("the song ") + how;
     keyplay_let_go(why.c_str());
     // A song that ended with no lane key pressed saves as a touch play's; one over or left saves nothing to say so of.
@@ -315,6 +320,8 @@ void begin(Thread& t, gaddr player) {
     p = Play{};
     p.player = player;
     p.fresh = false;
+    // A song is going on from this, its first frame, until finish() says its end.
+    g_in_song.store(true, std::memory_order_release);
     p.start = u32(player + sp::TrackStart);
     p.lanes = static_cast<int>(std::min<std::uint32_t>(u32(player + sp::TrackCount), 4));
     // The notes: a FixedArray of the game's (its items' array at 0x8, its count at 0xc).
@@ -533,8 +540,10 @@ std::uint64_t on_pause(Thread& t) {
 }
 std::uint64_t on_stop(Thread& t) {
     t.call(g_original[3], {t.arg(0), t.arg(1), t.arg(2)});
-    // Stopped (left, or after its end): no lane plays any more.
+    // Stopped (left, or after its end): no lane plays any more, and no song goes on (also a stop before the play's first
+    // frame, which finish() below has no play of its own to end for).
     g_playing.store(false, std::memory_order_release);
+    g_in_song.store(false, std::memory_order_release);
     finish(g_play, "stopped");
     keyplay_let_go("the song stopped");
     return 0;
@@ -732,6 +741,13 @@ int keyplay_song_state() {
     // Playing, and its last frame recent (a song left without a word from the game is not played any more).
     const bool playing = g_playing.load(std::memory_order_acquire) && steady_ms() - g_frame_ms.load(std::memory_order_acquire) < 500;
     return playing ? 1 : 0;
+}
+
+int keyplay_in_song() {
+    // Only the hook knows: without it, not known.
+    if (g_hook.load(std::memory_order_acquire) != kIn) return -1;
+    // From a play's first frame to its end, however long its own pause screen or a hold of the window lasts.
+    return g_in_song.load(std::memory_order_acquire) ? 1 : 0;
 }
 
 void keyplay_mark_save(const std::string& method, const std::string& body, std::vector<std::pair<std::string, std::string>>& headers) {
