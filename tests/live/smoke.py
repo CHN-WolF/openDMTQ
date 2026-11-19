@@ -501,11 +501,16 @@ check("the admin's cookie beats the browser", html_lang(request(plain, ADMIN + "
 check("signed out: a sign-in link on the pages that stay open, coming back to them", 'href="/opendmtq/login.php?next=%2Fopendmtq%2Flicenses.php"' in request(plain, SITE + "/opendmtq/licenses.php")[2].decode())
 check("signed in: a way to sign out", 'action="/opendmtq/login.php?logout=1"' in page("ranking.php", "en", portal))
 check("none on the sign-in page itself", 'class="auth' not in page("login.php", "en", plain))
-# The home page leads to the install page, which has the download and its steps.
+# The home page leads to the app (its file, or the download page while it is being built) or, with none yet, draws its
+# download waiting with the line that says why; the download page has the download and its steps, and no card of usage.
 home_page = page("", "en", portal)
 install_page = page("download.php", "en", portal)
-check("the home page leads to the download page, with no steps of its own", 'href="download.php"' in home_page and 'class="steps"' not in home_page)
-check("the download page has its title and the help, whatever the app's state", "<title>Download the app" in install_page and 'id="help"' in install_page)
+home_leads = ('href="/apk"' in home_page or 'href="download.php' in home_page
+              or ('aria-disabled="true"' in home_page and 'id="app-why"' in home_page))
+check("the home page leads to the app or says why it waits for it, with no steps of its own",
+      home_leads and 'class="steps"' not in home_page)
+check("the download page has its title and no card of usage, whatever the app's state",
+      "<title>Download the app" in install_page and 'id="help"' not in install_page)
 check("the home page's own look at who is on is plain JSON", isinstance(json.loads(request(portal, SITE + "/opendmtq/?live=1")[2]), list))
 check("the cards' script is served", request(plain, SITE + "/opendmtq/thumbs.js")[0] == 200)
 # What the game is told about its menus and its prices.
