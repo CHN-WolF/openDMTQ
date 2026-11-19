@@ -1989,6 +1989,13 @@ void show_notice(const std::string& text, bool live) {
     main_looper().post([text, live] { overlay::notice(text, live); });
 }
 
+void hold_notice(const std::string& text) {
+    if (text.empty()) jvm::log("player: the notice that stays goes");
+    else jvm::log("player: notice that stays: %s", text.c_str());
+    // On the UI thread too: the card that stays over the game, or its going (overlay_win32.cpp).
+    main_looper().post([text] { overlay::hold_notice(text); });
+}
+
 void soft_keyboard(bool open) {
     // On the UI thread, which owns the windows: the text field focused while the game asks for text, the frame after.
     main_looper().post([open] {

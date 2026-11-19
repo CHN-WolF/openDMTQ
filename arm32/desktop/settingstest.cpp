@@ -1341,6 +1341,51 @@ void live_notice_checks() {
     check(reach_notice(false, false, true, m3, l3, true).text.rfind("\xeb\xb0\xa9\xec\x86\xa1", 0) == 0, "reach: in Korean when the player speaks it");
 }
 
+// A ban's notice as the PC player keeps it up (live_notice.h ban_of, hold_of): the server's "ban" read as a key with its
+// JSON escapes, the notice held while every answer carries it and taken again when its words change, let go at the first
+// answer with "" and the player's own words then, an older server or no answer changing nothing (WIN-301; main showed the
+// ban's notice for six seconds, then the game's own network error alone).
+void ban_hold_checks() {
+    using namespace player::live_notice;
+    // The key with its colon: the kind's value "ban", before it, is no key; escapes as json_encode writes them, and
+    // UTF-8 as it is where JSON_UNESCAPED_UNICODE leaves it.
+    const BanWord banned = ban_of(R"({"on":false,"toast":"","toast_id":3,"toast_kind":"ban","ban":"You cannot play on this server\nMade-up \"scores\" \/ \\ \u00e9 \ud83c\udfb5 · until Nov 26, 11:00"})");
+    check(banned.given && banned.text == "You cannot play on this server\nMade-up \"scores\" / \\ \xc3\xa9 \xf0\x9f\x8e\xb5 \xc2\xb7 until Nov 26, 11:00",
+          "ban: the server's words read, the kind's value ban no key, every escape of json_encode's");
+    const BanWord free = ban_of(R"({"on":true,"toast":"","toast_id":0,"toast_kind":"","ban":""})");
+    check(free.given && free.text.empty(), "ban: \"\" read as no ban, from a server that says it");
+    check(!ban_of(R"({"on":true,"toast":"On air\nWatch","toast_id":4,"toast_kind":"on"})").given && !ban_of(R"({"toast_kind":"ban","toast":"x"})").given,
+          "ban: an older server's answer, or one naming nobody, says nothing of a ban (the kind's value is no key)");
+    check(!ban_of(R"({"ban":"You cannot play)").given, "ban: words without their end say nothing of a ban");
+    // Held while it lasts, and again only when its words change.
+    std::string held;
+    const BanWord first{true, "You cannot play on this server\nMade-up scores \xc2\xb7 until Nov 26, 11:00"};
+    const Hold up = hold_of(true, first, held, false);
+    check(up.change && up.text == first.text && !up.over.show && held == first.text, "ban: the first answer with it holds the notice up");
+    check(!hold_of(true, first, held, false).change, "ban: the same words in the next answers change nothing (it stays up, no timer)");
+    const BanWord again{true, "You cannot play on this server\nScores sent from a program"};
+    const Hold other = hold_of(true, again, held, false);
+    check(other.change && other.text == again.text && !other.over.show, "ban: made again with another reason or end, the notice says the new one");
+    // No answer, or an older server's, changes nothing: the game is still refused as far as anyone can tell.
+    check(!hold_of(false, BanWord{}, held, false).change && !hold_of(true, BanWord{}, held, false).change && held == again.text,
+          "ban: no answer, or one that says nothing of a ban, keeps the notice up");
+    // Over: let go, with the player's own words, once.
+    const Hold over = hold_of(true, BanWord{true, ""}, held, false);
+    check(over.change && over.text.empty() && over.over.show && !over.over.live && over.over.text == "You can play on this server again\nThe ban has ended" &&
+              held.empty(),
+          "ban: the first answer without it lets the notice go and says the game can be played again");
+    check(!hold_of(true, BanWord{true, ""}, held, false).change, "ban: said once, not at every answer after");
+    std::string held_ko;
+    hold_of(true, first, held_ko, true);
+    check(hold_of(true, BanWord{true, ""}, held_ko, true).over.text ==
+              "\xec\x9d\xb4 \xec\x84\x9c\xeb\xb2\x84\xec\x97\x90\xec\x84\x9c \xeb\x8b\xa4\xec\x8b\x9c \xed\x94\x8c\xeb\xa0\x88\xec\x9d\xb4\xed\x95\xa0 \xec\x88\x98 "
+              "\xec\x9e\x88\xec\x96\xb4\xec\x9a\x94\n\xec\x9d\xb4\xec\x9a\xa9 \xec\xa0\x95\xec\xa7\x80\xea\xb0\x80 \xeb\x81\x9d\xeb\x82\xac\xec\x96\xb4\xec\x9a\x94",
+          "ban: in Korean when the player speaks it");
+    // Never held: "" says nothing.
+    std::string never;
+    check(!hold_of(true, BanWord{true, ""}, never, false).change, "ban: no ban and none held says nothing");
+}
+
 int main() {
     // A file of its own beside the program's current folder.
     const std::string path = "settingstest.txt";
@@ -1512,6 +1557,8 @@ int main() {
     sound_panel_checks();
     // The broadcast's notices.
     live_notice_checks();
+    // A ban's notice that stays.
+    ban_hold_checks();
     if (g_failed) {
         std::printf("%d of %d checks FAILED\n", g_failed, g_checks);
         return 1;

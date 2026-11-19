@@ -88,6 +88,8 @@ void control_main() {
     // Asks in a row without an answer while on air, and whether the server was said to be gone (reach_notice).
     int misses = 0;
     bool lost = false;
+    // The ban's notice held over the game now ("" for none: live_notice.h hold_of).
+    std::string held_ban;
     const std::string lang = player::host_locale().first == "ko" ? "ko" : "en";
     for (;;) {
         sleep_ns(kSecond);
@@ -152,11 +154,21 @@ void control_main() {
         if (was_on && !state.on) g_link.end_stream();
         g_on.store(state.on);
         was_on = state.on;
+        // A ban, as a newer server says it in every answer: its notice stays over the game for as long as the server
+        // refuses the game (a few seconds would leave the game's own network error alone on the screen, which is not
+        // what happened), and goes at the first answer without it, with the player's own words that the game can go on.
+        const player::live_notice::BanWord ban = player::live_notice::ban_of(answer.body);
+        const player::live_notice::Hold hold = player::live_notice::hold_of(state.answered, ban, held_ban, lang == "ko");
+        if (hold.change) player::hold_notice(hold.text);
+        if (hold.over.show) player::show_notice(hold.over.text, false);
         // Every notice the server hands out, on and off alike, each once (live_notice.h notice_of). A PC that cannot
-        // encode sends nothing: the server's "you are live" would not be true here, and only that one is left out.
+        // encode sends nothing: the server's "you are live" would not be true here, and only that one is left out. The
+        // ban's own notice, from a server that says the ban in every answer, is the notice that stays already.
         const int shown_before = last_notice;
         const player::live_notice::Notice notice = player::live_notice::notice_of(state.answered, state.on, state.toast, fields, last_notice, g_gave_up.load());
-        if (notice.show) {
+        if (notice.show && fields.kind == "ban" && ban.given) {
+            log("player: live: the server's notice of the ban stays up as the notice that stays: %s", state.toast.c_str());
+        } else if (notice.show) {
             player::show_notice(notice.text, notice.live);
         } else if (!state.toast.empty()) {
             log("player: live: the server's notice left out (%s): %s", fields.id > 0 && fields.id <= shown_before ? "shown already" : "this PC sends no broadcast",

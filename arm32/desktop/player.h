@@ -215,6 +215,9 @@ void soft_keyboard(bool open);
 // The server's notice about this player's broadcast ("title\ndetail") over the game's window for a few seconds, as a
 // phone shows its toast; `live` while broadcasting. From any thread.
 void show_notice(const std::string& text, bool live);
+// The notice that stays over the game's window ("title\ndetail"; a ban's, while the server refuses the game) until it
+// is let go ("") or another takes its place. From any thread.
+void hold_notice(const std::string& text);
 // The game's part of the window changed size (the window resized, full screen, another display's scaling): the game is
 // told as Android tells it, SurfaceHolder's surfaceChanged on the Unity thread (main.cpp). Calls that come while one is
 // on its way are one.

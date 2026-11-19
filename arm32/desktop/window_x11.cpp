@@ -87,6 +87,10 @@ void wait_for_events(Looper::Clock::time_point until) {
 void soft_keyboard(bool) {}
 // The developer's window has no notice of its own: the log says it.
 void show_notice(const std::string& text, bool) { jvm::log("player: notice: %s", text.c_str()); }
+void hold_notice(const std::string& text) {
+    if (text.empty()) jvm::log("player: the notice that stays goes");
+    else jvm::log("player: notice that stays: %s", text.c_str());
+}
 
 bool pump_window() {
     // A held key gives presses only, not a release before each (its release then means it was let go).

@@ -507,7 +507,10 @@ song ends for one flipped during a song: the server keeps its notices until then
 the game's own tags; once over, its title says so alone, and it says where the broadcast can be watched. When the server
 stops answering while the PC broadcasts (three asks in a row, 15 seconds), the card says the broadcast has stopped, and
 when the server answers again on air, that it is back. The owner's maintenance notice comes the same way, between
-songs, when it begins, at each new message and when it ends.
+songs, when it begins, at each new message and when it ends. A ban the owner makes comes within the same 5 seconds, in a
+song too: "You cannot play on this server" with the owner's reason and the ban's end, which stays over the game for as
+long as the ban lasts, under the game's own error at its next request (RETRY tries again, CLOSE ends the game), and goes
+when the ban is over, the card then saying that the game can be played again (RETRY goes on).
 
 ## What it needs, and what it keeps
 

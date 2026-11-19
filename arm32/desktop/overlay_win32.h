@@ -49,8 +49,11 @@ bool press_bar_button(int which);
 // The overlay's windows that take the pointer (the bar, the sound panel, the question): a finger on them is a mouse's
 // click, as on the game, so the window gives them the game's quiet touch (no press and hold for a right click).
 std::vector<HWND> pressed_windows();
-// The server's notice ("title\ndetail"), with the LIVE mark while broadcasting, or the ended one.
+// The server's notice ("title\ndetail"), with the LIVE mark while broadcasting, or the ended one: for a few seconds.
 void notice(const std::string& text, bool live);
+// The notice that stays ("title\ndetail"; a ban's, while the server refuses the game): up until it is let go ("") or
+// another takes its place, with no timer; a notice for a few seconds meanwhile shows over it and gives it back after.
+void hold_notice(const std::string& text);
 // The mouse moved over the game, at (x, y) of its window, with its button down or not: resting at the very top edge or
 // on the handle, with the button up, it brings the bar down.
 void pointer_moved(int x, int y, bool pressed);

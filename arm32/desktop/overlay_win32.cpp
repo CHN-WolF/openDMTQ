@@ -2746,11 +2746,17 @@ LRESULT CALLBACK fps_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
 
 std::string g_notice_text;
 bool g_notice_live = false;
+// The notice that stays (hold_notice: a ban's, while the server refuses the game): its words, "" for none, and whether
+// the notice up now is it (no timer then: it stays until it is let go or another takes its place).
+std::string g_notice_hold;
+bool g_notice_stays = false;
 // When it first went on the screen, on the steady clock in nanoseconds (0: not yet; it slides in from then).
 std::int64_t g_notice_shown = 0;
 constexpr UINT_PTR kNoticeTimer = 1;
 // Sliding in (12 pixels down, fading in, easing out), staying, fading out.
 constexpr float kSlideMs = 220, kStayMs = 6000, kFadeMs = 300;
+// How often the notice that stays looks again at where it belongs while it stays, with no end of its own to wait for.
+constexpr UINT kNoticeLookMs = 500;
 constexpr float kSlide = 12;
 // Whether it is sliding in or fading out now: the motion's clock steps it then, with the display's refreshes.
 bool g_notice_stepping = false;
@@ -2794,6 +2800,44 @@ void notice_show() {
     show(g_notice);
 }
 
+// A notice on its way onto the screen: its words, the LIVE tag, whether it stays (no timer: the notice that stays); from
+// its first step, sliding in once its picture has come, in place of the one shown before.
+void start_notice(const std::string& text, bool live, bool stays) {
+    g_notice_text = text;
+    g_notice_live = live;
+    g_notice_stays = stays;
+    // From its first step, sliding in, once its picture has come; the one shown before goes.
+    g_notice_shown = 0;
+    g_notice_stepping = false;
+    g_notice_drop = 0;
+    if (g_notice.up) hide(g_notice);
+    g_notice.picture.reset();
+    g_notice.key.clear();
+    g_notice_up = true;
+    g_notice.wanted = GetTickCount64();
+    order_notice();
+    // The handle goes while it is up; the frame behind it wanted once its place is known.
+    handle_update();
+    glass_wish();
+    SetTimer(g_notice.window, kNoticeTimer, 15, nullptr);
+}
+
+// The notice off the screen, its timer stopped, its picture let go of; the one that stays comes (back) if one is held.
+void notice_gone() {
+    KillTimer(g_notice.window, kNoticeTimer);
+    hide(g_notice);
+    g_notice_up = false;
+    g_notice_stays = false;
+    g_notice_stepping = false;
+    g_notice_drop = 0;
+    g_notice.picture.reset();
+    g_notice.key.clear();
+    glass_wish();
+    handle_update();
+    // A notice for a few seconds went over the one that stays: that one is up again now.
+    if (!g_notice_hold.empty()) start_notice(g_notice_hold, false, true);
+}
+
 void notice_frame() {
     if (!g_notice_up) return;
     const std::int64_t now = now_ns();
@@ -2819,30 +2863,25 @@ void notice_frame() {
         const float ease = ease_down(t / slide);
         alpha = ease;
         drop = (1 - ease) * fpx(kSlide);
-    } else if (t > slide + kStayMs) {
+    } else if (t > slide + kStayMs && !g_notice_stays) {
         alpha = fade > 0 ? 1 - std::min(1.0f, (t - slide - kStayMs) / fade) : 0.0f;
     }
     // Gone only once the fade out is over: the first frame of the slide in is transparent as well.
     if (alpha <= 0 && t > slide) {
-        KillTimer(g_notice.window, kNoticeTimer);
-        hide(g_notice);
-        g_notice_up = false;
-        g_notice_stepping = false;
-        g_notice_drop = 0;
-        g_notice.picture.reset();
-        g_notice.key.clear();
-        glass_wish();
-        handle_update();
+        notice_gone();
         return;
     }
     g_notice_drop = static_cast<int>(drop);
     g_notice.alpha = static_cast<BYTE>(alpha * 255);
     notice_show();
     // The next step: with the display's refreshes while it slides or fades (its own timer too, now and then, should
-    // those fail to come); while it stays, once, when the fade begins.
-    const bool staying = t >= slide && t <= slide + kStayMs;
+    // those fail to come); while it stays, once, when the fade begins; the notice that stays has no end to wait for (its
+    // letting go starts its fade), only a look twice a second at where it belongs.
+    const bool staying = t >= slide && (g_notice_stays || t <= slide + kStayMs);
     g_notice_stepping = !staying;
-    if (staying) {
+    if (staying && g_notice_stays) {
+        SetTimer(g_notice.window, kNoticeTimer, kNoticeLookMs, nullptr);
+    } else if (staying) {
         SetTimer(g_notice.window, kNoticeTimer, static_cast<UINT>(std::max(1.0f, slide + kStayMs - t + 1)), nullptr);
     } else {
         SetTimer(g_notice.window, kNoticeTimer, 50, nullptr);
@@ -3871,22 +3910,33 @@ bool press_bar_button(int which) {
 
 void notice(const std::string& text, bool live) {
     if (!g_notice.window) return;
-    g_notice_text = text;
-    g_notice_live = live;
-    // From its first step, sliding in, once its picture has come; the one shown before goes.
-    g_notice_shown = 0;
-    g_notice_stepping = false;
-    g_notice_drop = 0;
-    if (g_notice.up) hide(g_notice);
-    g_notice.picture.reset();
-    g_notice.key.clear();
-    g_notice_up = true;
-    g_notice.wanted = GetTickCount64();
-    order_notice();
-    // The handle goes while it is up; the frame behind it wanted once its place is known.
-    handle_update();
-    glass_wish();
-    SetTimer(g_notice.window, kNoticeTimer, 15, nullptr);
+    // For a few seconds, over the one that stays if one is up (which comes back after it: notice_gone).
+    start_notice(text, live, false);
+}
+
+void hold_notice(const std::string& text) {
+    if (!g_notice.window) return;
+    g_notice_hold = text;
+    if (text.empty()) {
+        // Let go while it is up: it fades from now, as a notice does at the end of its seconds (at once before it has
+        // shown at all).
+        if (g_notice_up && g_notice_stays) {
+            g_notice_stays = false;
+            if (!g_notice_shown) {
+                notice_gone();
+                return;
+            }
+            const float slide = animations() ? kSlideMs : 0.0f;
+            g_notice_shown = now_ns() - static_cast<std::int64_t>((slide + kStayMs) * 1e6f);
+            notice_frame();
+        }
+        return;
+    }
+    // A notice for a few seconds is up: the one that stays comes once it has gone (notice_gone).
+    if (g_notice_up && !g_notice_stays) return;
+    // Up already with these words: it stays as it is.
+    if (g_notice_up && g_notice_text == text) return;
+    start_notice(text, false, true);
 }
 
 void pointer_moved(int x, int y, bool pressed) {
