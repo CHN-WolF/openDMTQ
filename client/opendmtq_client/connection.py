@@ -91,12 +91,17 @@ class Result:
 
     def verdict(self):
         """The one line over the steps: a server found on another port, the first step that failed, the first warning
-        after "the server answers", or that everything answers."""
+        after "the server answers" (in its own words where the step's would say the server again: an older version, no
+        sign-in, maintenance), or that everything answers."""
         if self.moved:
             return i18n.Said("test.verdict.moved", url=self.url, found=self.moved)
         for state in ("bad", "warn"):
             first = next((s for s in self.steps if s.state == state and s.said), None)
             if first is not None:
+                # A warning with a verdict of its own (test.verdict.<step>.<outcome>), with the step's own values.
+                own = "test.verdict." + first.said.key[len("test."):]
+                if state == "warn" and own in i18n.TEXT:
+                    return i18n.Said(own, **first.said.params)
                 return i18n.Said("test.verdict.%s" % state, step=i18n.Said("test." + first.key), found=first.said)
         if not self.ended:
             return i18n.Said("test.verdict.running")
@@ -346,12 +351,21 @@ def _steps(result, address, server, end, stop, cancel):
             continue
         if status == 200:
             times.append(_ms(started))
+    state, key, values = round_trip(times)
+    end(result.step("round_trip").done(state, key, statistics.median(times) if times else None, **values))
+
+
+def round_trip(times):
+    """The round trip's outcome from the times of the asks answered (ms): (state, its words' key under
+    test.round_trip, their values). Every ask answered ("all") or some ("ok", a warning), each with the median and the
+    fastest and slowest, or one figure when those are one ("_same": never "1~1 ms"); none ("bad")."""
     if not times:
-        end(result.step("round_trip").done("bad", "bad", None))
-    else:
-        end(result.step("round_trip").done("ok" if len(times) == ROUND_TRIPS else "warn", "ok", statistics.median(times),
-                                           n=len(times), of=ROUND_TRIPS, median=round(statistics.median(times)),
-                                           fast=round(min(times)), slow=round(max(times))))
+        return "bad", "bad", {}
+    fast, slow = round(min(times)), round(max(times))
+    every = len(times) == ROUND_TRIPS
+    key = ("all" if every else "ok") + ("_same" if fast == slow else "")
+    return ("ok" if every else "warn"), key, {"n": len(times), "of": ROUND_TRIPS, "median": round(statistics.median(times)),
+                                              "fast": fast, "slow": slow}
 
 
 def _is_address(host):

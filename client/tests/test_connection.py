@@ -80,20 +80,65 @@ class ConnectionTest(Folder):
         self.assertEqual(self.said(steps["broadcasts"]), "Broadcasts are off for the server.")
         self.assertRegex(self.said(steps["downloads"]),
                          r"^The app \(0\.1 MB\) and the client data's list \(3 KB\) are there to download\.$")
-        self.assertRegex(self.said(steps["round_trip"]), r"^5 of 5 asks answered: \d+ ms in the middle, from \d+ to \d+ ms\.$")
+        # Every ask answered: the median and the fastest and slowest, or one figure when they are one.
+        self.assertRegex(self.said(steps["round_trip"]),
+                         r"^All 5 asks answered: (\d+ ms in the middle, from \d+ to \d+ ms|\d+ ms each)\.$")
         # Heads alone for the downloads: nothing downloaded whole.
         self.assertNotIn(("GET", "/apk", self.site.cookie), self.site.requests)
         self.assertIn(("HEAD", "/apk", self.site.cookie), self.site.requests)
         # The version: the launcher's own against the server's, said with both.
         self.assertIn("The server runs 0.8.0", self.said(steps["version"]))
-        # The verdict: the server answers, and the first thing not as it should be.
-        self.assertTrue(EN.say(result.verdict()).startswith("The server answers. Version: The server runs 0.8.0"))
+        # The verdict: the server answers, and the first thing not as it should be, in words of its own that say the
+        # server once (main: "The server answers. Version: The server runs 0.8.0, ...").
+        from opendmtq_client import __version__
+        self.assertEqual(EN.say(result.verdict()),
+                         "The server answers; it runs 0.8.0, older than this launcher's %s." % __version__)
+        self.assertEqual(KO.say(result.verdict()),
+                         "서버가 응답합니다. 이 런처(%s)보다 오래된 0.8.0 버전입니다." % __version__)
         # Each step's time, the copy's text with every step, in both languages.
         self.assertTrue(all(s.ms is not None for s in result.steps))
         text = result.text(EN)
         self.assertIn("Connection test of %s" % self.site.url, text)
         self.assertEqual(len(text.splitlines()), 2 + len(connection.STEPS))
-        self.assertIn("게임 서버가 답합니다(패치 1.003.005).", result.text(KO))
+        self.assertIn("게임 서버가 응답합니다(패치 1.003.005).", result.text(KO))
+
+    def test_a_warnings_verdict_says_the_server_once(self):
+        # Each warning with words of its own over the steps: the server named once, never its step's name before a
+        # sentence that names it again. Another warning keeps "the server answers" with its step and what it found.
+        from opendmtq_client import __version__
+        cases = (("version", "newer", dict(server="9.0.0", launcher=__version__),
+                  "The server answers; it runs 9.0.0, newer than this launcher's %s." % __version__,
+                  "서버가 응답합니다. 이 런처(%s)보다 새로운 9.0.0 버전입니다." % __version__),
+                 ("version", "unknown", dict(launcher=__version__),
+                  "The server answers without saying its version; this launcher is %s." % __version__,
+                  "서버가 응답하지만 버전을 알려 주지 않습니다. 이 런처는 %s 버전입니다." % __version__),
+                 ("signin", "none", {}, "The server answers; this PC is not signed in to it.",
+                  "서버가 응답합니다. 이 PC에서 이 서버에 로그인하지 않았습니다."),
+                 ("game", "maintenance", dict(patch="1.003.005"),
+                  "The server answers; its game server is under maintenance (patch 1.003.005).",
+                  "서버가 응답하지만 게임 서버가 점검 중입니다(패치 1.003.005)."),
+                 ("round_trip", "ok", dict(n=4, of=5, median=3, fast=2, slow=5),
+                  "The server answers. Round trip: 4 of 5 asks answered: 3 ms in the middle, from 2 to 5 ms.",
+                  "서버가 응답합니다. 응답 시간: 5번 중 4번 응답: 중앙값 3 ms, 2~5 ms."))
+        for step, key, values, english, korean in cases:
+            result = connection.Result("http://192.0.2.20")
+            result.step(step).done("warn", key, 1.0, **values)
+            self.assertEqual(EN.say(result.verdict()), english, key)
+            self.assertEqual(KO.say(result.verdict()), korean, key)
+
+    def test_the_round_trip_says_each_figure_once(self):
+        # All five answered, some, none; the fastest and the slowest one figure when they are one (main: "1~1 ms").
+        cases = (([1.2, 2.0, 1.9, 4.6, 2.2], "ok", "All 5 asks answered: 2 ms in the middle, from 1 to 5 ms.",
+                  "5번 모두 응답: 중앙값 2 ms, 1~5 ms."),
+                 ([1.0, 1.2, 0.9, 1.1, 1.3], "ok", "All 5 asks answered: 1 ms each.", "5번 모두 응답: 각 1 ms."),
+                 ([3.0, 7.0, 5.0], "warn", "3 of 5 asks answered: 5 ms in the middle, from 3 to 7 ms.",
+                  "5번 중 3번 응답: 중앙값 5 ms, 3~7 ms."),
+                 ([2.0, 2.4], "warn", "2 of 5 asks answered: 2 ms each.", "5번 중 2번 응답: 각 2 ms."),
+                 ([], "bad", "None of the asks was answered.", "한 번도 응답하지 않았습니다."))
+        for times, state, english, korean in cases:
+            got, key, values = connection.round_trip(times)
+            said = i18n.Said("test.round_trip." + key, **values)
+            self.assertEqual((got, EN.say(said), KO.say(said)), (state, english, korean), times)
 
     def test_the_same_version_and_broadcasts_on(self):
         from opendmtq_client import __version__
@@ -102,7 +147,7 @@ class ConnectionTest(Folder):
         self.assertEqual(steps["version"].state, "ok")
         self.assertEqual(self.said(steps["broadcasts"]), "Broadcasts are on for the server.")
         self.assertEqual(EN.say(result.verdict()), "The server answers, and so does everything the game uses.")
-        self.assertEqual(KO.say(result.verdict()), "서버도, 게임이 쓰는 것도 모두 답합니다.")
+        self.assertEqual(KO.say(result.verdict()), "서버와 게임이 쓰는 기능이 모두 응답합니다.")
 
     def test_a_port_nobody_listens_on(self):
         port, probed = closed_port(), (closed_port(),)
@@ -130,7 +175,7 @@ class ConnectionTest(Folder):
                                                    "answers at %s." % (old, self.site.url))
         self.assertEqual(EN.say(result.verdict()), "Nothing answers at http://127.0.0.1:%d. An OpenDMTQ server answers at "
                                                    "%s." % (old, self.site.url))
-        self.assertEqual(KO.say(result.verdict()), "http://127.0.0.1:%d에서는 답이 없고, %s에서 OpenDMTQ 서버가 답합니다."
+        self.assertEqual(KO.say(result.verdict()), "http://127.0.0.1:%d에서는 응답이 없고, %s에서 OpenDMTQ 서버가 응답합니다."
                          % (old, self.site.url))
         # The ports a new server takes: 8791 and the next ones, never 80.
         self.assertEqual(connection.PORTS, tuple(range(8791, 8800)))
