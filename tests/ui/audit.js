@@ -347,6 +347,16 @@ async function sweep(contexts, pages, widths, langs = ['en', 'ko']) {
     await worker.signed.close();
     await worker.anon.close();
   }
+  // The language cookies as one view after another leaves them: each view sets its own for its address, and the flows
+  // after a sweep read the last one set (a sweep ends in the language they read). Set again in the views' order, on the
+  // contexts given, whichever worker looked at each view last.
+  for (const kind of ['signed', 'anon']) {
+    const mine = views.filter(v => (kind === 'anon') === !!v.options.anon);
+    if (!mine.length) continue;
+    const page = await contexts[kind].newPage();
+    for (const { url, lang } of mine) await page.setCookie({ name: 'opendmtq_lang', value: lang, url });
+    await page.close();
+  }
   const where = key => found[key].sort((a, b) => a - b).map(i => `${views[i].lang}${views[i].width}`);
   const keys = Object.keys(found).sort();
   fs.appendFileSync(path.join(OUT, 'findings.txt'), keys.map(k => `${stage} | ${k} @${where(k).join(',')}\n`).join(''));
