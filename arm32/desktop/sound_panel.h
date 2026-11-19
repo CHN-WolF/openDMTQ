@@ -26,9 +26,15 @@ constexpr float kPanelSide = 20, kPanelTop = 16, kPanelFoot = 20;
 constexpr float kTitleRow = 24, kTitleLine = 8, kAfterLine = 12, kSliderRow = 40, kGroupGap = 16, kChipRow = 32, kChipsAfter = 8;
 // A slider's label column, the gap to its track, the value's column at the right end.
 constexpr float kLabelWide = 92, kLabelGap = 12, kValueWide = 52, kValueGap = 12;
-// The chips: five in a row, 6 apart.
+// The chips: five in a row, 8 apart (a step of the spacing scale), each as wide as its word with the same room on both
+// sides, the room the row leaves shared out evenly: never less than kChipPad a side (the padding of the scale's 8).
 constexpr int kPresets = 5;
-constexpr float kChipsGap = 6;
+constexpr float kChipsGap = 8, kChipPad = 8;
+// The presets' words as the overlay draws them on the chips (overlay_win32.cpp's control_name, Pretendard Bold 13), their
+// advances at 720 lines as Windows' GDI+ sets them (the face's own), English (Flat, Bass, Vocal, Treble, Custom) then Korean
+// (기본, 베이스, 보컬, 트레블, 커스텀): the chips are laid out by these on both of the overlay's threads, with no face at
+// hand; glasstest.cpp measures the words as GDI+ sets them there and holds the room beside each to the padding.
+constexpr float kChipWords[2][kPresets] = {{22.7f, 29.6f, 34.1f, 38.7f, 48.0f}, {22.5f, 33.7f, 22.5f, 33.7f, 33.7f}};
 // The track's height and the thumb's diameter.
 constexpr float kTrackTall = 4, kThumb = 16;
 
@@ -76,8 +82,9 @@ inline float sound_scale(int area_w, int area_h, float overlay_scale, int bar_h)
 }
 
 // The layout in an area of area_w by area_h, the bar bar_h high, at the overlay's scale: at the area's right side, its
-// insets from the area's right edge and from the bar's foot, on whole pixels.
-inline SoundLayout sound_layout(int area_w, int area_h, float overlay_scale, int bar_h) {
+// insets from the area's right edge and from the bar's foot, on whole pixels; the chips by their words in the panel's
+// language (`korean`).
+inline SoundLayout sound_layout(int area_w, int area_h, float overlay_scale, int bar_h, bool korean = false) {
     SoundLayout l;
     const float k = sound_scale(area_w, area_h, overlay_scale, bar_h);
     l.scale = k;
@@ -107,9 +114,19 @@ inline SoundLayout sound_layout(int area_w, int area_h, float overlay_scale, int
     y += kTitleRow * k;
     l.eq_line = y + kTitleLine * k;
     y += (kTitleLine + kAfterLine) * k;
-    // The chips: equal widths across the inside, kChipsGap apart.
-    const float each = (inner - (kPresets - 1) * kChipsGap * k) / kPresets;
-    for (int i = 0; i < kPresets; ++i) l.chip[i] = Box{left + static_cast<float>(i) * (each + kChipsGap * k), y, each, kChipRow * k};
+    // The chips across the inside, kChipsGap apart: each its word's width and the same room on both of its sides, the
+    // room the row leaves after the words and the gaps shared out evenly, so that each word stands in the middle of its
+    // chip with as much room as the others (a long word no closer to its border than a short one).
+    const float* words = kChipWords[korean ? 1 : 0];
+    float all_words = 0;
+    for (int i = 0; i < kPresets; ++i) all_words += words[i] * k;
+    const float pad = (inner - (kPresets - 1) * kChipsGap * k - all_words) / (2 * kPresets);
+    float x = left;
+    for (int i = 0; i < kPresets; ++i) {
+        const float w = words[i] * k + 2 * pad;
+        l.chip[i] = Box{x, y, w, kChipRow * k};
+        x += w + kChipsGap * k;
+    }
     y += (kChipRow + kChipsAfter) * k;
     for (int i = kLow; i <= kHigh; ++i) {
         slider(i, y);

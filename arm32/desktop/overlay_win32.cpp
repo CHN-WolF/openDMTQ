@@ -1050,8 +1050,8 @@ struct SoundScale {
 };
 
 // The panel's layout in the game's area now: docked to its right edge under the bar (the bar's own height, at the
-// overlay's scale; the panel at its own).
-SoundLayout sound_layout_now() { return sound_layout(area_w(), area_h(), scale(), bar_height()); }
+// overlay's scale; the panel at its own), its chips by their words in the PC's language.
+SoundLayout sound_layout_now() { return sound_layout(area_w(), area_h(), scale(), bar_height(), g_korean); }
 
 // The panel's words in the language of the PC.
 const wchar_t* sound_title() { return g_korean ? L"사운드" : L"Sound"; }

@@ -1324,7 +1324,7 @@ void sound_panel_checks() {
     using namespace player::overlay;
     // Every gap of the panel's on its spacing scale (4, 8, 12, 16, 20 at 720 lines).
     bool on_scale = true;
-    for (const float gap : {kPanelSide, kPanelTop, kPanelFoot, kTitleLine, kAfterLine, kGroupGap, kChipsAfter, kLabelGap, kValueGap, kPanelInset}) {
+    for (const float gap : {kPanelSide, kPanelTop, kPanelFoot, kTitleLine, kAfterLine, kGroupGap, kChipsAfter, kLabelGap, kValueGap, kPanelInset, kChipsGap, kChipPad}) {
         if (!(gap == 4 || gap == 8 || gap == 12 || gap == 16 || gap == 20)) on_scale = false;
     }
     check(on_scale, "every gap of the sound panel's is 4, 8, 12, 16 or 20 at 720 lines");
@@ -1399,6 +1399,31 @@ void sound_panel_checks() {
         }
     }
     check(bad == 0, "the sound panel and its button over 16 shapes and scales: inside, apart, padded, large enough, room for the notice");
+    // The equaliser's chips by their words (WIN-302; main made the five one width, "Custom" 3 and 4 pixels from its border
+    // and "Flat" 18 and 19): in each shape and either language, each word in the middle of its chip with the same room on
+    // both sides as every other chip's, at least the scale's 8, the chips 8 apart and the row as wide as the inside.
+    int chips_bad = 0;
+    for (const Shape& sh : shapes) {
+        for (const bool korean : {false, true}) {
+            const float k0 = scale_for(sh.h, sh.dpi);
+            const SoundLayout l = sound_layout(sh.w, sh.h, k0, static_cast<int>(std::lround(kBarTall * k0)), korean);
+            const float k = l.scale, inner_left = l.panel.x + kPanelSide * k, inner_right = l.panel.right() - kPanelSide * k;
+            float first_room = -1;
+            bool ok = std::fabs(l.chip[0].x - inner_left) < 0.01f && std::fabs(l.chip[kPresets - 1].right() - inner_right) < 0.01f;
+            for (int i = 0; i < kPresets; ++i) {
+                const float room = (l.chip[i].w - kChipWords[korean ? 1 : 0][i] * k) / 2;
+                if (first_room < 0) first_room = room;
+                ok = ok && room >= kChipPad * k - 0.01f && std::fabs(room - first_room) < 0.01f;
+                if (i + 1 < kPresets) ok = ok && std::fabs(l.chip[i + 1].x - l.chip[i].right() - kChipsGap * k) < 0.01f;
+            }
+            if (!ok) {
+                ++chips_bad;
+                std::printf("  %dx%d at %.0f %% (%s): a chip's word off its middle, closer than 8 to its border, or the row not the inside\n", sh.w, sh.h,
+                            static_cast<double>(sh.dpi * 100), korean ? "ko" : "en");
+            }
+        }
+    }
+    check(chips_bad == 0, "the equaliser's chips: each word in its chip's middle with the same room as the others, 8 at least, in both languages");
 }
 
 // The broadcast's notices as the PC player reads them (live_notice.h): each numbered notice once, never by its words,

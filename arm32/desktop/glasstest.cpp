@@ -5,7 +5,11 @@
 // Under Wine as on Windows: Wine's GDI+ found no family by its name in the player's own collection, and the overlay fell
 // back to a face of Wine's with no Hangul (its Korean showed as boxes). Prints ALL CHECKS PASSED when every check held.
 #include "overlay_glass.h"
+// The equaliser's chips' words and their widths, which the panel is laid out by.
+#include "sound_panel.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -150,6 +154,46 @@ int main() {
         }
         check(hangul, "every Hangul syllable of the question is drawn as a glyph of its own, in each weight");
         check(latin, "every letter of its English is drawn as a glyph of its own, in each weight");
+        // The sound panel lays its equaliser's chips out by their words' widths (sound_panel.h kChipWords, Windows' GDI+
+        // widths of the words in the face the overlay draws them in, Pretendard Bold 13 at 720 lines), with no face at hand.
+        // Laid out so, the words as this GDI+ sets them (Wine's draws each glyph a little wider than Windows') stand in their
+        // chips with 8 at least on both sides and about the same room in every chip, in English and Korean, at 720 lines and
+        // at 1080; a longer word or another face fails here (WIN-302).
+        {
+            const wchar_t* const chip_words[2][player::overlay::kPresets] = {{L"Flat", L"Bass", L"Vocal", L"Treble", L"Custom"},
+                                                                           {L"기본", L"베이스", L"보컬", L"트레블", L"커스텀"}};
+            Gdiplus::Bitmap probe(1, 1, PixelFormat32bppPARGB);
+            Gdiplus::Graphics g(&probe);
+            player::overlay::smooth(g);
+            // The overlay's own way of measuring words (overlay_win32.cpp's tight format): typographic, on one line.
+            std::unique_ptr<Gdiplus::StringFormat> tight(Gdiplus::StringFormat::GenericTypographic()->Clone());
+            tight->SetFormatFlags(tight->GetFormatFlags() | Gdiplus::StringFormatFlagsNoWrap | Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
+            bool roomy = true;
+            for (const int lines : {720, 1080}) {
+                for (int lang = 0; lang < 2; ++lang) {
+                    // The panel in a 16:9 game of that height, at the overlay's scale (its height over 720), the bar 74 high.
+                    const float k0 = static_cast<float>(lines) / 720.0f;
+                    const player::overlay::SoundLayout l =
+                        player::overlay::sound_layout(lines * 16 / 9, lines, k0, static_cast<int>(std::lround(74 * k0)), lang == 1);
+                    const auto chip_font = player::overlay::font(Weight::kBold, 13 * l.scale, lang == 1);
+                    float least = 1e9f, most = 0;
+                    for (int i = 0; i < player::overlay::kPresets; ++i) {
+                        Gdiplus::RectF box;
+                        g.MeasureString(chip_words[lang][i], -1, chip_font.get(), Gdiplus::PointF(0, 0), tight.get(), &box);
+                        // The room on each side of the word, centred in its chip as the overlay draws it.
+                        const float room = (l.chip[i].w - box.Width) / 2;
+                        least = std::min(least, room);
+                        most = std::max(most, room);
+                    }
+                    if (least < 8 * l.scale - 0.5f || most - least > 3 * l.scale) {
+                        roomy = false;
+                        std::printf("  the chips at %d lines (%s): %.1f to %.1f of room beside their words\n", lines, lang ? "ko" : "en", static_cast<double>(least),
+                                    static_cast<double>(most));
+                    }
+                }
+            }
+            check(roomy, "the equaliser's chips: every word with 8 at least on both sides and about the same room as the others, in English and Korean");
+        }
     }
     if (g_failed) {
         std::printf("%d of %d checks FAILED\n", g_failed, g_checks);
