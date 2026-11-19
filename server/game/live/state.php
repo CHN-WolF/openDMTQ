@@ -2,7 +2,8 @@
 /*
  * GET /live/state?ids=<id1>,<id2>,...&lang=ko|en: what the phone's runtime and the PC player poll. Whether this player
  * is on air (their own switch and the server's), the upload key and settings while so, and a two-line notice to show once,
- * between songs, after every change of either switch. See docs/live.md.
+ * between songs, after every change of either switch; a ban's notice at once, and its words in every answer while it
+ * lasts. See docs/live.md.
  */
 require __DIR__ . '/../../portal/live_lib.php';
 
@@ -40,8 +41,10 @@ const MAINT_TOASTS = [
     'en' => ['maint_on' => "Under maintenance\n%s", 'maint_changed' => "Maintenance notice updated\n%s",
              'maint_off' => "Maintenance is over\nThe server is open as usual"],
 ];
-// A banned player's notice, at each sign-in the game tries (src/player.php odq_ban_notice()): the title, then the owner's
-// reason, with when the ban ends where it has an end.
+// A banned player's notice, as the ban is made (the admin pages, tools/opendmtq_tools/admin/game.py ban()) and at each
+// request of the game's the server refuses (src/player.php odq_ban_notice()): the title, then the owner's reason, with when
+// the ban ends where it has an end. The same words go in every answer while the ban lasts ("ban"), for the PC player's
+// card, which stays over the game for as long as the game is refused.
 const BAN_TOAST = ['ko' => "이 서버에서 플레이할 수 없어요\n%s", 'en' => "You cannot play on this server\n%s"];
 const BAN_UNTIL = ['ko' => '%s · %s까지', 'en' => '%s · until %s'];
 
@@ -74,15 +77,21 @@ $reply = ['on' => false] + live_stream_settings()
 /*
  * Hands out the player's waiting notice once, in the phone's language, as [words, number, kind]: only the request whose
  * update really cleared it returns it, also when two polls cross. A newer notice written meanwhile (another number) stays
- * for the next poll. It waits while the player is in a song.
+ * for the next poll. A notice of the broadcast waits while the player is in a song, and while the player is banned (it
+ * would speak of a broadcast that cannot go out then: it comes after the ban, unless a newer one took its place); a ban's
+ * notice comes at once, in a song too, since the game's next request is refused whatever it plays.
  */
 function live_take_toast(array $row, ?array $ban = null): array
 {
-    if ($row['toast'] === '' || live_in_song($row)) {
+    if ($row['toast'] === '') {
         return ['', 0, ''];
     }
     // A ban's notice only while the ban lasts: one lifted meanwhile is no news.
     if ($row['toast'] === 'ban' && $ban === null) {
+        return ['', 0, ''];
+    }
+    // Any other notice: not in a song, and not while the player is banned.
+    if ($row['toast'] !== 'ban' && ($ban !== null || live_in_song($row))) {
         return ['', 0, ''];
     }
     $rw = live_db(true);
@@ -184,6 +193,11 @@ if ($row) {
     if ($reply['toast'] === '') {
         [$reply['toast'], $reply['toast_id'], $reply['toast_kind']] = live_take_maintenance($row);
     }
+    // The ban's notice in every answer while the ban lasts, in the phone's language, and "" while there is none: the PC
+    // player keeps its card over the game for as long as this says so and takes it down at the first answer without it.
+    // Only for a player the ids name: an answer that names nobody says nothing of a ban either way (no key at all).
+    $lang = ($_GET['lang'] ?? '') === 'ko' ? 'ko' : 'en';
+    $reply['ban'] = $ban === null ? '' : sprintf(BAN_TOAST[$lang], live_ban_line($ban, $lang));
 }
 // Leftovers of stopped streams go now and then; phones poll even when nobody watches.
 live_sweep();

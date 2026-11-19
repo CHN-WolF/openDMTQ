@@ -159,6 +159,36 @@ class PlayerGamePageTest(unittest.TestCase):
             self.assertEqual(r.headers["Location"], "/opendmtq/admin/players")
             self.assertNotIn("Banned players", inst.client.get("/opendmtq/admin/players").get_data(as_text=True))
 
+    def test_a_ban_leaves_its_notice_for_the_game_as_it_is_made(self):
+        # ADM-210: the ban made (the page's form, the API's route: both game.ban) leaves the ban's notice for the player's
+        # game at once, in place of a notice not read yet and with a new number each time, as a refused sign-in leaves
+        # it; a ban made again (a new reason) leaves a new one; lifted, the notice not read yet goes. Main left none: a
+        # player banned while in the game heard nothing until the game signed in again.
+        with Install() as inst:
+            csrf, seen = self.server(inst)
+            with sqlite3.connect(admin.core.DB) as con:
+                admin.recordings.live_table(con)
+                con.execute("INSERT INTO LiveSwitch (guid, live, toast, toast_id) VALUES (7, 1, 'on', 4)")
+
+            def notice():
+                with sqlite3.connect(admin.core.DB) as con:
+                    return con.execute("SELECT toast, toast_id FROM LiveSwitch WHERE guid = 7").fetchone()
+
+            self.send(inst, csrf, seen, action="ban", reason="Made-up scores", days="7")
+            self.assertEqual(notice(), ("ban", 5))
+            # The API's way in (a request of its own, as each route call is).
+            with admin.app.test_request_context():
+                admin.game.ban(7, "Scores sent from a program", days=1)
+            self.assertEqual(notice(), ("ban", 6))
+            # A player with no row of the live view yet gets one, switched off, with the notice.
+            with admin.app.test_request_context():
+                admin.game.ban(8, "Made-up scores")
+            with sqlite3.connect(admin.core.DB) as con:
+                self.assertEqual(con.execute("SELECT live, toast, toast_id FROM LiveSwitch WHERE guid = 8").fetchone(), (0, "ban", 1))
+            with admin.app.test_request_context():
+                admin.game.unban(7)
+            self.assertEqual(notice()[0], "")
+
     def test_a_ban_ending_further_off_than_the_longest_is_refused_in_words(self):
         # An end the API may send: refused with the longest ban there is, nothing kept, never an exception that a request
         # turns into an error of the server (ADM-170; main raised ValueError for a year past 9999, OverflowError past 64 bits).

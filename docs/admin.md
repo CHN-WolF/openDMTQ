@@ -280,10 +280,12 @@ game's next start.
 - **Ban.** A reason (up to 200 characters, which the player sees) and an end: in 1, 3, 7 or 30 days, or until lifted.
   The game stops the player's sign-in, and any request of a game already in, at its own "Network connection error."
   (RETRY tries again, CLOSE ends the game), with OpenDMTQ's notice over it saying "You cannot play on this server" and
-  the reason, with the end where the ban has one: the PC client's overlay and the phones show it at every refused
-  sign-in. The site and the PC client's launcher refuse the accounts linked to the player with the same reason, a
-  browser signed in to one is signed out at its next page, and the player's broadcast ends (their own switch is kept for
-  after the ban). A ban whose end has passed ends by itself. Lift the ban here or on the Players page.
+  the reason, with the end where the ban has one: it comes as the ban is made (within seconds, in a song too) and at
+  each request the game makes after; the PC client's overlay keeps it up for as long as the ban lasts and, once the ban
+  is over, says the player can play again; the phones show it each time. The site and the PC client's launcher refuse
+  the accounts linked to the player with the same reason, a browser signed in to one is signed out at its next page,
+  and the player's broadcast ends (their own switch is kept for after the ban). A ban whose end has passed ends by
+  itself. Lift the ban here or on the Players page.
 - **Purchases.** What the player bought in the game, with its price and what was paid.
 - **Changes.** Every change of this player's made on these pages or through the API: when, what, from what to what, and
   who; the Logs page's Changes tab has them too.

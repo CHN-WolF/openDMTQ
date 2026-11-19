@@ -13,8 +13,10 @@
  *   - a save earns 150 MAX POINT and 10 experience, the level going up past a level's end, within what the game shows;
  *   - a chart that costs MAX POINT is paid for as its play starts, never below 0;
  *   - items given and taken are what shop.getOwnItemList lists;
- *   - a ban refuses the game's sign-in and every call of the player's, with the notice that says why over the game, no
- *     broadcast, and the site's and the PC client's sign-ins refused with the reason; an ended ban lets them in;
+ *   - a ban refuses the game's sign-in and every call of the player's, with the notice that says why over the game (at each
+ *     refused request, in a song too, and its words in every answer while it lasts, the broadcast's notices waiting
+ *     meanwhile), no broadcast, and the site's and the PC client's sign-ins refused with the reason; an ended ban lets
+ *     them in;
  *   - the rankings and the achievements follow each player's level.
  *   - A broadcast switched off with nothing recorded of it says that there is no replay, in both languages.
  *
@@ -304,7 +306,52 @@ check('GAME-92 a second refused sign-in: a new notice', strpos(json_decode($ko, 
 $db->exec("INSERT INTO LiveSwitch (guid, live, token) VALUES (9202, 1, 'stalekey') ON CONFLICT (guid) DO UPDATE SET live = 1, token = 'stalekey'");
 $up = post_raw("$base/live/upload?ids=protocol-state-9202&seq=0&dur=2000", "\x47" . str_repeat("\0", 187), ['X-Live-Token: stalekey']);
 check("GAME-92 a banned player's upload is refused, which stops the phone", $up === 403, (string)$up);
-$db->exec("UPDATE LiveSetting SET value = '0' WHERE name = 'on'");
+
+// ------------------------------------------------------------------ GAME-120..122: the ban told in the game, and kept up
+
+/* The player's notice as it waits in the live view's table: [kind, number]. */
+function waiting(SQLite3 $db, int $guid): array
+{
+    $r = $db->querySingle("SELECT toast, toast_id FROM LiveSwitch WHERE guid = $guid", true) ?: [];
+    return [(string)($r['toast'] ?? ''), (int)($r['toast_id'] ?? 0)];
+}
+// Nothing waiting now (the notice of the second sign-in was handed out above).
+[, $number] = waiting($db, 9202);
+// A request of the game's with two calls of the player's, refused as the game goes on after a ban (a purchase, the top bar):
+// one notice for the request, as a refused sign-in leaves one; another request while it waits leaves no second one.
+batch($base, [['game.getUserAsset', [9202]], ['shop.getOwnItemList', [9202]]]);
+$first = waiting($db, 9202);
+batch($base, [['shop.buyFreeProduct', [9202, 90003]]]);
+$second = waiting($db, 9202);
+check("GAME-120 a refused call other than the sign-in leaves the ban's notice, once for a request, none while one waits (main left none)",
+    $first === ['ban', $number + 1] && $second === $first, json_encode([$number, $first, $second]));
+// The ban's notice comes in a song too: the game's next request is refused whatever it plays (main held it to the song's end).
+$db->exec('UPDATE LiveSwitch SET playing = 1, play_at = ' . time() . ' WHERE guid = 9202');
+[, $in_song] = get("$base/live/state?ids=protocol-state-9202&lang=en");
+$s = json_decode($in_song, true) ?: [];
+check("GAME-121 the ban's notice is handed out in a song, the game's request refused meanwhile",
+    ($s['toast_kind'] ?? null) === 'ban' && strpos($s['toast'] ?? '', "You cannot play on this server\nMade-up scores · until ") === 0, $in_song);
+$db->exec('UPDATE LiveSwitch SET playing = 0 WHERE guid = 9202');
+// Every answer while the ban lasts carries its words (the PC player's card stays up by them), the notice handed out or
+// not, in the player's language; a player who is not banned gets "" (the PC's card goes), and ids that name nobody no key.
+[, $en] = get("$base/live/state?ids=protocol-state-9202&lang=en");
+[, $ko] = get("$base/live/state?ids=protocol-state-9202&lang=ko");
+[, $free] = get("$base/live/state?ids=protocol-state-9201&lang=en");
+[, $nobody] = get("$base/live/state?ids=protocol-state-nobody&lang=en");
+$en_s = json_decode($en, true) ?: [];
+$ko_s = json_decode($ko, true) ?: [];
+check('GAME-122 every answer to a banned player carries the ban\'s two lines, in their language; "" for one not banned; nothing for nobody',
+    ($en_s['toast'] ?? 'x') === '' && strpos($en_s['ban'] ?? '', "You cannot play on this server\nMade-up scores · until ") === 0
+    && strpos($ko_s['ban'] ?? '', "이 서버에서 플레이할 수 없어요\nMade-up scores · ") === 0 && strpos($ko_s['ban'] ?? '', '까지') !== false
+    && (json_decode($free, true)['ban'] ?? null) === '' && !array_key_exists('ban', json_decode($nobody, true) ?: ['ban' => 1]),
+    json_encode([$en, $ko, $free, $nobody], JSON_UNESCAPED_UNICODE));
+// A notice of the broadcast left for the banned player (the owner flips their switch, or the server's) waits: it would say
+// they are on air, which a banned player never is. It is there for after the ban (the end of the ban below hands it out).
+$db->exec("UPDATE LiveSwitch SET toast = 'on', toast_id = toast_id + 1 WHERE guid = 9202");
+[, $held] = get("$base/live/state?ids=protocol-state-9202&lang=en");
+check("GAME-122 a notice of the broadcast waits while the player is banned (main said they were on air)",
+    (json_decode($held, true)['toast'] ?? 'x') === '' && waiting($db, 9202)[0] === 'on', $held);
+
 // ------------------------------------------------------------------ GAME-123: a broadcast switched off that left no replay
 
 // The kind the admin pages leave when a player's switch goes off with nothing of the broadcast recorded (recordings.py
@@ -352,5 +399,12 @@ check('GAME-92 a ban whose end has passed lets the player in again', is_null_at(
     json_encode($login));
 [$status] = post("$base/opendmtq/client.php?signin", ['user' => 'halsite', 'password' => 'statepass']);
 check('GAME-93 and their account signs in again', $status === 200, (string)$status);
+// The notice of the broadcast that waited through the ban comes now, true again (the switches on, no ban), and the answer
+// says there is no ban: the PC player's card goes.
+[, $after] = get("$base/live/state?ids=protocol-state-9202&lang=en");
+$a = json_decode($after, true) ?: [];
+check('GAME-122 once the ban is over, the notice of the broadcast that waited comes, and the answer carries no ban',
+    ($a['toast_kind'] ?? null) === 'on' && ($a['on'] ?? null) === true && ($a['ban'] ?? null) === '', $after);
+$db->exec("UPDATE LiveSetting SET value = '0' WHERE name = 'on'");
 
 exit($failures ? 1 : 0);

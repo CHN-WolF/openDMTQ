@@ -1123,7 +1123,8 @@ ROUTES = [
                   (409, "stale", "The number belongs to someone else now.")]),
     Route("POST", "/players/{player}/ban", "write", "player_ban", "Players", "Bans a player, with a reason and an end.",
           "The game refuses their sign-in and every request of theirs with its own Network connection error, and OpenDMTQ's notice over "
-          "the game shows the reason (and the end); the site and the PC client refuse their accounts, and their broadcast ends. A ban "
+          "the game shows the reason (and the end): within seconds of the ban, in a song too, and at each request refused after (the PC "
+          "client keeps it up while the ban lasts); the site and the PC client refuse their accounts, and their broadcast ends. A ban "
           "there already is replaced. The end: days from now, or until (Unix time); neither, until it is lifted.", query=[SEEN],
           body=[Field("reason", "string", "Why, as the game shows it to the player.", max_length=200),
                 Field("days", "integer", "Days from now, 1 to 3,650; 0 (as when left out without until): until it is lifted.", optional=True),

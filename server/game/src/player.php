@@ -282,15 +282,26 @@ function odq_call_player(string $method, array $params): int
 
 /*
  * Tells a banned player why, in the game: the overlay of the PC client and the phones' runtime show the server's notice
- * (/live/state, docs/live.md) wherever the game is, songs aside; this one comes with the owner's reason and, when the ban
- * has an end, when it ends. A new notice for each refused sign-in, so that every try of the game's says it again. Never
- * gets in the way of the reply.
+ * (/live/state, docs/live.md) wherever the game is, a ban's in a song too; this one comes with the owner's reason and, when
+ * the ban has an end, when it ends. $again: a new notice even while one is waiting (each refused sign-in, so that every
+ * try of the game's says it again); otherwise one only where none waits (the other refused calls: a request's calls, all
+ * refused at once, leave one notice, and each request after the notice was shown leaves the next). Never gets in the way
+ * of the reply.
  */
-function odq_ban_notice(int $guid): void
+function odq_ban_notice(int $guid, bool $again = true): void
 {
+    // The players this request left the notice for already: the other refused calls of the same request leave none, so
+    // that a batch of a player's calls costs one write, not one a call.
+    static $left = [];
+    if (!$again && isset($left[$guid])) {
+        return;
+    }
+    $left[$guid] = true;
+    // Without $again, an update only of a row whose notice is not the ban's already (none waiting, or another kind).
+    $only = $again ? '' : " WHERE LiveSwitch.toast IS NOT 'ban'";
     try {
         @odq_db()->exec("INSERT INTO LiveSwitch (guid, live, toast, toast_id) VALUES ($guid, 0, 'ban', 1)
-                         ON CONFLICT (guid) DO UPDATE SET toast = 'ban', toast_id = LiveSwitch.toast_id + 1");
+                         ON CONFLICT (guid) DO UPDATE SET toast = 'ban', toast_id = LiveSwitch.toast_id + 1$only");
     } catch (Throwable $e) {
     }
 }

@@ -1229,7 +1229,7 @@ Refusals:
 
 #### `POST /players/{player}/ban`
 
-Bans a player, with a reason and an end. The game refuses their sign-in and every request of theirs with its own Network connection error, and OpenDMTQ's notice over the game shows the reason (and the end); the site and the PC client refuse their accounts, and their broadcast ends. A ban there already is replaced. The end: days from now, or until (Unix time); neither, until it is lifted.
+Bans a player, with a reason and an end. The game refuses their sign-in and every request of theirs with its own Network connection error, and OpenDMTQ's notice over the game shows the reason (and the end): within seconds of the ban, in a song too, and at each request refused after (the PC client keeps it up while the ban lasts); the site and the PC client refuse their accounts, and their broadcast ends. A ban there already is replaced. The end: days from now, or until (Unix time); neither, until it is lifted.
 
 Parameters:
 

@@ -136,12 +136,11 @@ function odq_call($method, $params): array
     $list = is_array($params) ? array_values($params) : [];
     try {
         // A banned player's game gets no further: their sign-in, and any call of theirs, refused, with a notice that says
-        // why at each sign-in.
+        // why: a new one at each sign-in, and at any other refused call one unless one is waiting already (the calls of a
+        // request are refused together, and say it once), so that the game's error comes with the reason every time.
         $player = $handler ? odq_call_player(odq_method_key($method), $list) : 0;
         if ($player > 0 && odq_ban_of($player) !== null) {
-            if (odq_method_key($method) === 'user.loginv2') {
-                odq_ban_notice($player);
-            }
+            odq_ban_notice($player, odq_method_key($method) === 'user.loginv2');
             $reply = odq_banned_reply();
         } else {
             $reply = $handler ? $handler($list) : odq_unknown_method($method);

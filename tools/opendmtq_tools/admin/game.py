@@ -413,6 +413,13 @@ def ban(pid, reason, days=0, until=None, seen=None):
         con.execute("""INSERT INTO PlayerBan (guid, reason, since, until, by) VALUES (?, ?, ?, ?, ?)
                        ON CONFLICT (guid) DO UPDATE SET reason = excluded.reason, since = excluded.since, until = excluded.until,
                            by = excluded.by""", (pid, words, now, end, core.acting_who()))
+        # Told in the game as it is made: the ban's notice waits for the player's game, which asks for the broadcast's
+        # state every few seconds (server/game/live/state.php hands it out then, in a song too, in the game's language),
+        # as a refused sign-in leaves it. A new number each time, in place of a notice not read yet. The live view's table
+        # as it is now first, for a database restored from before it.
+        recordings.live_table(con)
+        con.execute("""INSERT INTO LiveSwitch (guid, live, toast, toast_id) VALUES (?, 0, 'ban', 1)
+                       ON CONFLICT (guid) DO UPDATE SET toast = 'ban', toast_id = LiveSwitch.toast_id + 1""", (pid,))
         changed("player_game:ban", f"{who}: {words}" + (f" · {datetime.datetime.fromtimestamp(end):%Y-%m-%d %H:%M}" if end else ""),
                 player=pid, before=bool(before), after=True)
     end_broadcast(pid)
