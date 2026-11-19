@@ -7,7 +7,7 @@
 //   timed     waits with relative and absolute timeouts on both clocks, which must end in time, not early
 //   signals   the mailbox again with signals (handlers without SA_RESTART, so waits return EINTR) at all its threads
 //   requeue   a condition variable the way the C library of a desktop builds it: wake one, requeue the rest to the mutex
-//   wakeop    FUTEX_WAKE_OP waking two words at once
+//   wakeop    FUTEX_WAKE_OP waking two words at once, its two 12-bit arguments read with their sign as the kernel reads them
 //   churn     batches of threads made, started with one wake and joined (the join is a futex wait too)
 //   pthread   semaphores in a ring, a mutex and condition variables with and without timeouts
 //   lostsignal  the handshake of a game's video decoder (seek and its worker): a signal that comes before the wait it was
@@ -304,9 +304,11 @@ static void* op_driver(void* arg) {
     unsigned s = 5;
     for (unsigned i = 1; i <= kOpRounds; i++) {
         jitter(&s);
-        // op_b gets +1 (FUTEX_OP_ADD), and its waiter wakes when the old value of it is below 4095 (FUTEX_OP_CMP_LT).
+        // op_b gets +1 (FUTEX_OP_ADD), and its waiter wakes when the old value of it is above 0xfff (FUTEX_OP_CMP_GT). The
+        // kernel reads that 12-bit argument with its sign, as -1, which every count is above; read as 4095, it is above
+        // every count, and that waiter would never wake.
         atomic_store(&op_a, i);
-        unsigned enc = (1u << 28) | (2u << 24) | (1u << 12) | 0xfffu;
+        unsigned enc = FUTEX_OP(FUTEX_OP_ADD, 1, FUTEX_OP_CMP_GT, 0xfff);
         long woke = futex_count(&op_a, FUTEX_WAKE_OP, 1, 1, &op_b, enc);
         // The ack of both waiters: a lost wake of either leaves this wait for good.
         unsigned cur;
@@ -314,6 +316,57 @@ static void* op_driver(void* arg) {
         (void)woke;
     }
     return NULL;
+}
+// The operation's own argument has a sign too: ADD 0xfff takes one away, SET 0x800 makes the word -2048. Neither word has
+// a waiter, so the call wakes nobody and returns 0.
+static void op_arguments(void) {
+    static word nobody, w;
+    // 5 and one taken away.
+    atomic_store(&w, 5);
+    long n = futex_count(&nobody, FUTEX_WAKE_OP, 1, 1, &w, FUTEX_OP(FUTEX_OP_ADD, 0xfff, FUTEX_OP_CMP_EQ, 0));
+    if (n != 0 || atomic_load(&w) != 4) {
+        printf("FAIL wakeop: ADD 0xfff on 5 returned %ld and left %u, not 0 and 4\n", n, atomic_load(&w));
+        atomic_fetch_add(&failures, 1);
+    }
+    // -2048 in all 32 bits.
+    n = futex_count(&nobody, FUTEX_WAKE_OP, 1, 1, &w, FUTEX_OP(FUTEX_OP_SET, 0x800, FUTEX_OP_CMP_EQ, 0));
+    if (n != 0 || atomic_load(&w) != 0xfffff800u) {
+        printf("FAIL wakeop: SET 0x800 returned %ld and left 0x%08x, not 0 and 0xfffff800\n", n, atomic_load(&w));
+        atomic_fetch_add(&failures, 1);
+    }
+}
+// The comparison's argument on its own, where a wait that ends by itself cannot stand in for the wake: a word holding 0 is
+// above 0xfff (-1), so the call wakes the word's sleeper. Read without its sign (4095) the comparison never holds, and on
+// a host whose waits end on their own every so often the phase's stress would still pass, only slowly. The operation (ADD 0)
+// leaves the word at 0, so the sleeper goes back to sleep after each wake; the call is made again until one wakes it,
+// for two seconds at most (the first calls may come before it is asleep).
+static word cmp_word;
+static void* cmp_sleeper(void* arg) {
+    (void)arg;
+    unsigned cur;
+    // Asleep for as long as the word holds 0: its end is the word's change below.
+    while ((cur = atomic_load(&cmp_word)) == 0) futex(&cmp_word, FUTEX_WAIT, cur, NULL, NULL, 0);
+    return NULL;
+}
+static void op_comparison(void) {
+    static word nobody;
+    pthread_t t;
+    atomic_store(&cmp_word, 0);
+    pthread_create(&t, NULL, cmp_sleeper, NULL);
+    long n = 0;
+    long long end = now_ns(CLOCK_MONOTONIC) + 2000000000LL;
+    // The number woken on both words: nobody waits on the first, so 1 is the sleeper.
+    while ((n = futex_count(&nobody, FUTEX_WAKE_OP, 1, 1, &cmp_word, FUTEX_OP(FUTEX_OP_ADD, 0, FUTEX_OP_CMP_GT, 0xfff))) == 0 &&
+           now_ns(CLOCK_MONOTONIC) < end)
+        usleep(1000);
+    // The sleeper's end whatever the calls did: the word changes first, so that a wake it misses finds it awake.
+    atomic_store(&cmp_word, 1);
+    futex(&cmp_word, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    pthread_join(t, NULL);
+    if (n != 1) {
+        printf("FAIL wakeop: a comparison above 0xfff woke %ld sleepers in two seconds, not 1\n", n);
+        atomic_fetch_add(&failures, 1);
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------- churn
@@ -580,6 +633,9 @@ skip_requeue:;
     phase_name = "wakeop";
     if (only && !strstr("wakeop", only)) goto skip_wakeop;
     t0 = now_ns(CLOCK_MONOTONIC);
+    // The operation's argument first, on words nobody waits on, then the comparison's with one sleeper; then the stress.
+    op_arguments();
+    op_comparison();
     {
         pthread_t a, b, d;
         pthread_create(&a, NULL, op_waiter, &op_a);

@@ -436,10 +436,16 @@ long wake_locked(const void* word, long n, std::uint32_t bitset) {
     return woken;
 }
 
+// A 12-bit field as the signed number it holds, in 32 bits: bit 11 is its sign, as in the kernel's sign_extend32(field, 11).
+std::uint32_t signed12(std::uint32_t field) { return (field ^ 0x800u) - 0x800u; }
+
 // FUTEX_WAKE_OP's operation on the second word, and its comparison of the old value.
 bool wake_op(std::uint32_t* word2, std::uint32_t encoded) {
     std::uint32_t op = (encoded >> 28) & 7, cmp = (encoded >> 24) & 15;
-    std::uint32_t oparg = (encoded >> 12) & 0xfff, cmparg = encoded & 0xfff;
+    // Both arguments are numbers with a sign, as the kernel of a phone reads them: 0xfff is -1 and 0x800 is -2048, so that
+    // an ADD can count down and a comparison can be with a number below zero.
+    std::uint32_t oparg = signed12((encoded >> 12) & 0xfff), cmparg = signed12(encoded & 0xfff);
+    // With the shift flag the operand is 1 << oparg, from oparg's low five bits as the kernel takes them.
     if ((encoded >> 28) & 8) oparg = 1u << (oparg & 31);
     std::uint32_t old = __atomic_load_n(word2, __ATOMIC_SEQ_CST), next;
     do {
