@@ -47,6 +47,10 @@
          reads that fill back as color(srgb ...), which the checker must read too. -->
     <div style="margin-top: 16px; width: 240px"><p id="mixed-box" style="margin: 0; padding: 8px; background: color-mix(in srgb, #ff5f72 15%, #1a1f25)">A mixed red box</p><button id="mixed-under" style="height: 30px; padding: 0 12px; border: 0; color: #eee; background: #272e36">Under it</button></div>
   </section>
+  <!-- A band across the whole page (as the site's alert under its bar) with a box right under it: two of the page's own bands
+       may lie one on the other, but a box set against a band touches it all the same. -->
+  <div id="band" style="margin-top: 16px; padding: 8px; background: color-mix(in srgb, #ffcf3d 14%, #1a1f25)">A band across the page</div>
+  <p id="under-band" style="width: 200px; margin: 0 0 16px; padding: 8px; background: #2a3038">A box right under the band</p>
 </main>
 </body>
 </html>

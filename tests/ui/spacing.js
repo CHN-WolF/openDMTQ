@@ -115,6 +115,10 @@ window.spacingAudit = function spacingAudit() {
   // a stacked bar's segments) is drawn as one figure.
   const wordless = el => !el.textContent.trim() && !el.querySelector(CONTROL) && !el.matches(CONTROL);
   const joined = el => el.matches(JOINED) || (wordless(el) && !!el.parentElement && wordless(el.parentElement));
+  // A strip of the page itself: on the page (in no box) and edge to edge of the window, as the site's alert under its bar
+  // and the home page's stage are. The stylesheet starts the stage right under an alert on purpose, so two such strips,
+  // one on the other, are the page's own bands laid in turn and not two boxes set against each other.
+  const pageStrip = b => !b.parent && b.r.left <= 1 && b.r.right >= document.documentElement.clientWidth - 1;
 
   // The room between two rectangles across each axis: negative when they overlap along it.
   const apart = (a, b) => ({ x: Math.max(a.left, b.left) - Math.min(a.right, b.right), y: Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom) });
@@ -152,6 +156,7 @@ window.spacingAudit = function spacingAudit() {
         const a = kids[i], b = kids[j];
         if (a.el.contains(b.el) || b.el.contains(a.el) || a.layer !== b.layer) continue;
         if (joined(a.el) && joined(b.el)) continue;
+        if (pageStrip(a) && pageStrip(b)) continue;
         const d = apart(a.r, b.r);
         // Facing each other across one axis: they share more than a few pixels along the other.
         const facesX = d.y < -2, facesY = d.x < -2;

@@ -412,11 +412,18 @@ async function self(contexts) {
   check('the checker sees a box with a mixed colour touching the button under it',
     seenOnPage.some(f => f.kind === 'touching' && /#mixed-box/.test(f.detail) && /#mixed-under/.test(f.detail)),
     seenOnPage.filter(f => /mixed/.test(`${f.at} ${f.detail}`)).map(f => `${f.kind} ${f.detail}`).join(' ; '));
+  // A band across the page lies on the next one by design (the site's alert on the home page's stage), but a box right
+  // under a band is set against it: the room the checker leaves the page's bands is theirs alone.
+  check("the checker sees a box set against the page's band, though the page's bands may lie one on the other",
+    seenOnPage.some(f => f.kind === 'touching' && /#band/.test(f.detail) && /#under-band/.test(f.detail)),
+    seenOnPage.filter(f => /band/.test(`${f.at} ${f.detail}`)).map(f => `${f.kind} ${f.detail}`).join(' ; '));
   // And the room between things laid out as the site lays them out (panels a gap apart, buttons in a row, words inside
   // their padding) is no finding: the checker sees faults, not every box.
   await page.setContent(`<!doctype html><style>:root { --gap: 20px; --pad: 24px } body { margin: 0; background: #11151a; color: #eee; font: 14px/1.6 sans-serif }
     main { display: grid; gap: var(--gap); padding: 24px } .card { padding: var(--pad); background: #222 } .line { display: flex; gap: 10px; margin: 14px 0 0 }
     .btn { display: inline-flex; align-items: center; height: 42px; padding: 0 16px; background: #333 } p { margin: 0 0 14px }</style>
+    <div style="padding: 11px 24px; background: color-mix(in srgb, #ffcf3d 12%, #11151a)">A band across the page, as the site's notice under its bar.</div>
+    <div style="height: 80px; padding: 0 24px; background: #0b0e12">The page's stage right under it, edge to edge as well.</div>
     <main><div class="card"><p>A panel with words in its padding.</p><div class="line"><span class="btn">One</span><span class="btn">Two</span><span class="btn">Three</span></div></div>
     <div class="card"><p>Another, a gap below the first.</p></div></main>`);
   await page.addScriptTag({ content: spacing });
